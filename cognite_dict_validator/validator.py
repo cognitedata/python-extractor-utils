@@ -9,7 +9,12 @@ class DictValidator:
     docstring for DictValidator
     """
 
-    def __init__(self, logger: Optional[logging.Logger] = None):
+    def __init__(
+        self,
+        logger: Optional[logging.Logger] = None,
+        log_prefix: Optional[str] = None,
+        log_suffix: Optional[str] = None,
+    ):
         super(DictValidator, self).__init__()
 
         self._required_keys: List[Any] = []
@@ -20,6 +25,9 @@ class DictValidator:
         self._require_if_value: Dict[Any, Dict[Any, List[Any]]] = {}
         self._require_only_if_value: Dict[Any, Dict[Any, List[Any]]] = {}
         self._defaults: Dict[Any, Any] = {}
+
+        self.log_prefix = log_prefix if log_prefix is not None else ""
+        self.log_suffix = log_suffix if log_suffix is not None else ""
 
         if logger is not None:
             self.logger = logger
@@ -100,32 +108,55 @@ class DictValidator:
 
         for key in dictionary:
             if not key in self._get_all_known_keys():
-                self.logger.warning("Unknown key: '%s'.", str(key))
+                self.logger.warning("%sUnknown key: '%s'.%s", self.log_prefix, str(key), self.log_suffix)
 
         for key in self._required_keys:
             if not key in dictionary:
-                self.logger.error("Required key '%s' is missing.", str(key))
+                self.logger.error("%sRequired key '%s' is missing.%s", self.log_prefix, str(key), self.log_suffix)
                 is_ok = False
 
         for key in self._optional_keys:
             if not key in dictionary:
                 if key in self._defaults:
-                    self.logger.warning("No '%s' specified, defaulting to '%s'.", str(key), str(self._defaults[key]))
+                    self.logger.warning(
+                        "%sNo '%s' specified, defaulting to '%s'.%s",
+                        self.log_prefix,
+                        str(key),
+                        str(self._defaults[key], self.log_suffix),
+                    )
                 else:
-                    self.logger.warning("No '%s' specified.", key)
+                    self.logger.warning("%sNo '%s' specified.%s", self.log_prefix, str(key), self.log_suffix)
 
         for base_key in self._require_if_present:
             for key in self._require_if_present[base_key]:
                 if not key in dictionary:
-                    self.logger.error("Missing key '%s' required by '%s'.", str(key), str(base_key))
+                    self.logger.error(
+                        "%sMissing key '%s' required by '%s'.%s",
+                        self.log_prefix,
+                        str(key),
+                        str(base_key),
+                        self.log_suffix,
+                    )
                     is_ok = False
 
         for base_key in self._require_only_if_present:
             for key in self._require_only_if_present[base_key]:
                 if key in dictionary and not base_key in dictionary:
-                    self.logger.warning("Key '%s' is only required when key '%s' is present.", key, base_key)
+                    self.logger.warning(
+                        "%sKey '%s' is only required when key '%s' is present.%s",
+                        self.log_prefix,
+                        str(key),
+                        str(base_key),
+                        self.log_suffix,
+                    )
                 if not key in dictionary and base_key in dictionary:
-                    self.logger.error("Key '%s' is required when key '%s' is present.", key, base_key)
+                    self.logger.error(
+                        "%sKey '%s' is required when key '%s' is present.%s",
+                        self.log_prefix,
+                        str(key),
+                        str(base_key),
+                        self.log_suffix,
+                    )
                     is_ok = False
 
         for base_key in self._require_if_value:
@@ -134,7 +165,12 @@ class DictValidator:
                     for key in self._require_if_value[base_key][base_value]:
                         if not key in dictionary:
                             self.logger.error(
-                                "Missing key '%s' is required when key '%s' is set to '%s'.", key, base_key, base_value
+                                "%sMissing key '%s' is required when key '%s' is set to '%s'.%s",
+                                self.log_prefix,
+                                key,
+                                base_key,
+                                base_value,
+                                self.log_suffix,
                             )
                             is_ok = False
 
@@ -144,14 +180,24 @@ class DictValidator:
                     for key in self._require_only_if_value[base_key][base_value]:
                         if not key in dictionary:
                             self.logger.error(
-                                "Missing key '%s' is required when key '%s' is set to '%s'.", key, base_key, base_value
+                                "%sMissing key '%s' is required when key '%s' is set to '%s'.%s",
+                                self.log_prefix,
+                                key,
+                                base_key,
+                                base_value,
+                                self.log_suffix,
                             )
                             is_ok = False
                 else:
                     for key in self._require_only_if_value[base_key][base_value]:
                         if key in dictionary:
                             self.logger.warning(
-                                "Key '%s' is only required when key '%s' is set to '%s'.", key, base_key, base_value
+                                "%sKey '%s' is only required when key '%s' is set to '%s'.%s",
+                                self.log_prefix,
+                                key,
+                                base_key,
+                                base_value,
+                                self.log_suffix,
                             )
 
         return is_ok
