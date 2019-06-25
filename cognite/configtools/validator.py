@@ -1,3 +1,7 @@
+"""
+Module containing tools for verifying that a dictionary satisfies given requirements
+"""
+
 import logging
 from typing import Any, Dict, List, Optional
 
@@ -6,7 +10,14 @@ from .util import _MockLogger
 
 class DictValidator:
     """
-    docstring for DictValidator
+    A class for validating dictionaries.
+
+    Args:
+        logger (logging.Logger):    (Optional). A logger object to write warnings and errors to to during validation.
+                                    Defaults to no logger (ie an instance of the MockLogger in the util module).
+        log_prefix (str):           (Optional). A prefix to add to each log string. Default is no prefix.
+        log_suffix (str):           (Optional). A suffix to add to each log string. Default is no suffix.
+
     """
 
     def __init__(
@@ -25,6 +36,7 @@ class DictValidator:
         self._require_if_value: Dict[Any, Dict[Any, List[Any]]] = {}
         self._require_only_if_value: Dict[Any, Dict[Any, List[Any]]] = {}
         self._defaults: Dict[Any, Any] = {}
+        self._legal_values: Dict[Any, List[Any]] = {}
 
         self.log_prefix = log_prefix if log_prefix is not None else ""
         self.log_suffix = log_suffix if log_suffix is not None else ""
@@ -35,31 +47,86 @@ class DictValidator:
             # Create a mock logger so later calls to logger.info ... doesn't fail
             self.logger = _MockLogger()  # type: ignore
 
-    def __call__(self, dictionary: Dict[Any, Any], apply_defaults=True):
+    def __call__(self, dictionary: Dict[Any, Any], apply_defaults=True) -> bool:
+        """
+        Calls the validate method.
+
+        Args:
+            dictionary (dict):      Dictionary to vaildate.
+            apply_defaults (bool):  Wether to add the available defaults to optional keys, or simply warn about them
+                                    not existing.
+
+        Returns:
+            bool: verification of dictionary
+        """
         return self.validate(dictionary, apply_defaults)
 
     def add_required_keys(self, key_list: List[Any]):
+        """
+        Add a list of keys that must be present in the dictionary
+
+        Args:
+            key_list (list):    List of keys to add to the set of required keys.
+        """
         self._required_keys.extend(key_list)
 
     def add_optional_keys(self, key_list: List[Any]):
+        """
+        Add a list of keys that should be present, but doesn't have to be. Unlike required keys, the validation will
+        still pass if some of these keys are missing, but it will produce a warning.
+
+        Args:
+            key_list (list):    List of keys to add to the set of optional keys.
+        """
         self._optional_keys.extend(key_list)
 
     def add_known_keys(self, key_list: List[Any]):
+        """
+        Add a list of possible keys in the dictionary that are not required or optional. Unknown keys (ie, not
+        required, required_if_*, optional or known) are warned about during validation. Unlike optional keys, if known
+        keys are missing, it does not produce a warning.
+
+        Args:
+            key_list (list):    List of keys to add to the set of known keys.
+        """
         self._known_keys.extend(key_list)
 
     def require_if_present(self, base_key: Any, required_keys: List[Any]):
+        """
+        Require the precence of certain keys if given key is present in the dictionary.
+
+        Args:
+            base_key (Any):         Base key.
+            required_keys (list):   List of keys to require if base key is present in the dictionary.
+        """
         if base_key in self._require_if_present:
             self._require_if_present[base_key].extend(required_keys)
         else:
             self._require_if_present[base_key] = required_keys
 
     def require_only_if_present(self, base_key: Any, required_keys: List[Any]):
+        """
+        Require the precence of certain keys only if given key is present in the dictionary. Unlike require_if_present,
+        this produces a warning if any of the required keys are present when the base key is not.
+
+        Args:
+            base_key (Any):         Base key.
+            required_keys (list):   List of keys to require only if base key is present in the dictionary.
+        """
         if base_key in self._require_if_present:
             self._require_only_if_present[base_key].extend(required_keys)
         else:
             self._require_only_if_present[base_key] = required_keys
 
     def require_if_value(self, base_key: Any, base_value: Any, required_keys: List[Any]):
+        """
+        Require the precence of certain keys if given key has the given value in the dictionary.
+
+        Args:
+            base_key (Any):         Base key.
+            base_value (Any):       Base value.
+            required_keys (list):   List of keys to require if base key has base value.
+        """
         if base_key in self._require_if_present and base_value in self._require_if_present:
             self._require_if_value[base_key][base_value].extend(required_keys)
         elif base_key in self._require_if_value:
@@ -68,6 +135,15 @@ class DictValidator:
             self._require_if_value[base_key] = {base_value: required_keys}
 
     def require_only_if_value(self, base_key: Any, base_value: Any, required_keys: List[Any]):
+        """
+        Require the precence of certain keys only if given key has the given value. Unlike require_if_value, this
+        produces a warning if any of the required keys are present when the base key does not have the given value.
+
+        Args:
+            base_key (Any):         Base key.
+            base_value (Any):       Base value.
+            required_keys (list):   List of keys to require only if base key has base value.
+        """
         if base_key in self._require_only_if_value and base_value in self._require_only_if_value[base_key]:
             self._require_only_if_value[base_key][base_value].extend(required_keys)
         elif base_key in self._require_only_if_value:
@@ -76,18 +152,40 @@ class DictValidator:
             self._require_only_if_value[base_key] = {base_value: required_keys}
 
     def set_default(self, key: Any, default_value: Any):
+        """
+        Set the default value of optional keys. If key is not already specified as an optional key, it is added. This
+        changes the warning message, and depending on the args to validate, adds it to the dictionary.
+
+        Args:
+            key (Any):              Key.
+            default_value (Any):    Default value of key.
+        """
         if not key in self._optional_keys:
             self._optional_keys.append(key)
 
         self._defaults[key] = default_value
 
     def set_legal_values(self, key: Any, legal_values: List[Any]):
+        """
+        Restrict range of possible values for a key. If the key is previously unknown, it is added to the set of known
+        keys. Illegal values of a key produces an error and fails to validate.
+
+        Args:
+            key (Any):              Key.
+            legal_values (list):    All the legal values for key.
+        """
         if not key in self.get_all_known_keys():
             self._known_keys.append(key)
 
         self._legal_values[key] = legal_values
 
     def get_all_known_keys(self):
+        """
+        Returns a set of all the known keys (ie, required, required_if_*, optional or known keys).
+
+        Returns:
+            set: All keys known by the validator.
+        """
         keys = set(
             self._required_keys
             + self._optional_keys
@@ -110,10 +208,21 @@ class DictValidator:
         return keys
 
     def validate(self, dictionary: Dict[Any, Any], apply_defaults: bool = True):
+        """
+        Performs the verification. Checks if the given dictionary satisfies the given requirements.
+
+        Args:
+            dictionary (dict):      Dictionary to vaildate.
+            apply_defaults (bool):  Wether to add the available defaults to optional keys, or simply warn about them
+                                    not existing.
+
+        Returns:
+            bool: verification of dictionary
+        """
         is_ok = True
 
         for key in dictionary:
-            if not key in self._get_all_known_keys():
+            if not key in self.get_all_known_keys():
                 self.logger.warning("%sUnknown key: '%s'.%s", self.log_prefix, str(key), self.log_suffix)
 
         for key in self._required_keys:
@@ -208,5 +317,16 @@ class DictValidator:
                                 base_value,
                                 self.log_suffix,
                             )
+
+        for key in self._legal_values:
+            if not dictionary[key] in self._legal_values[key]:
+                self.logger.error(
+                    "%s'%s' is not a valid value for key '%s'%s",
+                    self.log_prefix,
+                    str(dictionary[key]),
+                    str(key),
+                    self.log_suffix,
+                )
+                is_ok = False
 
         return is_ok
