@@ -75,13 +75,19 @@ class DictValidator:
         else:
             self._require_only_if_value[base_key] = {base_value: required_keys}
 
-    def set_default(self, key, default_value):
+    def set_default(self, key: Any, default_value: Any):
         if not key in self._optional_keys:
             self._optional_keys.append(key)
 
         self._defaults[key] = default_value
 
-    def _get_all_known_keys(self):
+    def set_legal_values(self, key: Any, legal_values: List[Any]):
+        if not key in self.get_all_known_keys():
+            self._known_keys.append(key)
+
+        self._legal_values[key] = legal_values
+
+    def get_all_known_keys(self):
         keys = set(
             self._required_keys
             + self._optional_keys

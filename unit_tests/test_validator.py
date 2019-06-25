@@ -55,7 +55,7 @@ class TestValidator(unittest.TestCase):
             "Key5": "Value5",
             "Key6": "Value6",
         }
-        self.logger = CountingLogger()
+        self.logger = CountingLogger(True)
         self.val = DictValidator(logger=self.logger)  # type: ignore
 
     def test_required(self):
@@ -134,6 +134,29 @@ class TestValidator(unittest.TestCase):
         self.assertFalse(self.val.validate(self.dic))
         self.assertEqual(self.logger.warnings, 4)
         self.assertEqual(self.logger.errors, 1)
+
+    def test_legal_values(self):
+        self.val.set_legal_values("Key1", ["Value1", "Value2", "Value3"])
+        self.val.add_known_keys(["Key2", "Key3", "Key4", "Key5", "Key6"])
+
+        self.assertTrue(self.val.validate(self.dic))
+        self.assertEqual(self.logger.all, 0)
+
+        self.val.set_legal_values("Key1", ["Value2", "Value3"])
+        self.assertFalse(self.val.validate(self.dic))
+        self.assertEqual(self.logger.errors, 1)
+        self.assertEqual(self.logger.all, 1)
+
+    def test_add_defaults(self):
+        self.val.add_optional_keys(["Key7"])
+        self.val.set_default("Key7", "Value7")
+        self.val.add_known_keys(["Key1", "Key2", "Key3", "Key4", "Key5", "Key6"])
+
+        self.assertEqual(self.dic.get("Key7"), None)
+        self.val.validate(self.dic, apply_defaults=True)
+        self.assertEqual(self.logger.warnings, 1)
+        self.assertEqual(self.logger.all, 1)
+        self.assertEqual(self.dic.get("Key7"), "Value7")
 
 
 
