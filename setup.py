@@ -1,7 +1,7 @@
 from setuptools import setup
 
 setup(
-    name="cognite-dict-validator",
+    name="cognite-configtools",
 
     # Version number:
     version="0.1.0",
@@ -10,6 +10,6 @@ setup(
     author="Mathias Lohne",
     author_email="mathias.lohne@cognite.com",
 
-    packages=["cognite_dict_validator"],
-    description="Check that a given dictionary satisfies given requirements.",
+    packages=["cognite.configtools"],
+    description="Utilities to read and verify config files.",
 )

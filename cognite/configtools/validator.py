@@ -1,7 +1,7 @@
 import logging
 from typing import Any, Dict, List, Optional
 
-from .util import MockLogger
+from .util import _MockLogger
 
 
 class DictValidator:
@@ -33,10 +33,10 @@ class DictValidator:
             self.logger = logger
         else:
             # Create a mock logger so later calls to logger.info ... doesn't fail
-            self.logger = MockLogger()  # type: ignore
+            self.logger = _MockLogger()  # type: ignore
 
-    def __call__(self, dictionary: Dict[Any, Any]):
-        return self.validate(dictionary)
+    def __call__(self, dictionary: Dict[Any, Any], apply_defaults=True):
+        return self.validate(dictionary, apply_defaults)
 
     def add_required_keys(self, key_list: List[Any]):
         self._required_keys.extend(key_list)
@@ -103,7 +103,7 @@ class DictValidator:
 
         return keys
 
-    def validate(self, dictionary: Dict[Any, Any]):
+    def validate(self, dictionary: Dict[Any, Any], apply_defaults: bool = True):
         is_ok = True
 
         for key in dictionary:
@@ -122,8 +122,11 @@ class DictValidator:
                         "%sNo '%s' specified, defaulting to '%s'.%s",
                         self.log_prefix,
                         str(key),
-                        str(self._defaults[key], self.log_suffix),
+                        str(self._defaults[key]),
+                        self.log_suffix,
                     )
+                    if apply_defaults:
+                        dictionary[key] = self._defaults[key]
                 else:
                     self.logger.warning("%sNo '%s' specified.%s", self.log_prefix, str(key), self.log_suffix)
 
@@ -161,7 +164,7 @@ class DictValidator:
 
         for base_key in self._require_if_value:
             for base_value in self._require_if_value[base_key]:
-                if dictionary[base_key] == base_value:
+                if dictionary.get(base_key) == base_value:
                     for key in self._require_if_value[base_key][base_value]:
                         if not key in dictionary:
                             self.logger.error(
@@ -176,7 +179,7 @@ class DictValidator:
 
         for base_key in self._require_only_if_value:
             for base_value in self._require_only_if_value[base_key]:
-                if dictionary[base_key] == base_value:
+                if dictionary.get(base_key) == base_value:
                     for key in self._require_only_if_value[base_key][base_value]:
                         if not key in dictionary:
                             self.logger.error(

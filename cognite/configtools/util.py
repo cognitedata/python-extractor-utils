@@ -1,4 +1,4 @@
-class MockLogger:
+class _MockLogger:
     """
     A class with an interface similar to logging.Logger that does nothing.
     """

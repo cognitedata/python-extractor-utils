@@ -1,6 +1,6 @@
 import unittest
 
-from cognite_dict_validator.validator import DictValidator
+from cognite.configtools.validator import DictValidator
 
 
 class CountingLogger:
