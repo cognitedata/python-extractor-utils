@@ -18,5 +18,8 @@ class _MockLogger:
     def log(self, *args, **kwargs):
         pass
 
+    def debug(self, *args, **kwargs):
+        pass
+
     def exception(self, *args, **kwargs):
         pass

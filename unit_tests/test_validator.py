@@ -55,7 +55,7 @@ class TestValidator(unittest.TestCase):
             "Key5": "Value5",
             "Key6": "Value6",
         }
-        self.logger = CountingLogger(True)
+        self.logger = CountingLogger()
         self.val = DictValidator(logger=self.logger)  # type: ignore
 
     def test_required(self):
