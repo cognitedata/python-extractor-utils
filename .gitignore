@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Mac files
+.DS_Store
+
 # C extensions
 *.so
 
@@ -44,6 +47,7 @@ htmlcov/
 .coverage
 .coverage.*
 .cache
+test-report.xml
 nosetests.xml
 coverage.xml
 *.cover
