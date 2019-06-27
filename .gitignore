@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Tokens, etc
+token.txt
+
 # Mac files
 .DS_Store
 
