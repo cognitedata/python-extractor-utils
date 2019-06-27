@@ -1,6 +1,7 @@
 import unittest
 
-from cognite.configtools.util import _MockLogger
+from cognite.extractors.configtools.util import _MockLogger
+
 
 class TestMockLogger(unittest.TestCase):
     def setUp(self):
