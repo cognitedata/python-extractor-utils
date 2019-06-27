@@ -5,13 +5,13 @@ verify_ssl = true
 
 [dev-packages]
 black = "*"
+isort = "*"
 pytest = "*"
 mypy = "*"
 pytest-cov = "*"
+yolk3k = "*"
 
 [packages]
-pyyaml = "*"
-cognite-logger = "*"
 
 [requires]
 python_version = "3.6"
