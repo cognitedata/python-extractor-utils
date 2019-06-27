@@ -1,0 +1,22 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+twine = "*"
+yolk3k = "*"
+pytest = "*"
+black = "==18.9b0"
+isort = "*"
+pytest-cov = "*"
+tox = "*"
+sphinx-rtd-theme = "*"
+sphinx = "*"
+tox-pyenv = "*"
+pre-commit = "*"
+
+[packages]
+
+[requires]
+python_version = "3.7"
