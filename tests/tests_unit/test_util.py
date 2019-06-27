@@ -23,5 +23,6 @@ class TestMockLogger(unittest.TestCase):
             # Some of the calls threw an exception, fail the test
             self.fail()
 
+
 def get_suites():
     return unittest.TestLoader().loadTestsFromTestCase(TestMockLogger)

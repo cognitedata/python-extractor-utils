@@ -1,4 +1,4 @@
- Byte-compiled / optimized / DLL files
+# Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
 *$py.class
@@ -90,6 +90,9 @@ ipython_config.py
 #   install all needed dependencies.
 #Pipfile.lock
 
+# pyenv
+.python-version
+
 # celery beat schedule file
 celerybeat-schedule
 
@@ -122,3 +125,7 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+=======
+
+# jetbrains
+.idea/

@@ -17,31 +17,37 @@ class CountingLogger:
     def info(self, *args, **kwargs):
         self.infos += 1
         self.all += 1
-        if self.verbose: print(*args)
+        if self.verbose:
+            print(*args)
 
     def warning(self, *args, **kwargs):
         self.warnings += 1
         self.all += 1
-        if self.verbose: print(*args)
+        if self.verbose:
+            print(*args)
 
     def error(self, *args, **kwargs):
         self.errors += 1
         self.all += 1
-        if self.verbose: print(*args)
+        if self.verbose:
+            print(*args)
 
     def critical(self, *args, **kwargs):
         self.criticals += 1
         self.all += 1
-        if self.verbose: print(*args)
+        if self.verbose:
+            print(*args)
 
     def log(self, *args, **kwargs):
         self.infos += 1
         self.all += 1
-        if self.verbose: print(*args)
+        if self.verbose:
+            print(*args)
 
     def exception(self, *args, **kwargs):
         self.all += 1
-        if self.verbose: print(*args)
+        if self.verbose:
+            print(*args)
         raise AssertionError("Unexpected exception given to logger from vaildator")
 
 
@@ -157,7 +163,6 @@ class TestValidator(unittest.TestCase):
         self.assertEqual(self.logger.warnings, 1)
         self.assertEqual(self.logger.all, 1)
         self.assertEqual(self.dic.get("Key7"), "Value7")
-
 
 
 def get_suites():

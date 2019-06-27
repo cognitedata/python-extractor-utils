@@ -6,12 +6,19 @@ verify_ssl = true
 [dev-packages]
 black = "*"
 isort = "*"
-pytest = "*"
 mypy = "*"
-pytest-cov = "*"
+twine = "*"
 yolk3k = "*"
+pytest = "*"
+pytest-cov = "*"
+tox = "*"
+tox-pyenv = "*"
+sphinx = "*"
+sphinx-rtd-theme = "*"
+pre-commit = "*"
 
 [packages]
+cognite-configtools = {path = "."}
 
 [requires]
 python_version = "3.6"
