@@ -1,6 +1,6 @@
 import unittest
 
-from cognite.extractors.configtools.util import _MockLogger
+from cognite.extractorutils._inner_util import _MockLogger
 
 
 class TestMockLogger(unittest.TestCase):
