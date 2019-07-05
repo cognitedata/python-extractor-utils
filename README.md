@@ -4,7 +4,9 @@
 
 Python extractor-utils
 =======================
-[![build](https://webhooks.dev.cognite.ai/build/buildStatus/icon?job=github-builds/python-configtools/master)](https://jenkins.cognite.ai/job/github-builds/job/python-configtools/job/master/)
-<!-- [![codecov](https://codecov.io/gh/cognitedata/python-configtools/branch/master/graph/badge.svg)](https://codecov.io/gh/cognitedata/python-configtools) -->
+[![build](https://webhooks.dev.cognite.ai/build/buildStatus/icon?job=github-builds/python-extractor-utils/master)](https://jenkins.cognite.ai/job/github-builds/job/python-extractor-utils/job/master/)
+<!-- [![codecov](https://codecov.io/gh/cognitedata/python-extractor-utils/branch/master/graph/badge.svg)](https://codecov.io/gh/cognitedata/python-extractor-utils) -->
 
 A package containing convenient utilities for developing extractors in Python.
+
+For documentation, build the sphinx project found in `docs`.
