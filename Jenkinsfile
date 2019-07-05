@@ -53,7 +53,7 @@ podTemplate(
             stage('Check code style') {
                 sh("pipenv run black -l 120 --check .")
                 sh("pipenv run isort -w 120 -m 3 -tc -rc --check-only .")
-                sh("pipenv run python -m mypy cognite/extractors/configtools")
+                sh("pipenv run python -m mypy cognite/extractorutils")
             }
             stage('Build Docs') {
                 dir('./docs'){
@@ -63,7 +63,7 @@ podTemplate(
             stage('Test') {
                 // sh("pyenv local 3.5.0 3.6.6 3.7.2")
                 // sh("pipenv run tox -p all")
-                sh("pipenv run python -m pytest -v --cov-report xml:coverage.xml --cov=cognite.extractors.configtools --junitxml=test-report.xml")
+                sh("pipenv run python -m pytest -v --cov-report xml:coverage.xml --cov=cognite/extractorutils --junitxml=test-report.xml")
                 // junit(allowEmptyResults: true, testResults: '**/test-report.xml')
                 // summarizeTestResults()
             }
