@@ -261,7 +261,7 @@ class DictValidator:
             for key in self._require_only_if_present[base_key]:
                 if key in dictionary and not base_key in dictionary:
                     self.logger.warning(
-                        "%sKey '%s' is only required when key '%s' is present.%s",
+                        "%s'%s' is only required when key '%s' is present.%s",
                         self.log_prefix,
                         str(key),
                         str(base_key),
@@ -269,7 +269,7 @@ class DictValidator:
                     )
                 if not key in dictionary and base_key in dictionary:
                     self.logger.error(
-                        "%sKey '%s' is required when key '%s' is present.%s",
+                        "%s'%s' is required when key '%s' is present.%s",
                         self.log_prefix,
                         str(key),
                         str(base_key),
@@ -283,7 +283,7 @@ class DictValidator:
                     for key in self._require_if_value[base_key][base_value]:
                         if not key in dictionary:
                             self.logger.error(
-                                "%sMissing key '%s' is required when key '%s' is set to '%s'.%s",
+                                "%s'%s' is required when '%s' is set to '%s'.%s",
                                 self.log_prefix,
                                 key,
                                 base_key,
@@ -298,7 +298,7 @@ class DictValidator:
                     for key in self._require_only_if_value[base_key][base_value]:
                         if not key in dictionary:
                             self.logger.error(
-                                "%sMissing key '%s' is required when key '%s' is set to '%s'.%s",
+                                "%s'%s' is required when '%s' is set to '%s'.%s",
                                 self.log_prefix,
                                 key,
                                 base_key,
@@ -310,7 +310,7 @@ class DictValidator:
                     for key in self._require_only_if_value[base_key][base_value]:
                         if key in dictionary:
                             self.logger.warning(
-                                "%sKey '%s' is only required when key '%s' is set to '%s'.%s",
+                                "%s'%s' is only required when '%s' is set to '%s'.%s",
                                 self.log_prefix,
                                 key,
                                 base_key,
@@ -319,7 +319,7 @@ class DictValidator:
                             )
 
         for key in self._legal_values:
-            if not dictionary[key] in self._legal_values[key]:
+            if key in dictionary and dictionary[key] not in self._legal_values[key]:
                 self.logger.error(
                     "%s'%s' is not a valid value for key '%s'%s",
                     self.log_prefix,
