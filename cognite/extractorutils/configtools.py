@@ -5,7 +5,7 @@ Module containing tools for verifying that a dictionary satisfies given requirem
 import logging
 from typing import Any, Dict, List, Optional
 
-from .util import _MockLogger
+from ._inner_util import _MockLogger
 
 
 class DictValidator:

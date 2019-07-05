@@ -1,3 +1,8 @@
+"""
+A module containing utilites ment for use inside the extractor-utils package
+"""
+
+
 class _MockLogger:
     """
     A class with an interface similar to logging.Logger that does nothing.
