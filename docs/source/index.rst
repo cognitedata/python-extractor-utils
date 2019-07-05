@@ -3,8 +3,12 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Documentation
-=============
+Python extractor-utils package
+==============================
 
-.. automodule:: cognite.extractors.configtools
+.. automodule:: cognite.extractorutils.configtools
     :members:
+    :undoc-members:
+    :show-inheritance:
+
+

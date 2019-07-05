@@ -21,7 +21,7 @@ import os
 import sys
 
 sys.path.insert(0, os.path.abspath("../.."))
-import cognite.extractors.configtools  # isort:skip
+import cognite.extractorutils  # isort:skip
 
 # -- General configuration ------------------------------------------------
 
@@ -32,7 +32,7 @@ import cognite.extractors.configtools  # isort:skip
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ["sphinx.ext.autodoc", "sphinx.ext.napoleon"]
+extensions = ["sphinx.ext.autodoc", "sphinx.ext.viewcode", "sphinx.ext.napoleon"]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
@@ -47,7 +47,7 @@ source_suffix = ".rst"
 master_doc = "index"
 
 # General information about the project.
-project = "cognite-configtools"
+project = "cognite-extractorutils"
 copyright = "2019, Cognite"
 author = "Cognite"
 
@@ -56,7 +56,7 @@ author = "Cognite"
 # built documents.
 #
 # The short X.Y version.
-version = cognite.extractors.configtools.__version__
+version = cognite.extractorutils.__version__
 # The full version, including alpha/beta/rc tags.
 release = version
 
