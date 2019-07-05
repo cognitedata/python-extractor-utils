@@ -1,9 +1,9 @@
 """
-Module containing tools for verifying that a dictionary satisfies given requirements
+Module containing tools config verification and manipulation.
 """
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional
 
 from ._inner_util import _MockLogger
 
@@ -330,3 +330,20 @@ class DictValidator:
                 is_ok = False
 
         return is_ok
+
+
+def import_missing(from_dict: Dict[Any, Any], to_dict: Dict[Any, Any], keys: Optional[Iterable[Any]] = None):
+    """
+    Import missing key/value pairs from one dictionary to another.
+
+    Args:
+        from_dict (dict):   Dictionary to copy from
+        to_dict (dict):     Dictionary to copy to (in place)
+        keys (Iterable):    (Optional). If present, only the key/value pairs corresponding to these keys will be copied.
+    """
+    if keys is None:
+        keys = from_dict.keys()
+
+    for key in keys:
+        if key in from_dict and key not in to_dict:
+            to_dict[key] = from_dict[key]
