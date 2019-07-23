@@ -74,15 +74,15 @@ podTemplate(
             stage('Build') {
                 sh("python3 setup.py sdist bdist_wheel")
             }
-            // def pipVersion = sh(returnStdout: true, script: 'pipenv run yolk -V cognite-model-hosting | sort -n | tail -1 | cut -d\\  -f 2').trim()
+            // def pipVersion = sh(returnStdout: true, script: 'pipenv run yolk -V cognite-extractor-utils | sort -n | tail -1 | cut -d\\  -f 2').trim()
             def currentVersion = sh(returnStdout: true, script: 'sed -n -e "/^__version__/p" cognite/extractorutils/__init__.py | cut -d\\" -f2').trim()
             println("This version: " + currentVersion)
             // println("Latest pip version: " + pipVersion)
-            // if (env.BRANCH_NAME == 'master' && currentVersion != pipVersion) {
-            //    stage('Release') {
-            //        sh("pipenv run twine upload --config-file /pypi/.pypirc dist/*")
-            //    }
-            //}
+            if (env.BRANCH_NAME == 'master' && currentVersion != pipVersion) {
+               stage('Release') {
+                   sh("pipenv run twine upload --config-file /pypi/.pypirc dist/*")
+               }
+            }
         }
     }
 }
