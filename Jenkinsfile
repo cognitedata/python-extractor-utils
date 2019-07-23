@@ -78,7 +78,7 @@ podTemplate(
             def currentVersion = sh(returnStdout: true, script: 'sed -n -e "/^__version__/p" cognite/extractorutils/__init__.py | cut -d\\" -f2').trim()
             println("This version: " + currentVersion)
             // println("Latest pip version: " + pipVersion)
-            if (env.BRANCH_NAME == 'master' && currentVersion != pipVersion) {
+            if (env.BRANCH_NAME == 'master') {
                stage('Release') {
                    sh("pipenv run twine upload --config-file /pypi/.pypirc dist/*")
                }
