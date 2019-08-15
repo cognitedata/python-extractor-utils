@@ -107,4 +107,5 @@ class PrometheusClient:
         Stop the push loop.
         """
         self.logger.debug("Sending stop event to metrics push thread for gateway %s", self.url)
+        self._push_to_server()
         self.stopping.set()
