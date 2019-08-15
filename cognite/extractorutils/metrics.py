@@ -73,7 +73,7 @@ class PrometheusClient:
         pushadd_to_gateway(self.url, job=self.job_name, registry=REGISTRY, handler=self._auth_handler)
         self.logger.debug("Pushed metrics to %s", self.url)
 
-    def _delete(self):
+    def clear_gateway(self):
         """
         Delete metrics stored at the gateway (reset gateway).
         """
@@ -93,7 +93,6 @@ class PrometheusClient:
             except:  # pylint: disable=bare-except
                 self.logger.exception("Failed to push metrics to %s", self.url)
             time.sleep(self.push_interval)
-        self._delete()
 
     def start(self):
         """
@@ -106,6 +105,8 @@ class PrometheusClient:
         """
         Stop the push loop.
         """
-        self.logger.debug("Sending stop event to metrics push thread for gateway %s", self.url)
+        # Make sure everything is pushed, and cleanup gateway
         self._push_to_server()
+
+        self.logger.debug("Sending stop event to metrics push thread for gateway %s", self.url)
         self.stopping.set()
