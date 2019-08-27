@@ -3,7 +3,8 @@ Module containing tools config verification and manipulation.
 """
 
 import logging
-from typing import Any, Dict, Iterable, List, Optional
+from collections.abc import Iterable
+from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 from ._inner_util import _MockLogger
 
@@ -347,3 +348,36 @@ def import_missing(from_dict: Dict[Any, Any], to_dict: Dict[Any, Any], keys: Opt
     for key in keys:
         if key in from_dict and key not in to_dict:
             to_dict[key] = from_dict[key]
+
+
+def recursive_none_check(collection: Any) -> Tuple[bool, Any]:
+    """
+    Returns true if any value in the dictionary tree is None. That is, if any value in the given dictionary is None, or
+    if any lists or dictionaries as values in this dictionary contains None, and so on.
+
+    Args:
+        collection (dict):  Dictionary to check
+
+    Returns:
+        Tuple[bool, Any]: True if any value is None, and the local index / key of the value that is None
+    """
+
+    if isinstance(collection, dict):
+        for key in collection:
+            if collection[key] is None:
+                return True, key
+
+            res = recursive_none_check(collection[key])
+            if res[0]:
+                return res
+
+    elif isinstance(collection, list):
+        for i, element in enumerate(collection):
+            if element is None:
+                return True, i
+
+            res = recursive_none_check(collection[i])
+            if res[0]:
+                return res
+
+    return False, None
