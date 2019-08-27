@@ -13,6 +13,6 @@ setup(
     author_email="mathias.lohne@cognite.com",
     packages=["cognite.extractorutils"],
     description="Utilities for use in extractors.",
-    install_requires=["cognite-sdk==1.0.*", "typing", "google-cloud-pubsub==0.41.*", "prometheus-client==0.7.*"],
+    install_requires=["cognite-sdk>=1.0.0", "typing", "google-cloud-pubsub==0.41.*", "prometheus-client==0.7.*"],
     python_requires=">=3.5",
 )
