@@ -248,7 +248,7 @@ class DictValidator:
 
         for base_key in self._require_if_present:
             for key in self._require_if_present[base_key]:
-                if not key in dictionary:
+                if not key in dictionary and base_key in dictionary:
                     self.logger.error(
                         "%sMissing key '%s' required by '%s'.%s",
                         self.log_prefix,
