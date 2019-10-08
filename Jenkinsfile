@@ -9,9 +9,9 @@ podTemplate(
             name: 'python',
             image: 'python:3.6.5',
             command: '/bin/cat -',
-            resourceRequestCpu: '500m',
+            resourceRequestCpu: '1000m',
             resourceRequestMemory: '500Mi',
-            resourceLimitCpu: '500m',
+            resourceLimitCpu: '1000m',
             resourceLimitMemory: '500Mi',
             envVars: [
               secretEnvVar(key: 'CODECOV_TOKEN', secretName: 'codecov-tokens', secretKey: 'python-extractor-utils'),
@@ -26,7 +26,6 @@ podTemplate(
         ),
     ],
     volumes: [
-        // secretVolume(secretName: 'pypi-artifactory-credentials', mountPath: '/pypi', readOnly: true),
         secretVolume(secretName: 'pypi-credentials', mountPath: '/pypi', readOnly: true),
         configMapVolume(configMapName: 'codecov-script-configmap', mountPath: '/codecov-script'),
     ]
@@ -49,11 +48,6 @@ podTemplate(
                 sh("pipenv run isort -w 120 -m 3 -tc -rc --check-only .")
                 sh("pipenv run python -m mypy cognite/extractorutils")
             }
-            stage('Build Docs') {
-                dir('./docs'){
-                    sh("pipenv run sphinx-build -W -b html ./source ./build")
-                }
-            }
             stage('Test') {
                 sh("pipenv run python -m pytest -v --cov-report xml:coverage.xml --cov=cognite/extractorutils --junitxml=test-report.xml")
                 junit(allowEmptyResults: true, testResults: '**/test-report.xml')
@@ -63,6 +57,11 @@ podTemplate(
             }
             stage('Build') {
                 sh("python3 setup.py sdist bdist_wheel")
+            }
+            stage('Build Docs') {
+                dir('./docs'){
+                    sh("pipenv run sphinx-build -W -b html ./source ./build")
+                }
             }
             stage('Get latest version on PyPI') {
                 def pipVersion = sh(returnStdout: true, script: 'pipenv run yolk -V cognite-extractor-utils | sort -n | tail -1 | cut -d\\  -f 2').trim()

@@ -70,7 +70,14 @@ class PrometheusClient:
         if not self.url or not self.job_name:
             return
 
-        pushadd_to_gateway(self.url, job=self.job_name, registry=REGISTRY, handler=self._auth_handler)
+        try:
+            pushadd_to_gateway(self.url, job=self.job_name, registry=REGISTRY, handler=self._auth_handler)
+
+        except OSError as exp:
+            self.logger.warning("Failed to push metrics to %s: %s", self.url, str(exp))
+        except:  # pylint: disable=bare-except
+            self.logger.exception("Failed to push metrics to %s", self.url)
+
         self.logger.debug("Pushed metrics to %s", self.url)
 
     def clear_gateway(self):
@@ -86,18 +93,14 @@ class PrometheusClient:
         """
         self.logger.debug("Starting metric push thread to %s", self.url)
         while not self.stopping.is_set():
-            try:
-                self._push_to_server()
-            except OSError as exp:
-                self.logger.warning("Failed to push metrics to %s: %s", self.url, str(exp))
-            except:  # pylint: disable=bare-except
-                self.logger.exception("Failed to push metrics to %s", self.url)
+            self._push_to_server()
             time.sleep(self.push_interval)
 
     def start(self):
         """
         Starts a thread that pushes the default registery to the configured gateway at certain intervals.
         """
+        self.stopping.clear()
         self.thread = threading.Thread(target=self._run, daemon=True)
         self.thread.start()
 
