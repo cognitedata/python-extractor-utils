@@ -14,8 +14,14 @@ podTemplate(
             resourceLimitCpu: '500m',
             resourceLimitMemory: '500Mi',
             envVars: [
-                envVar(key: 'PYTHONPATH', value: '/usr/local/bin:$pwd+/../')
-            ],
+        secretEnvVar(key: 'CODECOV_TOKEN', secretName: 'codecov-tokens', secretKey: 'python-extractor-utils'),
+        envVar(key: 'JENKINS_URL', value: env.JENKINS_URL),
+        envVar(key: 'BRANCH_NAME', value: env.BRANCH_NAME),
+        envVar(key: 'BUILD_NUMBER', value: env.BUILD_NUMBER),
+        envVar(key: 'BUILD_URL', value: env.BUILD_URL),
+        envVar(key: 'CHANGE_ID', value: env.CHANGE_ID),
+        envVar(key: 'PYTHONPATH', value: '/usr/local/bin:$pwd+/../'),
+    ]
             ttyEnabled: true
         ),
     ],
@@ -23,14 +29,6 @@ podTemplate(
         // secretVolume(secretName: 'pypi-artifactory-credentials', mountPath: '/pypi', readOnly: true),
         secretVolume(secretName: 'pypi-credentials', mountPath: '/pypi', readOnly: true),
         configMapVolume(configMapName: 'codecov-script-configmap', mountPath: '/codecov-script'),
-    ],
-    envVars: [
-        secretEnvVar(key: 'CODECOV_TOKEN', secretName: 'codecov-tokens', secretKey: 'python-extractor-utils'),
-        envVar(key: 'JENKINS_URL', value: env.JENKINS_URL),
-        envVar(key: 'BRANCH_NAME', value: env.BRANCH_NAME),
-        envVar(key: 'BUILD_NUMBER', value: env.BUILD_NUMBER),
-        envVar(key: 'BUILD_URL', value: env.BUILD_URL),
-        envVar(key: 'CHANGE_ID', value: env.CHANGE_ID),
     ]
 ) {
     node(label) {
