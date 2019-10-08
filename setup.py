@@ -6,13 +6,12 @@ version = re.search('^__version__\s*=\s*"(.*)"', open("cognite/extractorutils/__
 
 setup(
     name="cognite-extractor-utils",
-    # Version number:
     version=version,
-    # Application author details:
+    description="Utilities for easier development of extractors for CDF",
     author="Mathias Lohne",
     author_email="mathias.lohne@cognite.com",
     packages=["cognite.extractorutils"],
     description="Utilities for use in extractors.",
-    install_requires=["cognite-sdk>=1.0.0", "typing", "google-cloud-pubsub==0.41.*", "prometheus-client==0.7.*"],
+    install_requires=["cognite-sdk>=1.0.0", "typing", "google-cloud-pubsub", "prometheus-client"],
     python_requires=">=3.5",
 )
