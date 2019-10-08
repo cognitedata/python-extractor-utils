@@ -11,7 +11,6 @@ setup(
     author="Mathias Lohne",
     author_email="mathias.lohne@cognite.com",
     packages=["cognite.extractorutils"],
-    description="Utilities for use in extractors.",
     install_requires=["cognite-sdk>=1.0.0", "typing", "google-cloud-pubsub", "prometheus-client"],
     python_requires=">=3.5",
 )
