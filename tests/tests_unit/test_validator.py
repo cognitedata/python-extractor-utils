@@ -1,6 +1,6 @@
 import unittest
 
-from cognite.extractorutils.configtools import DictValidator
+from cognite.extractorutils.configtools import DictValidator, import_missing, recursive_none_check
 
 
 class CountingLogger:
@@ -165,5 +165,34 @@ class TestValidator(unittest.TestCase):
         self.assertEqual(self.dic.get("Key7"), "Value7")
 
 
-def get_suites():
-    return unittest.TestLoader().loadTestsFromTestCase(TestValidator)
+class TestConfigtoolsMethods(unittest.TestCase):
+    def test_import_missing(self):
+        d1 = {"key1": "val1", "key2": "val2", "key3": "val3"}
+        d2 = {"key4": "val4", "key5": "val5", "key6": "val6"}
+
+        import_missing(from_dict=d1, to_dict=d2, keys=["key1"])
+
+        self.assertDictEqual(d2, {"key1": "val1", "key4": "val4", "key5": "val5", "key6": "val6"})
+        self.assertDictEqual(d1, {"key1": "val1", "key2": "val2", "key3": "val3"})
+
+        import_missing(from_dict={"key1": "dont overwrite this"}, to_dict=d1)
+        self.assertDictEqual(d1, {"key1": "val1", "key2": "val2", "key3": "val3"})
+
+        import_missing(from_dict=d1, to_dict=d2)
+
+        self.assertDictEqual(
+            d2, {"key1": "val1", "key2": "val2", "key3": "val3", "key4": "val4", "key5": "val5", "key6": "val6"}
+        )
+
+    def test_recursive_none_check(self):
+        d1 = {"key1": "val1", "key2": "val2", "key3": "val3"}
+        d2 = {"key1": "val1", "key2": "val2", "key3": None}
+        d3 = {"key1": "val1", "key2": "val2", "key3": ["v1", "v2", "v3"]}
+        d4 = {"key1": "val1", "key2": "val2", "key3": ["v1", "v2", None]}
+        d5 = {"key1": "val1", "key2": "val2", "key3": ["v1", "v2", {"check": None}]}
+
+        self.assertEqual(recursive_none_check(d1), (False, None))
+        self.assertEqual(recursive_none_check(d2), (True, "key3"))
+        self.assertEqual(recursive_none_check(d3), (False, None))
+        self.assertEqual(recursive_none_check(d4), (True, 2))
+        self.assertEqual(recursive_none_check(d5), (True, "check"))

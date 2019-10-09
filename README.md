@@ -5,7 +5,9 @@
 Python extractor-utils
 =======================
 [![build](https://webhooks.dev.cognite.ai/build/buildStatus/icon?job=github-builds/python-extractor-utils/master)](https://jenkins.cognite.ai/job/github-builds/job/python-extractor-utils/job/master/)
-<!-- [![codecov](https://codecov.io/gh/cognitedata/python-extractor-utils/branch/master/graph/badge.svg)](https://codecov.io/gh/cognitedata/python-extractor-utils) -->
+[![codecov](https://codecov.io/gh/cognitedata/python-extractor-utils/branch/master/graph/badge.svg?token=7AmVCpAh7I)](https://codecov.io/gh/cognitedata/python-extractor-utils)
+[![PyPI version](https://badge.fury.io/py/cognite-extractor-utils.svg)](https://pypi.org/project/cognite-extractor-utils)
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black)
 
 A package containing convenient utilities for developing extractors in Python.
 
