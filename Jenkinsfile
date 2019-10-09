@@ -31,6 +31,9 @@ podTemplate(
     ]
 ) {
     node(label) {
+        def pipVersion
+        def currentVersion
+
         container('jnlp') {
             stage('Checkout') {
                 checkout(scm)
@@ -64,8 +67,8 @@ podTemplate(
                 }
             }
             stage('Get latest version on PyPI') {
-                def pipVersion = sh(returnStdout: true, script: 'pipenv run yolk -V cognite-extractor-utils | sort -n | tail -1 | cut -d\\  -f 2').trim()
-                def currentVersion = sh(returnStdout: true, script: 'sed -n -e "/^__version__/p" cognite/extractorutils/__init__.py | cut -d\\" -f2').trim()
+                pipVersion = sh(returnStdout: true, script: 'pipenv run yolk -V cognite-extractor-utils | sort -n | tail -1 | cut -d\\  -f 2').trim()
+                currentVersion = sh(returnStdout: true, script: 'sed -n -e "/^__version__/p" cognite/extractorutils/__init__.py | cut -d\\" -f2').trim()
                 println("This version: " + currentVersion)
                 println("Latest pip version: " + pipVersion)
             }
