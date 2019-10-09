@@ -49,7 +49,6 @@ podTemplate(
             stage('Check code style') {
                 sh("pipenv run black -l 120 --check .")
                 sh("pipenv run isort -w 120 -m 3 -tc -rc --check-only .")
-                sh("pipenv run python -m mypy cognite/extractorutils")
             }
             stage('Test') {
                 sh("pipenv run python -m pytest -v --cov-report xml:coverage.xml --cov=cognite/extractorutils --junitxml=test-report.xml")

@@ -1,0 +1,371 @@
+"""
+Module containing upload queue classes. The *UploadQueue classes chunks together items and uploads them together to CDF,
+both to minimize the load on the API, and also to speed up uploading as requests can be slow.
+
+Each upload queue comes with some configurable conditions that, when met, automatically triggers an upload.
+"""
+import logging
+import threading
+import time
+from abc import ABC, abstractmethod
+from datetime import datetime
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+
+from cognite.client import CogniteClient
+from cognite.client._api.raw import RawAPI  # Private access, but we need it for typing
+from cognite.client.data_classes import Event
+from cognite.client.data_classes.raw import Row
+from cognite.client.exceptions import CogniteNotFoundError
+
+
+class UploadQueue(ABC):
+    """
+    Abstract uploader class.
+
+    Args:
+        post_upload_function (Callable[[int]): (Optional). A function that will be called after each upload. The
+            function will be given one argument: An int representing the number of rows uploaded in total.
+        queue_threshold (int): (Optional). Maximum byte size of upload queue. Defaults to no queue (ie upload after each
+            add_to_upload_queue).
+    """
+
+    def __init__(
+        self, post_upload_function: Optional[Callable[[int], None]] = None, queue_threshold: Optional[int] = None
+    ):
+        """
+        Called by subclasses. Saves info and inits upload queue.
+        """
+        self.threshold = queue_threshold if queue_threshold is not None else -1
+        self.upload_queue_byte_size = 0
+
+        self.num_uploaded_total = 0
+
+        self.post_upload_function = post_upload_function
+
+    def _check_triggers(self, item: Any) -> Any:
+        """
+        Check if upload triggers are met, call upload if they are. Called by subclasses.
+
+        Args:
+            item (dict): Item added to upload queue
+
+        Returns:
+            Any: Result of upload, if upload happened.
+        """
+        self.upload_queue_byte_size += len(repr(item))
+
+        # Check upload threshold
+        if self.upload_queue_byte_size > self.threshold and self.threshold >= 0:
+            return self.upload()
+
+        return None
+
+    def _post_upload(self, num: int):
+        self.num_uploaded_total += num
+
+        if self.post_upload_function is not None:
+            self.post_upload_function(self.num_uploaded_total)
+
+    @abstractmethod
+    def add_to_upload_queue(self, *args) -> Any:
+        """
+        Adds a row to the upload queue. The queue will be uploaded if the queue byte size is larger than the threshold
+        specified in the config.
+
+        Returns:
+            Any: Result of upload, if applicable and if upload happened.
+        """
+
+    @abstractmethod
+    def upload(self) -> Any:
+        """
+        Uploads the queue.
+
+        Returns:
+            Any: Result status of upload.
+        """
+
+
+class RawUploadQueue(UploadQueue):
+    """
+    Upload queue for raw
+
+    Args:
+        cdf_client (CogniteClient): Cognite Data Fusion client
+        post_upload_function (Callable[[int]): (Optional). A function that will be called after each upload. The
+            function will be given one argument: An int representing the number of rows uploaded in total.
+        queue_threshold (int): (Optional). Maximum size of upload queue. Defaults to no queue (ie upload after each
+            add_to_upload_queue).
+    """
+
+    raw: RawAPI
+
+    def __init__(
+        self,
+        cdf_client: CogniteClient,
+        post_upload_function: Optional[Callable[[int], None]] = None,
+        queue_threshold: Optional[int] = None,
+    ):
+        # Super sets post_upload and threshold
+        super().__init__(post_upload_function, queue_threshold)
+
+        self.upload_queue: Dict[str, Dict[str, List[Row]]] = dict()
+
+        self.raw = cdf_client.raw
+
+    def add_to_upload_queue(self, database: str, table: str, raw_row: Row) -> None:
+        """
+        Adds a row to the upload queue. The queue will be uploaded if the queue byte size is larger than the threshold
+        specified in the __init__.
+
+        Args:
+            database (str): The database to upload the Raw object to
+            table (str): The table to upload the Raw object to
+            raw_row (Row): The row object
+
+        Returns:
+            None.
+        """
+        # Ensure that the dicts has correct keys
+        if database not in self.upload_queue:
+            self.upload_queue[database] = dict()
+        if table not in self.upload_queue[database]:
+            self.upload_queue[database][table] = []
+
+        # Append row to queue
+        self.upload_queue[database][table].append(raw_row)
+
+        self._check_triggers(raw_row)
+
+    def upload(self) -> None:
+        """
+        Trigger an upload of the queue, clears queue afterwards
+        """
+        for database, tables in self.upload_queue.items():
+            for table, rows in tables.items():
+                # Upload
+                self.raw.rows.insert(db_name=database, table_name=table, row=rows, ensure_parent=True)
+
+                # Perform post-upload logic if applicable
+                self._post_upload(len(rows))
+
+        self.upload_queue = dict()
+        self.upload_queue_byte_size = 0
+
+
+class TimeSeriesUploadQueue(UploadQueue):
+    """
+    Upload queue for time series
+
+    Args:
+        cdf_client (CogniteClient): Cognite Data Fusion client
+        post_upload_function (Callable[[int]): (Optional). A function that will be called after each upload. The
+            function will be given one argument: An int representing the number of rows uploaded in total.
+        queue_threshold (int): (Optional). Maximum size of upload queue. Defaults to no queue (ie upload after each
+            add_to_upload_queue).
+        max_upload_interval (int): (Optional). Automatically trigger an upload each m seconds when run as a thread (use
+            start/stop methods).
+    """
+
+    cdf_client: CogniteClient
+
+    def __init__(
+        self,
+        cdf_client: CogniteClient,
+        post_upload_function: Optional[Callable[[int], None]] = None,
+        queue_threshold: Optional[int] = None,
+        max_upload_interval: Optional[int] = None,
+    ):
+        # Super sets post_upload and threshold
+        super().__init__(post_upload_function, queue_threshold)
+
+        self.upload_queue: Dict[
+            Union[int, str],
+            List[
+                Union[
+                    List[Dict[Union[int, float, datetime], Union[int, float, str]]],
+                    List[Tuple[Union[int, float, datetime], Union[int, float, str]]],
+                ]
+            ],
+        ] = dict()
+
+        self.max_upload_interval = max_upload_interval
+        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.stopping = threading.Event()
+
+        self.cdf_client = cdf_client
+
+        self.logger = logging.getLogger(__name__)
+
+    def add_to_upload_queue(
+        self,
+        timeseries_id: int,
+        datapoints: Union[
+            List[Dict[Union[int, float, datetime], Union[int, float, str]]],
+            List[Tuple[Union[int, float, datetime], Union[int, float, str]]],
+        ],
+    ) -> None:
+        """
+        Add data points to upload queue. The queue will be uploaded if the queue byte size is larger than the threshold
+        specified in the __init__.
+
+        Args:
+            timeseries_id (int): ID of time series
+            datapoints (list): List of data points to add
+        """
+        if timeseries_id not in self.upload_queue:
+            self.upload_queue[timeseries_id] = []
+
+        self.upload_queue[timeseries_id].extend(datapoints)
+        self._check_triggers(datapoints)
+
+    def _run(self):
+        """
+        Internal run method for upload thread
+        """
+        while not self.stopping.is_set():
+            self.upload()
+            time.sleep(self.max_upload_interval)
+
+    def upload(self) -> None:
+        """
+        Trigger an upload of the queue, clears queue afterwards
+        """
+        if len(self.upload_queue) == 0:
+            return
+
+        self.logger.debug("Triggering upload")
+
+        num_points = len(self.upload_queue)
+        upload_this = [{"id": id, "datapoints": datapoints} for id, datapoints in self.upload_queue.items()]
+        self.upload_queue.clear()
+
+        try:
+            self.cdf_client.datapoints.insert_multiple(upload_this)
+
+        except CogniteNotFoundError as ex:
+            self.logger.error("Could not upload data points to %s: %s", str(ex.not_found), str(ex))
+
+            # Get IDs of time series that exists, but failed because of the non-existing time series
+            retry_these = [id_dict["id"] for id_dict in ex.failed if not id_dict in ex.not_found]
+
+            # Remove entries with non-existing time series from upload queue
+            upload_this = [entry for entry in upload_this if entry["id"] in retry_these]
+
+            # Upload remaining
+            self.cdf_client.datapoints.insert_multiple(upload_this)
+
+        self._post_upload(num_points)
+
+    def start(self):
+        """
+        Start upload thread, this called the upload method every max_upload_interval seconds
+        """
+        if self.max_upload_interval is None:
+            raise ValueError("No max_upload_interval given, can't start uploader thread")
+
+        self.stopping.clear()
+        self.thread.start()
+
+    def stop(self, ensure_upload: bool = True):
+        """
+        Stop upload thread
+
+        Args:
+            ensure_upload (bool): (Optional). Call upload one last time after shutting down thread to ensure empty
+                upload queue.
+        """
+        self.stopping.set()
+        if ensure_upload:
+            self.upload()
+
+
+class EventUploadQueue(UploadQueue):
+    """
+    Upload queue for events
+
+    Args:
+        cdf_client (CogniteClient): Cognite Data Fusion client
+        post_upload_function (Callable[[int]): (Optional). A function that will be called after each upload. The
+            function will be given one argument: An int representing the number of rows uploaded in total.
+        queue_threshold (int): (Optional). Maximum size of upload queue. Defaults to no queue (ie upload after each
+            add_to_upload_queue).
+        max_upload_interval (int): (Optional). Automatically trigger an upload each m seconds when run as a thread (use
+            start/stop methods).
+    """
+
+    cdf_client: CogniteClient
+
+    def __init__(
+        self,
+        cdf_client: CogniteClient,
+        post_upload_function: Optional[Callable[[int], None]] = None,
+        queue_threshold: Optional[int] = None,
+        max_upload_interval: Optional[int] = None,
+    ):
+        # Super sets post_upload and threshold
+        super().__init__(post_upload_function, queue_threshold)
+
+        self.upload_queue: List[Event] = []
+
+        self.max_upload_interval = max_upload_interval
+        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.stopping = threading.Event()
+
+        self.cdf_client = cdf_client
+
+        self.logger = logging.getLogger(__name__)
+
+    def add_to_upload_queue(self, event: Event) -> None:
+        """
+        Add event to upload queue. The queue will be uploaded if the queue byte size is larger than the threshold
+        specified in the __init__.
+
+        Args:
+            event (Event): Event to add
+        """
+        self.upload_queue.append(event)
+        self._check_triggers(event)
+
+    def _run(self):
+        """
+        Internal run method for upload thread
+        """
+        while not self.stopping.is_set():
+            self.upload()
+            time.sleep(self.max_upload_interval)
+
+    def upload(self) -> None:
+        """
+        Trigger an upload of the queue, clears queue afterwards
+        """
+        if len(self.upload_queue) == 0:
+            return
+
+        self.logger.debug("Triggering upload")
+
+        self.cdf_client.events.create(self.upload_queue)
+        self._post_upload(len(self.upload_queue))
+        self.upload_queue.clear()
+
+    def start(self):
+        """
+        Start upload thread, this called the upload method every max_upload_interval seconds
+        """
+        if self.max_upload_interval is None:
+            raise ValueError("No max_upload_interval given, can't start uploader thread")
+
+        self.stopping.clear()
+        self.thread.start()
+
+    def stop(self, ensure_upload: bool = True):
+        """
+        Stop upload thread
+
+        Args:
+            ensure_upload (bool): (Optional). Call upload one last time after shutting down thread to ensure empty
+                upload queue.
+        """
+        self.stopping.set()
+        if ensure_upload:
+            self.upload()
