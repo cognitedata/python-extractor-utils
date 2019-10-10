@@ -18,7 +18,7 @@ sphinx-rtd-theme = "*"
 pre-commit = "*"
 
 [packages]
-cognite-configtools = {path = "."}
+cognite-extractor-utils = {path = "."}
 
 [requires]
 python_version = "3.6"

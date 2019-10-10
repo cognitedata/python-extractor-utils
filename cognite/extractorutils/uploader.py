@@ -9,7 +9,10 @@ import threading
 import time
 from abc import ABC, abstractmethod
 from datetime import datetime
+from json import dumps
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+
+from google.cloud import pubsub_v1
 
 from cognite.client import CogniteClient
 from cognite.client._api.raw import RawAPI  # Private access, but we need it for typing
@@ -149,8 +152,128 @@ class RawUploadQueue(UploadQueue):
                 # Perform post-upload logic if applicable
                 self._post_upload(len(rows))
 
-        self.upload_queue = dict()
+        self.upload_queue.clear()
         self.upload_queue_byte_size = 0
+
+
+class PubSubUploadQueue(UploadQueue):
+    """
+    Upload queue towards Google's Pub/Sub API
+
+    Args:
+        project_id (str): ID of Google Cloud Platform project to use.
+        topic_name (str): Name of Pub/Sub topic to publish to
+        post_upload_function (Callable[[int]): (Optional). A function that will be called after each upload. The
+            function will be given one argument: An int representing the number of rows uploaded in total.
+        queue_threshold (int): (Optional). Maximum size of upload queue. Defaults to no queue (ie upload after each
+            add_to_upload_queue).
+        always_ensure_topic (bool): (Optional). Call ensure_topic before each upload
+    """
+
+    def __init__(
+        self,
+        project_id: str,
+        topic_name: str,
+        post_upload_function: Optional[Callable[[int], None]] = None,
+        queue_threshold: Optional[int] = None,
+        always_ensure_topic: Optional[bool] = False,
+    ):
+        # Super sets post_upload and threshold
+        super().__init__(post_upload_function, queue_threshold)
+
+        self.upload_queue: Dict[str, Dict[str, List[Row]]] = dict()
+
+        # Init pub/sub
+        self.pubsub_client = pubsub_v1.PublisherClient()
+
+        # Save Google Pub/Sub info, construct topic path
+        self.project_id = project_id
+        self.project_path = self.pubsub_client.project_path(project_id)
+        self.topic_name = topic_name
+        self.topic_path = self.pubsub_client.topic_path(project_id, topic_name)
+
+        self.always_ensure_topic = always_ensure_topic
+
+    def ensure_topic(self):
+        """
+        Checks that the given topic name exists in project, and creates it if it doesn't.
+
+        Note that this action requires extended previlegies on the cloud platform. The normal 'publisher' role is not
+        allowed to view or manage topics.
+
+        Raises:
+            PermissionDenied: If API key stored in GOOGLE_APPLICATION_CREDENTIALS are not allowed to manipulate topics.
+        """
+        topic_paths = [topic.name for topic in self.pubsub_client.list_topics(self.project_path)]
+
+        if self.topic_path not in topic_paths:
+            self.pubsub_client.create_topic(self.topic_path)
+
+    def add_to_upload_queue(self, database: str, table: str, raw_row: Row) -> List[Any]:
+        """
+        Adds a row to the upload queue. The queue will be uploaded if the queue
+        byte size is larger than the threshold specified in the config.
+
+        Args:
+            database (str): The database to upload the Raw object to
+            table (str): The table to upload the Raw object to
+            raw_row (Row): The row object
+
+        Returns:
+            List[Any]: Pub/Sub message IDs, if an upload was made. None otherwise.
+        """
+        # Ensure that the dicts has correct keys
+        if database not in self.upload_queue:
+            self.upload_queue[database] = dict()
+        if table not in self.upload_queue[database]:
+            self.upload_queue[database][table] = []
+
+        # Append row to queue
+        self.upload_queue[database][table].append(raw_row)
+
+        return self._check_triggers(raw_row)
+
+    def upload(self) -> List[Any]:
+        """
+        Publishes the queue to Google's Pub/Sub.
+
+        Returns:
+            List[Any]: Pub/Sub message IDs.
+        """
+        if self.always_ensure_topic:
+            self.ensure_topic()
+
+        futures = []
+        ids = []
+
+        # Upload each table as a separate Pub/Sub message
+        for database, tables in self.upload_queue.items():
+            for table, rows in tables.items():
+                # Convert list of row dicts to one single bytestring
+                bytestring = str.encode(
+                    dumps({"database": database, "table": table, "rows": [row.__dict__ for row in rows]})
+                )
+
+                # Publish
+                pubsub_future = self.pubsub_client.publish(self.topic_path, bytestring)
+                futures.append(pubsub_future)
+
+                # Add message ID to ID list when message is sent
+                pubsub_future.add_done_callback(lambda f: ids.append(f.result()))
+
+                # Update upload stats
+                self._post_upload(len(rows))
+
+        self.upload_queue.clear()
+        self.upload_queue_byte_size = 0
+
+        # Wait until all the messages are sent before returning. We can't use concurrent.futures.wait here since these
+        # objects are instances of Google's own Future class and not the stdlib one.
+        for future in futures:
+            while future.running():
+                time.sleep(0.1)
+
+        return ids
 
 
 class TimeSeriesUploadQueue(UploadQueue):
@@ -160,7 +283,7 @@ class TimeSeriesUploadQueue(UploadQueue):
     Args:
         cdf_client (CogniteClient): Cognite Data Fusion client
         post_upload_function (Callable[[int]): (Optional). A function that will be called after each upload. The
-            function will be given one argument: An int representing the number of rows uploaded in total.
+            function will be given one argument: An int representing the number of points uploaded in total.
         queue_threshold (int): (Optional). Maximum size of upload queue. Defaults to no queue (ie upload after each
             add_to_upload_queue).
         max_upload_interval (int): (Optional). Automatically trigger an upload each m seconds when run as a thread (use
@@ -256,6 +379,7 @@ class TimeSeriesUploadQueue(UploadQueue):
             self.cdf_client.datapoints.insert_multiple(upload_this)
 
         self._post_upload(num_points)
+        self.upload_queue_byte_size = 0
 
     def start(self):
         """
@@ -287,7 +411,7 @@ class EventUploadQueue(UploadQueue):
     Args:
         cdf_client (CogniteClient): Cognite Data Fusion client
         post_upload_function (Callable[[int]): (Optional). A function that will be called after each upload. The
-            function will be given one argument: An int representing the number of rows uploaded in total.
+            function will be given one argument: An int representing the number of events uploaded in total.
         queue_threshold (int): (Optional). Maximum size of upload queue. Defaults to no queue (ie upload after each
             add_to_upload_queue).
         max_upload_interval (int): (Optional). Automatically trigger an upload each m seconds when run as a thread (use
@@ -347,6 +471,7 @@ class EventUploadQueue(UploadQueue):
         self.cdf_client.events.create(self.upload_queue)
         self._post_upload(len(self.upload_queue))
         self.upload_queue.clear()
+        self.upload_queue_byte_size = 0
 
     def start(self):
         """
