@@ -41,7 +41,7 @@ podTemplate(
         }
         container('python') {
             stage('Install pipenv') {
-                sh("pip3 install --upgrade pip pipenv setuptools")
+                sh("pip3 install pipenv")
             }
             stage('Install dependencies') {
                 sh("pipenv sync --dev")

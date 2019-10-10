@@ -59,10 +59,10 @@ class TestUploadQueue(unittest.TestCase):
         with self.assertRaises(ValueError):
             queue.start()
 
-        queue.add_to_upload_queue(1, [(1, 1), (2, 2)])
-        queue.add_to_upload_queue(2, [(3, 3), (4, 4)])
-        queue.add_to_upload_queue(1, [(5, 5), (6, 6)])
-        queue.add_to_upload_queue(3, [(7, 7), (8, 8)])
+        queue.add_to_upload_queue(id=1, datapoints=[(1, 1), (2, 2)])
+        queue.add_to_upload_queue(id=2, datapoints=[(3, 3), (4, 4)])
+        queue.add_to_upload_queue(id=1, datapoints=[(5, 5), (6, 6)])
+        queue.add_to_upload_queue(id=3, datapoints=[(7, 7), (8, 8)])
 
         client.datapoints.insert_multiple.assert_not_called()
         queue.upload()
@@ -86,10 +86,10 @@ class TestUploadQueue(unittest.TestCase):
         queue = TimeSeriesUploadQueue(client, max_upload_interval=2, post_upload_function=post)
         queue.start()
 
-        queue.add_to_upload_queue(1, [(1, 1), (2, 2)])
-        queue.add_to_upload_queue(2, [(3, 3), (4, 4)])
-        queue.add_to_upload_queue(1, [(5, 5), (6, 6)])
-        queue.add_to_upload_queue(3, [(7, 7), (8, 8)])
+        queue.add_to_upload_queue(id=1, datapoints=[(1, 1), (2, 2)])
+        queue.add_to_upload_queue(id=2, datapoints=[(3, 3), (4, 4)])
+        queue.add_to_upload_queue(id=1, datapoints=[(5, 5), (6, 6)])
+        queue.add_to_upload_queue(id=3, datapoints=[(7, 7), (8, 8)])
 
         time.sleep(2.1)
 

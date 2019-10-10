@@ -19,6 +19,7 @@ from cognite.client._api.raw import RawAPI  # Private access, but we need it for
 from cognite.client.data_classes import Event
 from cognite.client.data_classes.raw import Row
 from cognite.client.exceptions import CogniteNotFoundError
+from cognite.extractorutils._inner_util import _EitherId
 
 
 class UploadQueue(ABC):
@@ -303,7 +304,7 @@ class TimeSeriesUploadQueue(UploadQueue):
         super().__init__(post_upload_function, queue_threshold)
 
         self.upload_queue: Dict[
-            Union[int, str],
+            _EitherId,
             List[
                 Union[
                     List[Dict[Union[int, float, datetime], Union[int, float, str]]],
@@ -322,24 +323,29 @@ class TimeSeriesUploadQueue(UploadQueue):
 
     def add_to_upload_queue(
         self,
-        timeseries_id: int,
+        *,
+        id: int = None,
+        external_id: str = None,
         datapoints: Union[
             List[Dict[Union[int, float, datetime], Union[int, float, str]]],
             List[Tuple[Union[int, float, datetime], Union[int, float, str]]],
-        ],
+        ] = [],
     ) -> None:
         """
         Add data points to upload queue. The queue will be uploaded if the queue byte size is larger than the threshold
         specified in the __init__.
 
         Args:
-            timeseries_id (int): ID of time series
+            id (int): Internal ID of time series. Either this or external_id must be set.
+            external_id (str): External ID of time series. Either this or external_id must be set.
             datapoints (list): List of data points to add
         """
-        if timeseries_id not in self.upload_queue:
-            self.upload_queue[timeseries_id] = []
+        either_id = _EitherId(id, external_id)
 
-        self.upload_queue[timeseries_id].extend(datapoints)
+        if either_id not in self.upload_queue:
+            self.upload_queue[either_id] = []
+
+        self.upload_queue[either_id].extend(datapoints)
         self._check_triggers(datapoints)
 
     def _run(self):
@@ -360,7 +366,10 @@ class TimeSeriesUploadQueue(UploadQueue):
         self.logger.debug("Triggering upload")
 
         num_points = len(self.upload_queue)
-        upload_this = [{"id": id, "datapoints": datapoints} for id, datapoints in self.upload_queue.items()]
+        upload_this = [
+            {either_id.type(): either_id.content(), "datapoints": datapoints}
+            for either_id, datapoints in self.upload_queue.items()
+        ]
         self.upload_queue.clear()
 
         try:
@@ -370,10 +379,12 @@ class TimeSeriesUploadQueue(UploadQueue):
             self.logger.error("Could not upload data points to %s: %s", str(ex.not_found), str(ex))
 
             # Get IDs of time series that exists, but failed because of the non-existing time series
-            retry_these = [id_dict["id"] for id_dict in ex.failed if not id_dict in ex.not_found]
+            retry_these = [_EitherId(**id_dict) for id_dict in ex.failed if id_dict not in ex.not_found]
 
             # Remove entries with non-existing time series from upload queue
-            upload_this = [entry for entry in upload_this if entry["id"] in retry_these]
+            upload_this = [
+                entry for entry in upload_this if _EitherId(entry.get("id"), entry.get("externalId")) in retry_these
+            ]
 
             # Upload remaining
             self.cdf_client.datapoints.insert_multiple(upload_this)
