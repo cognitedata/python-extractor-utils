@@ -21,6 +21,11 @@ from cognite.client.data_classes.raw import Row
 from cognite.client.exceptions import CogniteNotFoundError
 from cognite.extractorutils._inner_util import _EitherId
 
+DataPointList = Union[
+    List[Dict[Union[int, float, datetime], Union[int, float, str]]],
+    List[Tuple[Union[int, float, datetime], Union[int, float, str]]],
+]
+
 
 class UploadQueue(ABC):
     """
@@ -28,7 +33,7 @@ class UploadQueue(ABC):
 
     Args:
         post_upload_function (Callable[[int]): (Optional). A function that will be called after each upload. The
-            function will be given one argument: An int representing the number of rows uploaded in total.
+            function will be given one argument: A list of the elements that were uploaded
         queue_threshold (int): (Optional). Maximum byte size of upload queue. Defaults to no queue (ie upload after each
             add_to_upload_queue).
     """
@@ -41,8 +46,6 @@ class UploadQueue(ABC):
         """
         self.threshold = queue_threshold if queue_threshold is not None else -1
         self.upload_queue_byte_size = 0
-
-        self.num_uploaded_total = 0
 
         self.post_upload_function = post_upload_function
 
@@ -64,17 +67,15 @@ class UploadQueue(ABC):
 
         return None
 
-    def _post_upload(self, num: int):
-        self.num_uploaded_total += num
-
+    def _post_upload(self, uploaded: List[Any]):
         if self.post_upload_function is not None:
-            self.post_upload_function(self.num_uploaded_total)
+            self.post_upload_function(uploaded)
 
     @abstractmethod
     def add_to_upload_queue(self, *args) -> Any:
         """
-        Adds a row to the upload queue. The queue will be uploaded if the queue byte size is larger than the threshold
-        specified in the config.
+        Adds an element to the upload queue. The queue will be uploaded if the queue byte size is larger than the
+        threshold specified in the config.
 
         Returns:
             Any: Result of upload, if applicable and if upload happened.
@@ -92,12 +93,12 @@ class UploadQueue(ABC):
 
 class RawUploadQueue(UploadQueue):
     """
-    Upload queue for raw
+    Upload queue for RAW
 
     Args:
         cdf_client (CogniteClient): Cognite Data Fusion client
         post_upload_function (Callable[[int]): (Optional). A function that will be called after each upload. The
-            function will be given one argument: An int representing the number of rows uploaded in total.
+            function will be given one argument: An a list of the rows that were uploaded.
         queue_threshold (int): (Optional). Maximum size of upload queue. Defaults to no queue (ie upload after each
             add_to_upload_queue).
     """
@@ -107,7 +108,7 @@ class RawUploadQueue(UploadQueue):
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[int], None]] = None,
+        post_upload_function: Optional[Callable[[List[Any]], None]] = None,
         queue_threshold: Optional[int] = None,
     ):
         # Super sets post_upload and threshold
@@ -151,7 +152,7 @@ class RawUploadQueue(UploadQueue):
                 self.raw.rows.insert(db_name=database, table_name=table, row=rows, ensure_parent=True)
 
                 # Perform post-upload logic if applicable
-                self._post_upload(len(rows))
+                self._post_upload(rows)
 
         self.upload_queue.clear()
         self.upload_queue_byte_size = 0
@@ -159,13 +160,28 @@ class RawUploadQueue(UploadQueue):
 
 class PubSubUploadQueue(UploadQueue):
     """
-    Upload queue towards Google's Pub/Sub API
+    Upload queue towards Google's Pub/Sub API. This queue will batch up RAW rows and send them as JSON encoded PubSub
+    messages on the following format:
+
+        {
+            "database": db-name,
+            "table": table-name,
+            "rows": [
+                {
+                    "key": key,
+                    "columns": {
+                        ...
+                    }
+                },
+                ...
+            ]
+        }
 
     Args:
         project_id (str): ID of Google Cloud Platform project to use.
         topic_name (str): Name of Pub/Sub topic to publish to
         post_upload_function (Callable[[int]): (Optional). A function that will be called after each upload. The
-            function will be given one argument: An int representing the number of rows uploaded in total.
+            function will be given one argument: An a list of the rows that were uploaded.
         queue_threshold (int): (Optional). Maximum size of upload queue. Defaults to no queue (ie upload after each
             add_to_upload_queue).
         always_ensure_topic (bool): (Optional). Call ensure_topic before each upload
@@ -175,7 +191,7 @@ class PubSubUploadQueue(UploadQueue):
         self,
         project_id: str,
         topic_name: str,
-        post_upload_function: Optional[Callable[[int], None]] = None,
+        post_upload_function: Optional[Callable[[List[Row]], None]] = None,
         queue_threshold: Optional[int] = None,
         always_ensure_topic: Optional[bool] = False,
     ):
@@ -252,7 +268,13 @@ class PubSubUploadQueue(UploadQueue):
             for table, rows in tables.items():
                 # Convert list of row dicts to one single bytestring
                 bytestring = str.encode(
-                    dumps({"database": database, "table": table, "rows": [row.__dict__ for row in rows]})
+                    dumps(
+                        {
+                            "database": database,
+                            "table": table,
+                            "rows": [{"key": row.key, "columns": row.columns} for row in rows],
+                        }
+                    )
                 )
 
                 # Publish
@@ -263,7 +285,7 @@ class PubSubUploadQueue(UploadQueue):
                 pubsub_future.add_done_callback(lambda f: ids.append(f.result()))
 
                 # Update upload stats
-                self._post_upload(len(rows))
+                self._post_upload(rows)
 
         self.upload_queue.clear()
         self.upload_queue_byte_size = 0
@@ -284,7 +306,8 @@ class TimeSeriesUploadQueue(UploadQueue):
     Args:
         cdf_client (CogniteClient): Cognite Data Fusion client
         post_upload_function (Callable[[int]): (Optional). A function that will be called after each upload. The
-            function will be given one argument: An int representing the number of points uploaded in total.
+            function will be given one argument: A dict from time series ID to a list of the data points that were
+            uploaded
         queue_threshold (int): (Optional). Maximum size of upload queue. Defaults to no queue (ie upload after each
             add_to_upload_queue).
         max_upload_interval (int): (Optional). Automatically trigger an upload each m seconds when run as a thread (use
@@ -296,22 +319,14 @@ class TimeSeriesUploadQueue(UploadQueue):
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[int], None]] = None,
+        post_upload_function: Optional[Callable[[Dict[_EitherId, DataPointList]], None]] = None,
         queue_threshold: Optional[int] = None,
         max_upload_interval: Optional[int] = None,
     ):
         # Super sets post_upload and threshold
         super().__init__(post_upload_function, queue_threshold)
 
-        self.upload_queue: Dict[
-            _EitherId,
-            List[
-                Union[
-                    List[Dict[Union[int, float, datetime], Union[int, float, str]]],
-                    List[Tuple[Union[int, float, datetime], Union[int, float, str]]],
-                ]
-            ],
-        ] = dict()
+        self.upload_queue: Dict[_EitherId, DataPointList] = dict()
 
         self.max_upload_interval = max_upload_interval
         self.thread = threading.Thread(target=self._run, daemon=True)
@@ -321,16 +336,7 @@ class TimeSeriesUploadQueue(UploadQueue):
 
         self.logger = logging.getLogger(__name__)
 
-    def add_to_upload_queue(
-        self,
-        *,
-        id: int = None,
-        external_id: str = None,
-        datapoints: Union[
-            List[Dict[Union[int, float, datetime], Union[int, float, str]]],
-            List[Tuple[Union[int, float, datetime], Union[int, float, str]]],
-        ] = [],
-    ) -> None:
+    def add_to_upload_queue(self, *, id: int = None, external_id: str = None, datapoints: DataPointList = []) -> None:
         """
         Add data points to upload queue. The queue will be uploaded if the queue byte size is larger than the threshold
         specified in the __init__.
@@ -365,7 +371,6 @@ class TimeSeriesUploadQueue(UploadQueue):
 
         self.logger.debug("Triggering upload")
 
-        num_points = len(self.upload_queue)
         upload_this = [
             {either_id.type(): either_id.content(), "datapoints": datapoints}
             for either_id, datapoints in self.upload_queue.items()
@@ -389,7 +394,7 @@ class TimeSeriesUploadQueue(UploadQueue):
             # Upload remaining
             self.cdf_client.datapoints.insert_multiple(upload_this)
 
-        self._post_upload(num_points)
+        self._post_upload(upload_this)
         self.upload_queue_byte_size = 0
 
     def start(self):
@@ -422,7 +427,7 @@ class EventUploadQueue(UploadQueue):
     Args:
         cdf_client (CogniteClient): Cognite Data Fusion client
         post_upload_function (Callable[[int]): (Optional). A function that will be called after each upload. The
-            function will be given one argument: An int representing the number of events uploaded in total.
+            function will be given one argument: A list of the events created
         queue_threshold (int): (Optional). Maximum size of upload queue. Defaults to no queue (ie upload after each
             add_to_upload_queue).
         max_upload_interval (int): (Optional). Automatically trigger an upload each m seconds when run as a thread (use
@@ -434,7 +439,7 @@ class EventUploadQueue(UploadQueue):
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[int], None]] = None,
+        post_upload_function: Optional[Callable[[List[Event]], None]] = None,
         queue_threshold: Optional[int] = None,
         max_upload_interval: Optional[int] = None,
     ):
@@ -480,7 +485,7 @@ class EventUploadQueue(UploadQueue):
         self.logger.debug("Triggering upload")
 
         self.cdf_client.events.create(self.upload_queue)
-        self._post_upload(len(self.upload_queue))
+        self._post_upload(self.upload_queue)
         self.upload_queue.clear()
         self.upload_queue_byte_size = 0
 

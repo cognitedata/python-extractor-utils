@@ -41,7 +41,15 @@ class TestPubSubUploadQueue(unittest.TestCase):
 
         self.fake_publisher.publish.assert_called_with(
             queue.topic_path,
-            str.encode(dumps({"database": "db", "table": "table", "rows": [row1.__dict__, row2.__dict__]})),
+            str.encode(
+                dumps(
+                    {
+                        "database": "db",
+                        "table": "table",
+                        "rows": [{"key": r.key, "columns": r.columns} for r in [row1, row2]],
+                    }
+                )
+            ),
         )
 
         queue.upload()
