@@ -1,8 +1,30 @@
 """
-Module containing upload queue classes. The *UploadQueue classes chunks together items and uploads them together to CDF,
+Module containing upload queue classes. The UploadQueue classes chunks together items and uploads them together to CDF,
 both to minimize the load on the API, and also to speed up uploading as requests can be slow.
 
 Each upload queue comes with some configurable conditions that, when met, automatically triggers an upload.
+
+**Note:** You cannot assume that an element is uploaded when it is added to the queue, since the upload may be
+delayed. To ensure that everything is uploaded you should set the `post_upload_function` callback to verify. For
+example, for a time series queue you might want to check the latest time stamp, as such (assuming incremental time
+stamps and using timestamp-value tuples as data point format): ::
+
+    latest_point = {"timestamp": 0}
+
+    def store_latest(time_series):
+        # time_series is a list of dicts where each dict represents a time series
+        latest_point["timestamp"] = max(
+            latest_point["timestamp"],
+            *[ts["datapoints"][-1][0] for ts in time_series]
+        )
+
+        # here you can also update metrics etc
+
+    queue = TimeSeriesUploadQueue(
+        cdf_client=self.client,
+        post_upload_function=store_latest,
+        max_upload_interval=1
+    )
 """
 import logging
 import threading
@@ -164,21 +186,24 @@ class RawUploadQueue(UploadQueue):
 class PubSubUploadQueue(UploadQueue):
     """
     Upload queue towards Google's Pub/Sub API. This queue will batch up RAW rows and send them as JSON encoded PubSub
-    messages on the following format:
+    messages
 
-        {
-            "database": db-name,
-            "table": table-name,
-            "rows": [
-                {
-                    "key": key,
-                    "columns": {
-                        ...
-                    }
-                },
-                ...
-            ]
-        }
+    JSON format:
+        The following example illustrates the message format: ::
+
+            {
+                "database": db-name,
+                "table": table-name,
+                "rows": [
+                    {
+                        "key": key,
+                        "columns": {
+                            ...
+                        }
+                    },
+                    ...
+                ]
+            }
 
     Args:
         project_id (str): ID of Google Cloud Platform project to use.
