@@ -69,7 +69,10 @@ class UploadQueue(ABC):
 
     def _post_upload(self, uploaded: List[Any]):
         if self.post_upload_function is not None:
-            self.post_upload_function(uploaded)
+            try:
+                self.post_upload_function(uploaded)
+            except Exception as e:
+                logging.getLogger(__name__).exception("Error during upload callback")
 
     @abstractmethod
     def add_to_upload_queue(self, *args) -> Any:

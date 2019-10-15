@@ -56,3 +56,6 @@ class _EitherId:
 
     def __str__(self) -> str:
         return "{}: {}".format(self.type(), self.content())
+
+    def __repr__(self) -> str:
+        return self.__str__()
