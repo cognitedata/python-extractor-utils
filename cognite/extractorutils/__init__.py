@@ -1,5 +1,5 @@
 """
-Extractotutils is a python package ment to simplify the development of new extractors.
+Extractor-utils is a Python package that simplifies the development of new extractors.
 """
 
-__version__ = "0.3.2"
+__version__ = "0.4.0"

@@ -1,6 +1,6 @@
 import re
 
-from setuptools import setup
+from setuptools import find_packages, setup
 
 version = re.search('^__version__\s*=\s*"(.*)"', open("cognite/extractorutils/__init__.py").read(), re.M).group(1)
 
@@ -10,7 +10,7 @@ setup(
     description="Utilities for easier development of extractors for CDF",
     author="Mathias Lohne",
     author_email="mathias.lohne@cognite.com",
-    packages=["cognite.extractorutils"],
-    install_requires=["cognite-sdk>=1.0.0", "typing", "google-cloud-pubsub", "prometheus-client"],
+    packages=["cognite.{}".format(p) for p in find_packages("cognite")],
+    install_requires=["cognite-sdk>=1.0.0", "typing", "google-cloud-pubsub", "google-api-core", "prometheus-client"],
     python_requires=">=3.5",
 )
