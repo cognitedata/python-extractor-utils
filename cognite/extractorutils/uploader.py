@@ -447,6 +447,27 @@ class TimeSeriesUploadQueue(UploadQueue):
         if ensure_upload:
             self.upload()
 
+    def __enter__(self):
+        """
+        Wraps around start method, for use as context manager
+
+        Returns:
+            self
+        """
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """
+        Wraps around stop method, for use as context manager
+
+        Args:
+            exc_type: Exception type
+            exc_val: Exception value
+            exc_tb: Traceback
+        """
+        self.stop()
+
 
 class EventUploadQueue(UploadQueue):
     """
@@ -538,3 +559,24 @@ class EventUploadQueue(UploadQueue):
         self.stopping.set()
         if ensure_upload:
             self.upload()
+
+    def __enter__(self):
+        """
+        Wraps around start method, for use as context manager
+
+        Returns:
+            self
+        """
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """
+        Wraps around stop method, for use as context manager
+
+        Args:
+            exc_type: Exception type
+            exc_val: Exception value
+            exc_tb: Traceback
+        """
+        self.stop()
