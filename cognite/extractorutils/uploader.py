@@ -61,13 +61,21 @@ class UploadQueue(ABC):
     """
 
     def __init__(
-        self, post_upload_function: Optional[Callable[[int], None]] = None, queue_threshold: Optional[int] = None
+        self,
+        post_upload_function: Optional[Callable[[int], None]] = None,
+        queue_threshold: Optional[int] = None,
+        trigger_log_level="DEBUG",
     ):
         """
         Called by subclasses. Saves info and inits upload queue.
         """
         self.threshold = queue_threshold if queue_threshold is not None else -1
         self.upload_queue_byte_size = 0
+
+        self.trigger_log_level = {"NOTSET": 0, "DEBUG": 10, "INFO": 20, "WARNING": 30, "ERROR": 40, "CRITICAL": 50}[
+            trigger_log_level.upper()
+        ]
+        self.logger = logging.getLogger(__name__)
 
         self.post_upload_function = post_upload_function
 
@@ -85,6 +93,7 @@ class UploadQueue(ABC):
 
         # Check upload threshold
         if self.upload_queue_byte_size > self.threshold and self.threshold >= 0:
+            self.logger.log(self.trigger_log_level, "Upload queue reached threshold size, triggering upload")
             return self.upload()
 
         return None
@@ -135,9 +144,10 @@ class RawUploadQueue(UploadQueue):
         cdf_client: CogniteClient,
         post_upload_function: Optional[Callable[[List[Any]], None]] = None,
         queue_threshold: Optional[int] = None,
+        trigger_log_level: str = "DEBUG",
     ):
         # Super sets post_upload and threshold
-        super().__init__(post_upload_function, queue_threshold)
+        super().__init__(post_upload_function, queue_threshold, trigger_log_level)
 
         self.upload_queue: Dict[str, Dict[str, List[Row]]] = dict()
 
@@ -222,9 +232,10 @@ class PubSubUploadQueue(UploadQueue):
         post_upload_function: Optional[Callable[[List[Row]], None]] = None,
         queue_threshold: Optional[int] = None,
         always_ensure_topic: Optional[bool] = False,
+        trigger_log_level: str = "DEBUG",
     ):
         # Super sets post_upload and threshold
-        super().__init__(post_upload_function, queue_threshold)
+        super().__init__(post_upload_function, queue_threshold, trigger_log_level)
 
         self.upload_queue: Dict[str, Dict[str, List[Row]]] = dict()
 
@@ -350,9 +361,10 @@ class TimeSeriesUploadQueue(UploadQueue):
         post_upload_function: Optional[Callable[[Dict[_EitherId, DataPointList]], None]] = None,
         queue_threshold: Optional[int] = None,
         max_upload_interval: Optional[int] = None,
+        trigger_log_level: str = "DEBUG",
     ):
         # Super sets post_upload and threshold
-        super().__init__(post_upload_function, queue_threshold)
+        super().__init__(post_upload_function, queue_threshold, trigger_log_level)
 
         self.upload_queue: Dict[_EitherId, DataPointList] = dict()
 
@@ -361,8 +373,6 @@ class TimeSeriesUploadQueue(UploadQueue):
         self.stopping = threading.Event()
 
         self.cdf_client = cdf_client
-
-        self.logger = logging.getLogger(__name__)
 
     def add_to_upload_queue(self, *, id: int = None, external_id: str = None, datapoints: DataPointList = []) -> None:
         """
@@ -397,13 +407,17 @@ class TimeSeriesUploadQueue(UploadQueue):
         if len(self.upload_queue) == 0:
             return
 
-        self.logger.debug("Triggering upload")
-
         upload_this = [
             {either_id.type(): either_id.content(), "datapoints": datapoints}
             for either_id, datapoints in self.upload_queue.items()
+            if len(datapoints) > 0
         ]
         self.upload_queue.clear()
+
+        if len(upload_this) == 0:
+            return
+
+        self.logger.log(self.trigger_log_level, "Triggering scheduled upload")
 
         try:
             self.cdf_client.datapoints.insert_multiple(upload_this)
@@ -491,9 +505,10 @@ class EventUploadQueue(UploadQueue):
         post_upload_function: Optional[Callable[[List[Event]], None]] = None,
         queue_threshold: Optional[int] = None,
         max_upload_interval: Optional[int] = None,
+        trigger_log_level: str = "DEBUG",
     ):
         # Super sets post_upload and threshold
-        super().__init__(post_upload_function, queue_threshold)
+        super().__init__(post_upload_function, queue_threshold, trigger_log_level)
 
         self.upload_queue: List[Event] = []
 
@@ -502,8 +517,6 @@ class EventUploadQueue(UploadQueue):
         self.stopping = threading.Event()
 
         self.cdf_client = cdf_client
-
-        self.logger = logging.getLogger(__name__)
 
     def add_to_upload_queue(self, event: Event) -> None:
         """
@@ -531,7 +544,7 @@ class EventUploadQueue(UploadQueue):
         if len(self.upload_queue) == 0:
             return
 
-        self.logger.debug("Triggering upload")
+        self.logger.log(self.trigger_log_level, "Triggering scheduled upload")
 
         self.cdf_client.events.create(self.upload_queue)
         self._post_upload(self.upload_queue)

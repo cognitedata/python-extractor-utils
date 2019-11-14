@@ -2,4 +2,4 @@
 Extractor-utils is a Python package that simplifies the development of new extractors.
 """
 
-__version__ = "0.4.1"
+__version__ = "0.4.2"
