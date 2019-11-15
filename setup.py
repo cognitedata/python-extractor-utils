@@ -11,6 +11,6 @@ setup(
     author="Mathias Lohne",
     author_email="mathias.lohne@cognite.com",
     packages=["cognite.{}".format(p) for p in find_packages("cognite")],
-    install_requires=["cognite-sdk>=1.0.0", "typing", "google-cloud-pubsub", "google-api-core", "prometheus-client"],
+    install_requires=["cognite-sdk>=1.0.0", "typing", "prometheus-client"],
     python_requires=">=3.5",
 )
