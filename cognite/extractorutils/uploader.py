@@ -31,10 +31,7 @@ import threading
 import time
 from abc import ABC, abstractmethod
 from datetime import datetime
-from json import dumps
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-
-from google.cloud import pubsub_v1
 
 from cognite.client import CogniteClient
 from cognite.client._api.raw import RawAPI  # Private access, but we need it for typing
