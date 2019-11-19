@@ -38,7 +38,7 @@ from cognite.client._api.raw import RawAPI  # Private access, but we need it for
 from cognite.client.data_classes import Event
 from cognite.client.data_classes.raw import Row
 from cognite.client.exceptions import CogniteNotFoundError
-from cognite.extractorutils._inner_util import _EitherId
+from cognite.extractorutils._inner_util import _EitherId, _resolve_log_level
 
 DataPointList = Union[
     List[Dict[Union[int, float, datetime], Union[int, float, str]]],
@@ -69,9 +69,7 @@ class UploadQueue(ABC):
         self.threshold = queue_threshold if queue_threshold is not None else -1
         self.upload_queue_byte_size = 0
 
-        self.trigger_log_level = {"NOTSET": 0, "DEBUG": 10, "INFO": 20, "WARNING": 30, "ERROR": 40, "CRITICAL": 50}[
-            trigger_log_level.upper()
-        ]
+        self.trigger_log_level = _resolve_log_level(trigger_log_level)
         self.logger = logging.getLogger(__name__)
 
         self.post_upload_function = post_upload_function
@@ -214,6 +212,7 @@ class TimeSeriesUploadQueue(UploadQueue):
         queue_threshold: Optional[int] = None,
         max_upload_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
+        thread_name: Optional[str] = None,
     ):
         # Super sets post_upload and threshold
         super().__init__(post_upload_function, queue_threshold, trigger_log_level)
@@ -221,7 +220,8 @@ class TimeSeriesUploadQueue(UploadQueue):
         self.upload_queue: Dict[_EitherId, DataPointList] = dict()
 
         self.max_upload_interval = max_upload_interval
-        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.thread = threading.Thread(target=self._run, daemon=True, name=thread_name)
+        self.lock = threading.RLock()
         self.stopping = threading.Event()
 
         self.cdf_client = cdf_client
@@ -238,11 +238,16 @@ class TimeSeriesUploadQueue(UploadQueue):
         """
         either_id = _EitherId(id, external_id)
 
-        if either_id not in self.upload_queue:
-            self.upload_queue[either_id] = []
+        self.lock.acquire()
+        try:
+            if either_id not in self.upload_queue:
+                self.upload_queue[either_id] = []
 
-        self.upload_queue[either_id].extend(datapoints)
-        self._check_triggers(datapoints)
+            self.upload_queue[either_id].extend(datapoints)
+            self._check_triggers(datapoints)
+
+        finally:
+            self.lock.release()
 
     def _run(self):
         """
@@ -264,32 +269,39 @@ class TimeSeriesUploadQueue(UploadQueue):
             for either_id, datapoints in self.upload_queue.items()
             if len(datapoints) > 0
         ]
-        self.upload_queue.clear()
 
-        if len(upload_this) == 0:
-            return
-
-        self.logger.log(self.trigger_log_level, "Triggering scheduled upload")
+        self.lock.acquire()
 
         try:
-            self.cdf_client.datapoints.insert_multiple(upload_this)
+            self.upload_queue.clear()
 
-        except CogniteNotFoundError as ex:
-            self.logger.error("Could not upload data points to %s: %s", str(ex.not_found), str(ex))
+            if len(upload_this) == 0:
+                return
 
-            # Get IDs of time series that exists, but failed because of the non-existing time series
-            retry_these = [_EitherId(**id_dict) for id_dict in ex.failed if id_dict not in ex.not_found]
+            self.logger.log(self.trigger_log_level, "Triggering scheduled upload")
 
-            # Remove entries with non-existing time series from upload queue
-            upload_this = [
-                entry for entry in upload_this if _EitherId(entry.get("id"), entry.get("externalId")) in retry_these
-            ]
+            try:
+                self.cdf_client.datapoints.insert_multiple(upload_this)
 
-            # Upload remaining
-            self.cdf_client.datapoints.insert_multiple(upload_this)
+            except CogniteNotFoundError as ex:
+                self.logger.error("Could not upload data points to %s: %s", str(ex.not_found), str(ex))
 
-        self._post_upload(upload_this)
-        self.upload_queue_byte_size = 0
+                # Get IDs of time series that exists, but failed because of the non-existing time series
+                retry_these = [_EitherId(**id_dict) for id_dict in ex.failed if id_dict not in ex.not_found]
+
+                # Remove entries with non-existing time series from upload queue
+                upload_this = [
+                    entry for entry in upload_this if _EitherId(entry.get("id"), entry.get("externalId")) in retry_these
+                ]
+
+                # Upload remaining
+                self.cdf_client.datapoints.insert_multiple(upload_this)
+
+            self._post_upload(upload_this)
+            self.upload_queue_byte_size = 0
+
+        finally:
+            self.lock.release()
 
     def start(self):
         """
@@ -358,6 +370,7 @@ class EventUploadQueue(UploadQueue):
         queue_threshold: Optional[int] = None,
         max_upload_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
+        thread_name: Optional[str] = None,
     ):
         # Super sets post_upload and threshold
         super().__init__(post_upload_function, queue_threshold, trigger_log_level)
@@ -365,7 +378,8 @@ class EventUploadQueue(UploadQueue):
         self.upload_queue: List[Event] = []
 
         self.max_upload_interval = max_upload_interval
-        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.thread = threading.Thread(target=self._run, daemon=True, name=thread_name)
+        self.lock = threading.RLock()
         self.stopping = threading.Event()
 
         self.cdf_client = cdf_client
@@ -378,8 +392,14 @@ class EventUploadQueue(UploadQueue):
         Args:
             event (Event): Event to add
         """
-        self.upload_queue.append(event)
-        self._check_triggers(event)
+        self.lock.acquire()
+
+        try:
+            self.upload_queue.append(event)
+            self._check_triggers(event)
+
+        finally:
+            self.lock.release()
 
     def _run(self):
         """
@@ -398,10 +418,16 @@ class EventUploadQueue(UploadQueue):
 
         self.logger.log(self.trigger_log_level, "Triggering scheduled upload")
 
-        self.cdf_client.events.create(self.upload_queue)
-        self._post_upload(self.upload_queue)
-        self.upload_queue.clear()
-        self.upload_queue_byte_size = 0
+        self.lock.acquire()
+
+        try:
+            self.cdf_client.events.create(self.upload_queue)
+            self._post_upload(self.upload_queue)
+            self.upload_queue.clear()
+            self.upload_queue_byte_size = 0
+
+        finally:
+            self.lock.release()
 
     def start(self):
         """
