@@ -122,3 +122,24 @@ class PrometheusClient:
 
         self.logger.debug("Sending stop event to metrics push thread for gateway %s", self.url)
         self.stopping.set()
+
+    def __enter__(self):
+        """
+        Wraps around start method, for use as context manager
+
+        Returns:
+            self
+        """
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """
+        Wraps around stop method, for use as context manager
+
+        Args:
+            exc_type: Exception type
+            exc_val: Exception value
+            exc_tb: Traceback
+        """
+        self.stop()
