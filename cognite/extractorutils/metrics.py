@@ -27,6 +27,7 @@ class PrometheusClient:
         password: Optional[str] = None,
         url: Optional[str] = None,
         push_interval: Optional[int] = None,
+        thread_name: Optional[str] = None,
     ):
 
         self.username = username
@@ -37,6 +38,7 @@ class PrometheusClient:
         self.push_interval = push_interval
 
         self.thread: Optional[threading.Thread] = None
+        self.thread_name = thread_name
         self.stopping = threading.Event()
 
         self.logger = logging.getLogger(__name__)
@@ -110,7 +112,7 @@ class PrometheusClient:
         Starts a thread that pushes the default registery to the configured gateway at certain intervals.
         """
         self.stopping.clear()
-        self.thread = threading.Thread(target=self._run, daemon=True)
+        self.thread = threading.Thread(target=self._run, daemon=True, name=self.thread_name)
         self.thread.start()
 
     def stop(self):
