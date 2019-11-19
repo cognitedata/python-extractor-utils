@@ -6,8 +6,8 @@ import threading
 import time
 from typing import Any, Callable, Dict, Optional, Union
 
-from prometheus_client.core import REGISTRY  # type: ignore
-from prometheus_client.exposition import basic_auth_handler, delete_from_gateway, pushadd_to_gateway  # type: ignore
+from prometheus_client.core import REGISTRY
+from prometheus_client.exposition import basic_auth_handler, delete_from_gateway, pushadd_to_gateway
 
 from ._inner_util import _MockLogger
 
@@ -20,13 +20,22 @@ class PrometheusClient:
     Initializes to an unconfigured client.
     """
 
-    def __init__(self):
-        self.job_name: Optional[str] = None
-        self.username: Optional[str] = None
-        self.password: Optional[str] = None
+    def __init__(
+        self,
+        job_name: Optional[str] = None,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        url: Optional[str] = None,
+        push_interval: Optional[int] = None,
+    ):
 
-        self.url: Optional[str] = None
-        self.push_interval: Optional[int] = None
+        self.username = username
+        self.job_name = job_name
+        self.password = password
+
+        self.url = url
+        self.push_interval = push_interval
+
         self.thread: Optional[threading.Thread] = None
         self.stopping = threading.Event()
 
@@ -40,12 +49,12 @@ class PrometheusClient:
         Args:
             config (dict):      Configuration dictionary
         """
-        self.job_name = config.get("job_name")  # type: ignore
-        self.username = config.get("username")  # type: ignore
-        self.password = config.get("password")  # type: ignore
-        self.url = config.get("gateway_url")  # type: ignore
+        self.job_name = config.get("job_name") or config.get("job-name")
+        self.username = config.get("username")
+        self.password = config.get("password")
+        self.url = config.get("gateway_url") or config.get("host")
 
-        self.push_interval = int(config.get("push_interval", 5))
+        self.push_interval = int(config.get("push_interval") or config.get("push-interval") or 5)
 
     def _auth_handler(self, url: str, method: str, timeout: int, headers: Dict[str, str], data: Any) -> Callable:
         """
