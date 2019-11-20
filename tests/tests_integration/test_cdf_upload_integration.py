@@ -66,6 +66,8 @@ class IntegrationTests(unittest.TestCase):
 
         queue.upload()
 
+        time.sleep(10)
+
         rows_in_cdf = sorted(
             self.client.raw.rows.list(db_name=self.database_name, table_name=self.table_name, limit=None),
             key=lambda row: row.key,
@@ -101,7 +103,7 @@ class IntegrationTests(unittest.TestCase):
         queue.add_to_upload_queue(external_id=self.time_series1, datapoints=points1_2)
         queue.add_to_upload_queue(id=created[1].id, datapoints=points2)
 
-        time.sleep(20)
+        time.sleep(30)
 
         recv_points1 = self.client.datapoints.retrieve(
             external_id=self.time_series1, start="1w-ago", end="now", limit=None
@@ -131,7 +133,7 @@ class IntegrationTests(unittest.TestCase):
         queue.add_to_upload_queue(external_id=self.time_series1, datapoints=points1)
         queue.add_to_upload_queue(external_id="noSuchExternalId", datapoints=points2)
 
-        time.sleep(10)
+        time.sleep(20)
 
         recv_points1 = self.client.datapoints.retrieve(
             external_id=self.time_series1, start="1w-ago", end="now", limit=None
