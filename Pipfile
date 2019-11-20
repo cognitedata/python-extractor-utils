@@ -4,6 +4,7 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 
 [dev-packages]
+keyring = "*"
 black = "*"
 isort = "*"
 mypy = "*"
@@ -19,9 +20,6 @@ pre-commit = "*"
 
 [packages]
 cognite-extractor-utils = {path = ".", editable = true}
-
-[requires]
-python_version = "3.6"
 
 [pipenv]
 allow_prereleases = true

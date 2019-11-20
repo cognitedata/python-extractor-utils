@@ -7,7 +7,7 @@ podTemplate(
     containers: [
         containerTemplate(
             name: 'python',
-            image: 'python:3.6.5',
+            image: 'python:3.7',
             command: '/bin/cat -',
             resourceRequestCpu: '1000m',
             resourceRequestMemory: '500Mi',
