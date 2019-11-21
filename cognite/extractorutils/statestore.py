@@ -24,9 +24,16 @@ class RawStateStore:
 
         self.deleted: List[str] = []
 
+        self._ensure_table()
+
+    def _ensure_table(self):
         try:
-            client.raw.databases.create(database)
-            client.raw.tables.create(database, table)
+            self.client.raw.databases.create(self.database)
+        except CogniteAPIError as e:
+            if not e.code == 400:
+                raise e
+        try:
+            self.client.raw.tables.create(self.database, self.table)
         except CogniteAPIError as e:
             if not e.code == 400:
                 raise e
@@ -63,7 +70,7 @@ class RawStateStore:
         Args:
             external_id (str): External ID of e.g. time series to store state of
             low (Any): Low watermark
-            high (Any): Low watermark
+            high (Any): High watermark
         """
         if external_id not in self.local_state:
             self.local_state[external_id] = {}
@@ -86,3 +93,5 @@ class RawStateStore:
         """
         self.client.raw.rows.insert(db_name=self.database, table_name=self.table, row=self.local_state)
         self.client.raw.rows.delete(db_name=self.database, table_name=self.table, key=self.deleted)
+
+        self.deleted.clear()
