@@ -15,25 +15,25 @@ class RawStateStore:
     """
 
     def __init__(self, client: CogniteClient, database: str, table: str):
-        self.client = client
+        self._client = client
         self.database = database
         self.table = table
 
-        self.initialized = False
-        self.local_state: Dict[str, Dict[str, Any]] = {}
+        self._initialized = False
+        self._local_state: Dict[str, Dict[str, Any]] = {}
 
-        self.deleted: List[str] = []
+        self._deleted: List[str] = []
 
         self._ensure_table()
 
     def _ensure_table(self):
         try:
-            self.client.raw.databases.create(self.database)
+            self._client.raw.databases.create(self.database)
         except CogniteAPIError as e:
             if not e.code == 400:
                 raise e
         try:
-            self.client.raw.tables.create(self.database, self.table)
+            self._client.raw.tables.create(self.database, self.table)
         except CogniteAPIError as e:
             if not e.code == 400:
                 raise e
@@ -51,17 +51,17 @@ class RawStateStore:
         Returns:
             dict: A mapping of external ID -> state
         """
-        if use_cache and self.initialized:
-            return self.local_state
+        if use_cache and self._initialized:
+            return self._local_state
 
-        rows = self.client.raw.rows.list(db_name=self.database, table_name=self.table, limit=None)
+        rows = self._client.raw.rows.list(db_name=self.database, table_name=self.table, limit=None)
 
-        self.local_state.clear()
+        self._local_state.clear()
         for row in rows:
-            self.local_state[row.key] = row.columns
+            self._local_state[row.key] = row.columns
 
-        self.initialized = True
-        return self.local_state
+        self._initialized = True
+        return self._local_state
 
     def set_state(self, external_id: str, low: Optional[Any] = None, high: Optional[Any] = None) -> None:
         """
@@ -72,10 +72,12 @@ class RawStateStore:
             low (Any): Low watermark
             high (Any): High watermark
         """
-        if external_id not in self.local_state:
-            self.local_state[external_id] = {}
-        self.local_state[external_id]["high"] = high if high is not None else self.local_state[external_id].get("high")
-        self.local_state[external_id]["low"] = low if low is not None else self.local_state[external_id].get("low")
+        if external_id not in self._local_state:
+            self._local_state[external_id] = {}
+        self._local_state[external_id]["high"] = (
+            high if high is not None else self._local_state[external_id].get("high")
+        )
+        self._local_state[external_id]["low"] = low if low is not None else self._local_state[external_id].get("low")
 
     def delete_state(self, external_id: str) -> None:
         """
@@ -84,14 +86,14 @@ class RawStateStore:
         Args:
             external_id (str): External ID to remove
         """
-        self.local_state.pop(external_id, None)
-        self.deleted.append(external_id)
+        self._local_state.pop(external_id, None)
+        self._deleted.append(external_id)
 
     def synchronize(self) -> None:
         """
         Upload local state store to CDF
         """
-        self.client.raw.rows.insert(db_name=self.database, table_name=self.table, row=self.local_state)
-        self.client.raw.rows.delete(db_name=self.database, table_name=self.table, key=self.deleted)
+        self._client.raw.rows.insert(db_name=self.database, table_name=self.table, row=self._local_state)
+        self._client.raw.rows.delete(db_name=self.database, table_name=self.table, key=self._deleted)
 
-        self.deleted.clear()
+        self._deleted.clear()
