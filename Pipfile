@@ -4,7 +4,6 @@ url = "https://pypi.org/simple"
 verify_ssl = true
 
 [dev-packages]
-keyring = "*"
 black = "*"
 isort = "*"
 mypy = "*"
@@ -17,6 +16,7 @@ tox-pyenv = "*"
 sphinx = "*"
 sphinx-rtd-theme = "*"
 pre-commit = "*"
+SecretStorage = "*"
 
 [packages]
 cognite-extractor-utils = {path = ".", editable = true}
