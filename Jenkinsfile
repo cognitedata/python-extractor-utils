@@ -47,6 +47,7 @@ podTemplate(
             stage('Install dependencies') {
                 sh("pipenv sync --dev")
                 sh("pipenv run pip list")
+                sh("pipenv graph")
             }
             stage('Check code style') {
                 sh("pipenv run black -l 120 --check .")
