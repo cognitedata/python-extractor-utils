@@ -7,7 +7,7 @@ podTemplate(
     containers: [
         containerTemplate(
             name: 'python',
-            image: 'python:3.6.5',
+            image: 'eu.gcr.io/cognitedata/multi-python:7040fac',
             command: '/bin/cat -',
             resourceRequestCpu: '1000m',
             resourceRequestMemory: '500Mi',
@@ -46,6 +46,8 @@ podTemplate(
             }
             stage('Install dependencies') {
                 sh("pipenv sync --dev")
+                sh("pipenv run pip list")
+                sh("pipenv graph")
             }
             stage('Check code style') {
                 sh("pipenv run black -l 120 --check .")
