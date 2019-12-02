@@ -1,3 +1,4 @@
+from threading import Lock
 from typing import Any, Dict, List, Optional
 
 from cognite.client import CogniteClient
@@ -25,6 +26,8 @@ class RawStateStore:
         self._deleted: List[str] = []
 
         self._ensure_table()
+
+        self.lock = Lock()
 
     def _ensure_table(self):
         try:
@@ -56,9 +59,10 @@ class RawStateStore:
 
         rows = self._client.raw.rows.list(db_name=self.database, table_name=self.table, limit=None)
 
-        self._local_state.clear()
-        for row in rows:
-            self._local_state[row.key] = row.columns
+        with self.lock.acquire():
+            self._local_state.clear()
+            for row in rows:
+                self._local_state[row.key] = row.columns
 
         self._initialized = True
         return self._local_state
@@ -72,12 +76,15 @@ class RawStateStore:
             low (Any): Low watermark
             high (Any): High watermark
         """
-        if external_id not in self._local_state:
-            self._local_state[external_id] = {}
-        self._local_state[external_id]["high"] = (
-            high if high is not None else self._local_state[external_id].get("high")
-        )
-        self._local_state[external_id]["low"] = low if low is not None else self._local_state[external_id].get("low")
+        with self.lock.acquire():
+            if external_id not in self._local_state:
+                self._local_state[external_id] = {}
+            self._local_state[external_id]["high"] = (
+                high if high is not None else self._local_state[external_id].get("high")
+            )
+            self._local_state[external_id]["low"] = (
+                low if low is not None else self._local_state[external_id].get("low")
+            )
 
     def delete_state(self, external_id: str) -> None:
         """
@@ -86,8 +93,9 @@ class RawStateStore:
         Args:
             external_id (str): External ID to remove
         """
-        self._local_state.pop(external_id, None)
-        self._deleted.append(external_id)
+        with self.lock.acquire():
+            self._local_state.pop(external_id, None)
+            self._deleted.append(external_id)
 
     def synchronize(self) -> None:
         """
@@ -96,4 +104,5 @@ class RawStateStore:
         self._client.raw.rows.insert(db_name=self.database, table_name=self.table, row=self._local_state)
         self._client.raw.rows.delete(db_name=self.database, table_name=self.table, key=self._deleted)
 
-        self._deleted.clear()
+        with self.lock.acquire():
+            self._deleted.clear()
