@@ -29,3 +29,11 @@ cognite.extratorutils.uploader - Batching upload queues
     :undoc-members:
     :show-inheritance:
 
+
+cognite.extratorutils.statestore - Storing extractor state between runs
+-----------------------------------------------------------------------
+
+.. automodule:: cognite.extractorutils.statestore
+    :members:
+    :undoc-members:
+    :show-inheritance:
