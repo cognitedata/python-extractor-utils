@@ -86,6 +86,24 @@ class RawStateStore:
                 low if low is not None else self._local_state[external_id].get("low")
             )
 
+    def expand_state(self, external_id: str, low: Optional[Any] = None, high: Optional[Any] = None) -> None:
+        """
+        Like set_state, but only sets state if the proposed state is outside the stored state. That is if e.g. low is
+        lower than the stored low.
+
+        Args:
+            external_id (str): External ID of e.g. time series to store state of
+            low (Any): Low watermark
+            high (Any): High watermark
+        """
+        if low is not None and external_id in self._local_state and "low" in self._local_state[external_id]:
+            low = low if low < self._local_state[external_id]["low"] else None
+
+        if high is not None and external_id in self._local_state and "high" in self._local_state[external_id]:
+            high = high if high > self._local_state[external_id]["high"] else None
+
+        self.set_state(external_id, low, high)
+
     def delete_state(self, external_id: str) -> None:
         """
         Delete an external ID from the state store.
