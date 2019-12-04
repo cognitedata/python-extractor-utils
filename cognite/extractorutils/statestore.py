@@ -59,7 +59,7 @@ class RawStateStore:
 
         rows = self._client.raw.rows.list(db_name=self.database, table_name=self.table, limit=None)
 
-        with self.lock.acquire():
+        with self.lock:
             self._local_state.clear()
             for row in rows:
                 self._local_state[row.key] = row.columns
@@ -76,7 +76,7 @@ class RawStateStore:
             low (Any): Low watermark
             high (Any): High watermark
         """
-        with self.lock.acquire():
+        with self.lock:
             if external_id not in self._local_state:
                 self._local_state[external_id] = {}
             self._local_state[external_id]["high"] = (
@@ -111,7 +111,7 @@ class RawStateStore:
         Args:
             external_id (str): External ID to remove
         """
-        with self.lock.acquire():
+        with self.lock:
             self._local_state.pop(external_id, None)
             self._deleted.append(external_id)
 
@@ -122,5 +122,5 @@ class RawStateStore:
         self._client.raw.rows.insert(db_name=self.database, table_name=self.table, row=self._local_state)
         self._client.raw.rows.delete(db_name=self.database, table_name=self.table, key=self._deleted)
 
-        with self.lock.acquire():
+        with self.lock:
             self._deleted.clear()
