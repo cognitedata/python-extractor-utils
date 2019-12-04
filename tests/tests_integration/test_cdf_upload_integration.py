@@ -18,12 +18,7 @@ class IntegrationTests(unittest.TestCase):
     time_series2: str = "util_integration_ts_test_2"
 
     def setUp(self):
-        self.client = CogniteClient(
-            api_key=os.getenv("COGNITE_API_KEY"),
-            project="extractor-tests",
-            base_url="https://greenfield.cognitedata.com",
-            client_name="extractor-utils-integration-tests",
-        )
+        self.client = CogniteClient(client_name="extractor-utils-integration-tests",)
 
         # Delete stuff we will use if it exists
         try:

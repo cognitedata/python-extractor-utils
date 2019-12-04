@@ -16,6 +16,8 @@ podTemplate(
             envVars: [
                 secretEnvVar(key: 'COGNITE_API_KEY', secretName: 'extractor-tests', secretKey: 'extractor-tests'),
                 secretEnvVar(key: 'CODECOV_TOKEN', secretName: 'codecov-tokens', secretKey: 'python-extractor-utils'),
+                envVar(key: 'COGNITE_PROJECT', value: 'extractor-tests'),
+                envVar(key: 'COGNITE_BASE_URL', value: 'https://greenfield.cognitedata.com'),
                 envVar(key: 'JENKINS_URL', value: env.JENKINS_URL),
                 envVar(key: 'BRANCH_NAME', value: env.BRANCH_NAME),
                 envVar(key: 'BUILD_NUMBER', value: env.BUILD_NUMBER),
