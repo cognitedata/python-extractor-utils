@@ -18,6 +18,17 @@ from cognite.extractorutils.util import ensure_time_series
 
 
 class MetricsPusher(ABC):
+    """
+    Base class for metric pushers. Metric pushers spawns a thread that routinely pushes metrics to a configured
+    destination.
+
+    Contains all the logic for starting and running threads.
+
+    Args:
+        push_interval (int): Seconds between each upload call
+        thread_name (str): Name of thread to start. If omitted, a standard name such as Thread-4 will be generated.
+    """
+
     def __init__(self, push_interval: Optional[int] = None, thread_name: Optional[str] = None):
         self.push_interval = push_interval
         self.thread_name = thread_name
@@ -29,10 +40,13 @@ class MetricsPusher(ABC):
         self.logger = logging.getLogger(__name__)
 
     @abstractmethod
-    def _push_to_server(self):
+    def _push_to_server(self) -> None:
+        """
+        Push metrics to a remote server, to be overrided in subclasses.
+        """
         pass
 
-    def _run(self):
+    def _run(self) -> None:
         """
         Run push loop.
         """
@@ -40,7 +54,7 @@ class MetricsPusher(ABC):
             self._push_to_server()
             self.stopping.wait(self.push_interval)
 
-    def start(self):
+    def start(self) -> None:
         """
         Starts a thread that pushes the default registry to the configured gateway at certain intervals.
         """
@@ -48,7 +62,7 @@ class MetricsPusher(ABC):
         self.thread = threading.Thread(target=self._run, daemon=True, name=self.thread_name)
         self.thread.start()
 
-    def stop(self):
+    def stop(self) -> None:
         """
         Stop the push loop.
         """
@@ -80,10 +94,15 @@ class MetricsPusher(ABC):
 
 class PrometheusPusher(MetricsPusher):
     """
-    Client to Prometheus Push Gateway, pushing default metrics registry. Runs a separate thread that routinely pushes
-    updated metrics to the push gateway.
+    Pusher to a Prometheus push gateway.
 
-    Initializes to an unconfigured client.
+    Args:
+        job_name (str): Prometheus job name
+        username (str): Push gateway credentials
+        password (str): Push gateway credentials
+        url (str): URL (with portnum) of push gateway
+        push_interval (int): Seconds between each upload call
+        thread_name (str): Name of thread to start. If omitted, a standard name such as Thread-4 will be generated.
     """
 
     def __init__(
@@ -104,10 +123,10 @@ class PrometheusPusher(MetricsPusher):
         self.url = url
         self.push_interval = push_interval
 
-    def configure(self, config: Dict[str, Union[str, int]]):
+    def configure(self, config: Dict[str, Union[str, int]]) -> None:
         """
-        Configure the client from a dictionary. The keys accessed in the dict are job_name, username, password,
-        gateway_url and push_interval.
+        Configure the client from a dictionary. The keys accessed in the dict are job_name or job-name, username,
+        password, gateway_url or host and push_interval or push-interval.
 
         Args:
             config (dict):      Configuration dictionary
@@ -135,7 +154,7 @@ class PrometheusPusher(MetricsPusher):
         """
         return basic_auth_handler(url, method, timeout, headers, data, self.username, self.password)
 
-    def _push_to_server(self):
+    def _push_to_server(self) -> None:
         """
         Push the default metrics registry to the configured Prometheus Pushgateway.
         """
@@ -161,6 +180,20 @@ class PrometheusPusher(MetricsPusher):
 
 
 class CognitePusher(MetricsPusher):
+    """
+    Pusher to CDF. Creates time series in CDF for all Gauges and Counters in the default Prometheus registry.
+
+    Optional contextualization with an Asset to make the time series observable in Asset Data Insight. The given asset
+    will be created at root level in the tenant if it doesn't already exist.
+
+    Args:
+        cdf_client (CogniteClient): The CDF tenant to upload time series to
+        external_id_prefix (str): Unique external ID prefix for this pusher.
+        asset (Asset): Optional contextualization.
+        push_interval (int): Seconds between each upload call
+        thread_name (str): Name of thread to start. If omitted, a standard name such as Thread-4 will be generated.
+    """
+
     def __init__(
         self,
         cdf_client: CogniteClient,
@@ -177,7 +210,10 @@ class CognitePusher(MetricsPusher):
 
         self._init_cdf()
 
-    def _init_cdf(self):
+    def _init_cdf(self) -> None:
+        """
+        Initialize the CDF tenant with the necessary time series and asset.
+        """
         time_series: List[TimeSeries] = []
 
         if self.asset is not None:
@@ -208,7 +244,10 @@ class CognitePusher(MetricsPusher):
 
         ensure_time_series(self.cdf_client, time_series)
 
-    def _push_to_server(self):
+    def _push_to_server(self) -> None:
+        """
+        Create datapoints an push them to their respective time series
+        """
         timestamp = int(arrow.get().float_timestamp * 1000)
 
         datapoints: List[Dict[str, Union[str, List[Tuple[float, float]]]]] = []
