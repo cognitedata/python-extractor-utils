@@ -1,5 +1,5 @@
 """
-Extractor-utils is a Python package that simplifies the development of new extractors.
+Cognite extractor utils is a Python package that simplifies the development of new extractors.
 """
 
-__version__ = "0.7.2"
+__version__ = "0.8.0"
