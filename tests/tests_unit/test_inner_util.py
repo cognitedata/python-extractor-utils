@@ -1,6 +1,7 @@
 import unittest
 
-from cognite.extractorutils._inner_util import _EitherId, _MockLogger
+from cognite.extractorutils._inner_util import _MockLogger
+from cognite.extractorutils.util import EitherId
 
 
 class TestMockLogger(unittest.TestCase):
@@ -22,11 +23,3 @@ class TestMockLogger(unittest.TestCase):
         except:
             # Some of the calls threw an exception, fail the test
             self.fail()
-
-    def test_either_id(self):
-        with self.assertRaises(TypeError):
-            _EitherId(123, "extId")
-        with self.assertRaises(TypeError):
-            _EitherId()
-
-        self.assertEqual(_EitherId(externalId="extId").__repr__(), "externalId: extId")
