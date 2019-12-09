@@ -38,7 +38,8 @@ from cognite.client._api.raw import RawAPI  # Private access, but we need it for
 from cognite.client.data_classes import Event
 from cognite.client.data_classes.raw import Row
 from cognite.client.exceptions import CogniteNotFoundError
-from cognite.extractorutils._inner_util import _EitherId, _resolve_log_level
+from cognite.extractorutils._inner_util import _resolve_log_level
+from cognite.extractorutils.util import EitherId
 
 DataPointList = Union[
     List[Dict[Union[int, float, datetime], Union[int, float, str]]],
@@ -208,7 +209,7 @@ class TimeSeriesUploadQueue(UploadQueue):
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[Dict[_EitherId, DataPointList]], None]] = None,
+        post_upload_function: Optional[Callable[[Dict[EitherId, DataPointList]], None]] = None,
         queue_threshold: Optional[int] = None,
         max_upload_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
@@ -217,7 +218,7 @@ class TimeSeriesUploadQueue(UploadQueue):
         # Super sets post_upload and threshold
         super().__init__(post_upload_function, queue_threshold, trigger_log_level)
 
-        self.upload_queue: Dict[_EitherId, DataPointList] = dict()
+        self.upload_queue: Dict[EitherId, DataPointList] = dict()
 
         self.max_upload_interval = max_upload_interval
         self.thread = threading.Thread(target=self._run, daemon=True, name=thread_name)
@@ -236,7 +237,7 @@ class TimeSeriesUploadQueue(UploadQueue):
             external_id (str): External ID of time series. Either this or external_id must be set.
             datapoints (list): List of data points to add
         """
-        either_id = _EitherId(id, external_id)
+        either_id = EitherId(id=id, external_id=external_id)
 
         self.lock.acquire()
         try:
@@ -287,11 +288,13 @@ class TimeSeriesUploadQueue(UploadQueue):
                 self.logger.error("Could not upload data points to %s: %s", str(ex.not_found), str(ex))
 
                 # Get IDs of time series that exists, but failed because of the non-existing time series
-                retry_these = [_EitherId(**id_dict) for id_dict in ex.failed if id_dict not in ex.not_found]
+                retry_these = [EitherId(**id_dict) for id_dict in ex.failed if id_dict not in ex.not_found]
 
                 # Remove entries with non-existing time series from upload queue
                 upload_this = [
-                    entry for entry in upload_this if _EitherId(entry.get("id"), entry.get("externalId")) in retry_these
+                    entry
+                    for entry in upload_this
+                    if EitherId(id=entry.get("id"), external_id=entry.get("externalId")) in retry_these
                 ]
 
                 # Upload remaining
