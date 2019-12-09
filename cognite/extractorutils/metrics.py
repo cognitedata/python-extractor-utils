@@ -210,6 +210,8 @@ class CognitePusher(MetricsPusher):
 
         self._init_cdf()
 
+        self._cdf_project = cdf_client.login.status().project
+
     def _init_cdf(self) -> None:
         """
         Initialize the CDF tenant with the necessary time series and asset.
@@ -253,7 +255,7 @@ class CognitePusher(MetricsPusher):
         datapoints: List[Dict[str, Union[str, List[Tuple[float, float]]]]] = []
 
         for metric in REGISTRY.collect():
-            if type(metric) == Metric:
+            if type(metric) == Metric and metric.type in ["gauge", "counter"]:
                 if len(metric.samples) == 0:
                     continue
 
@@ -261,3 +263,4 @@ class CognitePusher(MetricsPusher):
                 datapoints.append({"externalId": external_id, "datapoints": [(timestamp, metric.samples[0].value)]})
 
         self.cdf_client.datapoints.insert_multiple(datapoints)
+        self.logger.debug("Pushed metrics to CDF tenant '%s'", self._cdf_project)
