@@ -188,7 +188,7 @@ class LocalStateStore(StateStore):
 
     def initialize(self, force: bool = False) -> None:
         """
-        Load states from given JSON file
+        Load states from specified JSON file
 
         Args:
             force (bool): Enable re-initialization, ie overwrite when called multiple times
@@ -206,6 +206,9 @@ class LocalStateStore(StateStore):
         self._initialized = True
 
     def synchronize(self) -> None:
+        """
+        Save states to specified JSON file
+        """
         with open(self._file_path, "w") as f:
             json.dump(self._local_state, f)
 
