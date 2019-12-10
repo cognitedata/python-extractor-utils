@@ -203,6 +203,8 @@ class LocalStateStore(StateStore):
             except FileNotFoundError:
                 pass
 
+        self._initialized = True
+
     def synchronize(self) -> None:
         with open(self._file_path, "w") as f:
             json.dump(self._local_state, f)
