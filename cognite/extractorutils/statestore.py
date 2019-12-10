@@ -1,71 +1,64 @@
+import json
+from abc import ABC, abstractmethod
 from threading import Lock
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple, Union
 
 from cognite.client import CogniteClient
 from cognite.client.exceptions import CogniteAPIError
 
 
-class RawStateStore:
+class StateStore(ABC):
     """
-    An extractor state store based on CDF RAW, storing the progress of an extractor.
+    Base class for a state store.
 
-    Args:
-        client (CogniteClient): Cognite client to use
-        database (str): Name of CDF database
-        table (str): Name of CDF table
+    An extractor state store based is storing the progress of an extractor between runs, facilitating incremental load
+    and speeding up startup times.
     """
 
-    def __init__(self, client: CogniteClient, database: str, table: str):
-        self._client = client
-        self.database = database
-        self.table = table
-
+    def __init__(self):
         self._initialized = False
         self._local_state: Dict[str, Dict[str, Any]] = {}
 
         self._deleted: List[str] = []
 
-        self._ensure_table()
-
         self.lock = Lock()
 
-    def _ensure_table(self):
-        try:
-            self._client.raw.databases.create(self.database)
-        except CogniteAPIError as e:
-            if not e.code == 400:
-                raise e
-        try:
-            self._client.raw.tables.create(self.database, self.table)
-        except CogniteAPIError as e:
-            if not e.code == 400:
-                raise e
-
-    def get_states(self, use_cache: bool = True) -> Dict[str, Dict[str, Any]]:
+    @abstractmethod
+    def initialize(self, force: bool = False) -> None:
         """
-        Get all known states.
+        Get states from remote store
+        """
+        pass
 
-        WARNING: Calling get_states with use_cache = False will OVERWRITE the local state, if you have written changes
-        to the local states, these will be lost
+    @abstractmethod
+    def synchronize(self) -> None:
+        """
+        Upload states to remote store
+        """
+        pass
+
+    def get_state(self, external_id: Union[str, List[str]]) -> Union[Tuple[Any, Any], List[Tuple[Any, Any]]]:
+        """
+        Get state(s) for external ID(s)
 
         Args:
-            use_cache (bool): Use locally cached states, if exist
+            external_id: An external ID or list of external IDs to get states for
 
         Returns:
-            dict: A mapping of external ID -> state
+            A tuple with (low, high) watermarks, or a list of tuples
         """
-        if use_cache and self._initialized:
-            return self._local_state
-
-        rows = self._client.raw.rows.list(db_name=self.database, table_name=self.table, limit=None)
-
         with self.lock:
-            self._local_state.clear()
-            for row in rows:
-                self._local_state[row.key] = row.columns
+            if isinstance(external_id, list):
+                l = []
+                for e in external_id:
+                    state = self._local_state.get(e, {})
+                    l.append((state.get("low"), state.get("high")))
 
-        self._initialized = True
-        return self._local_state
+                return l
+
+            else:
+                state = self._local_state.get(external_id, {})
+                return state.get("low"), state.get("high")
 
     def set_state(self, external_id: str, low: Optional[Any] = None, high: Optional[Any] = None) -> None:
         """
@@ -115,6 +108,57 @@ class RawStateStore:
             self._local_state.pop(external_id, None)
             self._deleted.append(external_id)
 
+
+class RawStateStore(StateStore):
+    """
+    An extractor state store based on CDF RAW.
+
+    Args:
+        client (CogniteClient): Cognite client to use
+        database (str): Name of CDF database
+        table (str): Name of CDF table
+    """
+
+    def __init__(self, client: CogniteClient, database: str, table: str):
+        super().__init__()
+
+        self._client = client
+        self.database = database
+        self.table = table
+
+        self._ensure_table()
+
+    def _ensure_table(self):
+        try:
+            self._client.raw.databases.create(self.database)
+        except CogniteAPIError as e:
+            if not e.code == 400:
+                raise e
+        try:
+            self._client.raw.tables.create(self.database, self.table)
+        except CogniteAPIError as e:
+            if not e.code == 400:
+                raise e
+
+    def initialize(self, force: bool = False) -> None:
+        """
+        Get all known states.
+
+        Args:
+            force (bool): Enable re-initialization, ie overwrite when called multiple times
+        """
+        if self._initialized and not force:
+            return
+
+        rows = self._client.raw.rows.list(db_name=self.database, table_name=self.table, limit=None)
+
+        with self.lock:
+            self._local_state.clear()
+            for row in rows:
+                self._local_state[row.key] = row.columns
+
+        self._initialized = True
+
     def synchronize(self) -> None:
         """
         Upload local state store to CDF
@@ -124,6 +168,44 @@ class RawStateStore:
         # Create a copy of deleted to facilitate testing (mock library stores list, and as it changes, the assertions
         # fail)
         self._client.raw.rows.delete(db_name=self.database, table_name=self.table, key=[k for k in self._deleted])
+
+        with self.lock:
+            self._deleted.clear()
+
+
+class LocalStateStore(StateStore):
+    """
+    An extractor state store using a local JSON file as backend.
+
+    Args:
+        file_path (str): File path to JSON file to use
+    """
+
+    def __init__(self, file_path: str):
+        super().__init__()
+
+        self._file_path = file_path
+
+    def initialize(self, force: bool = False) -> None:
+        """
+        Load states from given JSON file
+
+        Args:
+            force (bool): Enable re-initialization, ie overwrite when called multiple times
+        """
+        if self._initialized and not force:
+            return
+
+        with self.lock:
+            try:
+                with open(self._file_path, "r") as f:
+                    self._local_state = json.load(f)
+            except FileNotFoundError:
+                pass
+
+    def synchronize(self) -> None:
+        with open(self._file_path, "w") as f:
+            json.dump(self._local_state, f)
 
         with self.lock:
             self._deleted.clear()
