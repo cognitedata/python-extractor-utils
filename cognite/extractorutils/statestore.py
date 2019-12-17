@@ -70,14 +70,9 @@ class StateStore(ABC):
             high (Any): High watermark
         """
         with self.lock:
-            if external_id not in self._local_state:
-                self._local_state[external_id] = {}
-            self._local_state[external_id]["high"] = (
-                high if high is not None else self._local_state[external_id].get("high")
-            )
-            self._local_state[external_id]["low"] = (
-                low if low is not None else self._local_state[external_id].get("low")
-            )
+            state = self._local_state.setdefault(external_id, {})
+            state["low"] = low if low is not None else state.get("low")
+            state["high"] = high if high is not None else state.get("high")
 
     def expand_state(self, external_id: str, low: Optional[Any] = None, high: Optional[Any] = None) -> None:
         """
@@ -89,13 +84,10 @@ class StateStore(ABC):
             low (Any): Low watermark
             high (Any): High watermark
         """
-        if low is not None and external_id in self._local_state and "low" in self._local_state[external_id]:
-            low = low if low < self._local_state[external_id]["low"] else None
-
-        if high is not None and external_id in self._local_state and "high" in self._local_state[external_id]:
-            high = high if high > self._local_state[external_id]["high"] else None
-
-        self.set_state(external_id, low, high)
+        with self.lock:
+            state = self._local_state.setdefault(external_id, {})
+            state["low"] = min(state.get("low", low), low) if low is not None else state.get("low")
+            state["high"] = max(state.get("high", high), high) if high is not None else state.get("high")
 
     def delete_state(self, external_id: str) -> None:
         """
