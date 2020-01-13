@@ -1,16 +1,188 @@
 """
-Module containing tools config verification and manipulation.
+Module containing tools for loading and verifying config files.
 """
 
 import logging
-from collections.abc import Iterable
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+import os
+import re
+from dataclasses import dataclass
+from typing import Any, Dict, Iterable, List, Optional, T, TextIO, Tuple, Type, Union
+
+import dacite
+import yaml
+
+from cognite.client import CogniteClient
 
 from ._inner_util import _MockLogger
+
+_logger = logging.getLogger(__name__)
+
+
+class InvalidConfigError(Exception):
+    def __init__(self, message: str):
+        super(InvalidConfigError, self).__init__()
+        self.message = message
+
+    def __str__(self):
+        return f"Invalid config: {self.message}"
+
+    def __repr__(self):
+        return self.__str__()
+
+
+def _to_snake_case(dictionary: Dict[str, Any], case_style: str) -> Dict[str, Any]:
+    """
+    Ensure that all keys in the dictionary follows the snake casing convention (recursively, so any sub-dictionaries are
+    changed too).
+
+    Args:
+        dictionary (dict): Dictionary to update.
+        case_style (str): Existing casing convention. Either 'snake', 'hyphen' or 'camel'.
+
+    Returns:
+        An updated dictionary with keys in the given convention.
+    """
+
+    def fix_dict(dictionary, key_translator):
+        new_dict = {}
+        for key in dictionary:
+            if isinstance(dictionary[key], dict):
+                new_dict[key_translator(key)] = fix_dict(dictionary[key], key_translator)
+            else:
+                new_dict[key_translator(key)] = dictionary[key]
+        return new_dict
+
+    def translate_hyphen(key):
+        return key.replace("-", "_")
+
+    def translate_camel(key):
+        return re.sub(r"([A-Z]+)", r"_\1", key).strip("_").lower()
+
+    if case_style == "snake" or case_style == "underscore":
+        return dictionary
+    elif case_style == "hyphen" or case_style == "kebab":
+        return fix_dict(dictionary, translate_hyphen)
+    elif case_style == "camel" or case_style == "pascal":
+        return fix_dict(dictionary, translate_camel)
+    else:
+        raise ValueError(f"Invalid case style: {case_style}")
+
+
+def load_yaml(source: Union[TextIO, str], config_type: Type[T], case_style: str = "hyphen", expand_envvars=True) -> T:
+    """
+    Read a YAML file, and create a config object based on its contents.
+
+    Args:
+        source: Input stream (as returned by open(...)) or string containing YAML.
+        config_type: Class of config type (i.e. your custom subclass of BaseConfig).
+        case_style: Casing convention of config file. Valid options are 'snake', 'hyphen' or 'camel'. Should be
+            'hyphen'.
+        expand_envvars: Substitute values with the pattern ${VAR} with the content of the environment variable VAR
+
+    Returns:
+        An initialized config object.
+
+    Raises:
+        InvalidConfigError: If any config field is given as an invalid type, is missing or is unknown
+    """
+
+    def env_constructor(_, node):
+        # Expnadvars uses same syntax as our env var substitution
+        return os.path.expandvars(node.value)
+
+    class EnvLoader(yaml.SafeLoader):
+        pass
+
+    EnvLoader.add_implicit_resolver("!env", re.compile(r"\$\{([^}^{]+)\}"), None)
+    EnvLoader.add_constructor("!env", env_constructor)
+
+    loader = EnvLoader if expand_envvars else yaml.SafeLoader
+
+    # Safe to use load instead of safe_load since both loader classes are based on SafeLoader
+    config_dict = yaml.load(source, Loader=loader)
+
+    config_dict = _to_snake_case(config_dict, case_style)
+
+    try:
+        config = dacite.from_dict(data=config_dict, data_class=config_type, config=dacite.Config(strict=True))
+    except (dacite.WrongTypeError, dacite.MissingValueError, dacite.UnionMatchError, dacite.UnexpectedDataError) as e:
+        raise InvalidConfigError(str(e))
+    except dacite.ForwardReferenceError as e:
+        raise ValueError(f"Invalid config class: {str(e)}")
+
+    return config
+
+
+@dataclass
+class CogniteConfig:
+    project: str
+    api_key: str
+    external_id_prefix: str
+    host: str = "https://api.cognitedata.com"
+
+    def get_cognite_client(self, client_name: str) -> CogniteClient:
+        return CogniteClient(api_key=self.api_key, project=self.project, base_url=self.host, client_name=client_name)
+
+
+@dataclass
+class _ConsoleLoggingConfig:
+    level: str
+
+
+@dataclass
+class _FileLoggingConfig:
+    level: str
+    path: str
+
+
+@dataclass
+class LoggingConfig:
+    console: Optional[_ConsoleLoggingConfig]
+    file: Optional[_FileLoggingConfig]
+
+
+@dataclass
+class _PushGatewayConfig:
+    host: str
+    job_name: str
+    username: str
+    password: str
+
+    push_interval: int
+
+
+@dataclass
+class _CogniteMetricsConfig:
+    external_id_prefix: str
+    asset_name: str
+    asset_external_id: str
+
+    push_interval: int
+
+
+@dataclass
+class MetricsConfig:
+    push_gateways: Optional[List[_PushGatewayConfig]]
+    cognite: Optional[_CogniteMetricsConfig]
+
+
+@dataclass
+class BaseConfig:
+    version: str
+
+    cognite: CogniteConfig
+    logger: LoggingConfig
+
+
+@dataclass
+class BaseWithMetricsConfig(BaseConfig):
+    metrics: MetricsConfig
 
 
 class DictValidator:
     """
+    DEPRECATED. Will be removed in version 1.0.0. Move to class based configs instead.
+
     A class for validating dictionaries.
 
     Args:
@@ -335,6 +507,8 @@ class DictValidator:
 
 def import_missing(from_dict: Dict[Any, Any], to_dict: Dict[Any, Any], keys: Optional[Iterable[Any]] = None):
     """
+    DEPRECATED. Will be removed in version 1.0.0. Move to class based configs instead.
+
     Import missing key/value pairs from one dictionary to another.
 
     Args:
@@ -352,6 +526,8 @@ def import_missing(from_dict: Dict[Any, Any], to_dict: Dict[Any, Any], keys: Opt
 
 def recursive_none_check(collection: Any) -> Tuple[bool, Any]:
     """
+    DEPRECATED. Will be removed in version 1.0.0. Move to class based configs instead.
+
     Returns true if any value in the dictionary tree is None. That is, if any value in the given dictionary is None, or
     if any lists or dictionaries as values in this dictionary contains None, and so on.
 
