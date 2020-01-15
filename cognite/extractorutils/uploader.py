@@ -98,7 +98,7 @@ class UploadQueue(ABC):
 
         return None
 
-    def _post_upload(self, uploaded: List[Any]):
+    def _post_upload(self, uploaded: List[Any]) -> None:
         if self.post_upload_function is not None:
             try:
                 self.post_upload_function(uploaded)
@@ -254,7 +254,7 @@ class TimeSeriesUploadQueue(UploadQueue):
         finally:
             self.lock.release()
 
-    def _run(self):
+    def _run(self) -> None:
         """
         Internal run method for upload thread
         """
@@ -310,7 +310,7 @@ class TimeSeriesUploadQueue(UploadQueue):
         finally:
             self.lock.release()
 
-    def start(self):
+    def start(self) -> None:
         """
         Start upload thread, this called the upload method every max_upload_interval seconds
         """
@@ -320,7 +320,7 @@ class TimeSeriesUploadQueue(UploadQueue):
         self.stopping.clear()
         self.thread.start()
 
-    def stop(self, ensure_upload: bool = True):
+    def stop(self, ensure_upload: bool = True) -> None:
         """
         Stop upload thread
 
@@ -332,7 +332,7 @@ class TimeSeriesUploadQueue(UploadQueue):
         if ensure_upload:
             self.upload()
 
-    def __enter__(self):
+    def __enter__(self) -> "TimeSeriesUploadQueue":
         """
         Wraps around start method, for use as context manager
 
@@ -342,7 +342,7 @@ class TimeSeriesUploadQueue(UploadQueue):
         self.start()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """
         Wraps around stop method, for use as context manager
 
@@ -436,7 +436,7 @@ class EventUploadQueue(UploadQueue):
         finally:
             self.lock.release()
 
-    def start(self):
+    def start(self) -> None:
         """
         Start upload thread, this called the upload method every max_upload_interval seconds
         """
@@ -446,7 +446,7 @@ class EventUploadQueue(UploadQueue):
         self.stopping.clear()
         self.thread.start()
 
-    def stop(self, ensure_upload: bool = True):
+    def stop(self, ensure_upload: bool = True) -> None:
         """
         Stop upload thread
 
@@ -458,7 +458,7 @@ class EventUploadQueue(UploadQueue):
         if ensure_upload:
             self.upload()
 
-    def __enter__(self):
+    def __enter__(self) -> "EventUploadQueue":
         """
         Wraps around start method, for use as context manager
 
@@ -468,7 +468,7 @@ class EventUploadQueue(UploadQueue):
         self.start()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """
         Wraps around stop method, for use as context manager
 

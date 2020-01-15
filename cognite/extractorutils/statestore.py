@@ -125,7 +125,7 @@ class RawStateStore(StateStore):
 
         self._ensure_table()
 
-    def _ensure_table(self):
+    def _ensure_table(self) -> None:
         try:
             self._client.raw.databases.create(self.database)
         except CogniteAPIError as e:

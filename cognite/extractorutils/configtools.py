@@ -31,10 +31,10 @@ class InvalidConfigError(Exception):
         super(InvalidConfigError, self).__init__()
         self.message = message
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"Invalid config: {self.message}"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.__str__()
 
 

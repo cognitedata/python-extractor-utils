@@ -10,7 +10,7 @@ from cognite.client.data_classes import TimeSeries
 from cognite.client.exceptions import CogniteNotFoundError
 
 
-def ensure_time_series(cdf_client: CogniteClient, time_series: Iterable[TimeSeries]):
+def ensure_time_series(cdf_client: CogniteClient, time_series: Iterable[TimeSeries]) -> None:
     """
     Ensure that all the given time series exists in CDF.
 

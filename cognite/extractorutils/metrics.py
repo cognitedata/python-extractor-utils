@@ -73,7 +73,7 @@ class MetricsPusher(ABC):
         self._push_to_server()
         self.stopping.set()
 
-    def __enter__(self):
+    def __enter__(self) -> "MetricsPusher":
         """
         Wraps around start method, for use as context manager
 
@@ -83,7 +83,7 @@ class MetricsPusher(ABC):
         self.start()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """
         Wraps around stop method, for use as context manager
 
@@ -174,7 +174,7 @@ class PrometheusPusher(MetricsPusher):
 
         self.logger.debug("Pushed metrics to %s", self.url)
 
-    def clear_gateway(self):
+    def clear_gateway(self) -> None:
         """
         Delete metrics stored at the gateway (reset gateway).
         """

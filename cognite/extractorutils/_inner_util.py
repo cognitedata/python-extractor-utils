@@ -5,6 +5,8 @@ A module containing utilities meant for use inside the extractor-utils package
 
 class _MockLogger:
     """
+    DEPRECATED.
+
     A class with an interface similar to logging.Logger that does nothing.
     """
 
