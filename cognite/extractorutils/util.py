@@ -1,3 +1,8 @@
+"""
+The ``util`` package contains miscellaneous functions and classes that can some times be useful while developing
+extractors.
+"""
+
 from typing import Any, Dict, Iterable, Union
 
 from cognite.client import CogniteClient
@@ -5,15 +10,15 @@ from cognite.client.data_classes import TimeSeries
 from cognite.client.exceptions import CogniteNotFoundError
 
 
-def ensure_time_series(cdf_client: CogniteClient, time_series: Iterable[TimeSeries]):
+def ensure_time_series(cdf_client: CogniteClient, time_series: Iterable[TimeSeries]) -> None:
     """
     Ensure that all the given time series exists in CDF.
 
     Searches through the tenant after the external IDs of the time series given, and creates those that are missing.
 
     Args:
-        cdf_client (CogniteClient): Tenant to create time series in
-        time_series (iterable): Time series to create
+        cdf_client: Tenant to create time series in
+        time_series: Time series to create
     """
     try:
         external_ids = [ts.external_id for ts in time_series]
@@ -35,8 +40,8 @@ class EitherId:
     type, not both.
 
     Args:
-        id (int): Internal ID
-        externalId or external_id (str): external ID
+        id: Internal ID
+        externalId or external_id: external ID
 
     Raises:
         TypeError: If none of both of id types are set.
@@ -60,7 +65,7 @@ class EitherId:
         Get the type of the ID
 
         Returns:
-            str: 'id' if the EitherId represents an internal ID, 'externalId' if the EitherId represents an external ID
+            'id' if the EitherId represents an internal ID, 'externalId' if the EitherId represents an external ID
         """
         return "id" if self.internal_id is not None else "externalId"
 
@@ -69,7 +74,7 @@ class EitherId:
         Get the value of the ID
 
         Returns:
-            int or str: The ID
+            The ID
         """
         return self.internal_id or self.external_id
 
@@ -78,10 +83,10 @@ class EitherId:
         Compare with another object. Only returns true if other is an EitherId with the same type and content
 
         Args:
-            other (Any): Another object
+            other: Another object
 
         Returns:
-            bool: True if the other object is equal to this
+            True if the other object is equal to this
         """
         if not isinstance(other, EitherId):
             return False
@@ -93,7 +98,7 @@ class EitherId:
         Returns a hash of the internal or external ID
 
         Returns:
-            int: Hash code of ID
+            Hash code of ID
         """
         return hash((self.internal_id, self.external_id))
 
@@ -102,7 +107,7 @@ class EitherId:
         Get a string representation of the EitherId on the format "type: content".
 
         Returns:
-            str: A string rep of the EitherId
+            A string rep of the EitherId
         """
         return "{}: {}".format(self.type(), self.content())
 

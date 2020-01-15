@@ -1,3 +1,11 @@
+"""
+The ``statestore`` module contains classes for keeping track of the extraction state of individual items, facilitating
+incremental load and speeding up startup times.
+
+At the beginning of a run the extractor typically calls the ``initialize`` method, which loads the states from the
+remote store (which can either be a local JSON file or a table in CDF RAW), and during and/or at the end of a run, the
+``synchronize`` method is called, which saves the current states to the remote store.
+"""
 import json
 from abc import ABC, abstractmethod
 from threading import Lock
@@ -10,9 +18,6 @@ from cognite.client.exceptions import CogniteAPIError
 class StateStore(ABC):
     """
     Base class for a state store.
-
-    An extractor state store based is storing the progress of an extractor between runs, facilitating incremental load
-    and speeding up startup times.
     """
 
     def __init__(self):
@@ -65,9 +70,9 @@ class StateStore(ABC):
         Set/update state of a singe external ID.
 
         Args:
-            external_id (str): External ID of e.g. time series to store state of
-            low (Any): Low watermark
-            high (Any): High watermark
+            external_id: External ID of e.g. time series to store state of
+            low: Low watermark
+            high: High watermark
         """
         with self.lock:
             state = self._local_state.setdefault(external_id, {})
@@ -80,9 +85,9 @@ class StateStore(ABC):
         lower than the stored low.
 
         Args:
-            external_id (str): External ID of e.g. time series to store state of
-            low (Any): Low watermark
-            high (Any): High watermark
+            external_id: External ID of e.g. time series to store state of
+            low: Low watermark
+            high: High watermark
         """
         with self.lock:
             state = self._local_state.setdefault(external_id, {})
@@ -94,7 +99,7 @@ class StateStore(ABC):
         Delete an external ID from the state store.
 
         Args:
-            external_id (str): External ID to remove
+            external_id: External ID to remove
         """
         with self.lock:
             self._local_state.pop(external_id, None)
@@ -106,9 +111,9 @@ class RawStateStore(StateStore):
     An extractor state store based on CDF RAW.
 
     Args:
-        client (CogniteClient): Cognite client to use
-        database (str): Name of CDF database
-        table (str): Name of CDF table
+        client: Cognite client to use
+        database: Name of CDF database
+        table: Name of CDF table
     """
 
     def __init__(self, client: CogniteClient, database: str, table: str):
@@ -120,7 +125,7 @@ class RawStateStore(StateStore):
 
         self._ensure_table()
 
-    def _ensure_table(self):
+    def _ensure_table(self) -> None:
         try:
             self._client.raw.databases.create(self.database)
         except CogniteAPIError as e:
@@ -137,7 +142,7 @@ class RawStateStore(StateStore):
         Get all known states.
 
         Args:
-            force (bool): Enable re-initialization, ie overwrite when called multiple times
+            force: Enable re-initialization, ie overwrite when called multiple times
         """
         if self._initialized and not force:
             return
@@ -170,7 +175,7 @@ class LocalStateStore(StateStore):
     An extractor state store using a local JSON file as backend.
 
     Args:
-        file_path (str): File path to JSON file to use
+        file_path: File path to JSON file to use
     """
 
     def __init__(self, file_path: str):
@@ -183,7 +188,7 @@ class LocalStateStore(StateStore):
         Load states from specified JSON file
 
         Args:
-            force (bool): Enable re-initialization, ie overwrite when called multiple times
+            force: Enable re-initialization, ie overwrite when called multiple times
         """
         if self._initialized and not force:
             return

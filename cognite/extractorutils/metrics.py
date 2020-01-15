@@ -1,5 +1,8 @@
 """
-Module containing tools for metric reporting.
+Module containing tools for pushers for metric reporting.
+
+The classes in this module scrape the default Prometheus registry and uploads it periodically to either a Prometheus
+push gateway, or to CDF as time series.
 """
 import logging
 import threading
@@ -25,8 +28,8 @@ class MetricsPusher(ABC):
     Contains all the logic for starting and running threads.
 
     Args:
-        push_interval (int): Seconds between each upload call
-        thread_name (str): Name of thread to start. If omitted, a standard name such as Thread-4 will be generated.
+        push_interval: Seconds between each upload call
+        thread_name: Name of thread to start. If omitted, a standard name such as Thread-4 will be generated.
     """
 
     def __init__(self, push_interval: Optional[int] = None, thread_name: Optional[str] = None):
@@ -70,7 +73,7 @@ class MetricsPusher(ABC):
         self._push_to_server()
         self.stopping.set()
 
-    def __enter__(self):
+    def __enter__(self) -> "MetricsPusher":
         """
         Wraps around start method, for use as context manager
 
@@ -80,7 +83,7 @@ class MetricsPusher(ABC):
         self.start()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """
         Wraps around stop method, for use as context manager
 
@@ -97,12 +100,12 @@ class PrometheusPusher(MetricsPusher):
     Pusher to a Prometheus push gateway.
 
     Args:
-        job_name (str): Prometheus job name
-        username (str): Push gateway credentials
-        password (str): Push gateway credentials
-        url (str): URL (with portnum) of push gateway
-        push_interval (int): Seconds between each upload call
-        thread_name (str): Name of thread to start. If omitted, a standard name such as Thread-4 will be generated.
+        job_name: Prometheus job name
+        username: Push gateway credentials
+        password: Push gateway credentials
+        url: URL (with portnum) of push gateway
+        push_interval: Seconds between each upload call
+        thread_name: Name of thread to start. If omitted, a standard name such as Thread-4 will be generated.
     """
 
     def __init__(
@@ -129,7 +132,7 @@ class PrometheusPusher(MetricsPusher):
         password, gateway_url or host and push_interval or push-interval.
 
         Args:
-            config (dict):      Configuration dictionary
+            config:      Configuration dictionary
         """
         self.job_name = config.get("job_name") or config.get("job-name")
         self.username = config.get("username")
@@ -143,11 +146,11 @@ class PrometheusPusher(MetricsPusher):
         Returns a authentication handler against the Prometheus Pushgateway to use in the pushadd_to_gateway method.
 
         Args:
-            url (str):      Push gateway
-            method (str):   HTTP method
-            timeout (int):  Request timeout (seconds)
-            headers (dict): HTTP headers
-            data (any):     Data to send
+            url:      Push gateway
+            method:   HTTP method
+            timeout:  Request timeout (seconds)
+            headers:  HTTP headers
+            data:     Data to send
 
         Returns:
             prometheus_client.exposition.basic_auth_handler: A authentication handler based on this client.
@@ -171,7 +174,7 @@ class PrometheusPusher(MetricsPusher):
 
         self.logger.debug("Pushed metrics to %s", self.url)
 
-    def clear_gateway(self):
+    def clear_gateway(self) -> None:
         """
         Delete metrics stored at the gateway (reset gateway).
         """
@@ -187,11 +190,11 @@ class CognitePusher(MetricsPusher):
     will be created at root level in the tenant if it doesn't already exist.
 
     Args:
-        cdf_client (CogniteClient): The CDF tenant to upload time series to
-        external_id_prefix (str): Unique external ID prefix for this pusher.
-        asset (Asset): Optional contextualization.
-        push_interval (int): Seconds between each upload call
-        thread_name (str): Name of thread to start. If omitted, a standard name such as Thread-4 will be generated.
+        cdf_client: The CDF tenant to upload time series to
+        external_id_prefix: Unique external ID prefix for this pusher.
+        asset: Optional contextualization.
+        push_interval: Seconds between each upload call
+        thread_name: Name of thread to start. If omitted, a standard name such as Thread-4 will be generated.
     """
 
     def __init__(

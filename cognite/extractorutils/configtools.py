@@ -19,14 +19,22 @@ _logger = logging.getLogger(__name__)
 
 
 class InvalidConfigError(Exception):
+    """
+    Exception thrown from ``load_yaml`` if config file is invalid. This can be due to
+
+      * Missing fields
+      * Incompatible types
+      * Unkown fields
+    """
+
     def __init__(self, message: str):
         super(InvalidConfigError, self).__init__()
         self.message = message
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"Invalid config: {self.message}"
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return self.__str__()
 
 
@@ -36,8 +44,8 @@ def _to_snake_case(dictionary: Dict[str, Any], case_style: str) -> Dict[str, Any
     changed too).
 
     Args:
-        dictionary (dict): Dictionary to update.
-        case_style (str): Existing casing convention. Either 'snake', 'hyphen' or 'camel'.
+        dictionary: Dictionary to update.
+        case_style: Existing casing convention. Either 'snake', 'hyphen' or 'camel'.
 
     Returns:
         An updated dictionary with keys in the given convention.
@@ -115,9 +123,13 @@ def load_yaml(source: Union[TextIO, str], config_type: Type[T], case_style: str 
 
 @dataclass
 class CogniteConfig:
+    """
+    Configuration parameters for CDF connection, such as project name, host address and API key
+    """
+
     project: str
     api_key: str
-    external_id_prefix: str
+    external_id_prefix: str = ""
     host: str = "https://api.cognitedata.com"
 
     def get_cognite_client(self, client_name: str) -> CogniteClient:
@@ -137,6 +149,10 @@ class _FileLoggingConfig:
 
 @dataclass
 class LoggingConfig:
+    """
+    Logging settings, such as log levels and path to log file
+    """
+
     console: Optional[_ConsoleLoggingConfig]
     file: Optional[_FileLoggingConfig]
 
@@ -162,12 +178,21 @@ class _CogniteMetricsConfig:
 
 @dataclass
 class MetricsConfig:
+    """
+    Destination(s) for metrics, including options for one or several Prometheus push gateways, and pushing as CDF Time
+    Series.
+    """
+
     push_gateways: Optional[List[_PushGatewayConfig]]
     cognite: Optional[_CogniteMetricsConfig]
 
 
 @dataclass
 class BaseConfig:
+    """
+    Basis for an extractor config, containing config version, ``CogniteConfig`` and ``LoggingConfig``
+    """
+
     version: str
 
     cognite: CogniteConfig
@@ -176,6 +201,10 @@ class BaseConfig:
 
 @dataclass
 class BaseWithMetricsConfig(BaseConfig):
+    """
+    An extension of ``BaseConfig`` including ``MetricsConfig``
+    """
+
     metrics: MetricsConfig
 
 
@@ -188,8 +217,8 @@ class DictValidator:
     Args:
         logger (logging.Logger):    (Optional). A logger object to write warnings and errors to to during validation.
                                     Defaults to no logger (ie an instance of the MockLogger in the util module).
-        log_prefix (str):           (Optional). A prefix to add to each log string. Default is no prefix.
-        log_suffix (str):           (Optional). A suffix to add to each log string. Default is no suffix.
+        log_prefix:           (Optional). A prefix to add to each log string. Default is no prefix.
+        log_suffix:           (Optional). A suffix to add to each log string. Default is no suffix.
 
     """
 
@@ -225,7 +254,7 @@ class DictValidator:
         Calls the validate method.
 
         Args:
-            dictionary (dict):      Dictionary to vaildate.
+            dictionary:      Dictionary to vaildate.
             apply_defaults (bool):  Wether to add the available defaults to optional keys, or simply warn about them
                                     not existing.
 
@@ -385,7 +414,7 @@ class DictValidator:
         Performs the verification. Checks if the given dictionary satisfies the given requirements.
 
         Args:
-            dictionary (dict):      Dictionary to vaildate.
+            dictionary:      Dictionary to vaildate.
             apply_defaults (bool):  Wether to add the available defaults to optional keys, or simply warn about them
                                     not existing.
 
@@ -512,8 +541,8 @@ def import_missing(from_dict: Dict[Any, Any], to_dict: Dict[Any, Any], keys: Opt
     Import missing key/value pairs from one dictionary to another.
 
     Args:
-        from_dict (dict):   Dictionary to copy from
-        to_dict (dict):     Dictionary to copy to (in place)
+        from_dict:   Dictionary to copy from
+        to_dict:     Dictionary to copy to (in place)
         keys (Iterable):    (Optional). If present, only the key/value pairs corresponding to these keys will be copied.
     """
     if keys is None:
@@ -532,7 +561,7 @@ def recursive_none_check(collection: Any) -> Tuple[bool, Any]:
     if any lists or dictionaries as values in this dictionary contains None, and so on.
 
     Args:
-        collection (dict):  Dictionary to check
+        collection:  Dictionary to check
 
     Returns:
         Tuple[bool, Any]: True if any value is None, and the local index / key of the value that is None
