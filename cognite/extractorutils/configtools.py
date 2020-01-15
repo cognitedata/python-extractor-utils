@@ -19,6 +19,14 @@ _logger = logging.getLogger(__name__)
 
 
 class InvalidConfigError(Exception):
+    """
+    Exception thrown from ``load_yaml`` if config file is invalid. This can be due to
+
+      * Missing fields
+      * Incompatible types
+      * Unkown fields
+    """
+
     def __init__(self, message: str):
         super(InvalidConfigError, self).__init__()
         self.message = message

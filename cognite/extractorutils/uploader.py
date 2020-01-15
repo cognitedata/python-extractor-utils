@@ -7,7 +7,10 @@ Each upload queue comes with some configurable conditions that, when met, automa
 **Note:** You cannot assume that an element is uploaded when it is added to the queue, since the upload may be
 delayed. To ensure that everything is uploaded you should set the `post_upload_function` callback to verify. For
 example, for a time series queue you might want to check the latest time stamp, as such (assuming incremental time
-stamps and using timestamp-value tuples as data point format): ::
+stamps and using timestamp-value tuples as data point format):
+
+
+.. code-block:: python
 
     latest_point = {"timestamp": 0}
 
@@ -25,6 +28,7 @@ stamps and using timestamp-value tuples as data point format): ::
         post_upload_function=store_latest,
         max_upload_interval=1
     )
+
 """
 import logging
 import threading

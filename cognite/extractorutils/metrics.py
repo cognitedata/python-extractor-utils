@@ -1,5 +1,8 @@
 """
-Module containing tools for metric reporting.
+Module containing tools for pushers for metric reporting.
+
+The classes in this module scrape the default Prometheus registry and uploads it periodically to either a Prometheus
+push gateway, or to CDF as time series.
 """
 import logging
 import threading

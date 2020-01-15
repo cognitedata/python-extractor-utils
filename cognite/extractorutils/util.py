@@ -1,3 +1,8 @@
+"""
+The ``util`` package contains miscellaneous functions and classes that can some times be useful while developing
+extractors.
+"""
+
 from typing import Any, Dict, Iterable, Union
 
 from cognite.client import CogniteClient

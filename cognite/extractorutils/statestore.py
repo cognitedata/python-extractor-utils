@@ -1,3 +1,11 @@
+"""
+The ``statestore`` module contains classes for keeping track of the extraction state of individual items, facilitating
+incremental load and speeding up startup times.
+
+At the beginning of a run the extractor typically calls the ``initialize`` method, which loads the states from the
+remote store (which can either be a local JSON file or a table in CDF RAW), and during and/or at the end of a run, the
+``synchronize`` method is called, which saves the current states to the remote store.
+"""
 import json
 from abc import ABC, abstractmethod
 from threading import Lock
@@ -10,9 +18,6 @@ from cognite.client.exceptions import CogniteAPIError
 class StateStore(ABC):
     """
     Base class for a state store.
-
-    An extractor state store based is storing the progress of an extractor between runs, facilitating incremental load
-    and speeding up startup times.
     """
 
     def __init__(self):

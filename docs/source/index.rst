@@ -1,19 +1,27 @@
-.. cognite-extractor-utils documentation master file, created by
-   sphinx-quickstart on Thu Jan 11 15:57:44 2018.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+Cognite extractor-utils package
+===============================
 
-Python extractor-utils package
-==============================
+The extractor-utils package is an extension of the Cognite Python SDK intended to simplify the development of data extractors for Cognite Data Fusion.
+
+
+Installation
+^^^^^^^^^^^^
+
+To install this package:
+
+.. code-block:: bash
+
+   pip install cognite-extractor-utils
+
+If the Cognite SDK is not already installed, the installation will automatically fetch and install it as well.
+
+
+Contents
+^^^^^^^^
 
 .. toctree::
    :maxdepth: 4
-   :caption: Contents:
 
    docs
 
 
-Indices and tables
-==================
-
-* :ref:`genindex`
