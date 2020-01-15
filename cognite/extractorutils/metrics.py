@@ -28,8 +28,8 @@ class MetricsPusher(ABC):
     Contains all the logic for starting and running threads.
 
     Args:
-        push_interval (int): Seconds between each upload call
-        thread_name (str): Name of thread to start. If omitted, a standard name such as Thread-4 will be generated.
+        push_interval: Seconds between each upload call
+        thread_name: Name of thread to start. If omitted, a standard name such as Thread-4 will be generated.
     """
 
     def __init__(self, push_interval: Optional[int] = None, thread_name: Optional[str] = None):
@@ -100,12 +100,12 @@ class PrometheusPusher(MetricsPusher):
     Pusher to a Prometheus push gateway.
 
     Args:
-        job_name (str): Prometheus job name
-        username (str): Push gateway credentials
-        password (str): Push gateway credentials
-        url (str): URL (with portnum) of push gateway
-        push_interval (int): Seconds between each upload call
-        thread_name (str): Name of thread to start. If omitted, a standard name such as Thread-4 will be generated.
+        job_name: Prometheus job name
+        username: Push gateway credentials
+        password: Push gateway credentials
+        url: URL (with portnum) of push gateway
+        push_interval: Seconds between each upload call
+        thread_name: Name of thread to start. If omitted, a standard name such as Thread-4 will be generated.
     """
 
     def __init__(
@@ -132,7 +132,7 @@ class PrometheusPusher(MetricsPusher):
         password, gateway_url or host and push_interval or push-interval.
 
         Args:
-            config (dict):      Configuration dictionary
+            config:      Configuration dictionary
         """
         self.job_name = config.get("job_name") or config.get("job-name")
         self.username = config.get("username")
@@ -146,11 +146,11 @@ class PrometheusPusher(MetricsPusher):
         Returns a authentication handler against the Prometheus Pushgateway to use in the pushadd_to_gateway method.
 
         Args:
-            url (str):      Push gateway
-            method (str):   HTTP method
-            timeout (int):  Request timeout (seconds)
-            headers (dict): HTTP headers
-            data (any):     Data to send
+            url:      Push gateway
+            method:   HTTP method
+            timeout:  Request timeout (seconds)
+            headers:  HTTP headers
+            data:     Data to send
 
         Returns:
             prometheus_client.exposition.basic_auth_handler: A authentication handler based on this client.
@@ -190,11 +190,11 @@ class CognitePusher(MetricsPusher):
     will be created at root level in the tenant if it doesn't already exist.
 
     Args:
-        cdf_client (CogniteClient): The CDF tenant to upload time series to
-        external_id_prefix (str): Unique external ID prefix for this pusher.
-        asset (Asset): Optional contextualization.
-        push_interval (int): Seconds between each upload call
-        thread_name (str): Name of thread to start. If omitted, a standard name such as Thread-4 will be generated.
+        cdf_client: The CDF tenant to upload time series to
+        external_id_prefix: Unique external ID prefix for this pusher.
+        asset: Optional contextualization.
+        push_interval: Seconds between each upload call
+        thread_name: Name of thread to start. If omitted, a standard name such as Thread-4 will be generated.
     """
 
     def __init__(

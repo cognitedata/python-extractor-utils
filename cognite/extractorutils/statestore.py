@@ -70,9 +70,9 @@ class StateStore(ABC):
         Set/update state of a singe external ID.
 
         Args:
-            external_id (str): External ID of e.g. time series to store state of
-            low (Any): Low watermark
-            high (Any): High watermark
+            external_id: External ID of e.g. time series to store state of
+            low: Low watermark
+            high: High watermark
         """
         with self.lock:
             state = self._local_state.setdefault(external_id, {})
@@ -85,9 +85,9 @@ class StateStore(ABC):
         lower than the stored low.
 
         Args:
-            external_id (str): External ID of e.g. time series to store state of
-            low (Any): Low watermark
-            high (Any): High watermark
+            external_id: External ID of e.g. time series to store state of
+            low: Low watermark
+            high: High watermark
         """
         with self.lock:
             state = self._local_state.setdefault(external_id, {})
@@ -99,7 +99,7 @@ class StateStore(ABC):
         Delete an external ID from the state store.
 
         Args:
-            external_id (str): External ID to remove
+            external_id: External ID to remove
         """
         with self.lock:
             self._local_state.pop(external_id, None)
@@ -111,9 +111,9 @@ class RawStateStore(StateStore):
     An extractor state store based on CDF RAW.
 
     Args:
-        client (CogniteClient): Cognite client to use
-        database (str): Name of CDF database
-        table (str): Name of CDF table
+        client: Cognite client to use
+        database: Name of CDF database
+        table: Name of CDF table
     """
 
     def __init__(self, client: CogniteClient, database: str, table: str):
@@ -142,7 +142,7 @@ class RawStateStore(StateStore):
         Get all known states.
 
         Args:
-            force (bool): Enable re-initialization, ie overwrite when called multiple times
+            force: Enable re-initialization, ie overwrite when called multiple times
         """
         if self._initialized and not force:
             return
@@ -175,7 +175,7 @@ class LocalStateStore(StateStore):
     An extractor state store using a local JSON file as backend.
 
     Args:
-        file_path (str): File path to JSON file to use
+        file_path: File path to JSON file to use
     """
 
     def __init__(self, file_path: str):
@@ -188,7 +188,7 @@ class LocalStateStore(StateStore):
         Load states from specified JSON file
 
         Args:
-            force (bool): Enable re-initialization, ie overwrite when called multiple times
+            force: Enable re-initialization, ie overwrite when called multiple times
         """
         if self._initialized and not force:
             return

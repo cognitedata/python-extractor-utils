@@ -56,9 +56,9 @@ class UploadQueue(ABC):
     Abstract uploader class.
 
     Args:
-        post_upload_function (Callable[[int]): (Optional). A function that will be called after each upload. The
+        post_upload_function: A function that will be called after each upload. The
             function will be given one argument: A list of the elements that were uploaded
-        queue_threshold (int): (Optional). Maximum byte size of upload queue. Defaults to no queue (ie upload after each
+        queue_threshold: Maximum byte size of upload queue. Defaults to no queue (ie upload after each
             add_to_upload_queue).
     """
 
@@ -84,10 +84,10 @@ class UploadQueue(ABC):
         Check if upload triggers are met, call upload if they are. Called by subclasses.
 
         Args:
-            item (dict): Item added to upload queue
+            item: Item added to upload queue
 
         Returns:
-            Any: Result of upload, if upload happened.
+            Result of upload, if upload happened.
         """
         self.upload_queue_byte_size += len(repr(item))
 
@@ -112,7 +112,7 @@ class UploadQueue(ABC):
         threshold specified in the config.
 
         Returns:
-            Any: Result of upload, if applicable and if upload happened.
+            Result of upload, if applicable and if upload happened.
         """
 
     @abstractmethod
@@ -121,7 +121,7 @@ class UploadQueue(ABC):
         Uploads the queue.
 
         Returns:
-            Any: Result status of upload.
+            Result status of upload.
         """
 
 
@@ -130,10 +130,10 @@ class RawUploadQueue(UploadQueue):
     Upload queue for RAW
 
     Args:
-        cdf_client (CogniteClient): Cognite Data Fusion client
-        post_upload_function (Callable[[int]): (Optional). A function that will be called after each upload. The
+        cdf_client: Cognite Data Fusion client
+        post_upload_function: A function that will be called after each upload. The
             function will be given one argument: An a list of the rows that were uploaded.
-        queue_threshold (int): (Optional). Maximum size of upload queue. Defaults to no queue (ie upload after each
+        queue_threshold: Maximum size of upload queue. Defaults to no queue (ie upload after each
             add_to_upload_queue).
     """
 
@@ -159,9 +159,9 @@ class RawUploadQueue(UploadQueue):
         specified in the __init__.
 
         Args:
-            database (str): The database to upload the Raw object to
-            table (str): The table to upload the Raw object to
-            raw_row (Row): The row object
+            database: The database to upload the Raw object to
+            table: The table to upload the Raw object to
+            raw_row: The row object
 
         Returns:
             None.
@@ -198,13 +198,13 @@ class TimeSeriesUploadQueue(UploadQueue):
     Upload queue for time series
 
     Args:
-        cdf_client (CogniteClient): Cognite Data Fusion client
-        post_upload_function (Callable[[int]): (Optional). A function that will be called after each upload. The
+        cdf_client: Cognite Data Fusion client
+        post_upload_function: A function that will be called after each upload. The
             function will be given one argument: A dict from time series ID to a list of the data points that were
             uploaded
-        queue_threshold (int): (Optional). Maximum size of upload queue. Defaults to no queue (ie upload after each
+        queue_threshold: Maximum size of upload queue. Defaults to no queue (ie upload after each
             add_to_upload_queue).
-        max_upload_interval (int): (Optional). Automatically trigger an upload each m seconds when run as a thread (use
+        max_upload_interval: Automatically trigger an upload each m seconds when run as a thread (use
             start/stop methods).
     """
 
@@ -237,9 +237,9 @@ class TimeSeriesUploadQueue(UploadQueue):
         specified in the __init__.
 
         Args:
-            id (int): Internal ID of time series. Either this or external_id must be set.
-            external_id (str): External ID of time series. Either this or external_id must be set.
-            datapoints (list): List of data points to add
+            id: Internal ID of time series. Either this or external_id must be set.
+            external_id: External ID of time series. Either this or external_id must be set.
+            datapoints: List of data points to add
         """
         either_id = EitherId(id=id, external_id=external_id)
 
@@ -359,12 +359,12 @@ class EventUploadQueue(UploadQueue):
     Upload queue for events
 
     Args:
-        cdf_client (CogniteClient): Cognite Data Fusion client
-        post_upload_function (Callable[[int]): (Optional). A function that will be called after each upload. The
+        cdf_client: Cognite Data Fusion client
+        post_upload_function: A function that will be called after each upload. The
             function will be given one argument: A list of the events created
-        queue_threshold (int): (Optional). Maximum size of upload queue. Defaults to no queue (ie upload after each
+        queue_threshold: Maximum size of upload queue. Defaults to no queue (ie upload after each
             add_to_upload_queue).
-        max_upload_interval (int): (Optional). Automatically trigger an upload each m seconds when run as a thread (use
+        max_upload_interval: Automatically trigger an upload each m seconds when run as a thread (use
             start/stop methods).
     """
 
@@ -397,7 +397,7 @@ class EventUploadQueue(UploadQueue):
         specified in the __init__.
 
         Args:
-            event (Event): Event to add
+            event: Event to add
         """
         self.lock.acquire()
 
@@ -451,7 +451,7 @@ class EventUploadQueue(UploadQueue):
         Stop upload thread
 
         Args:
-            ensure_upload (bool): (Optional). Call upload one last time after shutting down thread to ensure empty
+            ensure_upload: Call upload one last time after shutting down thread to ensure empty
                 upload queue.
         """
         self.stopping.set()
