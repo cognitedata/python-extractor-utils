@@ -5,10 +5,10 @@ from unittest.mock import Mock, patch
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Row
 from cognite.client.exceptions import CogniteAPIError
-from cognite.extractorutils.statestore import LocalStateStore, RawStateStore, StateStore
+from cognite.extractorutils.statestore import AbstractStateStore, LocalStateStore, RawStateStore
 
 
-class NoStateStore(StateStore):
+class NoStateStore(AbstractStateStore):
     def initialize(self, force: bool = False) -> None:
         pass
 

@@ -15,7 +15,7 @@ from cognite.client import CogniteClient
 from cognite.client.exceptions import CogniteAPIError
 
 
-class StateStore(ABC):
+class AbstractStateStore(ABC):
     """
     Base class for a state store.
     """
@@ -106,7 +106,7 @@ class StateStore(ABC):
             self._deleted.append(external_id)
 
 
-class RawStateStore(StateStore):
+class RawStateStore(AbstractStateStore):
     """
     An extractor state store based on CDF RAW.
 
@@ -170,7 +170,7 @@ class RawStateStore(StateStore):
             self._deleted.clear()
 
 
-class LocalStateStore(StateStore):
+class LocalStateStore(AbstractStateStore):
     """
     An extractor state store using a local JSON file as backend.
 
