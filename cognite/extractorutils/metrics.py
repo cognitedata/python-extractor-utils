@@ -20,7 +20,7 @@ from cognite.client.exceptions import CogniteDuplicatedError
 from cognite.extractorutils.util import ensure_time_series
 
 
-class MetricsPusher(ABC):
+class AbstractMetricsPusher(ABC):
     """
     Base class for metric pushers. Metric pushers spawns a thread that routinely pushes metrics to a configured
     destination.
@@ -73,7 +73,7 @@ class MetricsPusher(ABC):
         self._push_to_server()
         self.stopping.set()
 
-    def __enter__(self) -> "MetricsPusher":
+    def __enter__(self) -> "AbstractMetricsPusher":
         """
         Wraps around start method, for use as context manager
 
@@ -95,7 +95,7 @@ class MetricsPusher(ABC):
         self.stop()
 
 
-class PrometheusPusher(MetricsPusher):
+class PrometheusPusher(AbstractMetricsPusher):
     """
     Pusher to a Prometheus push gateway.
 
@@ -182,7 +182,7 @@ class PrometheusPusher(MetricsPusher):
         self.logger.debug("Deleted metrics from push gateway %s", self.url)
 
 
-class CognitePusher(MetricsPusher):
+class CognitePusher(AbstractMetricsPusher):
     """
     Pusher to CDF. Creates time series in CDF for all Gauges and Counters in the default Prometheus registry.
 

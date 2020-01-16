@@ -51,7 +51,7 @@ DataPointList = Union[
 ]
 
 
-class UploadQueue(ABC):
+class AbstractUploadQueue(ABC):
     """
     Abstract uploader class.
 
@@ -125,7 +125,7 @@ class UploadQueue(ABC):
         """
 
 
-class RawUploadQueue(UploadQueue):
+class RawUploadQueue(AbstractUploadQueue):
     """
     Upload queue for RAW
 
@@ -193,7 +193,7 @@ class RawUploadQueue(UploadQueue):
         self.upload_queue_byte_size = 0
 
 
-class TimeSeriesUploadQueue(UploadQueue):
+class TimeSeriesUploadQueue(AbstractUploadQueue):
     """
     Upload queue for time series
 
@@ -354,7 +354,7 @@ class TimeSeriesUploadQueue(UploadQueue):
         self.stop()
 
 
-class EventUploadQueue(UploadQueue):
+class EventUploadQueue(AbstractUploadQueue):
     """
     Upload queue for events
 
