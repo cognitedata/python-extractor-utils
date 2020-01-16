@@ -187,7 +187,10 @@ class RawUploadQueue(AbstractUploadQueue):
                 self.raw.rows.insert(db_name=database, table_name=table, row=rows, ensure_parent=True)
 
                 # Perform post-upload logic if applicable
-                self._post_upload(rows)
+                try:
+                    self._post_upload(rows)
+                except Exception as e:
+                    self.logger.error("Error in upload callback: %s", str(e))
 
         self.upload_queue.clear()
         self.upload_queue_byte_size = 0
@@ -259,7 +262,10 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         Internal run method for upload thread
         """
         while not self.stopping.is_set():
-            self.upload()
+            try:
+                self.upload()
+            except Exception as e:
+                self.logger.error("Unexpected error while uploading: %s. Skipping this upload.", str(e))
             time.sleep(self.max_upload_interval)
 
     def upload(self) -> None:
@@ -278,8 +284,6 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         self.lock.acquire()
 
         try:
-            self.upload_queue.clear()
-
             if len(upload_this) == 0:
                 return
 
@@ -304,7 +308,12 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
                 # Upload remaining
                 self.cdf_client.datapoints.insert_multiple(upload_this)
 
-            self._post_upload(upload_this)
+            try:
+                self._post_upload(upload_this)
+            except Exception as e:
+                self.logger.error("Error in upload callback: %s", str(e))
+
+            self.upload_queue.clear()
             self.upload_queue_byte_size = 0
 
         finally:
@@ -413,7 +422,10 @@ class EventUploadQueue(AbstractUploadQueue):
         Internal run method for upload thread
         """
         while not self.stopping.is_set():
-            self.upload()
+            try:
+                self.upload()
+            except Exception as e:
+                self.logger.error("Unexpected error while uploading: %s. Skipping this upload.", str(e))
             time.sleep(self.max_upload_interval)
 
     def upload(self) -> None:
@@ -429,7 +441,10 @@ class EventUploadQueue(AbstractUploadQueue):
 
         try:
             self.cdf_client.events.create(self.upload_queue)
-            self._post_upload(self.upload_queue)
+            try:
+                self._post_upload(self.upload_queue)
+            except Exception as e:
+                self.logger.error("Error in upload callback: %s", str(e))
             self.upload_queue.clear()
             self.upload_queue_byte_size = 0
 
