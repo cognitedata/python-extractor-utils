@@ -137,7 +137,13 @@ class CogniteConfig:
     host: str = "https://api.cognitedata.com"
 
     def get_cognite_client(self, client_name: str) -> CogniteClient:
-        return CogniteClient(api_key=self.api_key, project=self.project, base_url=self.host, client_name=client_name)
+        return CogniteClient(
+            api_key=self.api_key,
+            project=self.project,
+            base_url=self.host,
+            client_name=client_name,
+            disable_pypi_version_check=True,
+        )
 
 
 @dataclass
