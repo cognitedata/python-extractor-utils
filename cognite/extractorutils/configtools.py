@@ -6,14 +6,18 @@ import logging
 import os
 import re
 from dataclasses import dataclass
+from logging.handlers import TimedRotatingFileHandler
 from typing import Any, Dict, Iterable, List, Optional, T, TextIO, Tuple, Type, Union
 
 import dacite
 import yaml
 
 from cognite.client import CogniteClient
+from cognite.client.data_classes import Asset
 
 from ._inner_util import _MockLogger
+from .metrics import AbstractMetricsPusher, CognitePusher, PrometheusPusher
+from .statestore import AbstractStateStore, LocalStateStore, RawStateStore
 
 _logger = logging.getLogger(__name__)
 
@@ -138,13 +142,14 @@ class CogniteConfig:
 
 @dataclass
 class _ConsoleLoggingConfig:
-    level: str
+    level: str = "INFO"
 
 
 @dataclass
 class _FileLoggingConfig:
-    level: str
     path: str
+    level: str = "INFO"
+    retention: int = 7
 
 
 @dataclass
@@ -156,6 +161,39 @@ class LoggingConfig:
     console: Optional[_ConsoleLoggingConfig]
     file: Optional[_FileLoggingConfig]
 
+    def setup_logging(self, suppress_console=False) -> None:
+        """
+        Sets up the default logger in the logging package to be configured as defined in this config object
+
+        Args:
+            suppress_console: Don't log to console regardless of config. Useful when running an extractor as a Windows
+                service
+        """
+        fmt = logging.Formatter(
+            "%(asctime)s.%(msecs)03d [%(levelname)-8s] %(threadName)s %(message)s", "%Y-%m-%d %H:%M:%S",
+        )
+        root = logging.getLogger()
+
+        if self.console and not suppress_console:
+            console_handler = logging.StreamHandler()
+            console_handler.setLevel(self.console.level)
+            console_handler.setFormatter(fmt)
+
+            root.addHandler(console_handler)
+
+            if root.getEffectiveLevel() > console_handler.level:
+                root.setLevel(console_handler.level)
+
+        if self.file:
+            file_handler = TimedRotatingFileHandler(filename=self.file.path, when="D", backupCount=self.file.retention,)
+            file_handler.setLevel(self.file.level)
+            file_handler.setFormatter(fmt)
+
+            root.addHandler(file_handler)
+
+            if root.getEffectiveLevel() > file_handler.level:
+                root.setLevel(file_handler.level)
+
 
 @dataclass
 class _PushGatewayConfig:
@@ -164,16 +202,16 @@ class _PushGatewayConfig:
     username: str
     password: str
 
-    push_interval: int
+    push_interval: int = 30
 
 
 @dataclass
 class _CogniteMetricsConfig:
     external_id_prefix: str
-    asset_name: str
-    asset_external_id: str
+    asset_name: Optional[str]
+    asset_external_id: Optional[str]
 
-    push_interval: int
+    push_interval: int = 30
 
 
 @dataclass
@@ -185,6 +223,44 @@ class MetricsConfig:
 
     push_gateways: Optional[List[_PushGatewayConfig]]
     cognite: Optional[_CogniteMetricsConfig]
+
+    def start_pushers(self, cdf_client: CogniteClient) -> None:
+        self._pushers: List[AbstractMetricsPusher] = []
+
+        counter = 0
+
+        push_gateways = self.push_gateways or []
+
+        for push_gateway in push_gateways:
+            pusher = PrometheusPusher(thread_name=f"MetricsPusher-{counter}")
+            pusher.configure(push_gateway)
+
+            pusher.start()
+            self._pushers.append(pusher)
+            counter += 1
+
+        if self.cognite:
+            if self.cognite.asset_name is not None:
+                asset = Asset(name=self.cognite.asset_name, external_id=self.cognite.asset_external_id)
+            else:
+                asset = None
+
+            pusher = CognitePusher(
+                cdf_client=cdf_client,
+                external_id_prefix=self.cognite.external_id_prefix,
+                push_interval=self.cognite.push_interval,
+                asset=asset,
+                thread_name=f"MetricsPusher-{counter}",
+            )
+
+            pusher.start()
+            self._pushers.append(pusher)
+
+    def stop_pushers(self) -> None:
+        pushers = self.__dict__.get("_pushers") or []
+
+        for pusher in pushers:
+            pusher.stop()
 
 
 @dataclass
@@ -200,12 +276,41 @@ class BaseConfig:
 
 
 @dataclass
-class BaseWithMetricsConfig(BaseConfig):
-    """
-    An extension of ``BaseConfig`` including ``MetricsConfig``
-    """
+class RawDestinationConfig:
+    database: str
+    table: str
 
-    metrics: MetricsConfig
+
+@dataclass
+class RawStateStoreConfig(RawDestinationConfig):
+    upload_interval: int = 30
+
+
+@dataclass
+class LocalStateStoreConfig:
+    path: str
+    save_interval: int = 30
+
+
+@dataclass
+class StateStoreConfig:
+    raw: Optional[RawStateStoreConfig]
+    local: Optional[LocalStateStoreConfig]
+
+    def create_state_store(self, cognite_client: Optional[CogniteClient] = None) -> Optional[AbstractStateStore]:
+        if self.raw and self.local:
+            raise ValueError("Only one state store can be used simultaneously")
+
+        if self.raw:
+            if cognite_client is None:
+                raise TypeError("A cognite client object must be provided when state store is RAW")
+
+            return RawStateStore(client=cognite_client, database=self.raw.database, table=self.raw.table)
+
+        if self.local:
+            return LocalStateStore(file_path=self.local.path)
+
+        return None
 
 
 class DictValidator:
