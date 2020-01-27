@@ -43,13 +43,19 @@ The ``configtools`` module contains several prebuilt config classes for many com
 
 .. autoclass:: cognite.extractorutils.configtools.BaseConfig
     :undoc-members:
-.. autoclass:: cognite.extractorutils.configtools.BaseWithMetricsConfig
-    :undoc-members:
 .. autoclass:: cognite.extractorutils.configtools.CogniteConfig
     :undoc-members:
 .. autoclass:: cognite.extractorutils.configtools.LoggingConfig
     :undoc-members:
 .. autoclass:: cognite.extractorutils.configtools.MetricsConfig
+    :undoc-members:
+.. autoclass:: cognite.extractorutils.configtools.RawDestinationConfig
+    :undoc-members:
+.. autoclass:: cognite.extractorutils.configtools.StateStoreConfig
+    :undoc-members:
+.. autoclass:: cognite.extractorutils.configtools.RawStateStoreConfig
+    :undoc-members:
+.. autoclass:: cognite.extractorutils.configtools.LocalStateStoreConfig
     :undoc-members:
 
 
@@ -97,4 +103,3 @@ Exceptions
     :undoc-members:
     :inherited-members:
     :show-inheritance:
-
