@@ -11,6 +11,6 @@ setup(
     author="Mathias Lohne",
     author_email="mathias.lohne@cognite.com",
     packages=["cognite.{}".format(p) for p in find_packages("cognite")],
-    install_requires=["cognite-sdk>=1.0.0", "typing", "prometheus-client", "arrow", "pyyaml", "dacite"],
+    install_requires=["cognite-sdk>=1.0.0", "typing", "prometheus-client", "arrow", "pyyaml", "dacite", "psutil"],
     python_requires=">=3.5",
 )

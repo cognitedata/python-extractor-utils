@@ -5,12 +5,15 @@ The classes in this module scrape the default Prometheus registry and uploads it
 push gateway, or to CDF as time series.
 """
 import logging
+import os
 import threading
 from abc import ABC, abstractmethod
+from time import sleep
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import arrow
-from prometheus_client import Metric
+import psutil
+from prometheus_client import Gauge, Metric
 from prometheus_client.core import REGISTRY
 from prometheus_client.exposition import basic_auth_handler, delete_from_gateway, pushadd_to_gateway
 
@@ -18,6 +21,52 @@ from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset, TimeSeries
 from cognite.client.exceptions import CogniteDuplicatedError
 from cognite.extractorutils.util import ensure_time_series
+
+
+class BaseMetrics:
+    """
+    Base collection of extractor metrics. The class also spawns a collector thread on init that regularly fetches
+    process information and update the ``process_*`` gauges.
+
+    To create a set of metrics for an extractor, create a subclass of this class.
+
+    **Note that only one instance of this class (or any subclass) can exist simultaneously**
+
+    The collection includes the following metrics:
+     * startup (Prometheus name: last_extract_startup)     Startup time (unix epoch)
+     * finish (Prometheus name: last_extract_finish)       Finish time (unix epoch)
+     * process_num_threads                                 Number of active threads. Set automatically.
+     * process_memory_bytes                                Memory usage of extractor. Set automatically.
+     * process_cpu_percent                                 CPU usage of extractor. Set automatically.
+
+    Args:
+        process_scrape_interval: Interval (in seconds) between each fetch of data for the ``process_*`` gauges
+    """
+
+    def __init__(self, process_scrape_interval: float = 5):
+        self.startup = Gauge("last_extract_startup", "Timestamp (seconds) of when the extractor last started")
+        self.finish = Gauge("last_extract_finish", "Timestamp (seconds) of then the extractor last finished cleanly")
+
+        self._process = psutil.Process(os.getpid())
+
+        self.process_num_threads = Gauge("process_num_threads", "Number of threads")
+        self.process_memory_bytes = Gauge("process_memory_bytes", "Memory usage in bytes")
+        self.process_cpu_percent = Gauge("process_cpu_percent", "CPU usage percent")
+
+        self.process_scrape_interval = process_scrape_interval
+        self._start_proc_collector()
+
+    def _proc_collect(self):
+        while True:
+            self.process_num_threads.set(self._process.num_threads())
+            self.process_memory_bytes.set(self._process.memory_info().rss)
+            self.process_cpu_percent.set(self._process.cpu_percent())
+
+            sleep(self.process_scrape_interval)
+
+    def _start_proc_collector(self):
+        thread = threading.Thread(target=self._proc_collect, name="ProcessMetricsCollector", daemon=True)
+        thread.start()
 
 
 class AbstractMetricsPusher(ABC):
