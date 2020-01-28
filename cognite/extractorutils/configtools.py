@@ -55,13 +55,26 @@ def _to_snake_case(dictionary: Dict[str, Any], case_style: str) -> Dict[str, Any
         An updated dictionary with keys in the given convention.
     """
 
-    def fix_dict(dictionary, key_translator):
-        new_dict = {}
-        for key in dictionary:
-            if isinstance(dictionary[key], dict):
-                new_dict[key_translator(key)] = fix_dict(dictionary[key], key_translator)
+    def fix_list(list_, key_translator):
+        new_list = [None] * len(list_)
+        for i, element in enumerate(list_):
+            if isinstance(element, dict):
+                new_list[i] = fix_dict(element, key_translator)
+            elif isinstance(element, list):
+                new_list[i] = fix_list(element, key_translator)
             else:
-                new_dict[key_translator(key)] = dictionary[key]
+                new_list[i] = element
+        return new_list
+
+    def fix_dict(dict_, key_translator):
+        new_dict = {}
+        for key in dict_:
+            if isinstance(dict_[key], dict):
+                new_dict[key_translator(key)] = fix_dict(dict_[key], key_translator)
+            elif isinstance(dict_[key], list):
+                new_dict[key_translator(key)] = fix_list(dict_[key], key_translator)
+            else:
+                new_dict[key_translator(key)] = dict_[key]
         return new_dict
 
     def translate_hyphen(key):
