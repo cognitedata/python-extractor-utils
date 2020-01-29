@@ -33,28 +33,33 @@ class BaseMetrics:
     **Note that only one instance of this class (or any subclass) can exist simultaneously**
 
     The collection includes the following metrics:
-     * startup (Prometheus name: last_extract_startup)     Startup time (unix epoch)
-     * finish (Prometheus name: last_extract_finish)       Finish time (unix epoch)
-     * process_num_threads                                 Number of active threads. Set automatically.
-     * process_memory_bytes                                Memory usage of extractor. Set automatically.
-     * process_cpu_percent                                 CPU usage of extractor. Set automatically.
+     * startup:                     Startup time (unix epoch)
+     * finish:                      Finish time (unix epoch)
+     * process_num_threads          Number of active threads. Set automatically.
+     * process_memory_bytes         Memory usage of extractor. Set automatically.
+     * process_cpu_percent          CPU usage of extractor. Set automatically.
 
     Args:
+        extractor_name: Name of extractor, used to prefix metric names
         process_scrape_interval: Interval (in seconds) between each fetch of data for the ``process_*`` gauges
     """
 
-    def __init__(self, process_scrape_interval: float = 5):
-        self.startup = Gauge("last_extract_startup", "Timestamp (seconds) of when the extractor last started")
-        self.finish = Gauge("last_extract_finish", "Timestamp (seconds) of then the extractor last finished cleanly")
+    def __init__(self, extractor_name: str, process_scrape_interval: float = 5):
+        self.startup = Gauge(f"{extractor_name}_start_time", "Timestamp (seconds) of when the extractor last started")
+        self.finish = Gauge(
+            f"{extractor_name}_finish_time", "Timestamp (seconds) of then the extractor last finished cleanly"
+        )
 
         self._process = psutil.Process(os.getpid())
 
-        self.process_num_threads = Gauge("process_num_threads", "Number of threads")
-        self.process_memory_bytes = Gauge("process_memory_bytes", "Memory usage in bytes")
-        self.process_cpu_percent = Gauge("process_cpu_percent", "CPU usage percent")
+        self.process_num_threads = Gauge(f"{extractor_name}_num_threads", "Number of threads")
+        self.process_memory_bytes = Gauge(f"{extractor_name}_memory_bytes", "Memory usage in bytes")
+        self.process_cpu_percent = Gauge(f"{extractor_name}_cpu_percent", "CPU usage percent")
 
         self.process_scrape_interval = process_scrape_interval
         self._start_proc_collector()
+
+        self.startup.set_to_current_time()
 
     def _proc_collect(self):
         while True:
