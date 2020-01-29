@@ -44,7 +44,7 @@ class BaseMetrics:
         process_scrape_interval: Interval (in seconds) between each fetch of data for the ``process_*`` gauges
     """
 
-    def __init__(self, extractor_name: str, process_scrape_interval: float = 5):
+    def __init__(self, extractor_name: str, process_scrape_interval: float = 15):
         self.startup = Gauge(f"{extractor_name}_start_time", "Timestamp (seconds) of when the extractor last started")
         self.finish = Gauge(
             f"{extractor_name}_finish_time", "Timestamp (seconds) of then the extractor last finished cleanly"
