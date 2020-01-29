@@ -19,7 +19,7 @@ pre-commit = "*"
 SecretStorage = "*"
 
 [packages]
-cognite-extractor-utils = {path = ".", editable = true}
+cognite-extractor-utils = {path = "."}
 
 [pipenv]
 allow_prereleases = true
