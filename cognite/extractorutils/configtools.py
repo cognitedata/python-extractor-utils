@@ -251,8 +251,14 @@ class MetricsConfig:
         push_gateways = self.push_gateways or []
 
         for push_gateway in push_gateways:
-            pusher = PrometheusPusher(thread_name=f"MetricsPusher-{counter}")
-            pusher.configure(push_gateway)
+            pusher = PrometheusPusher(
+                job_name=push_gateway.job_name,
+                username=push_gateway.username,
+                password=push_gateway.password,
+                url=push_gateway.host,
+                push_interval=push_gateway.push_interval,
+                thread_name=f"MetricsPusher-{counter}",
+            )
 
             pusher.start()
             self._pushers.append(pusher)
