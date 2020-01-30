@@ -20,7 +20,8 @@ from prometheus_client.exposition import basic_auth_handler, delete_from_gateway
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset, TimeSeries
 from cognite.client.exceptions import CogniteDuplicatedError
-from cognite.extractorutils.util import ensure_time_series
+
+from .util import ensure_time_series
 
 
 class BaseMetrics:

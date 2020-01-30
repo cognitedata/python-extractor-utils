@@ -7,6 +7,7 @@ import os
 import re
 from dataclasses import dataclass
 from logging.handlers import TimedRotatingFileHandler
+from time import sleep
 from typing import Any, Dict, Iterable, List, Optional, T, TextIO, Tuple, Type, Union
 
 import dacite
@@ -221,6 +222,7 @@ class _PushGatewayConfig:
     username: str
     password: str
 
+    clear_after: Optional[int]
     push_interval: int = 30
 
 
@@ -245,6 +247,7 @@ class MetricsConfig:
 
     def start_pushers(self, cdf_client: CogniteClient) -> None:
         self._pushers: List[AbstractMetricsPusher] = []
+        self._clear_on_stop: Dict[PrometheusPusher, int] = {}
 
         counter = 0
 
@@ -262,6 +265,8 @@ class MetricsConfig:
 
             pusher.start()
             self._pushers.append(pusher)
+            if push_gateway.clear_after is not None:
+                self._clear_on_stop[pusher] = push_gateway.clear_after
             counter += 1
 
         if self.cognite:
@@ -286,6 +291,14 @@ class MetricsConfig:
 
         for pusher in pushers:
             pusher.stop()
+
+        if len(self._clear_on_stop) > 0:
+            wait_time = max(self._clear_on_stop.values())
+            _logger.debug("Waiting %d seconds before clearing gateways", wait_time)
+
+            sleep(wait_time)
+            for pusher in self._clear_on_stop.keys():
+                pusher.clear_gateway()
 
 
 @dataclass
