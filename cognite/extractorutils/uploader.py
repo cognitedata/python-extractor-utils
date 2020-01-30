@@ -42,8 +42,9 @@ from cognite.client._api.raw import RawAPI  # Private access, but we need it for
 from cognite.client.data_classes import Event
 from cognite.client.data_classes.raw import Row
 from cognite.client.exceptions import CogniteNotFoundError
-from cognite.extractorutils._inner_util import _resolve_log_level
-from cognite.extractorutils.util import EitherId
+
+from ._inner_util import _resolve_log_level
+from .util import EitherId
 
 DataPointList = Union[
     List[Dict[Union[int, float, datetime], Union[int, float, str]]],
@@ -151,6 +152,8 @@ class RawUploadQueue(AbstractUploadQueue):
 
         self.upload_queue: Dict[str, Dict[str, List[Row]]] = dict()
 
+        self.lock = threading.RLock()
+
         self.raw = cdf_client.raw
 
     def add_to_upload_queue(self, database: str, table: str, raw_row: Row) -> None:
@@ -166,34 +169,36 @@ class RawUploadQueue(AbstractUploadQueue):
         Returns:
             None.
         """
-        # Ensure that the dicts has correct keys
-        if database not in self.upload_queue:
-            self.upload_queue[database] = dict()
-        if table not in self.upload_queue[database]:
-            self.upload_queue[database][table] = []
+        with self.lock:
+            # Ensure that the dicts has correct keys
+            if database not in self.upload_queue:
+                self.upload_queue[database] = dict()
+            if table not in self.upload_queue[database]:
+                self.upload_queue[database][table] = []
 
-        # Append row to queue
-        self.upload_queue[database][table].append(raw_row)
+            # Append row to queue
+            self.upload_queue[database][table].append(raw_row)
 
-        self._check_triggers(raw_row)
+            self._check_triggers(raw_row)
 
     def upload(self) -> None:
         """
         Trigger an upload of the queue, clears queue afterwards
         """
-        for database, tables in self.upload_queue.items():
-            for table, rows in tables.items():
-                # Upload
-                self.raw.rows.insert(db_name=database, table_name=table, row=rows, ensure_parent=True)
+        with self.lock:
+            for database, tables in self.upload_queue.items():
+                for table, rows in tables.items():
+                    # Upload
+                    self.raw.rows.insert(db_name=database, table_name=table, row=rows, ensure_parent=True)
 
-                # Perform post-upload logic if applicable
-                try:
-                    self._post_upload(rows)
-                except Exception as e:
-                    self.logger.error("Error in upload callback: %s", str(e))
+                    # Perform post-upload logic if applicable
+                    try:
+                        self._post_upload(rows)
+                    except Exception as e:
+                        self.logger.error("Error in upload callback: %s", str(e))
 
-        self.upload_queue.clear()
-        self.upload_queue_byte_size = 0
+            self.upload_queue.clear()
+            self.upload_queue_byte_size = 0
 
 
 class TimeSeriesUploadQueue(AbstractUploadQueue):
