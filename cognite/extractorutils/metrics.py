@@ -169,10 +169,10 @@ class PrometheusPusher(AbstractMetricsPusher):
     def __init__(
         self,
         job_name: str,
-        username: str,
-        password: str,
         url: str,
         push_interval: int,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
         thread_name: Optional[str] = None,
     ):
         super(PrometheusPusher, self).__init__(push_interval, thread_name)

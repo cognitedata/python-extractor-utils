@@ -20,8 +20,7 @@ class TestPrometheusPusher(unittest.TestCase):
         self.altered_metrics.pushadd_to_gateway = Mock()
 
     def test_normal_run(self):
-        prom = self.altered_metrics.PrometheusPusher()
-        prom.configure({"job_name": "test-job", "gateway_url": "none", "push_interval": 1})
+        prom = self.altered_metrics.PrometheusPusher(job_name="test-job", url="none", push_interval=1)
 
         last = self.altered_metrics.pushadd_to_gateway.call_count
         prom.start()
@@ -37,23 +36,10 @@ class TestPrometheusPusher(unittest.TestCase):
         time.sleep(1.1)
         self.assertGreaterEqual(self.altered_metrics.pushadd_to_gateway.call_count, last)
 
-    def test_empty_configured(self):
-        prom = self.altered_metrics.PrometheusPusher()
-        prom.configure({})
-
-        prom.start()
-        time.sleep(0.1)
-        self.altered_metrics.pushadd_to_gateway.assert_not_called()
-        time.sleep(5.1)
-        self.altered_metrics.pushadd_to_gateway.assert_not_called()
-        prom.stop()
-        self.altered_metrics.pushadd_to_gateway.assert_not_called()
-
     def test_error_doesnt_stop1(self):
         self.altered_metrics.pushadd_to_gateway = Mock(side_effect=OSError)
 
-        prom = self.altered_metrics.PrometheusPusher()
-        prom.configure({"job_name": "test-job", "gateway_url": "none", "push_interval": 1})
+        prom = self.altered_metrics.PrometheusPusher(job_name="test-job", url="none", push_interval=1)
 
         prom.start()
         time.sleep(0.1)
@@ -65,8 +51,7 @@ class TestPrometheusPusher(unittest.TestCase):
     def test_error_doesnt_stop2(self):
         self.altered_metrics.pushadd_to_gateway = Mock(side_effect=Exception)
 
-        prom = self.altered_metrics.PrometheusPusher()
-        prom.configure({"job_name": "test-job", "gateway_url": "none", "push_interval": 1})
+        prom = self.altered_metrics.PrometheusPusher(job_name="test-job", url="none", push_interval=1)
 
         prom.start()
         time.sleep(0.1)
@@ -76,7 +61,7 @@ class TestPrometheusPusher(unittest.TestCase):
         prom.stop()
 
     def test_clear(self):
-        prom = self.altered_metrics.PrometheusPusher()
+        prom = self.altered_metrics.PrometheusPusher(job_name="test-job", url="none", push_interval=1)
         prom.clear_gateway()
 
         self.altered_metrics.delete_from_gateway.assert_called()
@@ -101,7 +86,7 @@ class TestCognitePusher(unittest.TestCase):
 
         self.client.assets.create = Mock(return_value=return_asset)
 
-        pusher = CognitePusher(self.client, "pre_", new_asset)
+        pusher = CognitePusher(self.client, external_id_prefix="pre_", asset=new_asset, push_interval=1)
 
         # Assert time series created
         # Hacky assert_called_once_with as the TimeSeries object is not the same obj, just equal content
@@ -128,7 +113,7 @@ class TestCognitePusher(unittest.TestCase):
         self.client.assets.create = Mock(side_effect=CogniteDuplicatedError(["assetid"]))
         self.client.assets.retrieve = Mock(return_value=return_asset)
 
-        pusher = CognitePusher(self.client, "pre_", new_asset)
+        pusher = CognitePusher(self.client, external_id_prefix="pre_", asset=new_asset, push_interval=1)
 
         # Assert time series created
         # Hacky assert_called_once_with as the TimeSeries object is not the same obj, just equal content
@@ -151,7 +136,7 @@ class TestCognitePusher(unittest.TestCase):
         self.client.assets.create = Mock(side_effect=CogniteDuplicatedError(["assetid"]))
         self.client.assets.retrieve = Mock(return_value=return_asset)
 
-        pusher = CognitePusher(self.client, "pre_", new_asset)
+        pusher = CognitePusher(self.client, external_id_prefix="pre_", asset=new_asset, push_interval=1)
 
         # Assert time series created
         self.client.time_series.create.assert_not_called()
@@ -161,7 +146,7 @@ class TestCognitePusher(unittest.TestCase):
         self.client.assets.retrieve.assert_called_once_with(external_id="assetid")
 
     def test_push(self):
-        pusher = CognitePusher(self.client, "pre_")
+        pusher = CognitePusher(self.client, "pre_", push_interval=1)
 
         TestCognitePusher.gauge.set(5)
         pusher._push_to_server()
