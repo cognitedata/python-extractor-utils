@@ -165,11 +165,11 @@ class PrometheusPusher(AbstractMetricsPusher):
 
     def __init__(
         self,
-        job_name: Optional[str] = None,
-        username: Optional[str] = None,
-        password: Optional[str] = None,
-        url: Optional[str] = None,
-        push_interval: Optional[int] = None,
+        job_name: str,
+        username: str,
+        password: str,
+        url: str,
+        push_interval: int,
         thread_name: Optional[str] = None,
     ):
         super(PrometheusPusher, self).__init__(push_interval, thread_name)
@@ -179,22 +179,6 @@ class PrometheusPusher(AbstractMetricsPusher):
         self.password = password
 
         self.url = url
-        self.push_interval = push_interval
-
-    def configure(self, config: Dict[str, Union[str, int]]) -> None:
-        """
-        Configure the client from a dictionary. The keys accessed in the dict are job_name or job-name, username,
-        password, gateway_url or host and push_interval or push-interval.
-
-        Args:
-            config:      Configuration dictionary
-        """
-        self.job_name = config.get("job_name") or config.get("job-name")
-        self.username = config.get("username")
-        self.password = config.get("password")
-        self.url = config.get("gateway_url") or config.get("host")
-
-        self.push_interval = int(config.get("push_interval") or config.get("push-interval") or 5)
 
     def _auth_handler(self, url: str, method: str, timeout: int, headers: Dict[str, str], data: Any) -> Callable:
         """
@@ -224,7 +208,7 @@ class PrometheusPusher(AbstractMetricsPusher):
 
         except OSError as exp:
             self.logger.warning("Failed to push metrics to %s: %s", self.url, str(exp))
-        except:  # pylint: disable=bare-except
+        except:
             self.logger.exception("Failed to push metrics to %s", self.url)
 
         self.logger.debug("Pushed metrics to %s", self.url)
@@ -247,8 +231,8 @@ class CognitePusher(AbstractMetricsPusher):
     Args:
         cdf_client: The CDF tenant to upload time series to
         external_id_prefix: Unique external ID prefix for this pusher.
-        asset: Optional contextualization.
         push_interval: Seconds between each upload call
+        asset: Optional contextualization.
         thread_name: Name of thread to start. If omitted, a standard name such as Thread-4 will be generated.
     """
 
@@ -256,8 +240,8 @@ class CognitePusher(AbstractMetricsPusher):
         self,
         cdf_client: CogniteClient,
         external_id_prefix: str,
+        push_interval: int,
         asset: Optional[Asset] = None,
-        push_interval: Optional[int] = None,
         thread_name: Optional[str] = None,
     ):
         super(CognitePusher, self).__init__(push_interval, thread_name)
