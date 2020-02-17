@@ -49,7 +49,7 @@ class IntegrationTests(unittest.TestCase):
             pass
 
     def test_raw_upload_queue(self):
-        queue = RawUploadQueue(cdf_client=self.client, queue_threshold=500)
+        queue = RawUploadQueue(cdf_client=self.client, max_queue_size=500)
 
         uploaded = []
 

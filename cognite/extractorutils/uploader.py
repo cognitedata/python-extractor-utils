@@ -59,41 +59,40 @@ class AbstractUploadQueue(ABC):
     Args:
         post_upload_function: A function that will be called after each upload. The
             function will be given one argument: A list of the elements that were uploaded
-        queue_threshold: Maximum byte size of upload queue. Defaults to no queue (ie upload after each
-            add_to_upload_queue).
+        max_queue_size: Maximum byte size of upload queue. Defaults to no automatic uploading.
     """
 
     def __init__(
         self,
-        post_upload_function: Optional[Callable[[int], None]] = None,
-        queue_threshold: Optional[int] = None,
-        trigger_log_level="DEBUG",
+        post_upload_function: Optional[Callable[[List[Any]], None]] = None,
+        max_queue_size: Optional[int] = None,
+        max_upload_interval: Optional[int] = None,
+        trigger_log_level: str = "DEBUG",
+        thread_name: Optional[str] = None,
     ):
         """
         Called by subclasses. Saves info and inits upload queue.
         """
-        self.threshold = queue_threshold if queue_threshold is not None else -1
-        self.upload_queue_byte_size = 0
+        self.threshold = max_queue_size if max_queue_size is not None else -1
+        self.upload_queue_size = 0
 
         self.trigger_log_level = _resolve_log_level(trigger_log_level)
         self.logger = logging.getLogger(__name__)
 
+        self.thread = threading.Thread(target=self._run, daemon=True, name=thread_name)
+        self.lock = threading.RLock()
+        self.stopping = threading.Event()
+
+        self.max_upload_interval = max_upload_interval
+
         self.post_upload_function = post_upload_function
 
-    def _check_triggers(self, item: Any) -> Any:
+    def _check_triggers(self) -> None:
         """
         Check if upload triggers are met, call upload if they are. Called by subclasses.
-
-        Args:
-            item: Item added to upload queue
-
-        Returns:
-            Result of upload, if upload happened.
         """
-        self.upload_queue_byte_size += len(repr(item))
-
         # Check upload threshold
-        if self.upload_queue_byte_size > self.threshold and self.threshold >= 0:
+        if self.upload_queue_size > self.threshold >= 0:
             self.logger.log(self.trigger_log_level, "Upload queue reached threshold size, triggering upload")
             return self.upload()
 
@@ -107,23 +106,80 @@ class AbstractUploadQueue(ABC):
                 logging.getLogger(__name__).exception("Error during upload callback")
 
     @abstractmethod
-    def add_to_upload_queue(self, *args) -> Any:
+    def add_to_upload_queue(self, *args) -> None:
         """
         Adds an element to the upload queue. The queue will be uploaded if the queue byte size is larger than the
         threshold specified in the config.
-
-        Returns:
-            Result of upload, if applicable and if upload happened.
         """
 
     @abstractmethod
-    def upload(self) -> Any:
+    def upload(self) -> None:
         """
         Uploads the queue.
+        """
+
+    def _run(self) -> None:
+        """
+        Internal run method for upload thread
+        """
+        while not self.stopping.is_set():
+            try:
+                self.upload()
+            except Exception as e:
+                self.logger.error("Unexpected error while uploading: %s. Skipping this upload.", str(e))
+            time.sleep(self.max_upload_interval)
+
+    def start(self) -> None:
+        """
+        Start upload thread, this called the upload method every max_upload_interval seconds
+        """
+        if self.max_upload_interval is None:
+            raise ValueError("No max_upload_interval given, can't start uploader thread")
+
+        self.stopping.clear()
+        self.thread.start()
+
+    def stop(self, ensure_upload: bool = True) -> None:
+        """
+        Stop upload thread
+
+        Args:
+            ensure_upload (bool): (Optional). Call upload one last time after shutting down thread to ensure empty
+                upload queue.
+        """
+        self.stopping.set()
+        if ensure_upload:
+            self.upload()
+
+    def __enter__(self) -> "AbstractUploadQueue":
+        """
+        Wraps around start method, for use as context manager
 
         Returns:
-            Result status of upload.
+            self
         """
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """
+        Wraps around stop method, for use as context manager
+
+        Args:
+            exc_type: Exception type
+            exc_val: Exception value
+            exc_tb: Traceback
+        """
+        self.stop()
+
+    def __len__(self) -> int:
+        """
+        The size of the upload queue
+
+        Returns:
+            Number of elements in queue
+        """
+        return self.upload_queue_size
 
 
 class RawUploadQueue(AbstractUploadQueue):
@@ -134,8 +190,9 @@ class RawUploadQueue(AbstractUploadQueue):
         cdf_client: Cognite Data Fusion client
         post_upload_function: A function that will be called after each upload. The
             function will be given one argument: An a list of the rows that were uploaded.
-        queue_threshold: Maximum size of upload queue. Defaults to no queue (ie upload after each
-            add_to_upload_queue).
+        max_queue_size: Maximum size of upload queue. Defaults to no automatic uploading.
+        max_upload_interval: Automatically trigger an upload each m seconds when run as a thread (use
+            start/stop methods).
     """
 
     raw: RawAPI
@@ -144,11 +201,13 @@ class RawUploadQueue(AbstractUploadQueue):
         self,
         cdf_client: CogniteClient,
         post_upload_function: Optional[Callable[[List[Any]], None]] = None,
-        queue_threshold: Optional[int] = None,
+        max_queue_size: Optional[int] = None,
+        max_upload_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
+        thread_name: Optional[str] = None,
     ):
         # Super sets post_upload and threshold
-        super().__init__(post_upload_function, queue_threshold, trigger_log_level)
+        super().__init__(post_upload_function, max_queue_size, max_upload_interval, trigger_log_level, thread_name)
 
         self.upload_queue: Dict[str, Dict[str, List[Row]]] = dict()
 
@@ -178,8 +237,9 @@ class RawUploadQueue(AbstractUploadQueue):
 
             # Append row to queue
             self.upload_queue[database][table].append(raw_row)
+            self.upload_queue_size += 1
 
-            self._check_triggers(raw_row)
+            self._check_triggers()
 
     def upload(self) -> None:
         """
@@ -198,7 +258,7 @@ class RawUploadQueue(AbstractUploadQueue):
                         self.logger.error("Error in upload callback: %s", str(e))
 
             self.upload_queue.clear()
-            self.upload_queue_byte_size = 0
+            self.upload_queue_size = 0
 
 
 class TimeSeriesUploadQueue(AbstractUploadQueue):
@@ -210,8 +270,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         post_upload_function: A function that will be called after each upload. The
             function will be given one argument: A dict from time series ID to a list of the data points that were
             uploaded
-        queue_threshold: Maximum size of upload queue. Defaults to no queue (ie upload after each
-            add_to_upload_queue).
+        max_queue_size: Maximum size of upload queue. Defaults to no automatic uploading.
         max_upload_interval: Automatically trigger an upload each m seconds when run as a thread (use
             start/stop methods).
     """
@@ -222,20 +281,15 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         self,
         cdf_client: CogniteClient,
         post_upload_function: Optional[Callable[[Dict[EitherId, DataPointList]], None]] = None,
-        queue_threshold: Optional[int] = None,
+        max_queue_size: Optional[int] = None,
         max_upload_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
     ):
         # Super sets post_upload and threshold
-        super().__init__(post_upload_function, queue_threshold, trigger_log_level)
+        super().__init__(post_upload_function, max_queue_size, max_upload_interval, trigger_log_level, thread_name)
 
         self.upload_queue: Dict[EitherId, DataPointList] = dict()
-
-        self.max_upload_interval = max_upload_interval
-        self.thread = threading.Thread(target=self._run, daemon=True, name=thread_name)
-        self.lock = threading.RLock()
-        self.stopping = threading.Event()
 
         self.cdf_client = cdf_client
 
@@ -257,21 +311,12 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
                 self.upload_queue[either_id] = []
 
             self.upload_queue[either_id].extend(datapoints)
-            self._check_triggers(datapoints)
+            self.upload_queue_size += len(datapoints)
+
+            self._check_triggers()
 
         finally:
             self.lock.release()
-
-    def _run(self) -> None:
-        """
-        Internal run method for upload thread
-        """
-        while not self.stopping.is_set():
-            try:
-                self.upload()
-            except Exception as e:
-                self.logger.error("Unexpected error while uploading: %s. Skipping this upload.", str(e))
-            time.sleep(self.max_upload_interval)
 
     def upload(self) -> None:
         """
@@ -319,53 +364,10 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
                 self.logger.error("Error in upload callback: %s", str(e))
 
             self.upload_queue.clear()
-            self.upload_queue_byte_size = 0
+            self.upload_queue_size = 0
 
         finally:
             self.lock.release()
-
-    def start(self) -> None:
-        """
-        Start upload thread, this called the upload method every max_upload_interval seconds
-        """
-        if self.max_upload_interval is None:
-            raise ValueError("No max_upload_interval given, can't start uploader thread")
-
-        self.stopping.clear()
-        self.thread.start()
-
-    def stop(self, ensure_upload: bool = True) -> None:
-        """
-        Stop upload thread
-
-        Args:
-            ensure_upload (bool): (Optional). Call upload one last time after shutting down thread to ensure empty
-                upload queue.
-        """
-        self.stopping.set()
-        if ensure_upload:
-            self.upload()
-
-    def __enter__(self) -> "TimeSeriesUploadQueue":
-        """
-        Wraps around start method, for use as context manager
-
-        Returns:
-            self
-        """
-        self.start()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        """
-        Wraps around stop method, for use as context manager
-
-        Args:
-            exc_type: Exception type
-            exc_val: Exception value
-            exc_tb: Traceback
-        """
-        self.stop()
 
 
 class EventUploadQueue(AbstractUploadQueue):
@@ -376,8 +378,7 @@ class EventUploadQueue(AbstractUploadQueue):
         cdf_client: Cognite Data Fusion client
         post_upload_function: A function that will be called after each upload. The
             function will be given one argument: A list of the events created
-        queue_threshold: Maximum size of upload queue. Defaults to no queue (ie upload after each
-            add_to_upload_queue).
+        max_queue_size: Maximum size of upload queue. Defaults to no automatic uploading.
         max_upload_interval: Automatically trigger an upload each m seconds when run as a thread (use
             start/stop methods).
     """
@@ -388,20 +389,15 @@ class EventUploadQueue(AbstractUploadQueue):
         self,
         cdf_client: CogniteClient,
         post_upload_function: Optional[Callable[[List[Event]], None]] = None,
-        queue_threshold: Optional[int] = None,
+        max_queue_size: Optional[int] = None,
         max_upload_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
     ):
         # Super sets post_upload and threshold
-        super().__init__(post_upload_function, queue_threshold, trigger_log_level)
+        super().__init__(post_upload_function, max_queue_size, max_upload_interval, trigger_log_level, thread_name)
 
         self.upload_queue: List[Event] = []
-
-        self.max_upload_interval = max_upload_interval
-        self.thread = threading.Thread(target=self._run, daemon=True, name=thread_name)
-        self.lock = threading.RLock()
-        self.stopping = threading.Event()
 
         self.cdf_client = cdf_client
 
@@ -417,21 +413,12 @@ class EventUploadQueue(AbstractUploadQueue):
 
         try:
             self.upload_queue.append(event)
-            self._check_triggers(event)
+            self.upload_queue_size += 1
+
+            self._check_triggers()
 
         finally:
             self.lock.release()
-
-    def _run(self):
-        """
-        Internal run method for upload thread
-        """
-        while not self.stopping.is_set():
-            try:
-                self.upload()
-            except Exception as e:
-                self.logger.error("Unexpected error while uploading: %s. Skipping this upload.", str(e))
-            time.sleep(self.max_upload_interval)
 
     def upload(self) -> None:
         """
@@ -451,50 +438,7 @@ class EventUploadQueue(AbstractUploadQueue):
             except Exception as e:
                 self.logger.error("Error in upload callback: %s", str(e))
             self.upload_queue.clear()
-            self.upload_queue_byte_size = 0
+            self.upload_queue_size = 0
 
         finally:
             self.lock.release()
-
-    def start(self) -> None:
-        """
-        Start upload thread, this called the upload method every max_upload_interval seconds
-        """
-        if self.max_upload_interval is None:
-            raise ValueError("No max_upload_interval given, can't start uploader thread")
-
-        self.stopping.clear()
-        self.thread.start()
-
-    def stop(self, ensure_upload: bool = True) -> None:
-        """
-        Stop upload thread
-
-        Args:
-            ensure_upload: Call upload one last time after shutting down thread to ensure empty
-                upload queue.
-        """
-        self.stopping.set()
-        if ensure_upload:
-            self.upload()
-
-    def __enter__(self) -> "EventUploadQueue":
-        """
-        Wraps around start method, for use as context manager
-
-        Returns:
-            self
-        """
-        self.start()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        """
-        Wraps around stop method, for use as context manager
-
-        Args:
-            exc_type: Exception type
-            exc_val: Exception value
-            exc_tb: Traceback
-        """
-        self.stop()
