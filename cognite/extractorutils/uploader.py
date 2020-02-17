@@ -59,13 +59,13 @@ class AbstractUploadQueue(ABC):
     Args:
         post_upload_function: A function that will be called after each upload. The
             function will be given one argument: A list of the elements that were uploaded
-        queue_threshold: Maximum byte size of upload queue. Defaults to no automatic uploading.
+        max_queue_size: Maximum byte size of upload queue. Defaults to no automatic uploading.
     """
 
     def __init__(
         self,
         post_upload_function: Optional[Callable[[List[Any]], None]] = None,
-        queue_threshold: Optional[int] = None,
+        max_queue_size: Optional[int] = None,
         max_upload_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
@@ -73,7 +73,7 @@ class AbstractUploadQueue(ABC):
         """
         Called by subclasses. Saves info and inits upload queue.
         """
-        self.threshold = queue_threshold if queue_threshold is not None else -1
+        self.threshold = max_queue_size if max_queue_size is not None else -1
         self.upload_queue_size = 0
 
         self.trigger_log_level = _resolve_log_level(trigger_log_level)
@@ -181,7 +181,7 @@ class RawUploadQueue(AbstractUploadQueue):
         cdf_client: Cognite Data Fusion client
         post_upload_function: A function that will be called after each upload. The
             function will be given one argument: An a list of the rows that were uploaded.
-        queue_threshold: Maximum size of upload queue. Defaults to no automatic uploading.
+        max_queue_size: Maximum size of upload queue. Defaults to no automatic uploading.
         max_upload_interval: Automatically trigger an upload each m seconds when run as a thread (use
             start/stop methods).
     """
@@ -192,13 +192,13 @@ class RawUploadQueue(AbstractUploadQueue):
         self,
         cdf_client: CogniteClient,
         post_upload_function: Optional[Callable[[List[Any]], None]] = None,
-        queue_threshold: Optional[int] = None,
+        max_queue_size: Optional[int] = None,
         max_upload_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
     ):
         # Super sets post_upload and threshold
-        super().__init__(post_upload_function, queue_threshold, max_upload_interval, trigger_log_level, thread_name)
+        super().__init__(post_upload_function, max_queue_size, max_upload_interval, trigger_log_level, thread_name)
 
         self.upload_queue: Dict[str, Dict[str, List[Row]]] = dict()
 
@@ -261,7 +261,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         post_upload_function: A function that will be called after each upload. The
             function will be given one argument: A dict from time series ID to a list of the data points that were
             uploaded
-        queue_threshold: Maximum size of upload queue. Defaults to no automatic uploading.
+        max_queue_size: Maximum size of upload queue. Defaults to no automatic uploading.
         max_upload_interval: Automatically trigger an upload each m seconds when run as a thread (use
             start/stop methods).
     """
@@ -272,13 +272,13 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         self,
         cdf_client: CogniteClient,
         post_upload_function: Optional[Callable[[Dict[EitherId, DataPointList]], None]] = None,
-        queue_threshold: Optional[int] = None,
+        max_queue_size: Optional[int] = None,
         max_upload_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
     ):
         # Super sets post_upload and threshold
-        super().__init__(post_upload_function, queue_threshold, max_upload_interval, trigger_log_level, thread_name)
+        super().__init__(post_upload_function, max_queue_size, max_upload_interval, trigger_log_level, thread_name)
 
         self.upload_queue: Dict[EitherId, DataPointList] = dict()
 
@@ -369,7 +369,7 @@ class EventUploadQueue(AbstractUploadQueue):
         cdf_client: Cognite Data Fusion client
         post_upload_function: A function that will be called after each upload. The
             function will be given one argument: A list of the events created
-        queue_threshold: Maximum size of upload queue. Defaults to no automatic uploading.
+        max_queue_size: Maximum size of upload queue. Defaults to no automatic uploading.
         max_upload_interval: Automatically trigger an upload each m seconds when run as a thread (use
             start/stop methods).
     """
@@ -380,13 +380,13 @@ class EventUploadQueue(AbstractUploadQueue):
         self,
         cdf_client: CogniteClient,
         post_upload_function: Optional[Callable[[List[Event]], None]] = None,
-        queue_threshold: Optional[int] = None,
+        max_queue_size: Optional[int] = None,
         max_upload_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
     ):
         # Super sets post_upload and threshold
-        super().__init__(post_upload_function, queue_threshold, max_upload_interval, trigger_log_level, thread_name)
+        super().__init__(post_upload_function, max_queue_size, max_upload_interval, trigger_log_level, thread_name)
 
         self.upload_queue: List[Event] = []
 
