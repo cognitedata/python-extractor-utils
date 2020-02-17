@@ -96,7 +96,7 @@ class TestRawStateStore(unittest.TestCase):
         self.client: CogniteClient = MockCogniteClient()
 
     def test_init_no_preexisting_raw(self):
-        state_store = RawStateStore(client=self.client, database=self.database, table=self.table)
+        state_store = RawStateStore(cdf_client=self.client, database=self.database, table=self.table)
 
         self.client.raw.databases.create.assert_called_once_with(self.database)
         self.client.raw.tables.create.assert_called_once_with(self.database, self.table)
@@ -104,20 +104,20 @@ class TestRawStateStore(unittest.TestCase):
     def test_init_preexisting_db(self):
         self.client.raw.databases.create = Mock(side_effect=CogniteAPIError("", code=400))
 
-        state_store = RawStateStore(client=self.client, database=self.database, table=self.table)
+        state_store = RawStateStore(cdf_client=self.client, database=self.database, table=self.table)
         self.client.raw.tables.create.assert_called_once_with(self.database, self.table)
 
     def test_init_preexisting_table(self):
         self.client.raw.databases.create = Mock(side_effect=CogniteAPIError("", code=400))
         self.client.raw.tables.create = Mock(side_effect=CogniteAPIError("", code=400))
 
-        state_store = RawStateStore(client=self.client, database=self.database, table=self.table)
+        state_store = RawStateStore(cdf_client=self.client, database=self.database, table=self.table)
 
         self.client.raw.databases.create.assert_called_once_with(self.database)
         self.client.raw.tables.create.assert_called_once_with(self.database, self.table)
 
     def test_get_raw_states_empty(self):
-        state_store = RawStateStore(client=self.client, database=self.database, table=self.table)
+        state_store = RawStateStore(cdf_client=self.client, database=self.database, table=self.table)
 
         # Make sure raw is not called on init
         self.client.raw.rows.list.assert_not_called()
@@ -135,7 +135,7 @@ class TestRawStateStore(unittest.TestCase):
         self.assertEqual(self.client.raw.rows.list.call_count, 2)
 
     def test_get_raw_states_content(self):
-        state_store = RawStateStore(client=self.client, database=self.database, table=self.table)
+        state_store = RawStateStore(cdf_client=self.client, database=self.database, table=self.table)
 
         # Make sure raw is not called on init
         self.client.raw.rows.list.assert_not_called()
@@ -152,7 +152,7 @@ class TestRawStateStore(unittest.TestCase):
         self.assertDictEqual(state_store._local_state, expected_states)
 
     def test_cdf_sync(self):
-        state_store = RawStateStore(client=self.client, database=self.database, table=self.table)
+        state_store = RawStateStore(cdf_client=self.client, database=self.database, table=self.table)
 
         state_store.initialize()
 
