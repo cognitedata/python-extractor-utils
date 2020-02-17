@@ -172,6 +172,15 @@ class AbstractUploadQueue(ABC):
         """
         self.stop()
 
+    def __len__(self) -> int:
+        """
+        The size of the upload queue
+
+        Returns:
+            Number of elements in queue
+        """
+        return self.upload_queue_size
+
 
 class RawUploadQueue(AbstractUploadQueue):
     """
