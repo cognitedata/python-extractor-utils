@@ -13,7 +13,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import arrow
 import psutil
-from prometheus_client import Gauge, Metric
+from prometheus_client import Gauge, Info, Metric
 from prometheus_client.core import REGISTRY
 from prometheus_client.exposition import basic_auth_handler, delete_from_gateway, pushadd_to_gateway
 
@@ -45,7 +45,7 @@ class BaseMetrics:
         process_scrape_interval: Interval (in seconds) between each fetch of data for the ``process_*`` gauges
     """
 
-    def __init__(self, extractor_name: str, process_scrape_interval: float = 15):
+    def __init__(self, extractor_name: str, extractor_version: str, process_scrape_interval: float = 15):
         self.startup = Gauge(f"{extractor_name}_start_time", "Timestamp (seconds) of when the extractor last started")
         self.finish = Gauge(
             f"{extractor_name}_finish_time", "Timestamp (seconds) of then the extractor last finished cleanly"
@@ -56,6 +56,9 @@ class BaseMetrics:
         self.process_num_threads = Gauge(f"{extractor_name}_num_threads", "Number of threads")
         self.process_memory_bytes = Gauge(f"{extractor_name}_memory_bytes", "Memory usage in bytes")
         self.process_cpu_percent = Gauge(f"{extractor_name}_cpu_percent", "CPU usage percent")
+
+        self.info = Info(f"{extractor_name}_info", "Information about running extractor")
+        self.info.info({"extractor_version": extractor_version, "extractor_type": extractor_name})
 
         self.process_scrape_interval = process_scrape_interval
         self._start_proc_collector()
