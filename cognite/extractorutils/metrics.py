@@ -13,7 +13,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import arrow
 import psutil
-from prometheus_client import Gauge, Metric
+from prometheus_client import Gauge, Info, Metric
 from prometheus_client.core import REGISTRY
 from prometheus_client.exposition import basic_auth_handler, delete_from_gateway, pushadd_to_gateway
 
@@ -45,7 +45,7 @@ class BaseMetrics:
         process_scrape_interval: Interval (in seconds) between each fetch of data for the ``process_*`` gauges
     """
 
-    def __init__(self, extractor_name: str, process_scrape_interval: float = 15):
+    def __init__(self, extractor_name: str, extractor_version: str, process_scrape_interval: float = 15):
         self.startup = Gauge(f"{extractor_name}_start_time", "Timestamp (seconds) of when the extractor last started")
         self.finish = Gauge(
             f"{extractor_name}_finish_time", "Timestamp (seconds) of then the extractor last finished cleanly"
@@ -56,6 +56,9 @@ class BaseMetrics:
         self.process_num_threads = Gauge(f"{extractor_name}_num_threads", "Number of threads")
         self.process_memory_bytes = Gauge(f"{extractor_name}_memory_bytes", "Memory usage in bytes")
         self.process_cpu_percent = Gauge(f"{extractor_name}_cpu_percent", "CPU usage percent")
+
+        self.info = Info(f"{extractor_name}_info", "Information about running extractor")
+        self.info.info({"extractor_version": extractor_version, "extractor_type": extractor_name})
 
         self.process_scrape_interval = process_scrape_interval
         self._start_proc_collector()
@@ -165,11 +168,11 @@ class PrometheusPusher(AbstractMetricsPusher):
 
     def __init__(
         self,
-        job_name: Optional[str] = None,
+        job_name: str,
+        url: str,
+        push_interval: int,
         username: Optional[str] = None,
         password: Optional[str] = None,
-        url: Optional[str] = None,
-        push_interval: Optional[int] = None,
         thread_name: Optional[str] = None,
     ):
         super(PrometheusPusher, self).__init__(push_interval, thread_name)
@@ -179,22 +182,6 @@ class PrometheusPusher(AbstractMetricsPusher):
         self.password = password
 
         self.url = url
-        self.push_interval = push_interval
-
-    def configure(self, config: Dict[str, Union[str, int]]) -> None:
-        """
-        Configure the client from a dictionary. The keys accessed in the dict are job_name or job-name, username,
-        password, gateway_url or host and push_interval or push-interval.
-
-        Args:
-            config:      Configuration dictionary
-        """
-        self.job_name = config.get("job_name") or config.get("job-name")
-        self.username = config.get("username")
-        self.password = config.get("password")
-        self.url = config.get("gateway_url") or config.get("host")
-
-        self.push_interval = int(config.get("push_interval") or config.get("push-interval") or 5)
 
     def _auth_handler(self, url: str, method: str, timeout: int, headers: Dict[str, str], data: Any) -> Callable:
         """
@@ -224,7 +211,7 @@ class PrometheusPusher(AbstractMetricsPusher):
 
         except OSError as exp:
             self.logger.warning("Failed to push metrics to %s: %s", self.url, str(exp))
-        except:  # pylint: disable=bare-except
+        except:
             self.logger.exception("Failed to push metrics to %s", self.url)
 
         self.logger.debug("Pushed metrics to %s", self.url)
@@ -247,8 +234,8 @@ class CognitePusher(AbstractMetricsPusher):
     Args:
         cdf_client: The CDF tenant to upload time series to
         external_id_prefix: Unique external ID prefix for this pusher.
-        asset: Optional contextualization.
         push_interval: Seconds between each upload call
+        asset: Optional contextualization.
         thread_name: Name of thread to start. If omitted, a standard name such as Thread-4 will be generated.
     """
 
@@ -256,8 +243,8 @@ class CognitePusher(AbstractMetricsPusher):
         self,
         cdf_client: CogniteClient,
         external_id_prefix: str,
+        push_interval: int,
         asset: Optional[Asset] = None,
-        push_interval: Optional[int] = None,
         thread_name: Optional[str] = None,
     ):
         super(CognitePusher, self).__init__(push_interval, thread_name)

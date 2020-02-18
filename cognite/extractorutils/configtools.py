@@ -260,7 +260,7 @@ class MetricsConfig:
                 password=push_gateway.password,
                 url=push_gateway.host,
                 push_interval=push_gateway.push_interval,
-                thread_name=f"MetricsPusher-{counter}",
+                thread_name=f"MetricsPusher_{counter}",
             )
 
             pusher.start()
@@ -280,7 +280,7 @@ class MetricsConfig:
                 external_id_prefix=self.cognite.external_id_prefix,
                 push_interval=self.cognite.push_interval,
                 asset=asset,
-                thread_name=f"MetricsPusher-{counter}",
+                thread_name=f"MetricsPusher_{counter}",
             )
 
             pusher.start()
