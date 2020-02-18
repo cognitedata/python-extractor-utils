@@ -111,15 +111,15 @@ class RawStateStore(AbstractStateStore):
     An extractor state store based on CDF RAW.
 
     Args:
-        client: Cognite client to use
+        cdf_client: Cognite client to use
         database: Name of CDF database
         table: Name of CDF table
     """
 
-    def __init__(self, client: CogniteClient, database: str, table: str):
+    def __init__(self, cdf_client: CogniteClient, database: str, table: str):
         super().__init__()
 
-        self._client = client
+        self._cdf_client = cdf_client
         self.database = database
         self.table = table
 
@@ -127,12 +127,12 @@ class RawStateStore(AbstractStateStore):
 
     def _ensure_table(self) -> None:
         try:
-            self._client.raw.databases.create(self.database)
+            self._cdf_client.raw.databases.create(self.database)
         except CogniteAPIError as e:
             if not e.code == 400:
                 raise e
         try:
-            self._client.raw.tables.create(self.database, self.table)
+            self._cdf_client.raw.tables.create(self.database, self.table)
         except CogniteAPIError as e:
             if not e.code == 400:
                 raise e
@@ -147,7 +147,7 @@ class RawStateStore(AbstractStateStore):
         if self._initialized and not force:
             return
 
-        rows = self._client.raw.rows.list(db_name=self.database, table_name=self.table, limit=None)
+        rows = self._cdf_client.raw.rows.list(db_name=self.database, table_name=self.table, limit=None)
 
         with self.lock:
             self._local_state.clear()
@@ -160,11 +160,11 @@ class RawStateStore(AbstractStateStore):
         """
         Upload local state store to CDF
         """
-        self._client.raw.rows.insert(db_name=self.database, table_name=self.table, row=self._local_state)
+        self._cdf_client.raw.rows.insert(db_name=self.database, table_name=self.table, row=self._local_state)
 
         # Create a copy of deleted to facilitate testing (mock library stores list, and as it changes, the assertions
         # fail)
-        self._client.raw.rows.delete(db_name=self.database, table_name=self.table, key=[k for k in self._deleted])
+        self._cdf_client.raw.rows.delete(db_name=self.database, table_name=self.table, key=[k for k in self._deleted])
 
         with self.lock:
             self._deleted.clear()

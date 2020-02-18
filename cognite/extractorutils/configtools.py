@@ -335,15 +335,15 @@ class StateStoreConfig:
     raw: Optional[RawStateStoreConfig]
     local: Optional[LocalStateStoreConfig]
 
-    def create_state_store(self, cognite_client: Optional[CogniteClient] = None) -> Optional[AbstractStateStore]:
+    def create_state_store(self, cdf_client: Optional[CogniteClient] = None) -> Optional[AbstractStateStore]:
         if self.raw and self.local:
             raise ValueError("Only one state store can be used simultaneously")
 
         if self.raw:
-            if cognite_client is None:
+            if cdf_client is None:
                 raise TypeError("A cognite client object must be provided when state store is RAW")
 
-            return RawStateStore(client=cognite_client, database=self.raw.database, table=self.raw.table)
+            return RawStateStore(cdf_client=cdf_client, database=self.raw.database, table=self.raw.table)
 
         if self.local:
             return LocalStateStore(file_path=self.local.path)
