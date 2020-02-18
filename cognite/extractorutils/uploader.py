@@ -24,7 +24,7 @@ stamps and using timestamp-value tuples as data point format):
         # here you can also update metrics etc
 
     queue = TimeSeriesUploadQueue(
-        cdf_client=self.client,
+        cdf_client=my_cognite_client,
         post_upload_function=store_latest,
         max_upload_interval=1
     )
@@ -38,7 +38,6 @@ from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from cognite.client import CogniteClient
-from cognite.client._api.raw import RawAPI  # Private access, but we need it for typing
 from cognite.client.data_classes import Event
 from cognite.client.data_classes.raw import Row
 from cognite.client.exceptions import CogniteNotFoundError
@@ -195,8 +194,6 @@ class RawUploadQueue(AbstractUploadQueue):
             start/stop methods).
     """
 
-    raw: RawAPI
-
     def __init__(
         self,
         cdf_client: CogniteClient,
@@ -213,7 +210,7 @@ class RawUploadQueue(AbstractUploadQueue):
 
         self.lock = threading.RLock()
 
-        self.raw = cdf_client.raw
+        self.cdf_client = cdf_client
 
     def add_to_upload_queue(self, database: str, table: str, raw_row: Row) -> None:
         """
@@ -249,7 +246,7 @@ class RawUploadQueue(AbstractUploadQueue):
             for database, tables in self.upload_queue.items():
                 for table, rows in tables.items():
                     # Upload
-                    self.raw.rows.insert(db_name=database, table_name=table, row=rows, ensure_parent=True)
+                    self.cdf_client.raw.rows.insert(db_name=database, table_name=table, row=rows, ensure_parent=True)
 
                     # Perform post-upload logic if applicable
                     try:
