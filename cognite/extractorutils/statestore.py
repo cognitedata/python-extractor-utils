@@ -9,10 +9,12 @@ remote store (which can either be a local JSON file or a table in CDF RAW), and 
 import json
 from abc import ABC, abstractmethod
 from threading import Lock
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from cognite.client import CogniteClient
 from cognite.client.exceptions import CogniteAPIError
+from cognite.extractorutils.uploader import DataPointList
+from cognite.extractorutils.util import EitherId
 
 
 class AbstractStateStore(ABC):
@@ -104,6 +106,27 @@ class AbstractStateStore(ABC):
         with self.lock:
             self._local_state.pop(external_id, None)
             self._deleted.append(external_id)
+
+    def post_upload_handler(self) -> Callable[[List[Dict[str, Union[str, DataPointList]]]], None]:
+        """
+        Get a callable suitable for passing to a time series upload queue as post_upload_function, that will
+        automatically update the states in this state store when that upload queue is uploading.
+
+        Returns:
+            A function that expands the current states with the values given
+        """
+
+        def callback(uploaded_points: List[Dict[str, Union[str, DataPointList]]]):
+            for time_series in uploaded_points:
+                # Use CDF timestamps
+                data_points = time_series["datapoints"]
+                if data_points:
+                    high = max(data_points)[0]
+                    low = min(data_points)[0]
+                    external_id = time_series["externalId"]
+                    self.expand_state(external_id, low, high)
+
+        return callback
 
 
 class RawStateStore(AbstractStateStore):

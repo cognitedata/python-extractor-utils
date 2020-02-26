@@ -6,6 +6,7 @@ from cognite.client import CogniteClient
 from cognite.client.data_classes import Row
 from cognite.client.exceptions import CogniteAPIError
 from cognite.extractorutils.statestore import AbstractStateStore, LocalStateStore, RawStateStore
+from cognite.extractorutils.uploader import TimeSeriesUploadQueue
 
 
 class NoStateStore(AbstractStateStore):
@@ -85,6 +86,34 @@ class TestBaseStateStore(unittest.TestCase):
         self.assertTupleEqual(state_store.get_state("extId5"), (None, None))
 
         self.assertListEqual(state_store.get_state(["extId1", "extId3", "extId5"]), [(1, 5), (0, None), (None, None)])
+
+    @patch("cognite.client.CogniteClient")
+    def test_upload_queue_integration(self, MockCogniteClient):
+        state_store = NoStateStore()
+
+        upload_queue = TimeSeriesUploadQueue(
+            cdf_client=MockCogniteClient(), post_upload_function=state_store.post_upload_handler()
+        )
+
+        upload_queue.add_to_upload_queue(external_id="testId", datapoints=[(1, 1), (4, 4)])
+        upload_queue.upload()
+
+        self.assertTupleEqual(state_store.get_state("testId"), (1, 4))
+
+        upload_queue.add_to_upload_queue(external_id="testId", datapoints=[(2, 2), (3, 3)])
+        upload_queue.upload()
+
+        self.assertTupleEqual(state_store.get_state("testId"), (1, 4))
+
+        upload_queue.add_to_upload_queue(external_id="testId", datapoints=[(5, 5)])
+        upload_queue.upload()
+
+        self.assertTupleEqual(state_store.get_state("testId"), (1, 5))
+
+        upload_queue.add_to_upload_queue(external_id="testId", datapoints=[(0, 0)])
+        upload_queue.upload()
+
+        self.assertTupleEqual(state_store.get_state("testId"), (0, 5))
 
 
 class TestRawStateStore(unittest.TestCase):
