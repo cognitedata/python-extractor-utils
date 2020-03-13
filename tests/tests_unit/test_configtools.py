@@ -150,7 +150,7 @@ class TestConfigtoolsMethods(unittest.TestCase):
         config = load_yaml(config_raw, CogniteConfig)
         cdf = config.get_cognite_client("client_name")
         assert isinstance(cdf, CogniteClient)
-        assert cdf._config.api_key is not None
+        assert cdf._config.api_key == "COGNITE_API_KEY"
         assert cdf._config.token is None
 
     def test_get_cognite_client_from_aad(self):
