@@ -149,9 +149,11 @@ class TestConfigtoolsMethods(unittest.TestCase):
         """
         config = load_yaml(config_raw, CogniteConfig)
         cdf = config.get_cognite_client("client_name")
-        assert isinstance(cdf, CogniteClient)
-        assert cdf._config.api_key == "COGNITE_API_KEY"
-        assert cdf._config.token is None
+        self.assertIsInstance(cdf, CogniteClient)
+        print("CONFIG", repr(cdf._config))
+        print("API_KEY", repr(cdf._config.api_key))
+        self.assertEqual(cdf._config.api_key, "COGNITE_API_KEY")
+        self.assertIsNone(cdf._config.token)
 
     def test_get_cognite_client_from_aad(self):
         config_raw = """    
@@ -166,9 +168,9 @@ class TestConfigtoolsMethods(unittest.TestCase):
         """
         config = load_yaml(config_raw, CogniteConfig)
         cdf = config.get_cognite_client("client_name")
-        assert isinstance(cdf, CogniteClient)
-        assert cdf._config.api_key is None
-        assert cdf._config.token is not None
+        self.assertIsInstance(cdf, CogniteClient)
+        self.assertIsNone(cdf._config.api_key)
+        self.assertIsNotNone(cdf._config.token)
 
     def test_get_cognite_client_no_credentials(self):
         config_raw = """
@@ -177,5 +179,5 @@ class TestConfigtoolsMethods(unittest.TestCase):
         """
         config = load_yaml(config_raw, CogniteConfig)
         with self.assertRaises(InvalidConfigError) as cm:
-            cdf = config.get_cognite_client("client_name")
-        assert str(cm.exception) == "Invalid config: No CDF credentials"
+            config.get_cognite_client("client_name")
+        self.assertEqual(str(cm.exception), "Invalid config: No CDF credentials")
