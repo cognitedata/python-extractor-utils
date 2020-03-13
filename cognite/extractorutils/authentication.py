@@ -30,11 +30,10 @@ class Authenticator:
             "grant_type": "client_credentials",
             "scope": self._config.scope,
         }
-        self._request_time = time.time()
         url = f"https://login.microsoftonline.com/{self._config.tenant}/oauth2/v2.0/token"
         r = requests.post(url, data=body)
         _logger.debug("Request AAD token: %d %s", r.status_code, r.reason)
-        self._response = r.json()
+        return r.json()
 
     def _valid(self):
         if self._response is None or "access_token" not in self._response:
@@ -45,7 +44,8 @@ class Authenticator:
 
     def get_token(self):
         if not self._valid():
-            self._request()
+            self._request_time = time.time()
+            self._response = self._request()
 
         if not self._valid():
             raise Exception("Invalid token")
