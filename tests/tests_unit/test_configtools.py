@@ -140,3 +140,42 @@ class TestConfigtoolsMethods(unittest.TestCase):
 
         with self.assertRaises(InvalidConfigError):
             load_yaml(config_raw, CogniteConfig)
+
+    def test_get_cognite_client_from_api_key(self):
+        config_raw = """    
+        api-key: COGNITE_API_KEY
+        project: tenant-name
+        external-id-prefix: "test_"
+        """
+        config = load_yaml(config_raw, CogniteConfig)
+        cdf = config.get_cognite_client("client_name")
+        assert isinstance(cdf, CogniteClient)
+        assert cdf._config.api_key is not None
+        assert cdf._config.token is None
+
+    def test_get_cognite_client_from_aad(self):
+        config_raw = """    
+        idp-authentication:
+            tenant: foo
+            client_id: cid
+            secret: scrt
+            scope: scp
+            min_ttl: 40
+        project: tenant-name
+        external-id-prefix: "test_"
+        """
+        config = load_yaml(config_raw, CogniteConfig)
+        cdf = config.get_cognite_client("client_name")
+        assert isinstance(cdf, CogniteClient)
+        assert cdf._config.api_key is None
+        assert cdf._config.token is not None
+
+    def test_get_cognite_client_no_credentials(self):
+        config_raw = """
+        project: tenant-name
+        external-id-prefix: "test_"
+        """
+        config = load_yaml(config_raw, CogniteConfig)
+        with self.assertRaises(InvalidConfigError) as cm:
+            cdf = config.get_cognite_client("client_name")
+        assert str(cm.exception) == "Invalid config: No CDF credentials"
