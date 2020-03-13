@@ -16,7 +16,7 @@ import yaml
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset
 
-from .authentication import AuthenticatorConfig, Authenticator
+from .authentication import Authenticator, AuthenticatorConfig
 from .metrics import AbstractMetricsPusher, CognitePusher, PrometheusPusher
 from .statestore import AbstractStateStore, LocalStateStore, RawStateStore
 
@@ -162,11 +162,7 @@ class CogniteConfig:
             raise InvalidConfigError("No CDF credentials")
 
         return CogniteClient(
-            project=self.project,
-            base_url=self.host,
-            client_name=client_name,
-            disable_pypi_version_check=True,
-            **kwargs
+            project=self.project, base_url=self.host, client_name=client_name, disable_pypi_version_check=True, **kwargs
         )
 
 

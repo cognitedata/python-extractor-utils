@@ -1,7 +1,8 @@
-import requests
-import time
 import logging
+import time
 from dataclasses import dataclass
+
+import requests
 
 _logger = logging.getLogger(__name__)
 
@@ -16,7 +17,6 @@ class AuthenticatorConfig:
 
 
 class Authenticator:
-
     def __init__(self, config: AuthenticatorConfig):
         self._config = config
         self._request_time = None

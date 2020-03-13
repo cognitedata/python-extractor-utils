@@ -13,6 +13,7 @@ We don't have such an infrastructure established for a Jenkins builds, so leavin
 def main():
     logging.basicConfig(level=logging.DEBUG)
     from cognite.extractorutils.configtools import load_yaml, CogniteConfig
+
     config = load_yaml(open("config.yaml"), CogniteConfig)
     cdf = config.get_cognite_client("AAD test")
     print("Login status", cdf.login.status())
