@@ -99,10 +99,8 @@ class TestConfigtoolsMethods(unittest.TestCase):
         self.assertIsNone(config.logger.file)
 
     def test_read_invalid_missing_fields(self):
+        # missing project
         config_raw = """    
-        # CDF project (also known as tenant name)
-        project: tenant-name
-    
         # How to label uploaded data in CDF
         external-id-prefix: "test_"
         """

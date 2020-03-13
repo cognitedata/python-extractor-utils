@@ -16,7 +16,7 @@ import yaml
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset
 
-from ._inner_util import _MockLogger
+from .authentication import AuthenticatorConfig, Authenticator
 from .metrics import AbstractMetricsPusher, CognitePusher, PrometheusPusher
 from .statestore import AbstractStateStore, LocalStateStore, RawStateStore
 
@@ -146,17 +146,27 @@ class CogniteConfig:
     """
 
     project: str
-    api_key: str
     external_id_prefix: str = ""
     host: str = "https://api.cognitedata.com"
+    api_key: Optional[str] = None
+    idp_authentication: Optional[AuthenticatorConfig] = None
 
     def get_cognite_client(self, client_name: str) -> CogniteClient:
+        kwargs = {}
+        if self.api_key:
+            kwargs["api_key"] = self.api_key
+        elif self.idp_authentication:
+            authorizer = Authenticator(self.idp_authentication)
+            kwargs["token"] = authorizer.get_token
+        else:
+            raise InvalidConfigError("No CDF credentials")
+
         return CogniteClient(
-            api_key=self.api_key,
             project=self.project,
             base_url=self.host,
             client_name=client_name,
             disable_pypi_version_check=True,
+            **kwargs
         )
 
 
