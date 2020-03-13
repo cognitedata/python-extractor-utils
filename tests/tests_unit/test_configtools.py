@@ -167,10 +167,12 @@ class TestConfigtoolsMethods(unittest.TestCase):
         external-id-prefix: "test_"
         """
         config = load_yaml(config_raw, CogniteConfig)
+        self.assertIsNone(config.api_key)
         cdf = config.get_cognite_client("client_name")
         self.assertIsInstance(cdf, CogniteClient)
-        self.assertIsNone(cdf._config.api_key)
         self.assertIsNotNone(cdf._config.token)
+        self.assertEqual(cdf._config.api_key, None)
+        self.assertIsNone(cdf._config.api_key)
 
     def test_get_cognite_client_no_credentials(self):
         config_raw = """
