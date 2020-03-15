@@ -146,10 +146,10 @@ class CogniteConfig:
     """
 
     project: str
+    api_key: Optional[str]
+    idp_authentication: Optional[AuthenticatorConfig]
     external_id_prefix: str = ""
     host: str = "https://api.cognitedata.com"
-    api_key: Optional[str] = None
-    idp_authentication: Optional[AuthenticatorConfig] = None
 
     def get_cognite_client(self, client_name: str) -> CogniteClient:
         kwargs = {}
