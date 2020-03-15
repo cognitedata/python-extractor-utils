@@ -1,3 +1,4 @@
+import sys
 import unittest
 
 from cognite.client import CogniteClient
@@ -156,6 +157,10 @@ class TestConfigtoolsMethods(unittest.TestCase):
         self.assertIsNone(cdf._config.token)
 
     def test_get_cognite_client_from_aad(self):
+        # some fixture test_cognite_util.py setting api_key to "********"!?
+        if "cognite._thread_local" in sys.modules:
+            del sys.modules["cognite._thread_local"]
+
         config_raw = """    
         idp-authentication:
             tenant: foo
@@ -170,9 +175,10 @@ class TestConfigtoolsMethods(unittest.TestCase):
         self.assertIsNone(config.api_key)
         cdf = config.get_cognite_client("client_name")
         self.assertIsInstance(cdf, CogniteClient)
-        self.assertIsNotNone(cdf._config.token)
+        self.assertTrue(callable(cdf._config.token))
         # The api_key is not None, possibly some thread local trick
-        # self.assertIsNone(cdf._config.api_key)
+        self.assertIsNone(cdf._config.api_key)
+        # self.assertEqual("********", cdf._config.api_key)
 
     def test_get_cognite_client_no_credentials(self):
         config_raw = """
