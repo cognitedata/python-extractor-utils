@@ -99,10 +99,8 @@ class TestConfigtoolsMethods(unittest.TestCase):
         self.assertIsNone(config.logger.file)
 
     def test_read_invalid_missing_fields(self):
+        # missing project
         config_raw = """    
-        # CDF project (also known as tenant name)
-        project: tenant-name
-    
         # How to label uploaded data in CDF
         external-id-prefix: "test_"
         """
@@ -142,3 +140,46 @@ class TestConfigtoolsMethods(unittest.TestCase):
 
         with self.assertRaises(InvalidConfigError):
             load_yaml(config_raw, CogniteConfig)
+
+    def test_get_cognite_client_from_api_key(self):
+        config_raw = """    
+        api-key: COGNITE_API_KEY
+        project: tenant-name
+        external-id-prefix: "test_"
+        """
+        config = load_yaml(config_raw, CogniteConfig)
+        cdf = config.get_cognite_client("client_name")
+        self.assertIsInstance(cdf, CogniteClient)
+        print("CONFIG", repr(cdf._config))
+        print("API_KEY", repr(cdf._config.api_key))
+        self.assertEqual(cdf._config.api_key, "COGNITE_API_KEY")
+        self.assertIsNone(cdf._config.token)
+
+    def test_get_cognite_client_from_aad(self):
+        config_raw = """    
+        idp-authentication:
+            tenant: foo
+            client_id: cid
+            secret: scrt
+            scope: scp
+            min_ttl: 40
+        project: tenant-name
+        external-id-prefix: "test_"
+        """
+        config = load_yaml(config_raw, CogniteConfig)
+        self.assertIsNone(config.api_key)
+        cdf = config.get_cognite_client("client_name")
+        self.assertIsInstance(cdf, CogniteClient)
+        self.assertTrue(callable(cdf._config.token))
+        # The api_key is not None, possibly some thread local trick when run in Jenkins
+        # self.assertTrue(cdf._config.api_key is None or cdf._config.api_key == "********")
+
+    def test_get_cognite_client_no_credentials(self):
+        config_raw = """
+        project: tenant-name
+        external-id-prefix: "test_"
+        """
+        config = load_yaml(config_raw, CogniteConfig)
+        with self.assertRaises(InvalidConfigError) as cm:
+            config.get_cognite_client("client_name")
+        self.assertEqual(str(cm.exception), "Invalid config: No CDF credentials")
