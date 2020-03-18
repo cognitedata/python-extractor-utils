@@ -8,7 +8,7 @@ import re
 from dataclasses import dataclass
 from logging.handlers import TimedRotatingFileHandler
 from time import sleep
-from typing import Any, Dict, Iterable, List, Optional, T, TextIO, Tuple, Type, Union
+from typing import Any, Dict, List, Optional, T, TextIO, Type, Union
 
 import dacite
 import yaml
