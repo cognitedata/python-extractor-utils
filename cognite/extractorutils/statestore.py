@@ -14,7 +14,6 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 from cognite.client import CogniteClient
 from cognite.client.exceptions import CogniteAPIError
 from cognite.extractorutils.uploader import DataPointList
-from cognite.extractorutils.util import EitherId
 
 
 class AbstractStateStore(ABC):
