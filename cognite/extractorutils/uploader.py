@@ -457,7 +457,7 @@ class EventUploadQueue(AbstractUploadQueue):
         self.lock.acquire()
 
         try:
-            self.cdf_client.events.create(self.upload_queue)
+            self.cdf_client.events.create([e for e in self.upload_queue])
             try:
                 self._post_upload(self.upload_queue)
             except Exception as e:
