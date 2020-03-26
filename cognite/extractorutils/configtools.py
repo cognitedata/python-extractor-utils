@@ -5,6 +5,7 @@ Module containing tools for loading and verifying config files.
 import logging
 import os
 import re
+import time
 from dataclasses import dataclass
 from logging.handlers import TimedRotatingFileHandler
 from time import sleep
@@ -196,8 +197,11 @@ class LoggingConfig:
                 service
         """
         fmt = logging.Formatter(
-            "%(asctime)s.%(msecs)03d [%(levelname)-8s] %(threadName)s %(message)s", "%Y-%m-%d %H:%M:%S",
+            "%(asctime)s.%(msecs)03d UTC [%(levelname)-8s] %(threadName)s %(message)s", "%Y-%m-%d %H:%M:%S",
         )
+        # Set logging to UTC
+        fmt.converter = time.gmtime
+
         root = logging.getLogger()
 
         if self.console and not suppress_console:
@@ -211,7 +215,9 @@ class LoggingConfig:
                 root.setLevel(console_handler.level)
 
         if self.file:
-            file_handler = TimedRotatingFileHandler(filename=self.file.path, when="D", backupCount=self.file.retention,)
+            file_handler = TimedRotatingFileHandler(
+                filename=self.file.path, when="D", utc=True, backupCount=self.file.retention,
+            )
             file_handler.setLevel(self.file.level)
             file_handler.setFormatter(fmt)
 
