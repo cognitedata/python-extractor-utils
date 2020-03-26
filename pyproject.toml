@@ -36,6 +36,10 @@ legacy_tox_ini = """
 isolated_build = true
 envlist = py36,py37,py38
 [testenv]
+setenv =
+    COGNITE_API_KEY={env:COGNITE_API_KEY}
+    COGNITE_BASE_URL={env:COGNITE_BASE_URL}
+    COGNITE_PROJECT={env:COGNITE_PROJECT}
 deps =
     pytest
     pytest-cov
