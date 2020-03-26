@@ -56,9 +56,6 @@ class TestUploadQueue(unittest.TestCase):
 
         queue = TimeSeriesUploadQueue(client)
 
-        with self.assertRaises(ValueError):
-            queue.start()
-
         queue.add_to_upload_queue(id=1, datapoints=[(1, 1), (2, 2)])
         queue.add_to_upload_queue(id=2, datapoints=[(3, 3), (4, 4)])
         queue.add_to_upload_queue(id=1, datapoints=[(5, 5), (6, 6)])
@@ -109,9 +106,6 @@ class TestUploadQueue(unittest.TestCase):
         client: CogniteClient = MockCogniteClient()
 
         queue = EventUploadQueue(client)
-
-        with self.assertRaises(ValueError):
-            queue.start()
 
         event1 = Event(start_time=1, end_time=2, description="test event")
         event2 = Event(start_time=3, end_time=4, description="another test event")
