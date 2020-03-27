@@ -1,0 +1,68 @@
+[tool.poetry]
+name = "cognite-extractor-utils"
+version = "0.11.0"
+description = "Utilities for easier development of extractors for CDF"
+authors = ["Mathias Lohne <mathias.lohne@cognite.com>"]
+
+packages = [
+    { include="cognite", from="." },
+]
+
+[tool.black]
+line-length = 120
+target_version = ['py37']
+include = '\.py$'
+
+[tool.isort]
+line_length=120                # corresponds to -w  flag
+multi_line_output=3            # corresponds to -m  flag
+include_trailing_comma=true    # corresponds to -tc flag
+skip_glob = '^((?!py$).)*$'    # this makes sort all Python files
+known_third_party = []
+
+[tool.poetry.dependencies]
+python = "^3.6.1"
+cognite-sdk = "^1.0.0"
+typing = "^3.7"
+prometheus-client = "^0.7.0"
+arrow = "^0.15.0"
+pyyaml = "^5.3.0"
+dacite = "^1.3.0"
+psutil = "^5.7.0"
+
+[tool.tox]
+legacy_tox_ini = """
+[tox]
+isolated_build = true
+envlist = py36,py37,py38
+[testenv]
+setenv =
+    COGNITE_API_KEY={env:COGNITE_API_KEY}
+    COGNITE_BASE_URL={env:COGNITE_BASE_URL}
+    COGNITE_PROJECT={env:COGNITE_PROJECT}
+deps =
+    pytest
+    pytest-cov
+commands =
+    coverage run --source cognite.extractorutils -m pytest -v tests
+    coverage xml
+"""
+
+[tool.poetry.dev-dependencies]
+black = "^19.10b0"
+isort = "^4.3.21"
+mypy = "^0.770"
+twine = "^3.1.1"
+yolk3k = "^0.9"
+pytest = "^5.4.1"
+pytest-cov = "^2.8.1"
+tox = "^3.14.6"
+tox-pyenv = "^1.1.0"
+sphinx = "^2.4.4"
+sphinx-rtd-theme = "^0.4.3"
+pre-commit = "^2.2.0"
+SecretStorage = "^3.1.2"
+
+[build-system]
+requires = ["poetry>=0.12"]
+build-backend = "poetry.masonry.api"
