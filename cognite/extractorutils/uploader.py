@@ -132,11 +132,9 @@ class AbstractUploadQueue(ABC):
         """
         Start upload thread, this called the upload method every max_upload_interval seconds
         """
-        if self.max_upload_interval is None:
-            raise ValueError("No max_upload_interval given, can't start uploader thread")
-
-        self.stopping.clear()
-        self.thread.start()
+        if self.max_upload_interval is not None:
+            self.stopping.clear()
+            self.thread.start()
 
     def stop(self, ensure_upload: bool = True) -> None:
         """
@@ -149,36 +147,6 @@ class AbstractUploadQueue(ABC):
         self.stopping.set()
         if ensure_upload:
             self.upload()
-
-    def __enter__(self) -> "AbstractUploadQueue":
-        """
-        Wraps around start method, for use as context manager
-
-        Returns:
-            self
-        """
-        self.start()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
-        """
-        Wraps around stop method, for use as context manager
-
-        Args:
-            exc_type: Exception type
-            exc_val: Exception value
-            exc_tb: Traceback
-        """
-        self.stop()
-
-    def __len__(self) -> int:
-        """
-        The size of the upload queue
-
-        Returns:
-            Number of elements in queue
-        """
-        return self.upload_queue_size
 
 
 class RawUploadQueue(AbstractUploadQueue):
@@ -256,6 +224,36 @@ class RawUploadQueue(AbstractUploadQueue):
 
             self.upload_queue.clear()
             self.upload_queue_size = 0
+
+    def __enter__(self) -> "RawUploadQueue":
+        """
+        Wraps around start method, for use as context manager
+
+        Returns:
+            self
+        """
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """
+        Wraps around stop method, for use as context manager
+
+        Args:
+            exc_type: Exception type
+            exc_val: Exception value
+            exc_tb: Traceback
+        """
+        self.stop()
+
+    def __len__(self) -> int:
+        """
+        The size of the upload queue
+
+        Returns:
+            Number of elements in queue
+        """
+        return self.upload_queue_size
 
 
 class TimeSeriesUploadQueue(AbstractUploadQueue):
@@ -366,6 +364,36 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         finally:
             self.lock.release()
 
+    def __enter__(self) -> "TimeSeriesUploadQueue":
+        """
+        Wraps around start method, for use as context manager
+
+        Returns:
+            self
+        """
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """
+        Wraps around stop method, for use as context manager
+
+        Args:
+            exc_type: Exception type
+            exc_val: Exception value
+            exc_tb: Traceback
+        """
+        self.stop()
+
+    def __len__(self) -> int:
+        """
+        The size of the upload queue
+
+        Returns:
+            Number of elements in queue
+        """
+        return self.upload_queue_size
+
 
 class EventUploadQueue(AbstractUploadQueue):
     """
@@ -429,7 +457,7 @@ class EventUploadQueue(AbstractUploadQueue):
         self.lock.acquire()
 
         try:
-            self.cdf_client.events.create(self.upload_queue)
+            self.cdf_client.events.create([e for e in self.upload_queue])
             try:
                 self._post_upload(self.upload_queue)
             except Exception as e:
@@ -439,3 +467,33 @@ class EventUploadQueue(AbstractUploadQueue):
 
         finally:
             self.lock.release()
+
+    def __enter__(self) -> "EventUploadQueue":
+        """
+        Wraps around start method, for use as context manager
+
+        Returns:
+            self
+        """
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """
+        Wraps around stop method, for use as context manager
+
+        Args:
+            exc_type: Exception type
+            exc_val: Exception value
+            exc_tb: Traceback
+        """
+        self.stop()
+
+    def __len__(self) -> int:
+        """
+        The size of the upload queue
+
+        Returns:
+            Number of elements in queue
+        """
+        return self.upload_queue_size
