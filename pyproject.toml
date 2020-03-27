@@ -44,7 +44,7 @@ deps =
     pytest
     pytest-cov
 commands =
-    coverage run --source project_generator -m pytest -v tests
+    coverage run --source cognite.extractorutils -m pytest -v tests
     coverage xml
 """
 
