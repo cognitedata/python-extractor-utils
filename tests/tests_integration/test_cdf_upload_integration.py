@@ -13,8 +13,8 @@ test_id = random.randint(0, 2 ** 31)
 
 
 class IntegrationTests(unittest.TestCase):
-    database_name: str = f"integrationTests-{test_id}"
-    table_name: str = "extractorUtils"
+    database_name: str = "integrationTests"
+    table_name: str = f"extractorUtils-{test_id}"
 
     time_series1: str = f"util_integration_ts_test_1-{test_id}"
     time_series2: str = f"util_integration_ts_test_2-{test_id}"
