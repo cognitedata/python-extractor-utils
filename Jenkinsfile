@@ -1,7 +1,7 @@
 @Library('jenkins-helpers') _
 testBuildReleasePoetryPackage {
     releaseToPypi = true
-    releaseToArtifactory = true
+    releaseToArtifactory = false
     uploadCoverageReport = true
     topLevelPackageName = 'cognite'
     testWithTox = true
