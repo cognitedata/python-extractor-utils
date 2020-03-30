@@ -3,6 +3,20 @@ Module containing tools for pushers for metric reporting.
 
 The classes in this module scrape the default Prometheus registry and uploads it periodically to either a Prometheus
 push gateway, or to CDF as time series.
+
+The ``BaseMetrics`` class forms the basis for a metrics collection for an extractor, containing some general metrics
+that all extractors should report. To create your own set of metrics, subclass this class and populate it with
+extractor-specific metrics, as such:
+
+.. code-block:: python
+
+    class MyMetrics(BaseMetrics):
+        def __init__(self):
+            super().__init__(extractor_name="my_extractor", extractor_version=__version__)
+
+            self.a_counter = Counter("my_extractor_example_counter", "An example counter")
+            ...
+
 """
 import logging
 import os
@@ -46,6 +60,8 @@ class BaseMetrics:
     """
 
     def __init__(self, extractor_name: str, extractor_version: str, process_scrape_interval: float = 15):
+        extractor_name = extractor_name.strip().replace(" ", "_")
+
         self.startup = Gauge(f"{extractor_name}_start_time", "Timestamp (seconds) of when the extractor last started")
         self.finish = Gauge(
             f"{extractor_name}_finish_time", "Timestamp (seconds) of then the extractor last finished cleanly"
@@ -65,7 +81,10 @@ class BaseMetrics:
 
         self.startup.set_to_current_time()
 
-    def _proc_collect(self):
+    def _proc_collect(self) -> None:
+        """
+        Collect values for process metrics
+        """
         while True:
             self.process_num_threads.set(self._process.num_threads())
             self.process_memory_bytes.set(self._process.memory_info().rss)
@@ -73,7 +92,10 @@ class BaseMetrics:
 
             sleep(self.process_scrape_interval)
 
-    def _start_proc_collector(self):
+    def _start_proc_collector(self) -> None:
+        """
+        Start a thread that collects process metrics at a regular interval
+        """
         thread = threading.Thread(target=self._proc_collect, name="ProcessMetricsCollector", daemon=True)
         thread.start()
 

@@ -28,6 +28,7 @@ The ``configtools`` module contains several prebuilt config classes for many com
 
     @dataclass
     class ExtractorConfig:
+        state_store: Optional[StateStoreConfig]
         ...
 
     @dataclass
