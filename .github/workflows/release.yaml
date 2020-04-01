@@ -29,9 +29,9 @@ jobs:
 
     - name: Run tests
       env:
-          COGNITE_API_KEY: ${{ secrets.COGNITE_API_KEY }}
-          COGNITE_PROJECT: extractor-tests
-          COGNITE_BASE_URL: https://greenfield.cognitedata.com
+        COGNITE_API_KEY: ${{ secrets.COGNITE_API_KEY }}
+        COGNITE_PROJECT: extractor-tests
+        COGNITE_BASE_URL: https://greenfield.cognitedata.com
       run: |
         coverage run --source cognite.extractorutils -m pytest -v tests
         coverage xml
@@ -43,4 +43,7 @@ jobs:
       run: cd docs && make html
 
     - name: Release to PyPI
-      run: twine upload --verbose --config-file /pypi/.pypirc dist/* || echo 'version exists'
+      env:
+        TWINE_USERNAME: ${{ secrets.PYPI_USER }}
+        TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+      run: twine upload --verbose dist/* || echo 'Version exists'
