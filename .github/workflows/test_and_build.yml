@@ -41,6 +41,11 @@ jobs:
         coverage run --source cognite.extractorutils -m pytest -v tests
         coverage xml
 
+    - uses: codecov/codecov-action@v1
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        file: ./coverage.xml
+
     - name: Build package
       run: poetry build
 
