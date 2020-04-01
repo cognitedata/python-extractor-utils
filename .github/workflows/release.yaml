@@ -1,25 +1,20 @@
-name: test_and_build
+name: release
 
 on:
-  pull_request:
+  push:
     branches: [ master ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
-    strategy:
-      fail-fast: false
-      matrix:
-        python-version: [3.6, 3.7, 3.8]
-
     steps:
     - uses: actions/checkout@v2
 
-    - name: Set up Python ${{ matrix.python-version }}
+    - name: Set up Python
       uses: actions/setup-python@v1
       with:
-        python-version: ${{ matrix.python-version }}
+        python-version: 3.7
 
     - name: Install dependencies
       run: |
@@ -46,3 +41,6 @@ jobs:
 
     - name: Build docs
       run: cd docs && make html
+
+    - name: Release to PyPI
+      run: twine upload --verbose --config-file /pypi/.pypirc dist/* || echo 'version exists'
