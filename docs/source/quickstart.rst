@@ -223,7 +223,7 @@ The config object
 
 The config object can additionally do several things, such as:
 
-Creating `CogniteClient`s based on the config:
+Creating a ``CogniteClient`` based on the config:
 
 .. code-block:: python
 
