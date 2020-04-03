@@ -15,12 +15,16 @@ To install this package:
 
 If the Cognite SDK is not already installed, the installation will automatically fetch and install it as well.
 
+To get going, consult the :doc:`quickstart`
+
 
 Contents
 ^^^^^^^^
 
 .. toctree::
    :maxdepth: 4
+
+   quickstart
 
    docs
 
