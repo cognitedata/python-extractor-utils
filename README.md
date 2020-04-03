@@ -4,7 +4,7 @@
 
 Cognite Python `extractor-utils`
 ================================
-[![build](https://webhooks.dev.cognite.ai/build/buildStatus/icon?job=github-builds/python-extractor-utils/master)](https://jenkins.cognite.ai/job/github-builds/job/python-extractor-utils/job/master/)
+[![Build Status](https://github.com/cognitedata/python-extractor-utils/workflows/release/badge.svg)](https://github.com/cognitedata/python-extractor-utils/actions)
 [![Documentation Status](https://readthedocs.com/projects/cognite-extractor-utils/badge/?version=latest&token=a9bab88214cbf624706005f6a71bbd77964efc910f8e527c7b3d75edc016397c)](https://cognite-extractor-utils.readthedocs-hosted.com/en/latest/?badge=latest)
 [![codecov](https://codecov.io/gh/cognitedata/python-extractor-utils/branch/master/graph/badge.svg?token=7AmVCpAh7I)](https://codecov.io/gh/cognitedata/python-extractor-utils)
 [![PyPI version](https://badge.fury.io/py/cognite-extractor-utils.svg)](https://pypi.org/project/cognite-extractor-utils)
