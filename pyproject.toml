@@ -4,6 +4,8 @@ version = "1.0.0"
 description = "Utilities for easier development of extractors for CDF"
 authors = ["Mathias Lohne <mathias.lohne@cognite.com>"]
 license = "Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/cognitedata/python-extractor-utils"
 
 packages = [
     { include="cognite", from="." },
