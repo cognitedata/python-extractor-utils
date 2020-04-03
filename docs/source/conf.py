@@ -47,8 +47,8 @@ source_suffix = ".rst"
 master_doc = "index"
 
 # General information about the project.
-project = "cognite-extractorutils"
-copyright = "2019, Cognite"
+project = "cognite-extractor-utils"
+copyright = "2020, Cognite"
 author = "Cognite"
 
 # The version info for the project you're documenting, acts as replacement for
