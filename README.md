@@ -8,7 +8,7 @@ Cognite Python `extractor-utils`
 [![Documentation Status](https://readthedocs.com/projects/cognite-extractor-utils/badge/?version=latest&token=a9bab88214cbf624706005f6a71bbd77964efc910f8e527c7b3d75edc016397c)](https://cognite-extractor-utils.readthedocs-hosted.com/en/latest/?badge=latest)
 [![codecov](https://codecov.io/gh/cognitedata/python-extractor-utils/branch/master/graph/badge.svg?token=7AmVCpAh7I)](https://codecov.io/gh/cognitedata/python-extractor-utils)
 [![PyPI version](https://badge.fury.io/py/cognite-extractor-utils.svg)](https://pypi.org/project/cognite-extractor-utils)
-![PyPI - Python Version](https://img.shields.io/pypi/pyversions/cognte-extractor-utils)
+![PyPI - Python Version](https://img.shields.io/pypi/pyversions/cognite-extractor-utils)
 [![License](https://img.shields.io/github/license/cognitedata/python-extractor-utils)](LICENSE)
 [![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/ambv/black)
 
