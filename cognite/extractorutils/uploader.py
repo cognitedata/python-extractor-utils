@@ -333,13 +333,13 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         if len(self.upload_queue) == 0:
             return
 
+        self.lock.acquire()
+
         upload_this = [
             {either_id.type(): either_id.content(), "datapoints": datapoints}
             for either_id, datapoints in self.upload_queue.items()
             if len(datapoints) > 0
         ]
-
-        self.lock.acquire()
 
         try:
             if len(upload_this) == 0:
