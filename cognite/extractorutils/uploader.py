@@ -139,6 +139,7 @@ class AbstractUploadQueue(ABC):
         """
         while not self.stopping.is_set():
             try:
+                self.logger.log(self.trigger_log_level, "Triggering scheduled upload")
                 self.upload()
             except Exception as e:
                 self.logger.error("Unexpected error while uploading: %s. Skipping this upload.", str(e))
@@ -313,8 +314,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         """
         either_id = EitherId(id=id, external_id=external_id)
 
-        self.lock.acquire()
-        try:
+        with self.lock:
             if either_id not in self.upload_queue:
                 self.upload_queue[either_id] = []
 
@@ -323,9 +323,6 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
 
             self._check_triggers()
 
-        finally:
-            self.lock.release()
-
     def upload(self) -> None:
         """
         Trigger an upload of the queue, clears queue afterwards
@@ -333,19 +330,15 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         if len(self.upload_queue) == 0:
             return
 
-        self.lock.acquire()
+        with self.lock:
+            upload_this = [
+                {either_id.type(): either_id.content(), "datapoints": datapoints}
+                for either_id, datapoints in self.upload_queue.items()
+                if len(datapoints) > 0
+            ]
 
-        upload_this = [
-            {either_id.type(): either_id.content(), "datapoints": datapoints}
-            for either_id, datapoints in self.upload_queue.items()
-            if len(datapoints) > 0
-        ]
-
-        try:
             if len(upload_this) == 0:
                 return
-
-            self.logger.log(self.trigger_log_level, "Triggering scheduled upload")
 
             try:
                 self.cdf_client.datapoints.insert_multiple(upload_this)
@@ -373,9 +366,6 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
 
             self.upload_queue.clear()
             self.upload_queue_size = 0
-
-        finally:
-            self.lock.release()
 
     def __enter__(self) -> "TimeSeriesUploadQueue":
         """
@@ -447,16 +437,11 @@ class EventUploadQueue(AbstractUploadQueue):
         Args:
             event: Event to add
         """
-        self.lock.acquire()
-
-        try:
+        with self.lock:
             self.upload_queue.append(event)
             self.upload_queue_size += 1
 
             self._check_triggers()
-
-        finally:
-            self.lock.release()
 
     def upload(self) -> None:
         """
@@ -465,11 +450,7 @@ class EventUploadQueue(AbstractUploadQueue):
         if len(self.upload_queue) == 0:
             return
 
-        self.logger.log(self.trigger_log_level, "Triggering scheduled upload")
-
-        self.lock.acquire()
-
-        try:
+        with self.lock:
             self.cdf_client.events.create([e for e in self.upload_queue])
             try:
                 self._post_upload(self.upload_queue)
@@ -477,9 +458,6 @@ class EventUploadQueue(AbstractUploadQueue):
                 self.logger.error("Error in upload callback: %s", str(e))
             self.upload_queue.clear()
             self.upload_queue_size = 0
-
-        finally:
-            self.lock.release()
 
     def __enter__(self) -> "EventUploadQueue":
         """
