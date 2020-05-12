@@ -211,7 +211,7 @@ class LoggingConfig:
                 service
         """
         fmt = logging.Formatter(
-            "%(asctime)s.%(msecs)03d UTC [%(levelname)-8s] %(threadName)s %(message)s", "%Y-%m-%d %H:%M:%S",
+            "%(asctime)s.%(msecs)03d UTC [%(levelname)-8s] %(threadName)s - %(message)s", "%Y-%m-%d %H:%M:%S",
         )
         # Set logging to UTC
         fmt.converter = time.gmtime
