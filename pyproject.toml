@@ -21,7 +21,7 @@ line_length=120                # corresponds to -w  flag
 multi_line_output=3            # corresponds to -m  flag
 include_trailing_comma=true    # corresponds to -tc flag
 skip_glob = '^((?!py$).)*$'    # this makes sort all Python files
-known_third_party = []
+known_third_party = ["arrow", "dacite", "prometheus_client", "psutil", "pytest", "requests", "yaml"]
 
 [tool.poetry.dependencies]
 python = "^3.6.1"
