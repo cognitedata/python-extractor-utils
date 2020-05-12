@@ -358,8 +358,8 @@ class LocalStateStoreConfig:
 
 @dataclass
 class StateStoreConfig:
-    raw: Optional[RawStateStoreConfig]
-    local: Optional[LocalStateStoreConfig]
+    raw: Optional[RawStateStoreConfig] = None
+    local: Optional[LocalStateStoreConfig] = LocalStateStoreConfig(path="states.json")
 
     def create_state_store(self, cdf_client: Optional[CogniteClient] = None) -> Optional[AbstractStateStore]:
         if self.raw and self.local:
