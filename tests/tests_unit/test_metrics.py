@@ -21,7 +21,7 @@ from prometheus_client import Gauge
 
 from cognite.client.data_classes import Asset, TimeSeries
 from cognite.client.exceptions import CogniteDuplicatedError, CogniteNotFoundError
-from cognite.extractorutils.metrics import CognitePusher
+from cognite.extractorutils.metrics import CognitePusher, safe_get
 
 
 class TestPrometheusPusher(unittest.TestCase):
@@ -173,3 +173,30 @@ class TestCognitePusher(unittest.TestCase):
         self.assertEqual(args["externalId"], "pre_gauge")
         self.assertLess(abs(timestamp - args["datapoints"][0][0]), 100)  # less than 100 ms
         self.assertAlmostEqual(args["datapoints"][0][1], 5)
+
+
+my_class_counter = 0
+
+
+class MyClass:
+    def __init__(self):
+        global my_class_counter
+        my_class_counter += 1
+
+
+class TestMetricUtils(unittest.TestCase):
+    def setUp(self) -> None:
+        global my_class_counter
+        my_class_counter = 0
+
+    def test_safe_get(self):
+        self.assertEqual(my_class_counter, 0)
+
+        a = safe_get(MyClass)
+        self.assertEqual(my_class_counter, 1)
+        self.assertIsInstance(a, MyClass)
+
+        b = safe_get(MyClass)
+        self.assertEqual(my_class_counter, 1)
+        self.assertIsInstance(b, MyClass)
+        self.assertIs(a, b)
