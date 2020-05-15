@@ -158,7 +158,7 @@ class AbstractStateStore(ABC):
         if external_id not in self._local_state:
             return True
 
-        high, low = self.get_state(external_id)
+        low, high = self.get_state(external_id)
 
         if high is not None and new_state > high:
             return True

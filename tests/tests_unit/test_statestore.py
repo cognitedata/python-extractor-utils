@@ -71,6 +71,25 @@ class TestBaseStateStore(unittest.TestCase):
         state_store.expand_state("newExtId", high=5)
         self.assertDictEqual(state_store._local_state["newExtId"], {"low": None, "high": 7})
 
+    def test_outside_state(self):
+        state_store = NoStateStore()
+
+        state_store.set_state("extId", low=3, high=10)
+        self.assertTrue(state_store.outside_state("extId", 1))
+        self.assertTrue(state_store.outside_state("extId", 14))
+        self.assertTrue(state_store.outside_state("newExtId", 5))
+        self.assertFalse(state_store.outside_state("extId", 5))
+
+        state_store.set_state("onlyHigh", high=7)
+        self.assertFalse(state_store.outside_state("onlyHigh", 6))
+        self.assertFalse(state_store.outside_state("onlyHigh", 7))
+        self.assertTrue(state_store.outside_state("onlyHigh", 8))
+
+        state_store.set_state("onlyLow", low=2)
+        self.assertFalse(state_store.outside_state("onlyLow", 3))
+        self.assertFalse(state_store.outside_state("onlyLow", 2))
+        self.assertTrue(state_store.outside_state("onlyLow", 1))
+
     def test_delete_state(self):
         state_store = NoStateStore()
 
