@@ -273,3 +273,15 @@ class LocalStateStore(AbstractStateStore):
 
         with self.lock:
             self._deleted.clear()
+
+
+class NoStateStore(AbstractStateStore):
+    """
+    A state store that only keeps states in memory and never stores or initializes from external sources.
+    """
+
+    def initialize(self, force: bool = False) -> None:
+        pass
+
+    def synchronize(self) -> None:
+        pass

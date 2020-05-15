@@ -38,7 +38,7 @@ import os
 import threading
 from abc import ABC, abstractmethod
 from time import sleep
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable, Dict, List, Optional, T, Tuple, Type, Union
 
 import arrow
 import psutil
@@ -51,6 +51,38 @@ from cognite.client.data_classes import Asset, TimeSeries
 from cognite.client.exceptions import CogniteDuplicatedError
 
 from .util import ensure_time_series
+
+_metrics_singularities = {}
+
+
+def safe_get(cls: Type[T]) -> T:
+    """
+    A factory for instances of metrics collections.
+
+    Since Prometheus doesn't allow multiple metrics with the same name, any subclass of BaseMetrics must never be
+    created more than once. This function creates an instance of the given class on the first call and stores it, any
+    subsequent calls with the same class as argument will return the same instance.
+
+    .. code-block:: python
+
+        >>> a = safe_get(MyMetrics)  # This will create a new instance of MyMetrics
+        >>> b = safe_get(MyMetrics)  # This will return the same instance
+        >>> a is b
+        True
+
+
+    Args:
+        cls: Metrics class to either create or get a cached version of
+
+    Returns:
+        An instance of given class
+    """
+    global _metrics_singularities
+
+    if cls not in _metrics_singularities:
+        _metrics_singularities[cls] = cls()
+
+    return _metrics_singularities[cls]
 
 
 class BaseMetrics:
