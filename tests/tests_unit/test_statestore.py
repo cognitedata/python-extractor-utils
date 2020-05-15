@@ -19,16 +19,8 @@ from unittest.mock import Mock, patch
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Row
 from cognite.client.exceptions import CogniteAPIError
-from cognite.extractorutils.statestore import AbstractStateStore, LocalStateStore, RawStateStore
+from cognite.extractorutils.statestore import AbstractStateStore, LocalStateStore, NoStateStore, RawStateStore
 from cognite.extractorutils.uploader import TimeSeriesUploadQueue
-
-
-class NoStateStore(AbstractStateStore):
-    def initialize(self, force: bool = False) -> None:
-        pass
-
-    def synchronize(self) -> None:
-        pass
 
 
 class TestBaseStateStore(unittest.TestCase):

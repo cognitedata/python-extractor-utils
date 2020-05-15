@@ -33,7 +33,7 @@ from cognite.client.data_classes import Asset
 
 from .authentication import Authenticator, AuthenticatorConfig
 from .metrics import AbstractMetricsPusher, CognitePusher, PrometheusPusher
-from .statestore import AbstractStateStore, LocalStateStore, RawStateStore
+from .statestore import AbstractStateStore, LocalStateStore, NoStateStore, RawStateStore
 
 _logger = logging.getLogger(__name__)
 
@@ -163,6 +163,7 @@ class CogniteConfig:
     project: str
     api_key: Optional[str]
     idp_authentication: Optional[AuthenticatorConfig]
+    data_set_id: Optional[int]
     external_id_prefix: str = ""
     host: str = "https://api.cognitedata.com"
 
@@ -333,7 +334,7 @@ class BaseConfig:
     Basis for an extractor config, containing config version, ``CogniteConfig`` and ``LoggingConfig``
     """
 
-    version: str
+    version: Optional[Union[str, int]]
 
     cognite: CogniteConfig
     logger: LoggingConfig
@@ -361,7 +362,7 @@ class StateStoreConfig:
     raw: Optional[RawStateStoreConfig] = None
     local: Optional[LocalStateStoreConfig] = LocalStateStoreConfig(path="states.json")
 
-    def create_state_store(self, cdf_client: Optional[CogniteClient] = None) -> Optional[AbstractStateStore]:
+    def create_state_store(self, cdf_client: Optional[CogniteClient] = None) -> AbstractStateStore:
         if self.raw and self.local:
             raise ValueError("Only one state store can be used simultaneously")
 
@@ -374,4 +375,4 @@ class StateStoreConfig:
         if self.local:
             return LocalStateStore(file_path=self.local.path)
 
-        return None
+        return NoStateStore()
