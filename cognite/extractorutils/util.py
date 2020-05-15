@@ -16,7 +16,9 @@
 The ``util`` package contains miscellaneous functions and classes that can some times be useful while developing
 extractors.
 """
-
+import logging
+import signal
+from threading import Event
 from typing import Any, Dict, Iterable, Union
 
 from cognite.client import CogniteClient
@@ -46,6 +48,23 @@ def ensure_time_series(cdf_client: CogniteClient, time_series: Iterable[TimeSeri
 
         create_these = [ts for ts in time_series if ts.external_id in external_ids]
         cdf_client.time_series.create(create_these)
+
+
+def set_event_on_interrupt(stop_event: Event) -> None:
+    """
+    Set given event on SIGINT (Ctrl-C) instead of throwing a KeyboardInterrupt exception.
+
+    Args:
+        stop_event: Event to set
+    """
+
+    def sigint_handler(sig, frame):
+        logger = logging.getLogger(__name__)
+        logger.warning("Interrupt signal received, stopping extractor gracefully")
+        stop_event.set()
+        logger.info("Waiting for threads to complete")
+
+    signal.signal(signal.SIGINT, sigint_handler)
 
 
 class EitherId:
