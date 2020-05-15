@@ -142,6 +142,31 @@ class AbstractStateStore(ABC):
 
         return callback
 
+    def outside_state(self, external_id: str, new_state: Any) -> bool:
+        """
+        Check if a new proposed state is outside state interval (ie, if a new datapoint should be processed).
+
+        Returns true if new_state is outside of stored state or if external_id is previously unseen.
+
+        Args:
+            external_id: External ID to test
+            new_state: Proposed new state to test
+
+        Returns:
+            True if new_state is higher than the stored high watermark or lower than the low watermark.
+        """
+        if external_id not in self._local_state:
+            return True
+
+        high, low = self.get_state(external_id)
+
+        if high is not None and new_state > high:
+            return True
+        if low is not None and new_state < low:
+            return True
+
+        return False
+
 
 class RawStateStore(AbstractStateStore):
     """
