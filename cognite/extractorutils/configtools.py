@@ -246,8 +246,8 @@ class LoggingConfig:
 class _PushGatewayConfig:
     host: str
     job_name: str
-    username: str
-    password: str
+    username: Optional[str]
+    password: Optional[str]
 
     clear_after: Optional[int]
     push_interval: int = 30
