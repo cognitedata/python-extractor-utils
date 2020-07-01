@@ -360,9 +360,22 @@ class LocalStateStoreConfig:
 @dataclass
 class StateStoreConfig:
     raw: Optional[RawStateStoreConfig] = None
-    local: Optional[LocalStateStoreConfig] = LocalStateStoreConfig(path="states.json")
+    local: Optional[LocalStateStoreConfig] = None
 
-    def create_state_store(self, cdf_client: Optional[CogniteClient] = None) -> AbstractStateStore:
+    def create_state_store(
+        self, cdf_client: Optional[CogniteClient] = None, default_to_local: bool = True
+    ) -> AbstractStateStore:
+        """
+        Create a state store object based on the config.
+
+        Args:
+            cdf_client: CogniteClient object to use in case of a RAW state store (ignored otherwise)
+            default_to_local: If true, return a LocalStateStore if no state store is configured. Otherwise return a
+                NoStateStore
+
+        Returns:
+            An (uninitialized) state store
+        """
         if self.raw and self.local:
             raise ValueError("Only one state store can be used simultaneously")
 
@@ -375,4 +388,7 @@ class StateStoreConfig:
         if self.local:
             return LocalStateStore(file_path=self.local.path)
 
-        return NoStateStore()
+        if default_to_local:
+            return LocalStateStore(file_path="states.json")
+        else:
+            return NoStateStore()
