@@ -72,6 +72,9 @@ def _to_snake_case(dictionary: Dict[str, Any], case_style: str) -> Dict[str, Any
     """
 
     def fix_list(list_, key_translator):
+        if list_ is None:
+            return []
+
         new_list = [None] * len(list_)
         for i, element in enumerate(list_):
             if isinstance(element, dict):
@@ -83,6 +86,9 @@ def _to_snake_case(dictionary: Dict[str, Any], case_style: str) -> Dict[str, Any
         return new_list
 
     def fix_dict(dict_, key_translator):
+        if dict_ is None:
+            return {}
+
         new_dict = {}
         for key in dict_:
             if isinstance(dict_[key], dict):
