@@ -72,6 +72,9 @@ def _to_snake_case(dictionary: Dict[str, Any], case_style: str) -> Dict[str, Any
     """
 
     def fix_list(list_, key_translator):
+        if list_ is None:
+            return []
+
         new_list = [None] * len(list_)
         for i, element in enumerate(list_):
             if isinstance(element, dict):
@@ -83,6 +86,9 @@ def _to_snake_case(dictionary: Dict[str, Any], case_style: str) -> Dict[str, Any
         return new_list
 
     def fix_dict(dict_, key_translator):
+        if dict_ is None:
+            return {}
+
         new_dict = {}
         for key in dict_:
             if isinstance(dict_[key], dict):
@@ -360,9 +366,22 @@ class LocalStateStoreConfig:
 @dataclass
 class StateStoreConfig:
     raw: Optional[RawStateStoreConfig] = None
-    local: Optional[LocalStateStoreConfig] = LocalStateStoreConfig(path="states.json")
+    local: Optional[LocalStateStoreConfig] = None
 
-    def create_state_store(self, cdf_client: Optional[CogniteClient] = None) -> AbstractStateStore:
+    def create_state_store(
+        self, cdf_client: Optional[CogniteClient] = None, default_to_local: bool = True
+    ) -> AbstractStateStore:
+        """
+        Create a state store object based on the config.
+
+        Args:
+            cdf_client: CogniteClient object to use in case of a RAW state store (ignored otherwise)
+            default_to_local: If true, return a LocalStateStore if no state store is configured. Otherwise return a
+                NoStateStore
+
+        Returns:
+            An (uninitialized) state store
+        """
         if self.raw and self.local:
             raise ValueError("Only one state store can be used simultaneously")
 
@@ -375,4 +394,7 @@ class StateStoreConfig:
         if self.local:
             return LocalStateStore(file_path=self.local.path)
 
-        return NoStateStore()
+        if default_to_local:
+            return LocalStateStore(file_path="states.json")
+        else:
+            return NoStateStore()
