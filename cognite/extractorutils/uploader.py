@@ -43,13 +43,20 @@ from abc import ABC, abstractmethod
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
+from retry import retry
+
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Event
 from cognite.client.data_classes.raw import Row
-from cognite.client.exceptions import CogniteNotFoundError
+from cognite.client.exceptions import CogniteAPIError, CogniteNotFoundError
 
 from ._inner_util import _resolve_log_level
 from .util import EitherId
+
+RETRY_BACKOFF_FACTOR = 1.5
+RETRY_MAX_DELAY = 15
+RETRY_DELAY = 5
+RETRIES = 10
 
 DataPointList = Union[
     List[Dict[Union[int, float, datetime], Union[int, float, str]]],
@@ -102,7 +109,10 @@ class AbstractUploadQueue(ABC):
         Check if upload triggers are met, call upload if they are. Called by subclasses.
         """
         if self.upload_queue_size > self.threshold >= 0:
-            self.logger.log(self.trigger_log_level, "Upload queue reached threshold size, triggering upload")
+            self.logger.log(
+                self.trigger_log_level,
+                f"Upload queue reached threshold size {self.upload_queue_size}/{self.threshold}, triggering upload",
+            )
             return self.upload()
 
         return None
@@ -227,8 +237,11 @@ class RawUploadQueue(AbstractUploadQueue):
         with self.lock:
             for database, tables in self.upload_queue.items():
                 for table, rows in tables.items():
-                    # Upload
-                    self.cdf_client.raw.rows.insert(db_name=database, table_name=table, row=rows, ensure_parent=True)
+                    # Deduplicate
+                    # In case of duplicate keys, the first key is preserved, and the last value is preserved.
+                    patch: Dict[str, Row] = {r.key: r for r in rows}
+
+                    self._upload_batch(database=database, table=table, patch=list(patch.values()))
 
                     # Perform post-upload logic if applicable
                     try:
@@ -237,7 +250,19 @@ class RawUploadQueue(AbstractUploadQueue):
                         self.logger.error("Error in upload callback: %s", str(e))
 
             self.upload_queue.clear()
+            self.logger.info(f"Uploaded {self.upload_queue_size} rows in total")
             self.upload_queue_size = 0
+
+    @retry(
+        exceptions=CogniteAPIError,
+        tries=RETRIES,
+        delay=RETRY_DELAY,
+        max_delay=RETRY_MAX_DELAY,
+        backoff=RETRY_BACKOFF_FACTOR,
+    )
+    def _upload_batch(self, database: str, table: str, patch: List[Row]):
+        # Upload
+        self.cdf_client.raw.rows.insert(db_name=database, table_name=table, row=patch, ensure_parent=True)
 
     def __enter__(self) -> "RawUploadQueue":
         """
@@ -331,33 +356,13 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
             return
 
         with self.lock:
-            upload_this = [
-                {either_id.type(): either_id.content(), "datapoints": datapoints}
-                for either_id, datapoints in self.upload_queue.items()
-                if len(datapoints) > 0
-            ]
-
-            if len(upload_this) == 0:
-                return
-
-            try:
-                self.cdf_client.datapoints.insert_multiple(upload_this)
-
-            except CogniteNotFoundError as ex:
-                self.logger.error("Could not upload data points to %s: %s", str(ex.not_found), str(ex))
-
-                # Get IDs of time series that exists, but failed because of the non-existing time series
-                retry_these = [EitherId(**id_dict) for id_dict in ex.failed if id_dict not in ex.not_found]
-
-                # Remove entries with non-existing time series from upload queue
-                upload_this = [
-                    entry
-                    for entry in upload_this
-                    if EitherId(id=entry.get("id"), external_id=entry.get("externalId")) in retry_these
+            upload_this = self._upload_batch(
+                [
+                    {either_id.type(): either_id.content(), "datapoints": datapoints}
+                    for either_id, datapoints in self.upload_queue.items()
+                    if len(datapoints) > 0
                 ]
-
-                # Upload remaining
-                self.cdf_client.datapoints.insert_multiple(upload_this)
+            )
 
             try:
                 self._post_upload(upload_this)
@@ -366,6 +371,37 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
 
             self.upload_queue.clear()
             self.upload_queue_size = 0
+
+    @retry(
+        exceptions=CogniteAPIError,
+        tries=RETRIES,
+        delay=RETRY_DELAY,
+        max_delay=RETRY_MAX_DELAY,
+        backoff=RETRY_BACKOFF_FACTOR,
+    )
+    def _upload_batch(self, upload_this: List[Dict]) -> List[Dict]:
+        if len(upload_this) == 0:
+            return upload_this
+
+        try:
+            self.cdf_client.datapoints.insert_multiple(upload_this)
+
+        except CogniteNotFoundError as ex:
+            self.logger.error("Could not upload data points to %s: %s", str(ex.not_found), str(ex))
+
+            # Get IDs of time series that exists, but failed because of the non-existing time series
+            retry_these = [EitherId(**id_dict) for id_dict in ex.failed if id_dict not in ex.not_found]
+
+            # Remove entries with non-existing time series from upload queue
+            upload_this = [
+                entry
+                for entry in upload_this
+                if EitherId(id=entry.get("id"), external_id=entry.get("externalId")) in retry_these
+            ]
+
+            # Upload remaining
+            self.cdf_client.datapoints.insert_multiple(upload_this)
+        return upload_this
 
     def __enter__(self) -> "TimeSeriesUploadQueue":
         """
@@ -451,13 +487,23 @@ class EventUploadQueue(AbstractUploadQueue):
             return
 
         with self.lock:
-            self.cdf_client.events.create([e for e in self.upload_queue])
+            self._upload_batch()
             try:
                 self._post_upload(self.upload_queue)
             except Exception as e:
                 self.logger.error("Error in upload callback: %s", str(e))
             self.upload_queue.clear()
             self.upload_queue_size = 0
+
+    @retry(
+        exceptions=CogniteAPIError,
+        tries=RETRIES,
+        delay=RETRY_DELAY,
+        max_delay=RETRY_MAX_DELAY,
+        backoff=RETRY_BACKOFF_FACTOR,
+    )
+    def _upload_batch(self):
+        self.cdf_client.events.create([e for e in self.upload_queue])
 
     def __enter__(self) -> "EventUploadQueue":
         """
