@@ -23,13 +23,16 @@ remote store (which can either be a local JSON file or a table in CDF RAW), and 
 
 import json
 from abc import ABC, abstractmethod
+from datetime import timedelta
 from threading import Lock
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
+import arrow
 from retry import retry
 
 from cognite.client import CogniteClient
 from cognite.client.exceptions import CogniteAPIError
+from cognite.extractorutils.long_livinig_client import LongLivingClient
 from cognite.extractorutils.uploader import DataPointList
 
 RETRY_BACKOFF_FACTOR = 1.5
@@ -187,12 +190,15 @@ class RawStateStore(AbstractStateStore):
 
     def __init__(self, cdf_client: CogniteClient, database: str, table: str):
         super().__init__()
-
-        self._cdf_client = cdf_client
+        self._llc_client = LongLivingClient(cdf_client, timedelta(minutes=10).seconds)
         self.database = database
         self.table = table
 
         self._ensure_table()
+
+    @property
+    def _cdf_client(self) -> CogniteClient:
+        return self._llc_client.client()
 
     @retry(
         exceptions=CogniteAPIError,

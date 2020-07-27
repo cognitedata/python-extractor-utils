@@ -40,7 +40,7 @@ import logging
 import threading
 import time
 from abc import ABC, abstractmethod
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from retry import retry
@@ -51,6 +51,7 @@ from cognite.client.data_classes.raw import Row
 from cognite.client.exceptions import CogniteAPIError, CogniteNotFoundError
 
 from ._inner_util import _resolve_log_level
+from .long_livinig_client import LongLivingClient
 from .util import EitherId
 
 RETRY_BACKOFF_FACTOR = 1.5
@@ -88,7 +89,7 @@ class AbstractUploadQueue(ABC):
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
     ):
-        self.cdf_client = cdf_client
+        self._llc_client = LongLivingClient(cdf_client, timedelta(minutes=10).seconds)
 
         self.threshold = max_queue_size if max_queue_size is not None else -1
         self.upload_queue_size = 0
@@ -103,6 +104,10 @@ class AbstractUploadQueue(ABC):
         self.max_upload_interval = max_upload_interval
 
         self.post_upload_function = post_upload_function
+
+    @property
+    def cdf_client(self) -> CogniteClient:
+        return self._llc_client.client()
 
     def _check_triggers(self) -> None:
         """
