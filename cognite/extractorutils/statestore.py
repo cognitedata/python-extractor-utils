@@ -26,9 +26,16 @@ from abc import ABC, abstractmethod
 from threading import Lock
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
+from retry import retry
+
 from cognite.client import CogniteClient
 from cognite.client.exceptions import CogniteAPIError
 from cognite.extractorutils.uploader import DataPointList
+
+RETRY_BACKOFF_FACTOR = 1.5
+RETRY_MAX_DELAY = 15
+RETRY_DELAY = 5
+RETRIES = 10
 
 
 class AbstractStateStore(ABC):
@@ -187,6 +194,13 @@ class RawStateStore(AbstractStateStore):
 
         self._ensure_table()
 
+    @retry(
+        exceptions=CogniteAPIError,
+        tries=RETRIES,
+        delay=RETRY_DELAY,
+        max_delay=RETRY_MAX_DELAY,
+        backoff=RETRY_BACKOFF_FACTOR,
+    )
     def _ensure_table(self) -> None:
         try:
             self._cdf_client.raw.databases.create(self.database)
@@ -200,6 +214,16 @@ class RawStateStore(AbstractStateStore):
                 raise e
 
     def initialize(self, force: bool = False) -> None:
+        self._initialize_implementation(force)
+
+    @retry(
+        exceptions=CogniteAPIError,
+        tries=RETRIES,
+        delay=RETRY_DELAY,
+        max_delay=RETRY_MAX_DELAY,
+        backoff=RETRY_BACKOFF_FACTOR,
+    )
+    def _initialize_implementation(self, force: bool = False) -> None:
         """
         Get all known states.
 
@@ -219,15 +243,23 @@ class RawStateStore(AbstractStateStore):
         self._initialized = True
 
     def synchronize(self) -> None:
+        self._synchronize_implementation()
+
+    @retry(
+        exceptions=CogniteAPIError,
+        tries=RETRIES,
+        delay=RETRY_DELAY,
+        max_delay=RETRY_MAX_DELAY,
+        backoff=RETRY_BACKOFF_FACTOR,
+    )
+    def _synchronize_implementation(self) -> None:
         """
         Upload local state store to CDF
         """
         self._cdf_client.raw.rows.insert(db_name=self.database, table_name=self.table, row=self._local_state)
-
         # Create a copy of deleted to facilitate testing (mock library stores list, and as it changes, the assertions
         # fail)
         self._cdf_client.raw.rows.delete(db_name=self.database, table_name=self.table, key=[k for k in self._deleted])
-
         with self.lock:
             self._deleted.clear()
 
