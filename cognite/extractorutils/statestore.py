@@ -26,6 +26,7 @@ from abc import ABC, abstractmethod
 from threading import Lock
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
+from requests.exceptions import ConnectionError
 from retry import retry
 
 from cognite.client import CogniteClient
@@ -195,7 +196,7 @@ class RawStateStore(AbstractStateStore):
         self._ensure_table()
 
     @retry(
-        exceptions=CogniteAPIError,
+        exceptions=(CogniteAPIError, ConnectionError),
         tries=RETRIES,
         delay=RETRY_DELAY,
         max_delay=RETRY_MAX_DELAY,
@@ -217,7 +218,7 @@ class RawStateStore(AbstractStateStore):
         self._initialize_implementation(force)
 
     @retry(
-        exceptions=CogniteAPIError,
+        exceptions=(CogniteAPIError, ConnectionError),
         tries=RETRIES,
         delay=RETRY_DELAY,
         max_delay=RETRY_MAX_DELAY,
@@ -246,7 +247,7 @@ class RawStateStore(AbstractStateStore):
         self._synchronize_implementation()
 
     @retry(
-        exceptions=CogniteAPIError,
+        exceptions=(CogniteAPIError, ConnectionError),
         tries=RETRIES,
         delay=RETRY_DELAY,
         max_delay=RETRY_MAX_DELAY,
