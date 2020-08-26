@@ -58,7 +58,6 @@ RETRY_BACKOFF_FACTOR = 1.5
 RETRY_MAX_DELAY = 15
 RETRY_DELAY = 5
 RETRIES = 10
-CREATION_TIMEOUT = 60
 
 DataPointList = Union[
     List[Dict[Union[int, float, datetime], Union[int, float, str]]],
@@ -404,27 +403,9 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
             if self.create_missing:
                 # Get the time series that can be created
                 create_these = [id_dict["externalId"] for id_dict in ex.not_found if "externalId" in id_dict]
-                self.cdf_client.time_series.create([TimeSeries(external_id=i) for i in create_these])
 
                 self.logger.info(f"Creating {len(create_these)} time series")
-
-                # Wait for the TS to be created before inserting (account for eventual consistency)
-                it = 0
-                while len(
-                    self.cdf_client.time_series.retrieve_multiple(external_ids=create_these, ignore_unknown_ids=True)
-                ) != len(create_these):
-                    if it == CREATION_TIMEOUT:
-                        self.logger.warning("Time series creation timed out")
-                        create_these = [
-                            ts.external_id
-                            for ts in self.cdf_client.time_series.retrieve_multiple(
-                                external_ids=create_these, ignore_unknown_ids=True
-                            )
-                        ]
-
-                    self.logger.debug("Waiting for time series to be created")
-                    time.sleep(1)
-                    it += 1
+                self.cdf_client.time_series.create([TimeSeries(external_id=i) for i in create_these])
 
                 retry_these.extend([EitherId(external_id=i) for i in create_these])
 
