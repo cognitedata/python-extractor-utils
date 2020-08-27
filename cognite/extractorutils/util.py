@@ -144,11 +144,11 @@ class EitherId:
         """
         return "{}: {}".format(self.type(), self.content())
 
-    def __repr__(self) -> Dict[str, Union[str, int]]:
+    def __repr__(self) -> str:
         """
-        Returns a dict containing the ID type as key and ID as value
+        Get a string representation of the EitherId on the format "type: content".
 
         Returns:
-            A dictionary representation of the EitherId
+            A string rep of the EitherId
         """
-        return {self.type(): self.content()}
+        return self.__str__()

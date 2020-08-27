@@ -97,4 +97,4 @@ class TestEitherId(unittest.TestCase):
         self.assertTrue(hash(id1) == hash(id2))
 
     def test_repr(self):
-        self.assertDictEqual(EitherId(externalId="extId").__repr__(), {"externalId": "extId"})
+        self.assertEqual(EitherId(externalId="extId").__repr__(), "externalId: extId")
