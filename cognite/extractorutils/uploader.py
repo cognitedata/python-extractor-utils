@@ -47,9 +47,9 @@ from requests.exceptions import ConnectionError
 from retry import retry
 
 from cognite.client import CogniteClient
-from cognite.client.data_classes import Event, TimeSeries, Sequence, SequenceData
+from cognite.client.data_classes import Event, Sequence, SequenceData, TimeSeries
 from cognite.client.data_classes.raw import Row
-from cognite.client.exceptions import CogniteAPIError, CogniteNotFoundError, CogniteDuplicatedError
+from cognite.client.exceptions import CogniteAPIError, CogniteDuplicatedError, CogniteNotFoundError
 
 from ._inner_util import _resolve_log_level
 from .util import EitherId
@@ -563,16 +563,15 @@ class EventUploadQueue(AbstractUploadQueue):
 
 
 class SequenceUploadQueue(AbstractUploadQueue):
-
     def __init__(
-            self,
-            cdf_client: CogniteClient,
-            post_upload_function: Optional[Callable[[List[Any]], None]] = None,
-            max_queue_size: Optional[int] = None,
-            max_upload_interval: Optional[int] = None,
-            trigger_log_level: str = "DEBUG",
-            thread_name: Optional[str] = None,
-            create_missing=False
+        self,
+        cdf_client: CogniteClient,
+        post_upload_function: Optional[Callable[[List[Any]], None]] = None,
+        max_queue_size: Optional[int] = None,
+        max_upload_interval: Optional[int] = None,
+        trigger_log_level: str = "DEBUG",
+        thread_name: Optional[str] = None,
+        create_missing=False,
     ):
         """
         Args:
@@ -599,12 +598,12 @@ class SequenceUploadQueue(AbstractUploadQueue):
         self.create_missing = create_missing
 
     def set_sequence_metadata(
-            self,
-            metadata: Dict[str, Union[str, int, float]],
-            id: int = None,
-            external_id: str = None,
-            asset_external_id: str = None,
-            dataset_external_id: str = None
+        self,
+        metadata: Dict[str, Union[str, int, float]],
+        id: int = None,
+        external_id: str = None,
+        asset_external_id: str = None,
+        dataset_external_id: str = None,
     ) -> None:
         """
         Set sequence metadata. Metadata will be cached until the sequence is created. The metadata will be updated
@@ -625,10 +624,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
         self.sequence_dataset_ids[either_id] = dataset_external_id
 
     def set_sequence_column_definition(
-            self,
-            col_def: List[Dict[str, str]],
-            id: int = None,
-            external_id: str = None
+        self, col_def: List[Dict[str, str]], id: int = None, external_id: str = None
     ) -> None:
         """
         Set sequence column definition
@@ -644,16 +640,16 @@ class SequenceUploadQueue(AbstractUploadQueue):
         self.column_definitions[either_id] = col_def
 
     def add_to_upload_queue(
-            self,
-            rows: Union[
-                Dict[int, List[Union[int, float, str]]],
-                List[Tuple[int, Union[int, float, str]]],
-                List[Dict[str, Any]],
-                SequenceData,
-            ],
-            column_external_ids: Optional[List[str]] = None,
-            id: int = None,
-            external_id: str = None,
+        self,
+        rows: Union[
+            Dict[int, List[Union[int, float, str]]],
+            List[Tuple[int, Union[int, float, str]]],
+            List[Dict[str, Any]],
+            SequenceData,
+        ],
+        column_external_ids: Optional[List[str]] = None,
+        id: int = None,
+        external_id: str = None,
     ) -> None:
         """
         Add sequence rows to upload queue. Mirrors implementation of SequenceApi.insert. Inserted rows will be
@@ -678,27 +674,17 @@ class SequenceUploadQueue(AbstractUploadQueue):
             # Already in desired format
             pass
         elif isinstance(rows, dict):
-            rows = [
-                {
-                    'rowNumber': row_number,
-                    'values': values
-                } for row_number, values in rows.items()
-            ]
+            rows = [{"rowNumber": row_number, "values": values} for row_number, values in rows.items()]
 
             rows = SequenceData(id=id, external_id=id, rows=rows, columns=column_external_ids)
 
         elif isinstance(rows, list):
             if isinstance(rows[0], tuple) or isinstance(rows[0], list):
-                rows = [
-                    {
-                        'rowNumber': row_number,
-                        'values': values
-                    } for row_number, values in rows
-                ]
+                rows = [{"rowNumber": row_number, "values": values} for row_number, values in rows]
 
             rows = SequenceData(id=id, external_id=id, rows=rows, columns=column_external_ids)
         else:
-            raise TypeError('Unsupported type for sequence rows: {}'.format(type(rows)))
+            raise TypeError("Unsupported type for sequence rows: {}".format(type(rows)))
 
         with self.lock:
             seq = self.upload_queue.get(either_id)
@@ -739,11 +725,12 @@ class SequenceUploadQueue(AbstractUploadQueue):
     )
     def _upload_single(self, either_id: EitherId, upload_this: SequenceData) -> SequenceData:
 
-        self.logger.debug('Writing {} rows to sequence {}'.format(len(upload_this.values), either_id))
+        self.logger.debug("Writing {} rows to sequence {}".format(len(upload_this.values), either_id))
 
         try:
-            self.cdf_client.sequences.data.insert(id=either_id.internal_id, external_id=either_id.external_id,
-                                                  rows=upload_this, column_external_ids=None)
+            self.cdf_client.sequences.data.insert(
+                id=either_id.internal_id, external_id=either_id.external_id, rows=upload_this, column_external_ids=None
+            )
         except CogniteNotFoundError as ex:
             if self.create_missing:
 
@@ -751,8 +738,12 @@ class SequenceUploadQueue(AbstractUploadQueue):
                 self._create_or_update(either_id)
 
                 # Retry
-                self.cdf_client.sequences.data.insert(id=either_id.internal_id, external_id=either_id.external_id,
-                                                      rows=upload_this, column_external_ids=None)
+                self.cdf_client.sequences.data.insert(
+                    id=either_id.internal_id,
+                    external_id=either_id.external_id,
+                    rows=upload_this,
+                    column_external_ids=None,
+                )
             else:
                 raise ex
 
@@ -769,18 +760,20 @@ class SequenceUploadQueue(AbstractUploadQueue):
         column_def = self.column_definitions.get(either_id)
 
         try:
-            seq = self.cdf_client.sequences.create(Sequence(
-                id=either_id.internal_id,
-                external_id=either_id.external_id,
-                metadata=self.sequence_metadata.get(either_id, None),
-                asset_id=self.sequence_asset_ids.get(either_id, None),
-                data_set_id=self.sequence_asset_ids.get(either_id, None),
-                columns=column_def
-            ))
+            seq = self.cdf_client.sequences.create(
+                Sequence(
+                    id=either_id.internal_id,
+                    external_id=either_id.external_id,
+                    metadata=self.sequence_metadata.get(either_id, None),
+                    asset_id=self.sequence_asset_ids.get(either_id, None),
+                    data_set_id=self.sequence_asset_ids.get(either_id, None),
+                    columns=column_def,
+                )
+            )
 
         except CogniteDuplicatedError:
 
-            self.logger.info('Sequnce already exist: {}'.format(either_id))
+            self.logger.info("Sequnce already exist: {}".format(either_id))
             seq = self.cdf_client.sequences.retrieve(id=either_id.internal_id, external_id=either_id.external_id)
 
         # Update definition of cached sequence
@@ -816,4 +809,3 @@ class SequenceUploadQueue(AbstractUploadQueue):
             Number of data points in queue
         """
         return self.upload_queue_size
-

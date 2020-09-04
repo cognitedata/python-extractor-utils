@@ -18,7 +18,7 @@ from unittest.mock import patch
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Event, Row
-from cognite.extractorutils.uploader import EventUploadQueue, RawUploadQueue, TimeSeriesUploadQueue, SequenceUploadQueue
+from cognite.extractorutils.uploader import EventUploadQueue, RawUploadQueue, SequenceUploadQueue, TimeSeriesUploadQueue
 
 
 class TestUploadQueue(unittest.TestCase):
@@ -160,10 +160,7 @@ class TestUploadQueue(unittest.TestCase):
     def test_sequence_uploader1(self, MockCogniteClient):
         client: CogniteClient = MockCogniteClient()
 
-        post_upload_test = {
-            "value": 0,
-            "rows": 0
-        }
+        post_upload_test = {"value": 0, "rows": 0}
 
         def post(x):
             post_upload_test["value"] += 1
@@ -172,38 +169,18 @@ class TestUploadQueue(unittest.TestCase):
         queue = SequenceUploadQueue(client, max_upload_interval=2, post_upload_function=post, create_missing=True)
         queue.start()
 
-        queue.add_to_upload_queue(rows=[
-                {
-                    'rowNumber': 1,
-                    'values': {
-                        'field': 'Hello'
-                    }
-                }
-            ],
-            column_external_ids=[
-
-            ],
-            external_id='seq-1'
+        queue.add_to_upload_queue(
+            rows=[{"rowNumber": 1, "values": {"field": "Hello"}}], column_external_ids=[], external_id="seq-1"
         )
 
-        queue.add_to_upload_queue(rows=[
-            {
-                'rowNumber': 2,
-                'values': {
-                    'field': 'World'
-                }
-            }
-        ],
-            column_external_ids=[
-
-            ],
-            external_id='seq-1'
+        queue.add_to_upload_queue(
+            rows=[{"rowNumber": 2, "values": {"field": "World"}}], column_external_ids=[], external_id="seq-1"
         )
 
         time.sleep(2.1)
 
-        self.assertEqual(post_upload_test["value"],  1)
-        self.assertEqual(post_upload_test["rows"],  2)
+        self.assertEqual(post_upload_test["value"], 1)
+        self.assertEqual(post_upload_test["rows"], 2)
 
         queue.stop()
 
@@ -211,10 +188,7 @@ class TestUploadQueue(unittest.TestCase):
     def test_sequence_uploader2(self, MockCogniteClient):
         client: CogniteClient = MockCogniteClient()
 
-        post_upload_test = {
-            "value": 0,
-            "rows": 0
-        }
+        post_upload_test = {"value": 0, "rows": 0}
 
         def post(x):
             post_upload_test["value"] += 1
@@ -223,37 +197,17 @@ class TestUploadQueue(unittest.TestCase):
         queue = SequenceUploadQueue(client, max_upload_interval=2, post_upload_function=post, create_missing=True)
         queue.start()
 
-        queue.add_to_upload_queue(rows=[
-            {
-                'rowNumber': 1,
-                'values': {
-                    'field': 'Hello'
-                }
-            }
-        ],
-            column_external_ids=[
-
-            ],
-            external_id='seq-1'
+        queue.add_to_upload_queue(
+            rows=[{"rowNumber": 1, "values": {"field": "Hello"}}], column_external_ids=[], external_id="seq-1"
         )
 
-        queue.add_to_upload_queue(rows=[
-            {
-                'rowNumber': 2,
-                'values': {
-                    'field': 'World'
-                }
-            }
-        ],
-            column_external_ids=[
-
-            ],
-            external_id='seq-2'
+        queue.add_to_upload_queue(
+            rows=[{"rowNumber": 2, "values": {"field": "World"}}], column_external_ids=[], external_id="seq-2"
         )
 
         time.sleep(2.1)
 
-        self.assertEqual(post_upload_test["value"],  1)
-        self.assertEqual(post_upload_test["rows"],  2)
+        self.assertEqual(post_upload_test["value"], 1)
+        self.assertEqual(post_upload_test["rows"], 2)
 
         queue.stop()
