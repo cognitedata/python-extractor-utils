@@ -49,7 +49,7 @@ from retry import retry
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Event, TimeSeries, Sequence, SequenceData
 from cognite.client.data_classes.raw import Row
-from cognite.client.exceptions import CogniteAPIError, CogniteNotFoundError
+from cognite.client.exceptions import CogniteAPIError, CogniteNotFoundError, CogniteDuplicatedError
 
 from ._inner_util import _resolve_log_level
 from .util import EitherId
@@ -572,6 +572,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
             max_upload_interval: Optional[int] = None,
             trigger_log_level: str = "DEBUG",
             thread_name: Optional[str] = None,
+            create_missing=False
     ):
         """
         Args:
@@ -583,6 +584,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
                 methods).
             trigger_log_level: Log level to log upload triggers to.
             thread_name: Thread name of uploader thread.
+            create_missing: Create missing time series if possible (ie, if external id is used)
         """
 
         # Super sets post_upload and threshold
@@ -594,6 +596,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
         self.sequence_asset_ids: Dict[EitherId, str] = dict()
         self.sequence_dataset_ids: Dict[EitherId, str] = dict()
         self.column_definitions: Dict[EitherId, List[Dict[str, str]]] = dict()
+        self.create_missing = create_missing
 
     def set_sequence_metadata(
             self,
@@ -720,7 +723,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
                 self._upload_single(either_id, upload_this)
 
         try:
-            self._post_upload(upload_this)
+            self._post_upload([seqdata for _, seqdata in self.upload_queue.items()])
         except Exception as e:
             self.logger.error("Error in upload callback: %s", str(e))
 
@@ -735,11 +738,23 @@ class SequenceUploadQueue(AbstractUploadQueue):
         backoff=RETRY_BACKOFF_FACTOR,
     )
     def _upload_single(self, either_id: EitherId, upload_this: SequenceData) -> SequenceData:
-        self._create_or_update(either_id)
 
         self.logger.debug('Writing {} rows to sequence {}'.format(len(upload_this.values), either_id))
-        self.cdf_client.sequences.data.insert(id=either_id.internal_id, external_id=either_id.external_id,
-                                              rows=upload_this, column_external_ids=None)
+
+        try:
+            self.cdf_client.sequences.data.insert(id=either_id.internal_id, external_id=either_id.external_id,
+                                                  rows=upload_this, column_external_ids=None)
+        except CogniteNotFoundError as ex:
+            if self.create_missing:
+
+                # Create missing sequence
+                self._create_or_update(either_id)
+
+                # Retry
+                self.cdf_client.sequences.data.insert(id=either_id.internal_id, external_id=either_id.external_id,
+                                                      rows=upload_this, column_external_ids=None)
+            else:
+                raise ex
 
         return upload_this
 
@@ -752,28 +767,6 @@ class SequenceUploadQueue(AbstractUploadQueue):
         """
 
         column_def = self.column_definitions.get(either_id)
-        if not column_def:
-            self.logger.warning('Missing column definitions for sequence: {}'.format(either_id))
-
-        try:
-            seq = self.cdf_client.sequences.retrieve(id=either_id.internal_id, external_id=either_id.external_id)
-            if seq and column_def:
-                self.logger.debug('Updating column-defintions post-creation not yet supported')
-
-                #self.logger.debug('The sequence column definitions matched input for {}'.format(either_id))
-
-                # Update definition of cached sequence
-
-                cseq = self.upload_queue[either_id]
-                cseq.columns = seq.columns
-
-                return
-            elif not seq and not column_def:
-                raise CogniteAPIError('The sequence {} did not exist. Needs column definition to create'.format(either_id))
-            else:
-                self.logger.debug('The sequence {} did not exist, and will be created'.format(either_id))
-        except CogniteNotFoundError:
-            pass
 
         try:
             seq = self.cdf_client.sequences.create(Sequence(
@@ -785,11 +778,14 @@ class SequenceUploadQueue(AbstractUploadQueue):
                 columns=column_def
             ))
 
-            # Update definition of cached sequence
-            cseq = self.upload_queue[either_id]
-            cseq.columns = seq.columns
-        except CogniteAPIError as ex:
-            self.logger.error('Failed to create the sequence "{}": err={}'.format(either_id, ex))
+        except CogniteDuplicatedError:
+
+            self.logger.info('Sequnce already exist: {}'.format(either_id))
+            seq = self.cdf_client.sequences.retrieve(id=either_id.internal_id, external_id=either_id.external_id)
+
+        # Update definition of cached sequence
+        cseq = self.upload_queue[either_id]
+        cseq.columns = seq.columns
 
     def __enter__(self, exc_type, exc_val, exc_tb) -> "SequenceUploadQueue":
         """

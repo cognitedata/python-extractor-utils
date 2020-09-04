@@ -18,7 +18,7 @@ from unittest.mock import patch
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Event, Row
-from cognite.extractorutils.uploader import EventUploadQueue, RawUploadQueue, TimeSeriesUploadQueue
+from cognite.extractorutils.uploader import EventUploadQueue, RawUploadQueue, TimeSeriesUploadQueue, SequenceUploadQueue
 
 
 class TestUploadQueue(unittest.TestCase):
@@ -153,5 +153,107 @@ class TestUploadQueue(unittest.TestCase):
 
         client.events.create.ssert_called_with([event1, event2])
         self.assertTrue(post_upload_test["value"])
+
+        queue.stop()
+
+    @patch("cognite.client.CogniteClient")
+    def test_sequence_uploader1(self, MockCogniteClient):
+        client: CogniteClient = MockCogniteClient()
+
+        post_upload_test = {
+            "value": 0,
+            "rows": 0
+        }
+
+        def post(x):
+            post_upload_test["value"] += 1
+            post_upload_test["rows"] += sum([len(e.values) for e in x])
+
+        queue = SequenceUploadQueue(client, max_upload_interval=2, post_upload_function=post, create_missing=True)
+        queue.start()
+
+        queue.add_to_upload_queue(rows=[
+                {
+                    'rowNumber': 1,
+                    'values': {
+                        'field': 'Hello'
+                    }
+                }
+            ],
+            column_external_ids=[
+
+            ],
+            external_id='seq-1'
+        )
+
+        queue.add_to_upload_queue(rows=[
+            {
+                'rowNumber': 2,
+                'values': {
+                    'field': 'World'
+                }
+            }
+        ],
+            column_external_ids=[
+
+            ],
+            external_id='seq-1'
+        )
+
+        time.sleep(2.1)
+
+        self.assertEqual(post_upload_test["value"],  1)
+        self.assertEqual(post_upload_test["rows"],  2)
+
+        queue.stop()
+
+    @patch("cognite.client.CogniteClient")
+    def test_sequence_uploader2(self, MockCogniteClient):
+        client: CogniteClient = MockCogniteClient()
+
+        post_upload_test = {
+            "value": 0,
+            "rows": 0
+        }
+
+        def post(x):
+            post_upload_test["value"] += 1
+            post_upload_test["rows"] += sum([len(e.values) for e in x])
+
+        queue = SequenceUploadQueue(client, max_upload_interval=2, post_upload_function=post, create_missing=True)
+        queue.start()
+
+        queue.add_to_upload_queue(rows=[
+            {
+                'rowNumber': 1,
+                'values': {
+                    'field': 'Hello'
+                }
+            }
+        ],
+            column_external_ids=[
+
+            ],
+            external_id='seq-1'
+        )
+
+        queue.add_to_upload_queue(rows=[
+            {
+                'rowNumber': 2,
+                'values': {
+                    'field': 'World'
+                }
+            }
+        ],
+            column_external_ids=[
+
+            ],
+            external_id='seq-2'
+        )
+
+        time.sleep(2.1)
+
+        self.assertEqual(post_upload_test["value"],  1)
+        self.assertEqual(post_upload_test["rows"],  2)
 
         queue.stop()
