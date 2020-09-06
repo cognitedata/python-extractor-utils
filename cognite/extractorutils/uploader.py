@@ -885,7 +885,7 @@ class FileUploadQueue(AbstractUploadQueue):
         backoff=RETRY_BACKOFF_FACTOR,
     )
     def _upload_batch(self):
-        for i, file_meta, file_name in enumerate(self.upload_queue):
+        for i, (file_meta, file_name) in enumerate(self.upload_queue):
 
             # Upload file
             file_meta = self.cdf_client.files.upload(file_name, **file_meta.dump(), overwrite=self.overwrite_existing)
