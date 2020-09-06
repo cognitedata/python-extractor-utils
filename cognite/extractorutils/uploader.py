@@ -41,13 +41,14 @@ import threading
 import time
 from abc import ABC, abstractmethod
 from datetime import datetime
+from os import PathLike
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from requests.exceptions import ConnectionError
 from retry import retry
 
 from cognite.client import CogniteClient
-from cognite.client.data_classes import Event, Sequence, SequenceData, TimeSeries
+from cognite.client.data_classes import Event, FileMetadata, Sequence, SequenceData, TimeSeries
 from cognite.client.data_classes.raw import Row
 from cognite.client.exceptions import CogniteAPIError, CogniteDuplicatedError, CogniteNotFoundError
 
@@ -807,5 +808,117 @@ class SequenceUploadQueue(AbstractUploadQueue):
 
         Returns:
             Number of data points in queue
+        """
+        return self.upload_queue_size
+
+
+class FileUploadQueue(AbstractUploadQueue):
+    """
+    Upload queue for files
+
+    Args:
+        cdf_client: Cognite Data Fusion client to use
+        post_upload_function: A function that will be called after each upload. The function will be given one argument:
+            A list of the events that were uploaded.
+        max_queue_size: Maximum size of upload queue. Defaults to no max size.
+        max_upload_interval: Automatically trigger an upload each m seconds when run as a thread (use start/stop
+            methods).
+        trigger_log_level: Log level to log upload triggers to.
+        thread_name: Thread name of uploader thread.
+    """
+
+    def __init__(
+        self,
+        cdf_client: CogniteClient,
+        post_upload_function: Optional[Callable[[List[Event]], None]] = None,
+        max_queue_size: Optional[int] = None,
+        max_upload_interval: Optional[int] = None,
+        trigger_log_level: str = "DEBUG",
+        thread_name: Optional[str] = None,
+        overwrite_existing: bool = False,
+    ):
+        # Super sets post_upload and threshold
+        super().__init__(
+            cdf_client, post_upload_function, max_queue_size, max_upload_interval, trigger_log_level, thread_name
+        )
+
+        self.upload_queue: List[Tuple[FileMetadata, Union[str, PathLike]]] = []
+        self.overwrite_existing = overwrite_existing
+
+    def add_to_upload_queue(self, file_meta: FileMetadata, file_name: Union[str, PathLike] = None) -> None:
+        """
+        Add file to upload queue. The queue will be uploaded if the queue size is larger than the threshold
+        specified in the __init__.
+
+        Args:
+            file_meta: File metadata-object
+            file_name: Path to file to be uploaded.
+                If none, the file object will still be created, but no data is uploaded
+        """
+        with self.lock:
+            self.upload_queue.append((file_meta, file_name))
+            self.upload_queue_size += 1
+
+            self._check_triggers()
+
+    def upload(self) -> None:
+        """
+        Trigger an upload of the queue, clears queue afterwards
+        """
+        if len(self.upload_queue) == 0:
+            return
+
+        with self.lock:
+            self._upload_batch()
+            try:
+                self._post_upload(self.upload_queue)
+            except Exception as e:
+                self.logger.error("Error in upload callback: %s", str(e))
+            self.upload_queue.clear()
+            self.upload_queue_size = 0
+
+    @retry(
+        exceptions=(CogniteAPIError, ConnectionError),
+        tries=RETRIES,
+        delay=RETRY_DELAY,
+        max_delay=RETRY_MAX_DELAY,
+        backoff=RETRY_BACKOFF_FACTOR,
+    )
+    def _upload_batch(self):
+        for i, file_meta, file_name in enumerate(self.upload_queue):
+
+            # Upload file
+            file_meta = self.cdf_client.files.upload(file_name, **file_meta.dump(), overwrite=self.overwrite_existing)
+
+            # Update meta-object in queue
+            self.upload_queue[i] = (file_meta, file_name)
+
+    def __enter__(self) -> "FileUploadQueue":
+        """
+        Wraps around start method, for use as context manager
+
+        Returns:
+            self
+        """
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """
+        Wraps around stop method, for use as context manager
+
+        Args:
+            exc_type: Exception type
+            exc_val: Exception value
+            exc_tb: Traceback
+        """
+        self.stop()
+
+    def __len__(self) -> int:
+        """
+        The size of the upload queue
+
+        Returns:
+            Number of events in queue
         """
         return self.upload_queue_size
