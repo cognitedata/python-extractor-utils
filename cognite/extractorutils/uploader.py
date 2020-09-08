@@ -40,6 +40,7 @@ import logging
 import threading
 import time
 from abc import ABC, abstractmethod
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from os import PathLike
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -884,14 +885,22 @@ class FileUploadQueue(AbstractUploadQueue):
         max_delay=RETRY_MAX_DELAY,
         backoff=RETRY_BACKOFF_FACTOR,
     )
+    def _upload_single(self, index, file_name, file_meta):
+
+        # Upload file
+        file_meta = self.cdf_client.files.upload(file_name, **file_meta.dump(), overwrite=self.overwrite_existing)
+
+        # Update meta-object in queue
+        with self.lock:
+            self.upload_queue[index] = (file_meta, file_name)
+
     def _upload_batch(self):
-        for i, (file_meta, file_name) in enumerate(self.upload_queue):
 
-            # Upload file
-            file_meta = self.cdf_client.files.upload(file_name, **file_meta.dump(), overwrite=self.overwrite_existing)
+        # Concurrently execute file-uploads
 
-            # Update meta-object in queue
-            self.upload_queue[i] = (file_meta, file_name)
+        with ThreadPoolExecutor(self.cdf_client.config.max_workers) as pool:
+            for i, (file_meta, file_name) in enumerate(self.upload_queue):
+                pool.submit(fn=self._upload_single, args=(i, file_name, file_meta))
 
     def __enter__(self) -> "FileUploadQueue":
         """
