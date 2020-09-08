@@ -51,7 +51,7 @@ from retry import retry
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Event, FileMetadata, Sequence, SequenceData, TimeSeries
 from cognite.client.data_classes.raw import Row
-from cognite.client.exceptions import CogniteAPIError, CogniteDuplicatedError, CogniteNotFoundError
+from cognite.client.exceptions import CogniteAPIError, CogniteDuplicatedError, CogniteNotFoundError, CogniteReadTimeout
 
 from ._inner_util import _resolve_log_level
 from .util import EitherId
@@ -257,7 +257,7 @@ class RawUploadQueue(AbstractUploadQueue):
             self.upload_queue_size = 0
 
     @retry(
-        exceptions=(CogniteAPIError, ConnectionError),
+        exceptions=(CogniteAPIError, ConnectionError, CogniteReadTimeout),
         tries=RETRIES,
         delay=RETRY_DELAY,
         max_delay=RETRY_MAX_DELAY,
