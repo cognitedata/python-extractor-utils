@@ -17,8 +17,14 @@ import unittest
 from unittest.mock import patch
 
 from cognite.client import CogniteClient
-from cognite.client.data_classes import Event, Row
-from cognite.extractorutils.uploader import EventUploadQueue, RawUploadQueue, SequenceUploadQueue, TimeSeriesUploadQueue
+from cognite.client.data_classes import Event, FileMetadata, Row
+from cognite.extractorutils.uploader import (
+    EventUploadQueue,
+    FileUploadQueue,
+    RawUploadQueue,
+    SequenceUploadQueue,
+    TimeSeriesUploadQueue,
+)
 
 
 class TestUploadQueue(unittest.TestCase):
@@ -211,3 +217,21 @@ class TestUploadQueue(unittest.TestCase):
         self.assertEqual(post_upload_test["rows"], 2)
 
         queue.stop()
+
+    @patch("cognite.client.CogniteClient")
+    def test_file_uploader(self, MockCogniteClient):
+        client: CogniteClient = MockCogniteClient()
+
+        post_upload_test = {"value": 0}
+
+        def post(x):
+            post_upload_test["value"] += 1
+
+        queue = FileUploadQueue(client, max_upload_interval=2, post_upload_function=post)
+        queue.start()
+
+        queue.add_to_upload_queue(FileMetadata(name="hello.txt"), None)
+
+        time.sleep(2.1)
+
+        self.assertEqual(post_upload_test["value"], 1)
