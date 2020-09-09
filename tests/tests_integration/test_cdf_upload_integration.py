@@ -14,6 +14,7 @@
 
 import os
 import random
+import string
 import time
 import unittest
 from datetime import datetime, timezone
@@ -153,3 +154,33 @@ class IntegrationTests(unittest.TestCase):
         self.assertListEqual([int(p) for p in recv_points1.value], [p[1] for p in points1])
 
         queue.stop()
+
+    def test_time_series_upload_queue_create_missing(self):
+        id1 = self.time_series1 + "_missing"
+        id2 = self.time_series2 + "_missing"
+
+        self.client.time_series.delete(external_id=[id1, id2], ignore_unknown_ids=True)
+
+        queue = TimeSeriesUploadQueue(cdf_client=self.client, create_missing=True)
+
+        # Create some synthetic data
+        now = int(datetime.now(tz=timezone.utc).timestamp() * 1000)
+        points1 = [(now + i * 107, random.randint(0, 10)) for i in range(10)]
+        points2 = [
+            (now + i * 107, "".join([random.choice(string.printable) for j in range(16)])) for i in range(10, 20)
+        ]
+
+        queue.add_to_upload_queue(external_id=id1, datapoints=points1)
+        queue.add_to_upload_queue(external_id=id2, datapoints=points2)
+
+        queue.upload()
+        time.sleep(3)
+
+        recv_points1 = self.client.datapoints.retrieve(external_id=id1, start="1w-ago", end="now", limit=None)
+        recv_points2 = self.client.datapoints.retrieve(external_id=id2, start="1w-ago", end="now", limit=None)
+
+        self.assertListEqual([int(p) for p in recv_points1.value], [p[1] for p in points1])
+        self.assertListEqual([p for p in recv_points2.value], [p[1] for p in points2])
+
+        queue.stop()
+        self.client.time_series.delete(external_id=[id1, id2], ignore_unknown_ids=True)
