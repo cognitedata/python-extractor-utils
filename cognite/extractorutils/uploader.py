@@ -405,9 +405,16 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
             if self.create_missing:
                 # Get the time series that can be created
                 create_these = [id_dict["externalId"] for id_dict in ex.not_found if "externalId" in id_dict]
+                is_string = {
+                    ts_dict["externalId"]: isinstance(ts_dict["datapoints"][0][1], str)
+                    for ts_dict in upload_this
+                    if ts_dict["externalId"] in create_these
+                }
 
                 self.logger.info(f"Creating {len(create_these)} time series")
-                self.cdf_client.time_series.create([TimeSeries(external_id=i) for i in create_these])
+                self.cdf_client.time_series.create(
+                    [TimeSeries(external_id=i, is_string=is_string[i]) for i in create_these]
+                )
 
                 retry_these.extend([EitherId(external_id=i) for i in create_these])
 
