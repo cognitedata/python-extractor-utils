@@ -25,7 +25,7 @@ known_third_party = ["arrow", "dacite", "prometheus_client", "psutil", "pytest",
 
 [tool.poetry.dependencies]
 python = "^3.6.1"
-cognite-sdk = ">=1.4.8<3.0.0"
+cognite-sdk = "^2.2.2"
 prometheus-client = ">0.7.0<=1.0.0"
 arrow = ">0.15.0<=1.0.0"
 pyyaml = "^5.3.0"
