@@ -221,7 +221,7 @@ class TestUploadQueue(unittest.TestCase):
     @patch("cognite.client.CogniteClient")
     def test_file_uploader(self, MockCogniteClient):
         client: CogniteClient = MockCogniteClient()
-        client.config.max_workers = 10
+        client.config.max_workers = 5
 
         post_upload_test = {"value": 0}
 
