@@ -175,7 +175,8 @@ class TestConfigtoolsMethods(unittest.TestCase):
             tenant: foo
             client_id: cid
             secret: scrt
-            scope: scp
+            scopes: 
+                - scp
             min_ttl: 40
         project: tenant-name
         external-id-prefix: "test_"
