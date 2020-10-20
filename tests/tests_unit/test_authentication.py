@@ -18,7 +18,7 @@ import pytest
 
 from cognite.extractorutils.authentication import Authenticator, AuthenticatorConfig
 
-config = AuthenticatorConfig(tenant="tid", client_id="cid", scope="scp", secret="scrt",)
+config = AuthenticatorConfig(tenant="tid", client_id="cid", scopes=["scp"], secret="scrt",)
 
 
 def token(expires_in: int, t: str):
