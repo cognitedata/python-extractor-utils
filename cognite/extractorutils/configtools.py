@@ -32,30 +32,11 @@ from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset
 
 from .authentication import Authenticator, AuthenticatorConfig
+from .exceptions import InvalidConfigError
 from .metrics import AbstractMetricsPusher, CognitePusher, PrometheusPusher
 from .statestore import AbstractStateStore, LocalStateStore, NoStateStore, RawStateStore
 
 _logger = logging.getLogger(__name__)
-
-
-class InvalidConfigError(Exception):
-    """
-    Exception thrown from ``load_yaml`` if config file is invalid. This can be due to
-
-      * Missing fields
-      * Incompatible types
-      * Unkown fields
-    """
-
-    def __init__(self, message: str):
-        super(InvalidConfigError, self).__init__()
-        self.message = message
-
-    def __str__(self) -> str:
-        return f"Invalid config: {self.message}"
-
-    def __repr__(self) -> str:
-        return self.__str__()
 
 
 def _to_snake_case(dictionary: Dict[str, Any], case_style: str) -> Dict[str, Any]:
