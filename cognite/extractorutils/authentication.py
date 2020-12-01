@@ -38,12 +38,12 @@ class AuthenticatorConfig:
     Configuration parameters for an OIDC flow
     """
 
-    tenant: Optional[str]
-    token_url: Optional[str]
     client_id: str
     scopes: List[str]
     secret: str
-    resource: Optional[str]
+    tenant: Optional[str] = None
+    token_url: Optional[str] = None
+    resource: Optional[str] = None
     authority: str = "https://login.microsoftonline.com/"
     min_ttl: float = 30  # minimum time to live: refresh token ahead of expiration
 
