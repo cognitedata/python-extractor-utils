@@ -15,7 +15,8 @@
 import unittest
 
 from cognite.client import CogniteClient
-from cognite.extractorutils.configtools import BaseConfig, CogniteConfig, InvalidConfigError, _to_snake_case, load_yaml
+from cognite.extractorutils.configtools import BaseConfig, CogniteConfig, _to_snake_case, load_yaml
+from cognite.extractorutils.exceptions import InvalidConfigError
 
 
 class TestConfigtoolsMethods(unittest.TestCase):

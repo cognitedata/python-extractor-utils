@@ -22,10 +22,12 @@ class from ``cognite.extractorutils.configtools`` your extractor will be configu
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from urllib.parse import urljoin
 
 import requests
+
+from .exceptions import InvalidConfigError
 
 _logger = logging.getLogger(__name__)
 
@@ -36,10 +38,12 @@ class AuthenticatorConfig:
     Configuration parameters for an OIDC flow
     """
 
-    tenant: str
     client_id: str
     scopes: List[str]
     secret: str
+    tenant: Optional[str] = None
+    token_url: Optional[str] = None
+    resource: Optional[str] = None
     authority: str = "https://login.microsoftonline.com/"
     min_ttl: float = 30  # minimum time to live: refresh token ahead of expiration
 
@@ -57,6 +61,16 @@ class Authenticator:
         self._request_time = None
         self._response = None
 
+        if config.token_url:
+            self._token_url = config.token_url
+
+        elif config.tenant:
+            base_url = urljoin(self._config.authority, self._config.tenant)
+            self._token_url = f"{base_url}/oauth2/v2.0/token"
+
+        else:
+            raise InvalidConfigError("No AAD tenant or token url defined")
+
     def _request(self) -> Dict[str, Any]:
         """
         Get OAuth2 token from AAD.
@@ -71,9 +85,11 @@ class Authenticator:
             "grant_type": "client_credentials",
             "scope": " ".join(self._config.scopes),
         }
-        base_url = urljoin(self._config.authority, self._config.tenant)
 
-        url = f"{base_url}/oauth2/v2.0/token"
+        if self._config.resource:
+            body["resource"] = self._config.resource
+
+        url = f"{self._token_url}/oauth2/v2.0/token"
         r = requests.post(url, data=body)
         _logger.debug("Request AAD token: %d %s", r.status_code, r.reason)
         return r.json()
