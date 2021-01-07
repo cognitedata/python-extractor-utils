@@ -893,21 +893,18 @@ class FileUploadQueue(AbstractUploadQueue):
         backoff=RETRY_BACKOFF_FACTOR,
     )
     def _upload_single(self, index, file_name, file_meta):
-
         # Upload file
-        file_meta = self.cdf_client.files.upload(file_name, **file_meta.dump(), overwrite=self.overwrite_existing)
+        file_meta = self.cdf_client.files.upload(file_name, overwrite=self.overwrite_existing, **file_meta.dump())
 
         # Update meta-object in queue
-        with self.lock:
-            self.upload_queue[index] = (file_meta, file_name)
+        self.upload_queue[index] = (file_meta, file_name)
 
     def _upload_batch(self):
-
         # Concurrently execute file-uploads
 
         with ThreadPoolExecutor(self.cdf_client.config.max_workers) as pool:
             for i, (file_meta, file_name) in enumerate(self.upload_queue):
-                pool.submit(fn=self._upload_single, args=(i, file_name, file_meta))
+                pool.submit(self._upload_single, i, file_name, file_meta)
 
     def __enter__(self) -> "FileUploadQueue":
         """
