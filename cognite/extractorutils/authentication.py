@@ -89,8 +89,7 @@ class Authenticator:
         if self._config.resource:
             body["resource"] = self._config.resource
 
-        url = f"{self._token_url}/oauth2/v2.0/token"
-        r = requests.post(url, data=body)
+        r = requests.post(self._token_url, data=body)
         _logger.debug("Request AAD token: %d %s", r.status_code, r.reason)
         return r.json()
 
