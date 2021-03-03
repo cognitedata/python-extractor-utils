@@ -33,6 +33,7 @@ class IntegrationTests(unittest.TestCase):
 
     time_series1: str = f"util_integration_ts_test_1-{test_id}"
     time_series2: str = f"util_integration_ts_test_2-{test_id}"
+    time_series3: str = f"util_integration_ts_test_3-{test_id}"
 
     def setUp(self):
         self.client = CogniteClient(client_name="extractor-utils-integration-tests",)
@@ -158,6 +159,7 @@ class IntegrationTests(unittest.TestCase):
     def test_time_series_upload_queue_create_missing(self):
         id1 = self.time_series1 + "_missing"
         id2 = self.time_series2 + "_missing"
+        id3 = self.time_series3 + "_missing"
 
         self.client.time_series.delete(external_id=[id1, id2], ignore_unknown_ids=True)
 
@@ -169,18 +171,22 @@ class IntegrationTests(unittest.TestCase):
         points2 = [
             (now + i * 107, "".join([random.choice(string.printable) for j in range(16)])) for i in range(10, 20)
         ]
+        points3 = [{"timestamp": now + i * 107, "value": random.randint(0, 10)} for i in range(10)]
 
         queue.add_to_upload_queue(external_id=id1, datapoints=points1)
         queue.add_to_upload_queue(external_id=id2, datapoints=points2)
+        queue.add_to_upload_queue(external_id=id3, datapoints=points3)
 
         queue.upload()
         time.sleep(3)
 
         recv_points1 = self.client.datapoints.retrieve(external_id=id1, start="1w-ago", end="now", limit=None)
         recv_points2 = self.client.datapoints.retrieve(external_id=id2, start="1w-ago", end="now", limit=None)
+        recv_points3 = self.client.datapoints.retrieve(external_id=id3, start="1w-ago", end="now", limit=None)
 
         self.assertListEqual([int(p) for p in recv_points1.value], [p[1] for p in points1])
         self.assertListEqual([p for p in recv_points2.value], [p[1] for p in points2])
+        self.assertListEqual([int(p) for p in recv_points3.value], [p["value"] for p in points3])
 
         queue.stop()
-        self.client.time_series.delete(external_id=[id1, id2], ignore_unknown_ids=True)
+        self.client.time_series.delete(external_id=[id1, id2, id3], ignore_unknown_ids=True)
