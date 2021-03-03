@@ -298,6 +298,21 @@ class RawUploadQueue(AbstractUploadQueue):
         return self.upload_queue_size
 
 
+def default_time_series_factory(external_id: str, datapoints: DataPointList) -> TimeSeries:
+    """
+    Default time series factory used when create_missing in a TimeSeriesUploadQueue is given as a boolean.
+
+    Args:
+        external_id: External ID of time series to create
+        datapoints: The list of datapoints that were tried to be inserted
+
+    Returns:
+        A TimeSeries object with external_id set, and the is_string automatically detected
+    """
+    is_string = isinstance(datapoints[0][1], str)
+    return TimeSeries(external_id=external_id, is_string=is_string)
+
+
 class TimeSeriesUploadQueue(AbstractUploadQueue):
     """
     Upload queue for time series
@@ -312,7 +327,9 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
             methods).
         trigger_log_level: Log level to log upload triggers to.
         thread_name: Thread name of uploader thread.
-        create_missing: Create missing time series if possible (ie, if external id is used)
+        create_missing: Create missing time series if possible (ie, if external id is used). Either given as a boolean
+            (True would auto-create a time series with nothing but an external ID), or as a factory function taking an
+            external ID and a list of datapoints about to be inserted and returning a TimeSeries object.
     """
 
     def __init__(
@@ -323,13 +340,19 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         max_upload_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
-        create_missing: bool = False,
+        create_missing: Union[Callable[[str, DataPointList], TimeSeries], bool] = False,
     ):
         # Super sets post_upload and threshold
         super().__init__(
             cdf_client, post_upload_function, max_queue_size, max_upload_interval, trigger_log_level, thread_name
         )
-        self.create_missing = create_missing
+
+        if isinstance(create_missing, bool):
+            self.create_missing = create_missing
+            self.missing_factory = default_time_series_factory
+        else:
+            self.create_missing = True
+            self.missing_factory = create_missing
 
         self.upload_queue: Dict[EitherId, DataPointList] = dict()
 
@@ -404,24 +427,27 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
 
             if self.create_missing:
                 # Get the time series that can be created
-                create_these = [id_dict["externalId"] for id_dict in ex.not_found if "externalId" in id_dict]
-                is_string = {
-                    ts_dict["externalId"]: isinstance(ts_dict["datapoints"][0][1], str)
+                create_these_ids = [id_dict["externalId"] for id_dict in ex.not_found if "externalId" in id_dict]
+                datapoints_lists: Dict[str, DataPointList] = {
+                    ts_dict["externalId"]: ts_dict["datapoints"]
                     for ts_dict in upload_this
-                    if ts_dict["externalId"] in create_these
+                    if ts_dict["externalId"] in create_these_ids
                 }
 
-                self.logger.info(f"Creating {len(create_these)} time series")
+                self.logger.info(f"Creating {len(create_these_ids)} time series")
                 self.cdf_client.time_series.create(
-                    [TimeSeries(external_id=i, is_string=is_string[i]) for i in create_these]
+                    [
+                        self.missing_factory(external_id, datapoints_lists[external_id])
+                        for external_id in create_these_ids
+                    ]
                 )
 
-                retry_these.extend([EitherId(external_id=i) for i in create_these])
+                retry_these.extend([EitherId(external_id=i) for i in create_these_ids])
 
-                if len(ex.not_found) != len(create_these):
+                if len(ex.not_found) != len(create_these_ids):
                     missing = [id_dict for id_dict in ex.not_found if id_dict.get("externalId") not in retry_these]
                     self.logger.error(
-                        f"{len(ex.not_found) - len(create_these)} time series not found, and could not be created automatically:\n"
+                        f"{len(ex.not_found) - len(create_these_ids)} time series not found, and could not be created automatically:\n"
                         + str(missing)
                         + "\nData will be dropped"
                     )
