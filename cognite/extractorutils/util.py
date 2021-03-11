@@ -60,7 +60,7 @@ def set_event_on_interrupt(stop_event: Event) -> None:
 
     def sigint_handler(sig, frame):
         logger = logging.getLogger(__name__)
-        logger.warning("Interrupt signal received, stopping extractor gracefully")
+        logger.warning("Interrupt signal received, cancelation_token extractor gracefully")
         stop_event.set()
         logger.info("Waiting for threads to complete")
 

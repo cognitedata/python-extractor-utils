@@ -39,16 +39,15 @@ import threading
 from abc import ABC, abstractmethod
 from time import sleep
 from typing import Any, Callable, Dict, List, Optional, T, Tuple, Type, Union
-
+from threading import Event
 import arrow
 import psutil
-from prometheus_client import Gauge, Info, Metric
-from prometheus_client.core import REGISTRY
-from prometheus_client.exposition import basic_auth_handler, delete_from_gateway, pushadd_to_gateway
-
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset, TimeSeries
 from cognite.client.exceptions import CogniteDuplicatedError
+from prometheus_client import Gauge, Info, Metric
+from prometheus_client.core import REGISTRY
+from prometheus_client.exposition import basic_auth_handler, delete_from_gateway, pushadd_to_gateway
 
 from .util import ensure_time_series
 
@@ -157,15 +156,17 @@ class AbstractMetricsPusher(ABC):
     Args:
         push_interval: Seconds between each upload call
         thread_name: Name of thread to start. If omitted, a standard name such as Thread-4 will be generated.
+        cancelation_token: Event object to be used as a thread cancelation event
     """
 
-    def __init__(self, push_interval: Optional[int] = None, thread_name: Optional[str] = None):
+    def __init__(self, push_interval: Optional[int] = None, thread_name: Optional[str] = None,
+                 cancelation_token: Event = Event()):
         self.push_interval = push_interval
         self.thread_name = thread_name
 
         self.thread: Optional[threading.Thread] = None
         self.thread_name = thread_name
-        self.stopping = threading.Event()
+        self.cancelation_token = cancelation_token
 
         self.logger = logging.getLogger(__name__)
 
@@ -180,15 +181,21 @@ class AbstractMetricsPusher(ABC):
         """
         Run push loop.
         """
-        while not self.stopping.is_set():
+        while not self.cancelation_token.is_set():
             self._push_to_server()
-            self.stopping.wait(self.push_interval)
+            self.cancelation_token.wait(self.push_interval)
 
-    def start(self) -> None:
+    def start(self, cancelation_token: Optional[Event] = None) -> None:
         """
         Starts a thread that pushes the default registry to the configured gateway at certain intervals.
+
+        Args:
+        cancelation_token: Event object to be used as a thread cancelation event
         """
-        self.stopping.clear()
+        self.cancelation_token.clear()
+        if cancelation_token:
+            self.cancelation_token = cancelation_token
+
         self.thread = threading.Thread(target=self._run, daemon=True, name=self.thread_name)
         self.thread.start()
 
@@ -198,7 +205,7 @@ class AbstractMetricsPusher(ABC):
         """
         # Make sure everything is pushed
         self._push_to_server()
-        self.stopping.set()
+        self.cancelation_token.set()
 
     def __enter__(self) -> "AbstractMetricsPusher":
         """
@@ -233,18 +240,20 @@ class PrometheusPusher(AbstractMetricsPusher):
         url: URL (with portnum) of push gateway
         push_interval: Seconds between each upload call
         thread_name: Name of thread to start. If omitted, a standard name such as Thread-4 will be generated.
+        cancelation_token: Event object to be used as a thread cancelation event
     """
 
     def __init__(
-        self,
-        job_name: str,
-        url: str,
-        push_interval: int,
-        username: Optional[str] = None,
-        password: Optional[str] = None,
-        thread_name: Optional[str] = None,
+            self,
+            job_name: str,
+            url: str,
+            push_interval: int,
+            username: Optional[str] = None,
+            password: Optional[str] = None,
+            thread_name: Optional[str] = None,
+            cancelation_token: Optional[Event] = None,
     ):
-        super(PrometheusPusher, self).__init__(push_interval, thread_name)
+        super(PrometheusPusher, self).__init__(push_interval, thread_name, cancelation_token)
 
         self.username = username
         self.job_name = job_name
@@ -306,17 +315,19 @@ class CognitePusher(AbstractMetricsPusher):
         push_interval: Seconds between each upload call
         asset: Optional contextualization.
         thread_name: Name of thread to start. If omitted, a standard name such as Thread-4 will be generated.
+        cancelation_token: Event object to be used as a thread cancelation event
     """
 
     def __init__(
-        self,
-        cdf_client: CogniteClient,
-        external_id_prefix: str,
-        push_interval: int,
-        asset: Optional[Asset] = None,
-        thread_name: Optional[str] = None,
+            self,
+            cdf_client: CogniteClient,
+            external_id_prefix: str,
+            push_interval: int,
+            asset: Optional[Asset] = None,
+            thread_name: Optional[str] = None,
+            cancelation_token: Optional[Event] = None,
     ):
-        super(CognitePusher, self).__init__(push_interval, thread_name)
+        super(CognitePusher, self).__init__(push_interval, thread_name, cancelation_token)
 
         self.cdf_client = cdf_client
         self.asset = asset
