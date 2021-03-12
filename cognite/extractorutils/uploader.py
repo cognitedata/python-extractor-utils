@@ -400,6 +400,25 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
 
         self.upload_queue: Dict[EitherId, DataPointList] = dict()
 
+        self.points_queued = Counter(
+            "cognite_timeseries_uploader_points_queued", "Total number of datapoints queued", labelnames=["destination"]
+        )
+
+        self.points_written = Counter(
+            "cognite_timeseries_uploader_points_written",
+            "Total number of datapoints written",
+            labelnames=["destination"],
+        )
+
+        self.queue_size = Gauge("cognite_timeseries_uploader_queue_size", "Internal queue size")
+
+        self.latency = Histogram(
+            "cognite_timeseries_uploader_latency",
+            "Distribution of times in seconds records spend in the queue",
+            labelnames=["destination"],
+        )
+        self.latency_zero_point = arrow.utcnow()
+
     def add_to_upload_queue(self, *, id: int = None, external_id: str = None, datapoints: DataPointList = []) -> None:
         """
         Add data points to upload queue. The queue will be uploaded if the queue size is larger than the threshold
@@ -411,13 +430,20 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
             datapoints: List of data points to add
         """
         either_id = EitherId(id=id, external_id=external_id)
+        _labels = [str(either_id.content())]
 
         with self.lock:
             if either_id not in self.upload_queue:
                 self.upload_queue[either_id] = []
 
+            if self.upload_queue_size == 0:
+                self.latency_zero_point = arrow.utcnow()
+
             self.upload_queue[either_id].extend(datapoints)
+            self.points_queued.labels(_labels).inc(len(datapoints))
+            self.latency.labels(_labels).observe((arrow.utcnow() - self.latency_zero_point).total_seconds())
             self.upload_queue_size += len(datapoints)
+            self.queue_size.set(self.upload_queue_size)
 
             self._check_triggers()
 
@@ -437,6 +463,9 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
                 ]
             )
 
+            for either_id, datapoints in self.upload_queue.items():
+                self.points_written.labels([str(either_id.content())]).inc(len(datapoints))
+
             try:
                 self._post_upload(upload_this)
             except Exception as e:
@@ -444,6 +473,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
 
             self.upload_queue.clear()
             self.upload_queue_size = 0
+            self.queue_size.set(self.upload_queue_size)
 
     @retry(
         exceptions=(CogniteAPIError, ConnectionError),
@@ -570,6 +600,17 @@ class EventUploadQueue(AbstractUploadQueue):
 
         self.upload_queue: List[Event] = []
 
+        self.events_queued = Counter("cognite_events_uploader_queued", "Total number of events queued")
+
+        self.events_written = Counter("cognite_events_uploader_written", "Total number of events written")
+
+        self.queue_size = Gauge("cognite_events_uploader_queue_size", "Internal queue size")
+
+        self.latency = Histogram(
+            "cognite_events_uploader_latency", "Distribution of times in seconds records spend in the queue"
+        )
+        self.latency_zero_point = arrow.utcnow()
+
     def add_to_upload_queue(self, event: Event) -> None:
         """
         Add event to upload queue. The queue will be uploaded if the queue size is larger than the threshold
@@ -579,8 +620,13 @@ class EventUploadQueue(AbstractUploadQueue):
             event: Event to add
         """
         with self.lock:
+            if self.upload_queue_size == 0:
+                self.latency_zero_point = arrow.utcnow()
+
             self.upload_queue.append(event)
+            self.events_queued.inc()
             self.upload_queue_size += 1
+            self.queue_size.set(self.upload_queue_size)
 
             self._check_triggers()
 
@@ -593,12 +639,17 @@ class EventUploadQueue(AbstractUploadQueue):
 
         with self.lock:
             self._upload_batch()
+
+            self.latency.observe((arrow.utcnow() - self.latency_zero_point).total_seconds())
+            self.events_written.inc(self.upload_queue_size)
+
             try:
                 self._post_upload(self.upload_queue)
             except Exception as e:
                 self.logger.error("Error in upload callback: %s", str(e))
             self.upload_queue.clear()
             self.upload_queue_size = 0
+            self.queue_size.set(self.upload_queue_size)
 
     @retry(
         exceptions=(CogniteAPIError, ConnectionError),
@@ -923,6 +974,17 @@ class FileUploadQueue(AbstractUploadQueue):
         self.upload_queue: List[Tuple[FileMetadata, Union[str, PathLike]]] = []
         self.overwrite_existing = overwrite_existing
 
+        self.files_queued = Counter("cognite_files_uploader_queued", "Total number of files queued")
+
+        self.files_written = Counter("cognite_files_uploader_written", "Total number of files written")
+
+        self.queue_size = Gauge("cognite_events_uploader_queue_size", "Internal queue size")
+
+        self.latency = Histogram(
+            "cognite_events_uploader_latency", "Distribution of times in seconds records spend in the queue"
+        )
+        self.latency_zero_point = arrow.utcnow()
+
     def add_to_upload_queue(self, file_meta: FileMetadata, file_name: Union[str, PathLike] = None) -> None:
         """
         Add file to upload queue. The queue will be uploaded if the queue size is larger than the threshold
@@ -934,8 +996,13 @@ class FileUploadQueue(AbstractUploadQueue):
                 If none, the file object will still be created, but no data is uploaded
         """
         with self.lock:
+            if self.upload_queue_size == 0:
+                self.latency_zero_point = arrow.utcnow()
+
             self.upload_queue.append((file_meta, file_name))
             self.upload_queue_size += 1
+            self.files_queued.inc()
+            self.queue_size.set(self.upload_queue_size)
 
             self._check_triggers()
 
@@ -948,12 +1015,17 @@ class FileUploadQueue(AbstractUploadQueue):
 
         with self.lock:
             self._upload_batch()
+
+            self.latency.observe((arrow.utcnow() - self.latency_zero_point).total_seconds())
+            self.files_written.inc(self.upload_queue_size)
+
             try:
                 self._post_upload(self.upload_queue)
             except Exception as e:
                 self.logger.error("Error in upload callback: %s", str(e))
             self.upload_queue.clear()
             self.upload_queue_size = 0
+            self.queue_size.set(self.upload_queue_size)
 
     @retry(
         exceptions=(CogniteAPIError, ConnectionError),
