@@ -37,17 +37,19 @@ import logging
 import os
 import threading
 from abc import ABC, abstractmethod
+from threading import Event
 from time import sleep
 from typing import Any, Callable, Dict, List, Optional, T, Tuple, Type, Union
-from threading import Event
+
 import arrow
 import psutil
-from cognite.client import CogniteClient
-from cognite.client.data_classes import Asset, TimeSeries
-from cognite.client.exceptions import CogniteDuplicatedError
 from prometheus_client import Gauge, Info, Metric
 from prometheus_client.core import REGISTRY
 from prometheus_client.exposition import basic_auth_handler, delete_from_gateway, pushadd_to_gateway
+
+from cognite.client import CogniteClient
+from cognite.client.data_classes import Asset, TimeSeries
+from cognite.client.exceptions import CogniteDuplicatedError
 
 from .util import ensure_time_series
 
@@ -117,6 +119,9 @@ class BaseMetrics:
 
         self.process_num_threads = Gauge(f"{extractor_name}_num_threads", "Number of threads")
         self.process_memory_bytes = Gauge(f"{extractor_name}_memory_bytes", "Memory usage in bytes")
+        self.process_memory_bytes_available = Gauge(
+            f"{extractor_name}_memory_bytes_available", "Memory available in bytes"
+        )
         self.process_cpu_percent = Gauge(f"{extractor_name}_cpu_percent", "CPU usage percent")
 
         self.info = Info(f"{extractor_name}_info", "Information about running extractor")
@@ -131,11 +136,13 @@ class BaseMetrics:
         """
         Collect values for process metrics
         """
+        total_memory_available = psutil.virtual_memory().total
         while True:
             self.process_num_threads.set(self._process.num_threads())
             self.process_memory_bytes.set(self._process.memory_info().rss)
+            self.process_memory_bytes_available.set(total_memory_available)
             self.process_cpu_percent.set(self._process.cpu_percent())
-
+            self._process.connections()
             sleep(self.process_scrape_interval)
 
     def _start_proc_collector(self) -> None:
@@ -159,8 +166,9 @@ class AbstractMetricsPusher(ABC):
         cancelation_token: Event object to be used as a thread cancelation event
     """
 
-    def __init__(self, push_interval: Optional[int] = None, thread_name: Optional[str] = None,
-                 cancelation_token: Event = Event()):
+    def __init__(
+        self, push_interval: Optional[int] = None, thread_name: Optional[str] = None, cancelation_token: Event = Event()
+    ):
         self.push_interval = push_interval
         self.thread_name = thread_name
 
@@ -185,17 +193,12 @@ class AbstractMetricsPusher(ABC):
             self._push_to_server()
             self.cancelation_token.wait(self.push_interval)
 
-    def start(self, cancelation_token: Optional[Event] = None) -> None:
+    def start(self) -> None:
         """
         Starts a thread that pushes the default registry to the configured gateway at certain intervals.
 
-        Args:
-        cancelation_token: Event object to be used as a thread cancelation event
         """
         self.cancelation_token.clear()
-        if cancelation_token:
-            self.cancelation_token = cancelation_token
-
         self.thread = threading.Thread(target=self._run, daemon=True, name=self.thread_name)
         self.thread.start()
 
@@ -244,14 +247,14 @@ class PrometheusPusher(AbstractMetricsPusher):
     """
 
     def __init__(
-            self,
-            job_name: str,
-            url: str,
-            push_interval: int,
-            username: Optional[str] = None,
-            password: Optional[str] = None,
-            thread_name: Optional[str] = None,
-            cancelation_token: Optional[Event] = None,
+        self,
+        job_name: str,
+        url: str,
+        push_interval: int,
+        username: Optional[str] = None,
+        password: Optional[str] = None,
+        thread_name: Optional[str] = None,
+        cancelation_token: Event = Event(),
     ):
         super(PrometheusPusher, self).__init__(push_interval, thread_name, cancelation_token)
 
@@ -319,13 +322,13 @@ class CognitePusher(AbstractMetricsPusher):
     """
 
     def __init__(
-            self,
-            cdf_client: CogniteClient,
-            external_id_prefix: str,
-            push_interval: int,
-            asset: Optional[Asset] = None,
-            thread_name: Optional[str] = None,
-            cancelation_token: Optional[Event] = None,
+        self,
+        cdf_client: CogniteClient,
+        external_id_prefix: str,
+        push_interval: int,
+        asset: Optional[Asset] = None,
+        thread_name: Optional[str] = None,
+        cancelation_token: Event = Event(),
     ):
         super(CognitePusher, self).__init__(push_interval, thread_name, cancelation_token)
 

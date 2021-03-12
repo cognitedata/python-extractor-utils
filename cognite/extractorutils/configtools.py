@@ -260,7 +260,7 @@ class MetricsConfig:
     push_gateways: Optional[List[_PushGatewayConfig]]
     cognite: Optional[_CogniteMetricsConfig]
 
-    def start_pushers(self, cdf_client: CogniteClient, cancelation_token: Optional[Event] = None) -> None:
+    def start_pushers(self, cdf_client: CogniteClient, cancelation_token: Event = Event()) -> None:
         self._pushers: List[AbstractMetricsPusher] = []
         self._clear_on_stop: Dict[PrometheusPusher, int] = {}
 

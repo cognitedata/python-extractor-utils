@@ -41,10 +41,14 @@ import threading
 import time
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from datetime import datetime
 from os import PathLike
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
+import arrow
+from arrow import Arrow
+from prometheus_client import Counter, Gauge, Histogram
 from requests.exceptions import ConnectionError
 from retry import retry
 
@@ -180,6 +184,12 @@ class AbstractUploadQueue(ABC):
             self.upload()
 
 
+@dataclass(frozen=True)
+class TimestampedObject:
+    payload: Any
+    created: Arrow
+
+
 class RawUploadQueue(AbstractUploadQueue):
     """
     Upload queue for RAW
@@ -208,7 +218,27 @@ class RawUploadQueue(AbstractUploadQueue):
         super().__init__(
             cdf_client, post_upload_function, max_queue_size, max_upload_interval, trigger_log_level, thread_name
         )
-        self.upload_queue: Dict[str, Dict[str, List[Row]]] = dict()
+        self.upload_queue: Dict[str, Dict[str, List[TimestampedObject]]] = dict()
+
+        self.rows_queued = Counter(
+            "cognite_raw_uploader_rows_queued", "Total number of records queued", labelnames=["destination"]
+        )
+
+        self.rows_written = Counter(
+            "cognite_raw_uploader_rows_written", "Total number of records written", labelnames=["destination"]
+        )
+
+        self.rows_duplicates = Counter(
+            "cognite_raw_uploader_rows_duplicates", "Total number of duplicates found", labelnames=["destination"]
+        )
+
+        self.queue_size = Gauge("cognite_raw_uploader_queue_size", "Internal queue size")
+
+        self.latency = Histogram(
+            "cognite_raw_uploader_latency",
+            "Distribution of times in seconds records spend in the queue",
+            labelnames=["destination"],
+        )
 
     def add_to_upload_queue(self, database: str, table: str, raw_row: Row) -> None:
         """
@@ -228,8 +258,10 @@ class RawUploadQueue(AbstractUploadQueue):
                 self.upload_queue[database][table] = []
 
             # Append row to queue
-            self.upload_queue[database][table].append(raw_row)
+            self.upload_queue[database][table].append(TimestampedObject(payload=raw_row, created=Arrow.utcnow()))
             self.upload_queue_size += 1
+            self.rows_queued.labels(f"{database}:{table}").inc()
+            self.queue_size.set(self.upload_queue_size)
 
             self._check_triggers()
 
@@ -240,11 +272,18 @@ class RawUploadQueue(AbstractUploadQueue):
         with self.lock:
             for database, tables in self.upload_queue.items():
                 for table, rows in tables.items():
+                    _labels = [f"{database}:{table}"]
+
                     # Deduplicate
                     # In case of duplicate keys, the first key is preserved, and the last value is preserved.
-                    patch: Dict[str, Row] = {r.key: r for r in rows}
+                    patch: Dict[str, Row] = {r.payload.key: r.payload for r in rows}
+                    self.rows_duplicates.labels(_labels).inc(len(rows) - len(patch))
 
                     self._upload_batch(database=database, table=table, patch=list(patch.values()))
+                    self.rows_written.labels(_labels).inc(len(patch))
+                    _written: Arrow = arrow.utcnow()
+                    for r in rows:
+                        self.latency.labels(_labels).observe((_written - r.created).total_seconds())
 
                     # Perform post-upload logic if applicable
                     try:
@@ -255,6 +294,7 @@ class RawUploadQueue(AbstractUploadQueue):
             self.upload_queue.clear()
             self.logger.info(f"Uploaded {self.upload_queue_size} rows in total")
             self.upload_queue_size = 0
+            self.queue_size.set(self.upload_queue_size)
 
     @retry(
         exceptions=(CogniteAPIError, ConnectionError, CogniteReadTimeout),
