@@ -142,7 +142,7 @@ class BaseMetrics:
             self.process_memory_bytes.set(self._process.memory_info().rss)
             self.process_memory_bytes_available.set(total_memory_available)
             self.process_cpu_percent.set(self._process.cpu_percent())
-            self._process.connections()
+
             sleep(self.process_scrape_interval)
 
     def _start_proc_collector(self) -> None:
