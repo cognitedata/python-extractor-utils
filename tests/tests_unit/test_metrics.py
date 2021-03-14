@@ -166,10 +166,9 @@ class TestCognitePusher(unittest.TestCase):
         pusher._push_to_server()
 
         self.client.datapoints.insert_multiple.assert_called_once()
-        args = self.client.datapoints.insert_multiple.call_args_list[0][0][0][0]
+        args = self.client.datapoints.insert_multiple.call_args_list[0][0][0][-1]
 
         timestamp = int(arrow.get().float_timestamp * 1000)
-
         self.assertEqual(args["externalId"], "pre_gauge")
         self.assertLess(abs(timestamp - args["datapoints"][0][0]), 100)  # less than 100 ms
         self.assertAlmostEqual(args["datapoints"][0][1], 5)
@@ -182,6 +181,12 @@ class MyClass:
     def __init__(self):
         global my_class_counter
         my_class_counter += 1
+
+
+class MyBettrerClass:
+    def __init__(self, value):
+        global my_class_counter
+        my_class_counter += value
 
 
 class TestMetricUtils(unittest.TestCase):
@@ -200,3 +205,7 @@ class TestMetricUtils(unittest.TestCase):
         self.assertEqual(my_class_counter, 1)
         self.assertIsInstance(b, MyClass)
         self.assertIs(a, b)
+
+        c = safe_get(MyBettrerClass, 5)
+        self.assertEqual(my_class_counter, 6)
+        self.assertIsInstance(c, MyBettrerClass)

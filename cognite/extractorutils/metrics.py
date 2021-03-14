@@ -56,7 +56,7 @@ from .util import ensure_time_series
 _metrics_singularities = {}
 
 
-def safe_get(cls: Type[T]) -> T:
+def safe_get(cls: Type[T], *args, **kwargs) -> T:
     """
     A factory for instances of metrics collections.
 
@@ -81,7 +81,7 @@ def safe_get(cls: Type[T]) -> T:
     global _metrics_singularities
 
     if cls not in _metrics_singularities:
-        _metrics_singularities[cls] = cls()
+        _metrics_singularities[cls] = cls(*args, **kwargs)
 
     return _metrics_singularities[cls]
 

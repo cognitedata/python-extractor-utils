@@ -154,13 +154,15 @@ class AbstractUploadQueue(ABC):
         """
         Internal run method for upload thread
         """
-        while not self.stopping.is_set():
+        while not self.stopping.wait(timeout=self.max_upload_interval):
             try:
                 self.logger.log(self.trigger_log_level, "Triggering scheduled upload")
                 self.upload()
             except Exception as e:
                 self.logger.error("Unexpected error while uploading: %s. Skipping this upload.", str(e))
-            time.sleep(self.max_upload_interval)
+
+        # trigger stop event explicitly to drain the queue
+        self.stop(ensure_upload=True)
 
     def start(self) -> None:
         """
@@ -188,6 +190,75 @@ class AbstractUploadQueue(ABC):
 class TimestampedObject:
     payload: Any
     created: Arrow
+
+
+raw_uploader_rows_queued = Counter(
+    "cognite_raw_uploader_rows_queued", "Total number of records queued", labelnames=["destination"]
+)
+raw_uploader_rows_written = Counter(
+    "cognite_raw_uploader_rows_written", "Total number of records written", labelnames=["destination"]
+)
+raw_uploader_rows_duplicates = Counter(
+    "cognite_raw_uploader_rows_duplicates", "Total number of duplicates found", labelnames=["destination"]
+)
+raw_uploader_queue_size = Gauge("cognite_raw_uploader_queue_size", "Internal queue size")
+raw_uploader_latency = Histogram(
+    "cognite_raw_uploader_latency",
+    "Distribution of times in seconds records spend in the queue",
+    labelnames=["destination"],
+)
+
+timeseries_uploader_points_queued = Counter(
+    "cognite_timeseries_uploader_points_queued", "Total number of datapoints queued", labelnames=["destination"]
+)
+
+timeseries_uploader_points_written = Counter(
+    "cognite_timeseries_uploader_points_written", "Total number of datapoints written", labelnames=["destination"],
+)
+
+timeseries_uploader_queue_size = Gauge("cognite_timeseries_uploader_queue_size", "Internal queue size")
+
+timeseries_uploader_latency = Histogram(
+    "cognite_timeseries_uploader_latency",
+    "Distribution of times in seconds records spend in the queue",
+    labelnames=["destination"],
+)
+
+sequences_uploader_points_queued = Counter(
+    "cognite_sequences_uploader_points_queued", "Total number of sequences queued", labelnames=["destination"]
+)
+
+sequences_uploader_points_written = Counter(
+    "cognite_sequences_uploader_points_written", "Total number of sequences written", labelnames=["destination"],
+)
+
+sequences_uploader_queue_size = Gauge("cognite_sequences_uploader_queue_size", "Internal queue size")
+
+sequences_uploader_latency = Histogram(
+    "cognite_sequences_uploader_latency",
+    "Distribution of times in seconds records spend in the queue",
+    labelnames=["destination"],
+)
+
+events_uploader_queued = Counter("cognite_events_uploader_queued", "Total number of events queued")
+
+events_uploader_written = Counter("cognite_events_uploader_written", "Total number of events written")
+
+events_uploader_queue_size = Gauge("cognite_events_uploader_queue_size", "Internal queue size")
+
+events_uploader_latency = Histogram(
+    "cognite_events_uploader_latency", "Distribution of times in seconds records spend in the queue"
+)
+
+files_uploader_queued = Counter("cognite_files_uploader_queued", "Total number of files queued")
+
+files_uploader_written = Counter("cognite_files_uploader_written", "Total number of files written")
+
+files_uploader_queue_size = Gauge("cognite_files_uploader_queue_size", "Internal queue size")
+
+files_uploader_latency = Histogram(
+    "cognite_files_uploader_latency", "Distribution of times in seconds records spend in the queue"
+)
 
 
 class RawUploadQueue(AbstractUploadQueue):
@@ -220,25 +291,15 @@ class RawUploadQueue(AbstractUploadQueue):
         )
         self.upload_queue: Dict[str, Dict[str, List[TimestampedObject]]] = dict()
 
-        self.rows_queued = Counter(
-            "cognite_raw_uploader_rows_queued", "Total number of records queued", labelnames=["destination"]
-        )
-
-        self.rows_written = Counter(
-            "cognite_raw_uploader_rows_written", "Total number of records written", labelnames=["destination"]
-        )
-
-        self.rows_duplicates = Counter(
-            "cognite_raw_uploader_rows_duplicates", "Total number of duplicates found", labelnames=["destination"]
-        )
-
-        self.queue_size = Gauge("cognite_raw_uploader_queue_size", "Internal queue size")
-
-        self.latency = Histogram(
-            "cognite_raw_uploader_latency",
-            "Distribution of times in seconds records spend in the queue",
-            labelnames=["destination"],
-        )
+        # It is a hack since Prometheus client registers metrics on object creation, so object has to be created once
+        # Store the reference to a global objects.
+        global raw_uploader_rows_queued, raw_uploader_rows_written, raw_uploader_rows_duplicates
+        global raw_uploader_queue_size, raw_uploader_latency
+        self.rows_queued = raw_uploader_rows_queued
+        self.rows_written = raw_uploader_rows_written
+        self.rows_duplicates = raw_uploader_rows_duplicates
+        self.queue_size = raw_uploader_queue_size
+        self.latency = raw_uploader_latency
 
     def add_to_upload_queue(self, database: str, table: str, raw_row: Row) -> None:
         """
@@ -400,23 +461,12 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
 
         self.upload_queue: Dict[EitherId, DataPointList] = dict()
 
-        self.points_queued = Counter(
-            "cognite_timeseries_uploader_points_queued", "Total number of datapoints queued", labelnames=["destination"]
-        )
-
-        self.points_written = Counter(
-            "cognite_timeseries_uploader_points_written",
-            "Total number of datapoints written",
-            labelnames=["destination"],
-        )
-
-        self.queue_size = Gauge("cognite_timeseries_uploader_queue_size", "Internal queue size")
-
-        self.latency = Histogram(
-            "cognite_timeseries_uploader_latency",
-            "Distribution of times in seconds records spend in the queue",
-            labelnames=["destination"],
-        )
+        global timeseries_uploader_points_queued, timeseries_uploader_points_written, timeseries_uploader_queue_size
+        global timeseries_uploader_latency
+        self.points_queued = timeseries_uploader_points_queued
+        self.points_written = timeseries_uploader_points_written
+        self.queue_size = timeseries_uploader_queue_size
+        self.latency = timeseries_uploader_latency
         self.latency_zero_point = arrow.utcnow()
 
     def add_to_upload_queue(self, *, id: int = None, external_id: str = None, datapoints: DataPointList = []) -> None:
@@ -600,15 +650,11 @@ class EventUploadQueue(AbstractUploadQueue):
 
         self.upload_queue: List[Event] = []
 
-        self.events_queued = Counter("cognite_events_uploader_queued", "Total number of events queued")
-
-        self.events_written = Counter("cognite_events_uploader_written", "Total number of events written")
-
-        self.queue_size = Gauge("cognite_events_uploader_queue_size", "Internal queue size")
-
-        self.latency = Histogram(
-            "cognite_events_uploader_latency", "Distribution of times in seconds records spend in the queue"
-        )
+        global events_uploader_queued, events_uploader_written, events_uploader_queue_size, events_uploader_latency
+        self.events_queued = events_uploader_queued
+        self.events_written = events_uploader_written
+        self.queue_size = events_uploader_queue_size
+        self.latency = events_uploader_latency
         self.latency_zero_point = arrow.utcnow()
 
     def add_to_upload_queue(self, event: Event) -> None:
@@ -726,6 +772,13 @@ class SequenceUploadQueue(AbstractUploadQueue):
         self.sequence_dataset_ids: Dict[EitherId, str] = dict()
         self.column_definitions: Dict[EitherId, List[Dict[str, str]]] = dict()
         self.create_missing = create_missing
+        global sequences_uploader_points_queued, sequences_uploader_points_written, sequences_uploader_queue_size
+        global sequences_uploader_latency
+        self.points_queued = sequences_uploader_points_queued
+        self.points_written = sequences_uploader_points_written
+        self.queue_size = sequences_uploader_queue_size
+        self.latency = sequences_uploader_latency
+        self.latency_zero_point = arrow.utcnow()
 
     def set_sequence_metadata(
         self,
@@ -826,6 +879,9 @@ class SequenceUploadQueue(AbstractUploadQueue):
                 self.upload_queue[either_id] = seq
             else:
                 self.upload_queue[either_id] = rows
+            self.upload_queue_size = len(self.upload_queue)
+            self.queue_size.set(self.upload_queue_size)
+            self.points_queued.labels([str(either_id.content())]).inc()
 
     def upload(self) -> None:
         """
@@ -836,15 +892,19 @@ class SequenceUploadQueue(AbstractUploadQueue):
 
         with self.lock:
             for either_id, upload_this in self.upload_queue.items():
+                _labels = [str(either_id.content())]
                 self._upload_single(either_id, upload_this)
+                self.latency.labels(_labels).observe((arrow.utcnow() - self.latency_zero_point).total_seconds())
+                self.points_written.labels(_labels).inc()
 
-        try:
-            self._post_upload([seqdata for _, seqdata in self.upload_queue.items()])
-        except Exception as e:
-            self.logger.error("Error in upload callback: %s", str(e))
+            try:
+                self._post_upload([seqdata for _, seqdata in self.upload_queue.items()])
+            except Exception as e:
+                self.logger.error("Error in upload callback: %s", str(e))
 
-        self.upload_queue.clear()
-        self.upload_queue_size = 0
+            self.upload_queue.clear()
+            self.upload_queue_size = 0
+            self.queue_size.set(self.upload_queue_size)
 
     @retry(
         exceptions=CogniteAPIError,
@@ -974,15 +1034,11 @@ class FileUploadQueue(AbstractUploadQueue):
         self.upload_queue: List[Tuple[FileMetadata, Union[str, PathLike]]] = []
         self.overwrite_existing = overwrite_existing
 
-        self.files_queued = Counter("cognite_files_uploader_queued", "Total number of files queued")
-
-        self.files_written = Counter("cognite_files_uploader_written", "Total number of files written")
-
-        self.queue_size = Gauge("cognite_events_uploader_queue_size", "Internal queue size")
-
-        self.latency = Histogram(
-            "cognite_events_uploader_latency", "Distribution of times in seconds records spend in the queue"
-        )
+        global files_uploader_queued, files_uploader_written, files_uploader_queue_size, files_uploader_latency
+        self.files_queued = files_uploader_queued
+        self.files_written = files_uploader_written
+        self.queue_size = files_uploader_queue_size
+        self.latency = files_uploader_latency
         self.latency_zero_point = arrow.utcnow()
 
     def add_to_upload_queue(self, file_meta: FileMetadata, file_name: Union[str, PathLike] = None) -> None:
