@@ -94,6 +94,7 @@ class AbstractUploadQueue(ABC):
         max_upload_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
+        cancelation_token: threading.Event = threading.Event(),
     ):
         self.cdf_client = cdf_client
 
@@ -105,7 +106,7 @@ class AbstractUploadQueue(ABC):
 
         self.thread = threading.Thread(target=self._run, daemon=True, name=thread_name)
         self.lock = threading.RLock()
-        self.stopping = threading.Event()
+        self.cancelation_token: threading.Event = cancelation_token
 
         self.max_upload_interval = max_upload_interval
 
@@ -154,7 +155,7 @@ class AbstractUploadQueue(ABC):
         """
         Internal run method for upload thread
         """
-        while not self.stopping.wait(timeout=self.max_upload_interval):
+        while not self.cancelation_token.wait(timeout=self.max_upload_interval):
             try:
                 self.logger.log(self.trigger_log_level, "Triggering scheduled upload")
                 self.upload()
@@ -170,7 +171,7 @@ class AbstractUploadQueue(ABC):
         seconds.
         """
         if self.max_upload_interval is not None:
-            self.stopping.clear()
+            self.cancelation_token.clear()
             self.thread.start()
 
     def stop(self, ensure_upload: bool = True) -> None:
@@ -181,7 +182,7 @@ class AbstractUploadQueue(ABC):
             ensure_upload (bool): (Optional). Call upload one last time after shutting down thread to ensure empty
                 upload queue.
         """
-        self.stopping.set()
+        self.cancelation_token.set()
         if ensure_upload:
             self.upload()
 
@@ -284,10 +285,17 @@ class RawUploadQueue(AbstractUploadQueue):
         max_upload_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
+        cancelation_token: threading.Event = threading.Event(),
     ):
         # Super sets post_upload and thresholds
         super().__init__(
-            cdf_client, post_upload_function, max_queue_size, max_upload_interval, trigger_log_level, thread_name
+            cdf_client,
+            post_upload_function,
+            max_queue_size,
+            max_upload_interval,
+            trigger_log_level,
+            thread_name,
+            cancelation_token,
         )
         self.upload_queue: Dict[str, Dict[str, List[TimestampedObject]]] = dict()
 
@@ -446,10 +454,17 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
         create_missing: Union[Callable[[str, DataPointList], TimeSeries], bool] = False,
+        cancelation_token: threading.Event = threading.Event(),
     ):
         # Super sets post_upload and threshold
         super().__init__(
-            cdf_client, post_upload_function, max_queue_size, max_upload_interval, trigger_log_level, thread_name
+            cdf_client,
+            post_upload_function,
+            max_queue_size,
+            max_upload_interval,
+            trigger_log_level,
+            thread_name,
+            cancelation_token,
         )
 
         if isinstance(create_missing, bool):
@@ -642,10 +657,17 @@ class EventUploadQueue(AbstractUploadQueue):
         max_upload_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
+        cancelation_token: threading.Event = threading.Event(),
     ):
         # Super sets post_upload and threshold
         super().__init__(
-            cdf_client, post_upload_function, max_queue_size, max_upload_interval, trigger_log_level, thread_name
+            cdf_client,
+            post_upload_function,
+            max_queue_size,
+            max_upload_interval,
+            trigger_log_level,
+            thread_name,
+            cancelation_token,
         )
 
         self.upload_queue: List[Event] = []
@@ -748,6 +770,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
         create_missing=False,
+        cancelation_token: threading.Event = threading.Event(),
     ):
         """
         Args:
@@ -764,7 +787,13 @@ class SequenceUploadQueue(AbstractUploadQueue):
 
         # Super sets post_upload and threshold
         super().__init__(
-            cdf_client, post_upload_function, max_queue_size, max_upload_interval, trigger_log_level, thread_name
+            cdf_client,
+            post_upload_function,
+            max_queue_size,
+            max_upload_interval,
+            trigger_log_level,
+            thread_name,
+            cancelation_token,
         )
         self.upload_queue: Dict[EitherId, SequenceData] = dict()
         self.sequence_metadata: Dict[EitherId, Dict[str, Union[str, int, float]]] = dict()
@@ -1025,10 +1054,17 @@ class FileUploadQueue(AbstractUploadQueue):
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
         overwrite_existing: bool = False,
+        cancelation_token: threading.Event = threading.Event(),
     ):
         # Super sets post_upload and threshold
         super().__init__(
-            cdf_client, post_upload_function, max_queue_size, max_upload_interval, trigger_log_level, thread_name
+            cdf_client,
+            post_upload_function,
+            max_queue_size,
+            max_upload_interval,
+            trigger_log_level,
+            thread_name,
+            cancelation_token,
         )
 
         self.upload_queue: List[Tuple[FileMetadata, Union[str, PathLike]]] = []
