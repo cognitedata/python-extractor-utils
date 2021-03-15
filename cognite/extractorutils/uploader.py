@@ -41,10 +41,14 @@ import threading
 import time
 from abc import ABC, abstractmethod
 from concurrent.futures import ThreadPoolExecutor
+from dataclasses import dataclass
 from datetime import datetime
 from os import PathLike
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
+import arrow
+from arrow import Arrow
+from prometheus_client import Counter, Gauge, Histogram
 from requests.exceptions import ConnectionError
 from retry import retry
 
@@ -90,6 +94,7 @@ class AbstractUploadQueue(ABC):
         max_upload_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
+        cancelation_token: threading.Event = threading.Event(),
     ):
         self.cdf_client = cdf_client
 
@@ -101,7 +106,7 @@ class AbstractUploadQueue(ABC):
 
         self.thread = threading.Thread(target=self._run, daemon=True, name=thread_name)
         self.lock = threading.RLock()
-        self.stopping = threading.Event()
+        self.cancelation_token: threading.Event = cancelation_token
 
         self.max_upload_interval = max_upload_interval
 
@@ -150,13 +155,15 @@ class AbstractUploadQueue(ABC):
         """
         Internal run method for upload thread
         """
-        while not self.stopping.is_set():
+        while not self.cancelation_token.wait(timeout=self.max_upload_interval):
             try:
                 self.logger.log(self.trigger_log_level, "Triggering scheduled upload")
                 self.upload()
             except Exception as e:
                 self.logger.error("Unexpected error while uploading: %s. Skipping this upload.", str(e))
-            time.sleep(self.max_upload_interval)
+
+        # trigger stop event explicitly to drain the queue
+        self.stop(ensure_upload=True)
 
     def start(self) -> None:
         """
@@ -164,7 +171,7 @@ class AbstractUploadQueue(ABC):
         seconds.
         """
         if self.max_upload_interval is not None:
-            self.stopping.clear()
+            self.cancelation_token.clear()
             self.thread.start()
 
     def stop(self, ensure_upload: bool = True) -> None:
@@ -175,9 +182,84 @@ class AbstractUploadQueue(ABC):
             ensure_upload (bool): (Optional). Call upload one last time after shutting down thread to ensure empty
                 upload queue.
         """
-        self.stopping.set()
+        self.cancelation_token.set()
         if ensure_upload:
             self.upload()
+
+
+@dataclass(frozen=True)
+class TimestampedObject:
+    payload: Any
+    created: Arrow
+
+
+RAW_UPLOADER_ROWS_QUEUED = Counter(
+    "cognite_raw_uploader_rows_queued", "Total number of records queued", labelnames=["destination"]
+)
+RAW_UPLOADER_ROWS_WRITTEN = Counter(
+    "cognite_raw_uploader_rows_written", "Total number of records written", labelnames=["destination"]
+)
+RAW_UPLOADER_ROWS_DUPLICATES = Counter(
+    "cognite_raw_uploader_rows_duplicates", "Total number of duplicates found", labelnames=["destination"]
+)
+RAW_UPLOADER_QUEUE_SIZE = Gauge("cognite_raw_uploader_queue_size", "Internal queue size")
+RAW_UPLOADER_LATENCY = Histogram(
+    "cognite_raw_uploader_latency",
+    "Distribution of times in seconds records spend in the queue",
+    labelnames=["destination"],
+)
+
+TIMESERIES_UPLOADER_POINTS_QUEUED = Counter(
+    "cognite_timeseries_uploader_points_queued", "Total number of datapoints queued", labelnames=["destination"]
+)
+
+TIMESERIES_UPLOADER_POINTS_WRITTEN = Counter(
+    "cognite_timeseries_uploader_points_written", "Total number of datapoints written", labelnames=["destination"],
+)
+
+TIMESERIES_UPLOADER_QUEUE_SIZE = Gauge("cognite_timeseries_uploader_queue_size", "Internal queue size")
+
+TIMESERIES_UPLOADER_LATENCY = Histogram(
+    "cognite_timeseries_uploader_latency",
+    "Distribution of times in seconds records spend in the queue",
+    labelnames=["destination"],
+)
+
+SEQUENCES_UPLOADER_POINTS_QUEUED = Counter(
+    "cognite_sequences_uploader_points_queued", "Total number of sequences queued", labelnames=["destination"]
+)
+
+SEQUENCES_UPLOADER_POINTS_WRITTEN = Counter(
+    "cognite_sequences_uploader_points_written", "Total number of sequences written", labelnames=["destination"],
+)
+
+SEQUENCES_UPLOADER_QUEUE_SIZE = Gauge("cognite_sequences_uploader_queue_size", "Internal queue size")
+
+SEQUENCES_UPLOADER_LATENCY = Histogram(
+    "cognite_sequences_uploader_latency",
+    "Distribution of times in seconds records spend in the queue",
+    labelnames=["destination"],
+)
+
+EVENTS_UPLOADER_QUEUED = Counter("cognite_events_uploader_queued", "Total number of events queued")
+
+EVENTS_UPLOADER_WRITTEN = Counter("cognite_events_uploader_written", "Total number of events written")
+
+EVENTS_UPLOADER_QUEUE_SIZE = Gauge("cognite_events_uploader_queue_size", "Internal queue size")
+
+EVENTS_UPLOADER_LATENCY = Histogram(
+    "cognite_events_uploader_latency", "Distribution of times in seconds records spend in the queue"
+)
+
+FILES_UPLOADER_QUEUED = Counter("cognite_files_uploader_queued", "Total number of files queued")
+
+FILES_UPLOADER_WRITTEN = Counter("cognite_files_uploader_written", "Total number of files written")
+
+FILES_UPLOADER_QUEUE_SIZE = Gauge("cognite_files_uploader_queue_size", "Internal queue size")
+
+FILES_UPLOADER_LATENCY = Histogram(
+    "cognite_files_uploader_latency", "Distribution of times in seconds records spend in the queue"
+)
 
 
 class RawUploadQueue(AbstractUploadQueue):
@@ -203,12 +285,26 @@ class RawUploadQueue(AbstractUploadQueue):
         max_upload_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
+        cancelation_token: threading.Event = threading.Event(),
     ):
         # Super sets post_upload and thresholds
         super().__init__(
-            cdf_client, post_upload_function, max_queue_size, max_upload_interval, trigger_log_level, thread_name
+            cdf_client,
+            post_upload_function,
+            max_queue_size,
+            max_upload_interval,
+            trigger_log_level,
+            thread_name,
+            cancelation_token,
         )
-        self.upload_queue: Dict[str, Dict[str, List[Row]]] = dict()
+        self.upload_queue: Dict[str, Dict[str, List[TimestampedObject]]] = dict()
+
+        # It is a hack since Prometheus client registers metrics on object creation, so object has to be created once
+        self.rows_queued = RAW_UPLOADER_ROWS_QUEUED
+        self.rows_written = RAW_UPLOADER_ROWS_WRITTEN
+        self.rows_duplicates = RAW_UPLOADER_ROWS_DUPLICATES
+        self.queue_size = RAW_UPLOADER_QUEUE_SIZE
+        self.latency = RAW_UPLOADER_LATENCY
 
     def add_to_upload_queue(self, database: str, table: str, raw_row: Row) -> None:
         """
@@ -228,8 +324,10 @@ class RawUploadQueue(AbstractUploadQueue):
                 self.upload_queue[database][table] = []
 
             # Append row to queue
-            self.upload_queue[database][table].append(raw_row)
+            self.upload_queue[database][table].append(TimestampedObject(payload=raw_row, created=Arrow.utcnow()))
             self.upload_queue_size += 1
+            self.rows_queued.labels(f"{database}:{table}").inc()
+            self.queue_size.set(self.upload_queue_size)
 
             self._check_triggers()
 
@@ -240,11 +338,18 @@ class RawUploadQueue(AbstractUploadQueue):
         with self.lock:
             for database, tables in self.upload_queue.items():
                 for table, rows in tables.items():
+                    _labels = [f"{database}:{table}"]
+
                     # Deduplicate
                     # In case of duplicate keys, the first key is preserved, and the last value is preserved.
-                    patch: Dict[str, Row] = {r.key: r for r in rows}
+                    patch: Dict[str, Row] = {r.payload.key: r.payload for r in rows}
+                    self.rows_duplicates.labels(_labels).inc(len(rows) - len(patch))
 
                     self._upload_batch(database=database, table=table, patch=list(patch.values()))
+                    self.rows_written.labels(_labels).inc(len(patch))
+                    _written: Arrow = arrow.utcnow()
+                    for r in rows:
+                        self.latency.labels(_labels).observe((_written - r.created).total_seconds())
 
                     # Perform post-upload logic if applicable
                     try:
@@ -255,6 +360,7 @@ class RawUploadQueue(AbstractUploadQueue):
             self.upload_queue.clear()
             self.logger.info(f"Uploaded {self.upload_queue_size} rows in total")
             self.upload_queue_size = 0
+            self.queue_size.set(self.upload_queue_size)
 
     @retry(
         exceptions=(CogniteAPIError, ConnectionError, CogniteReadTimeout),
@@ -345,10 +451,17 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
         create_missing: Union[Callable[[str, DataPointList], TimeSeries], bool] = False,
+        cancelation_token: threading.Event = threading.Event(),
     ):
         # Super sets post_upload and threshold
         super().__init__(
-            cdf_client, post_upload_function, max_queue_size, max_upload_interval, trigger_log_level, thread_name
+            cdf_client,
+            post_upload_function,
+            max_queue_size,
+            max_upload_interval,
+            trigger_log_level,
+            thread_name,
+            cancelation_token,
         )
 
         if isinstance(create_missing, bool):
@@ -359,6 +472,12 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
             self.missing_factory = create_missing
 
         self.upload_queue: Dict[EitherId, DataPointList] = dict()
+
+        self.points_queued = TIMESERIES_UPLOADER_POINTS_QUEUED
+        self.points_written = TIMESERIES_UPLOADER_POINTS_WRITTEN
+        self.queue_size = TIMESERIES_UPLOADER_QUEUE_SIZE
+        self.latency = TIMESERIES_UPLOADER_LATENCY
+        self.latency_zero_point = arrow.utcnow()
 
     def add_to_upload_queue(self, *, id: int = None, external_id: str = None, datapoints: DataPointList = []) -> None:
         """
@@ -371,13 +490,20 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
             datapoints: List of data points to add
         """
         either_id = EitherId(id=id, external_id=external_id)
+        _labels = [str(either_id.content())]
 
         with self.lock:
             if either_id not in self.upload_queue:
                 self.upload_queue[either_id] = []
 
+            if self.upload_queue_size == 0:
+                self.latency_zero_point = arrow.utcnow()
+
             self.upload_queue[either_id].extend(datapoints)
+            self.points_queued.labels(_labels).inc(len(datapoints))
+            self.latency.labels(_labels).observe((arrow.utcnow() - self.latency_zero_point).total_seconds())
             self.upload_queue_size += len(datapoints)
+            self.queue_size.set(self.upload_queue_size)
 
             self._check_triggers()
 
@@ -397,6 +523,9 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
                 ]
             )
 
+            for either_id, datapoints in self.upload_queue.items():
+                self.points_written.labels([str(either_id.content())]).inc(len(datapoints))
+
             try:
                 self._post_upload(upload_this)
             except Exception as e:
@@ -404,6 +533,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
 
             self.upload_queue.clear()
             self.upload_queue_size = 0
+            self.queue_size.set(self.upload_queue_size)
 
     @retry(
         exceptions=(CogniteAPIError, ConnectionError),
@@ -522,13 +652,26 @@ class EventUploadQueue(AbstractUploadQueue):
         max_upload_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
+        cancelation_token: threading.Event = threading.Event(),
     ):
         # Super sets post_upload and threshold
         super().__init__(
-            cdf_client, post_upload_function, max_queue_size, max_upload_interval, trigger_log_level, thread_name
+            cdf_client,
+            post_upload_function,
+            max_queue_size,
+            max_upload_interval,
+            trigger_log_level,
+            thread_name,
+            cancelation_token,
         )
 
         self.upload_queue: List[Event] = []
+
+        self.events_queued = EVENTS_UPLOADER_QUEUED
+        self.events_written = EVENTS_UPLOADER_WRITTEN
+        self.queue_size = EVENTS_UPLOADER_QUEUE_SIZE
+        self.latency = EVENTS_UPLOADER_LATENCY
+        self.latency_zero_point = arrow.utcnow()
 
     def add_to_upload_queue(self, event: Event) -> None:
         """
@@ -539,8 +682,13 @@ class EventUploadQueue(AbstractUploadQueue):
             event: Event to add
         """
         with self.lock:
+            if self.upload_queue_size == 0:
+                self.latency_zero_point = arrow.utcnow()
+
             self.upload_queue.append(event)
+            self.events_queued.inc()
             self.upload_queue_size += 1
+            self.queue_size.set(self.upload_queue_size)
 
             self._check_triggers()
 
@@ -553,12 +701,17 @@ class EventUploadQueue(AbstractUploadQueue):
 
         with self.lock:
             self._upload_batch()
+
+            self.latency.observe((arrow.utcnow() - self.latency_zero_point).total_seconds())
+            self.events_written.inc(self.upload_queue_size)
+
             try:
                 self._post_upload(self.upload_queue)
             except Exception as e:
                 self.logger.error("Error in upload callback: %s", str(e))
             self.upload_queue.clear()
             self.upload_queue_size = 0
+            self.queue_size.set(self.upload_queue_size)
 
     @retry(
         exceptions=(CogniteAPIError, ConnectionError),
@@ -611,6 +764,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
         create_missing=False,
+        cancelation_token: threading.Event = threading.Event(),
     ):
         """
         Args:
@@ -627,7 +781,13 @@ class SequenceUploadQueue(AbstractUploadQueue):
 
         # Super sets post_upload and threshold
         super().__init__(
-            cdf_client, post_upload_function, max_queue_size, max_upload_interval, trigger_log_level, thread_name
+            cdf_client,
+            post_upload_function,
+            max_queue_size,
+            max_upload_interval,
+            trigger_log_level,
+            thread_name,
+            cancelation_token,
         )
         self.upload_queue: Dict[EitherId, SequenceData] = dict()
         self.sequence_metadata: Dict[EitherId, Dict[str, Union[str, int, float]]] = dict()
@@ -635,6 +795,12 @@ class SequenceUploadQueue(AbstractUploadQueue):
         self.sequence_dataset_ids: Dict[EitherId, str] = dict()
         self.column_definitions: Dict[EitherId, List[Dict[str, str]]] = dict()
         self.create_missing = create_missing
+
+        self.points_queued = SEQUENCES_UPLOADER_POINTS_QUEUED
+        self.points_written = SEQUENCES_UPLOADER_POINTS_WRITTEN
+        self.queue_size = SEQUENCES_UPLOADER_QUEUE_SIZE
+        self.latency = SEQUENCES_UPLOADER_LATENCY
+        self.latency_zero_point = arrow.utcnow()
 
     def set_sequence_metadata(
         self,
@@ -735,6 +901,9 @@ class SequenceUploadQueue(AbstractUploadQueue):
                 self.upload_queue[either_id] = seq
             else:
                 self.upload_queue[either_id] = rows
+            self.upload_queue_size = len(self.upload_queue)
+            self.queue_size.set(self.upload_queue_size)
+            self.points_queued.labels([str(either_id.content())]).inc()
 
     def upload(self) -> None:
         """
@@ -745,15 +914,19 @@ class SequenceUploadQueue(AbstractUploadQueue):
 
         with self.lock:
             for either_id, upload_this in self.upload_queue.items():
+                _labels = [str(either_id.content())]
                 self._upload_single(either_id, upload_this)
+                self.latency.labels(_labels).observe((arrow.utcnow() - self.latency_zero_point).total_seconds())
+                self.points_written.labels(_labels).inc()
 
-        try:
-            self._post_upload([seqdata for _, seqdata in self.upload_queue.items()])
-        except Exception as e:
-            self.logger.error("Error in upload callback: %s", str(e))
+            try:
+                self._post_upload([seqdata for _, seqdata in self.upload_queue.items()])
+            except Exception as e:
+                self.logger.error("Error in upload callback: %s", str(e))
 
-        self.upload_queue.clear()
-        self.upload_queue_size = 0
+            self.upload_queue.clear()
+            self.upload_queue_size = 0
+            self.queue_size.set(self.upload_queue_size)
 
     @retry(
         exceptions=CogniteAPIError,
@@ -874,14 +1047,27 @@ class FileUploadQueue(AbstractUploadQueue):
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
         overwrite_existing: bool = False,
+        cancelation_token: threading.Event = threading.Event(),
     ):
         # Super sets post_upload and threshold
         super().__init__(
-            cdf_client, post_upload_function, max_queue_size, max_upload_interval, trigger_log_level, thread_name
+            cdf_client,
+            post_upload_function,
+            max_queue_size,
+            max_upload_interval,
+            trigger_log_level,
+            thread_name,
+            cancelation_token,
         )
 
         self.upload_queue: List[Tuple[FileMetadata, Union[str, PathLike]]] = []
         self.overwrite_existing = overwrite_existing
+
+        self.files_queued = FILES_UPLOADER_QUEUED
+        self.files_written = FILES_UPLOADER_WRITTEN
+        self.queue_size = FILES_UPLOADER_QUEUE_SIZE
+        self.latency = FILES_UPLOADER_LATENCY
+        self.latency_zero_point = arrow.utcnow()
 
     def add_to_upload_queue(self, file_meta: FileMetadata, file_name: Union[str, PathLike] = None) -> None:
         """
@@ -894,8 +1080,13 @@ class FileUploadQueue(AbstractUploadQueue):
                 If none, the file object will still be created, but no data is uploaded
         """
         with self.lock:
+            if self.upload_queue_size == 0:
+                self.latency_zero_point = arrow.utcnow()
+
             self.upload_queue.append((file_meta, file_name))
             self.upload_queue_size += 1
+            self.files_queued.inc()
+            self.queue_size.set(self.upload_queue_size)
 
             self._check_triggers()
 
@@ -908,12 +1099,17 @@ class FileUploadQueue(AbstractUploadQueue):
 
         with self.lock:
             self._upload_batch()
+
+            self.latency.observe((arrow.utcnow() - self.latency_zero_point).total_seconds())
+            self.files_written.inc(self.upload_queue_size)
+
             try:
                 self._post_upload(self.upload_queue)
             except Exception as e:
                 self.logger.error("Error in upload callback: %s", str(e))
             self.upload_queue.clear()
             self.upload_queue_size = 0
+            self.queue_size.set(self.upload_queue_size)
 
     @retry(
         exceptions=(CogniteAPIError, ConnectionError),

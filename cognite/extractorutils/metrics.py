@@ -37,6 +37,7 @@ import logging
 import os
 import threading
 from abc import ABC, abstractmethod
+from threading import Event
 from time import sleep
 from typing import Any, Callable, Dict, List, Optional, T, Tuple, Type, Union
 
@@ -55,7 +56,7 @@ from .util import ensure_time_series
 _metrics_singularities = {}
 
 
-def safe_get(cls: Type[T]) -> T:
+def safe_get(cls: Type[T], *args, **kwargs) -> T:
     """
     A factory for instances of metrics collections.
 
@@ -80,7 +81,7 @@ def safe_get(cls: Type[T]) -> T:
     global _metrics_singularities
 
     if cls not in _metrics_singularities:
-        _metrics_singularities[cls] = cls()
+        _metrics_singularities[cls] = cls(*args, **kwargs)
 
     return _metrics_singularities[cls]
 
@@ -118,6 +119,9 @@ class BaseMetrics:
 
         self.process_num_threads = Gauge(f"{extractor_name}_num_threads", "Number of threads")
         self.process_memory_bytes = Gauge(f"{extractor_name}_memory_bytes", "Memory usage in bytes")
+        self.process_memory_bytes_available = Gauge(
+            f"{extractor_name}_memory_bytes_available", "Memory available in bytes"
+        )
         self.process_cpu_percent = Gauge(f"{extractor_name}_cpu_percent", "CPU usage percent")
 
         self.info = Info(f"{extractor_name}_info", "Information about running extractor")
@@ -132,9 +136,11 @@ class BaseMetrics:
         """
         Collect values for process metrics
         """
+        total_memory_available = psutil.virtual_memory().total
         while True:
             self.process_num_threads.set(self._process.num_threads())
             self.process_memory_bytes.set(self._process.memory_info().rss)
+            self.process_memory_bytes_available.set(total_memory_available)
             self.process_cpu_percent.set(self._process.cpu_percent())
 
             sleep(self.process_scrape_interval)
@@ -157,15 +163,18 @@ class AbstractMetricsPusher(ABC):
     Args:
         push_interval: Seconds between each upload call
         thread_name: Name of thread to start. If omitted, a standard name such as Thread-4 will be generated.
+        cancelation_token: Event object to be used as a thread cancelation event
     """
 
-    def __init__(self, push_interval: Optional[int] = None, thread_name: Optional[str] = None):
+    def __init__(
+        self, push_interval: Optional[int] = None, thread_name: Optional[str] = None, cancelation_token: Event = Event()
+    ):
         self.push_interval = push_interval
         self.thread_name = thread_name
 
         self.thread: Optional[threading.Thread] = None
         self.thread_name = thread_name
-        self.stopping = threading.Event()
+        self.cancelation_token = cancelation_token
 
         self.logger = logging.getLogger(__name__)
 
@@ -180,15 +189,16 @@ class AbstractMetricsPusher(ABC):
         """
         Run push loop.
         """
-        while not self.stopping.is_set():
+        while not self.cancelation_token.is_set():
             self._push_to_server()
-            self.stopping.wait(self.push_interval)
+            self.cancelation_token.wait(self.push_interval)
 
     def start(self) -> None:
         """
         Starts a thread that pushes the default registry to the configured gateway at certain intervals.
+
         """
-        self.stopping.clear()
+        self.cancelation_token.clear()
         self.thread = threading.Thread(target=self._run, daemon=True, name=self.thread_name)
         self.thread.start()
 
@@ -198,7 +208,7 @@ class AbstractMetricsPusher(ABC):
         """
         # Make sure everything is pushed
         self._push_to_server()
-        self.stopping.set()
+        self.cancelation_token.set()
 
     def __enter__(self) -> "AbstractMetricsPusher":
         """
@@ -233,6 +243,7 @@ class PrometheusPusher(AbstractMetricsPusher):
         url: URL (with portnum) of push gateway
         push_interval: Seconds between each upload call
         thread_name: Name of thread to start. If omitted, a standard name such as Thread-4 will be generated.
+        cancelation_token: Event object to be used as a thread cancelation event
     """
 
     def __init__(
@@ -243,8 +254,9 @@ class PrometheusPusher(AbstractMetricsPusher):
         username: Optional[str] = None,
         password: Optional[str] = None,
         thread_name: Optional[str] = None,
+        cancelation_token: Event = Event(),
     ):
-        super(PrometheusPusher, self).__init__(push_interval, thread_name)
+        super(PrometheusPusher, self).__init__(push_interval, thread_name, cancelation_token)
 
         self.username = username
         self.job_name = job_name
@@ -306,6 +318,7 @@ class CognitePusher(AbstractMetricsPusher):
         push_interval: Seconds between each upload call
         asset: Optional contextualization.
         thread_name: Name of thread to start. If omitted, a standard name such as Thread-4 will be generated.
+        cancelation_token: Event object to be used as a thread cancelation event
     """
 
     def __init__(
@@ -315,8 +328,9 @@ class CognitePusher(AbstractMetricsPusher):
         push_interval: int,
         asset: Optional[Asset] = None,
         thread_name: Optional[str] = None,
+        cancelation_token: Event = Event(),
     ):
-        super(CognitePusher, self).__init__(push_interval, thread_name)
+        super(CognitePusher, self).__init__(push_interval, thread_name, cancelation_token)
 
         self.cdf_client = cdf_client
         self.asset = asset

@@ -22,6 +22,7 @@ import re
 import time
 from dataclasses import dataclass
 from logging.handlers import TimedRotatingFileHandler
+from threading import Event
 from time import sleep
 from typing import Any, Dict, List, Optional, T, TextIO, Type, Union
 
@@ -259,15 +260,13 @@ class MetricsConfig:
     push_gateways: Optional[List[_PushGatewayConfig]]
     cognite: Optional[_CogniteMetricsConfig]
 
-    def start_pushers(self, cdf_client: CogniteClient) -> None:
+    def start_pushers(self, cdf_client: CogniteClient, cancelation_token: Event = Event()) -> None:
         self._pushers: List[AbstractMetricsPusher] = []
         self._clear_on_stop: Dict[PrometheusPusher, int] = {}
 
-        counter = 0
-
         push_gateways = self.push_gateways or []
 
-        for push_gateway in push_gateways:
+        for counter, push_gateway in enumerate(push_gateways):
             pusher = PrometheusPusher(
                 job_name=push_gateway.job_name,
                 username=push_gateway.username,
@@ -275,26 +274,27 @@ class MetricsConfig:
                 url=push_gateway.host,
                 push_interval=push_gateway.push_interval,
                 thread_name=f"MetricsPusher_{counter}",
+                cancelation_token=cancelation_token,
             )
 
             pusher.start()
             self._pushers.append(pusher)
             if push_gateway.clear_after is not None:
                 self._clear_on_stop[pusher] = push_gateway.clear_after
-            counter += 1
 
         if self.cognite:
+            asset = None
+
             if self.cognite.asset_name is not None:
                 asset = Asset(name=self.cognite.asset_name, external_id=self.cognite.asset_external_id)
-            else:
-                asset = None
 
             pusher = CognitePusher(
                 cdf_client=cdf_client,
                 external_id_prefix=self.cognite.external_id_prefix,
                 push_interval=self.cognite.push_interval,
                 asset=asset,
-                thread_name=f"MetricsPusher_{counter}",
+                thread_name="CogniteMetricsPusher",  # There is only one Cognite project as a target
+                cancelation_token=cancelation_token,
             )
 
             pusher.start()
