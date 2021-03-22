@@ -338,7 +338,7 @@ class RawUploadQueue(AbstractUploadQueue):
         with self.lock:
             for database, tables in self.upload_queue.items():
                 for table, rows in tables.items():
-                    _labels = [f"{database}:{table}"]
+                    _labels = f"{database}:{table}"
 
                     # Deduplicate
                     # In case of duplicate keys, the first key is preserved, and the last value is preserved.
@@ -490,7 +490,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
             datapoints: List of data points to add
         """
         either_id = EitherId(id=id, external_id=external_id)
-        _labels = [str(either_id.content())]
+        _labels = str(either_id.content())
 
         with self.lock:
             if either_id not in self.upload_queue:
@@ -524,7 +524,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
             )
 
             for either_id, datapoints in self.upload_queue.items():
-                self.points_written.labels([str(either_id.content())]).inc(len(datapoints))
+                self.points_written.labels(str(either_id.content())).inc(len(datapoints))
 
             try:
                 self._post_upload(upload_this)
@@ -903,7 +903,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
                 self.upload_queue[either_id] = rows
             self.upload_queue_size = len(self.upload_queue)
             self.queue_size.set(self.upload_queue_size)
-            self.points_queued.labels([str(either_id.content())]).inc()
+            self.points_queued.labels(str(either_id.content())).inc()
 
     def upload(self) -> None:
         """
@@ -914,7 +914,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
 
         with self.lock:
             for either_id, upload_this in self.upload_queue.items():
-                _labels = [str(either_id.content())]
+                _labels = str(either_id.content())
                 self._upload_single(either_id, upload_this)
                 self.latency.labels(_labels).observe((arrow.utcnow() - self.latency_zero_point).total_seconds())
                 self.points_written.labels(_labels).inc()
