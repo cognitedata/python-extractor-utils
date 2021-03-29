@@ -152,6 +152,7 @@ class CogniteConfig:
     api_key: Optional[str]
     idp_authentication: Optional[AuthenticatorConfig]
     data_set_id: Optional[int]
+    data_set_external_id: Optional[str]
     external_id_prefix: str = ""
     host: str = "https://api.cognitedata.com"
 
