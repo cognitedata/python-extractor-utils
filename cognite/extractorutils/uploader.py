@@ -210,35 +210,31 @@ RAW_UPLOADER_LATENCY = Histogram(
 )
 
 TIMESERIES_UPLOADER_POINTS_QUEUED = Counter(
-    "cognite_timeseries_uploader_points_queued", "Total number of datapoints queued", labelnames=["destination"]
+    "cognite_timeseries_uploader_points_queued", "Total number of datapoints queued"
 )
 
 TIMESERIES_UPLOADER_POINTS_WRITTEN = Counter(
-    "cognite_timeseries_uploader_points_written", "Total number of datapoints written", labelnames=["destination"],
+    "cognite_timeseries_uploader_points_written", "Total number of datapoints written"
 )
 
 TIMESERIES_UPLOADER_QUEUE_SIZE = Gauge("cognite_timeseries_uploader_queue_size", "Internal queue size")
 
 TIMESERIES_UPLOADER_LATENCY = Histogram(
-    "cognite_timeseries_uploader_latency",
-    "Distribution of times in seconds records spend in the queue",
-    labelnames=["destination"],
+    "cognite_timeseries_uploader_latency", "Distribution of times in seconds records spend in the queue"
 )
 
 SEQUENCES_UPLOADER_POINTS_QUEUED = Counter(
-    "cognite_sequences_uploader_points_queued", "Total number of sequences queued", labelnames=["destination"]
+    "cognite_sequences_uploader_points_queued", "Total number of sequences queued"
 )
 
 SEQUENCES_UPLOADER_POINTS_WRITTEN = Counter(
-    "cognite_sequences_uploader_points_written", "Total number of sequences written", labelnames=["destination"],
+    "cognite_sequences_uploader_points_written", "Total number of sequences written"
 )
 
 SEQUENCES_UPLOADER_QUEUE_SIZE = Gauge("cognite_sequences_uploader_queue_size", "Internal queue size")
 
 SEQUENCES_UPLOADER_LATENCY = Histogram(
-    "cognite_sequences_uploader_latency",
-    "Distribution of times in seconds records spend in the queue",
-    labelnames=["destination"],
+    "cognite_sequences_uploader_latency", "Distribution of times in seconds records spend in the queue"
 )
 
 EVENTS_UPLOADER_QUEUED = Counter("cognite_events_uploader_queued", "Total number of events queued")
@@ -490,7 +486,6 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
             datapoints: List of data points to add
         """
         either_id = EitherId(id=id, external_id=external_id)
-        _labels = str(either_id.content())
 
         with self.lock:
             if either_id not in self.upload_queue:
@@ -500,8 +495,8 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
                 self.latency_zero_point = arrow.utcnow()
 
             self.upload_queue[either_id].extend(datapoints)
-            self.points_queued.labels(_labels).inc(len(datapoints))
-            self.latency.labels(_labels).observe((arrow.utcnow() - self.latency_zero_point).total_seconds())
+            self.points_queued.inc(len(datapoints))
+            self.latency.observe((arrow.utcnow() - self.latency_zero_point).total_seconds())
             self.upload_queue_size += len(datapoints)
             self.queue_size.set(self.upload_queue_size)
 
@@ -524,7 +519,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
             )
 
             for either_id, datapoints in self.upload_queue.items():
-                self.points_written.labels(str(either_id.content())).inc(len(datapoints))
+                self.points_written.inc(len(datapoints))
 
             try:
                 self._post_upload(upload_this)
@@ -903,7 +898,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
                 self.upload_queue[either_id] = rows
             self.upload_queue_size = len(self.upload_queue)
             self.queue_size.set(self.upload_queue_size)
-            self.points_queued.labels(str(either_id.content())).inc()
+            self.points_queued.inc()
 
     def upload(self) -> None:
         """
@@ -916,8 +911,8 @@ class SequenceUploadQueue(AbstractUploadQueue):
             for either_id, upload_this in self.upload_queue.items():
                 _labels = str(either_id.content())
                 self._upload_single(either_id, upload_this)
-                self.latency.labels(_labels).observe((arrow.utcnow() - self.latency_zero_point).total_seconds())
-                self.points_written.labels(_labels).inc()
+                self.latency.observe((arrow.utcnow() - self.latency_zero_point).total_seconds())
+                self.points_written.inc()
 
             try:
                 self._post_upload([seqdata for _, seqdata in self.upload_queue.items()])
