@@ -192,7 +192,7 @@ class LoggingConfig:
 
     console: Optional[_ConsoleLoggingConfig]
     file: Optional[_FileLoggingConfig]
-    log_metrics: bool = False  # enables metrics on the number of log messages recorded (per logger and level)
+    log_metrics: Optional[bool] = False  # enables metrics on the number of log messages recorded (per logger and level)
 
     def setup_logging(self, suppress_console=False) -> None:
         """
