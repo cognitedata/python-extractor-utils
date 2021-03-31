@@ -28,7 +28,6 @@ from typing import Any, Dict, List, Optional, T, TextIO, Type, Union
 
 import dacite
 import yaml
-
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset
 
@@ -192,7 +191,10 @@ class LoggingConfig:
 
     console: Optional[_ConsoleLoggingConfig]
     file: Optional[_FileLoggingConfig]
-    log_metrics: Optional[bool] = False  # enables metrics on the number of log messages recorded (per logger and level)
+    # enables metrics on the number of log messages recorded (per logger and level)
+    # In order to collect/see result MetricsConfig should be set as well, so metrics are propagated to
+    # Prometheus and/or Cognite
+    metrics: Optional[bool] = False
 
     def setup_logging(self, suppress_console=False) -> None:
         """
@@ -210,7 +212,7 @@ class LoggingConfig:
 
         root = logging.getLogger()
 
-        if self.log_metrics:
+        if self.metrics:
             export_log_stats_on_root_logger(root)
 
         if self.console and not suppress_console:
@@ -356,7 +358,7 @@ class StateStoreConfig:
     local: Optional[LocalStateStoreConfig] = None
 
     def create_state_store(
-        self, cdf_client: Optional[CogniteClient] = None, default_to_local: bool = True
+            self, cdf_client: Optional[CogniteClient] = None, default_to_local: bool = True
     ) -> AbstractStateStore:
         """
         Create a state store object based on the config.
