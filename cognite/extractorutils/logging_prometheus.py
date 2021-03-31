@@ -1,8 +1,8 @@
 import logging
 
-import prometheus_client
+from prometheus_client import Counter
 
-log_entries = prometheus_client.Counter(
+log_entries = Counter(
     "cognite_python_logging_messages_total", "Count of log entries by logger and level.", ["logger", "level"]
 )
 
