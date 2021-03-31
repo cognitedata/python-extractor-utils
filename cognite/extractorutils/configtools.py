@@ -28,6 +28,7 @@ from typing import Any, Dict, List, Optional, T, TextIO, Type, Union
 
 import dacite
 import yaml
+
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset
 
@@ -355,7 +356,7 @@ class StateStoreConfig:
     local: Optional[LocalStateStoreConfig] = None
 
     def create_state_store(
-            self, cdf_client: Optional[CogniteClient] = None, default_to_local: bool = True
+        self, cdf_client: Optional[CogniteClient] = None, default_to_local: bool = True
     ) -> AbstractStateStore:
         """
         Create a state store object based on the config.

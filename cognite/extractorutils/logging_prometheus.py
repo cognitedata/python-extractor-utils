@@ -3,9 +3,8 @@ import logging
 import prometheus_client
 
 log_entries = prometheus_client.Counter(
-    'cognite_python_logging_messages_total',
-    'Count of log entries by logger and level.',
-    ['logger', 'level'])
+    "cognite_python_logging_messages_total", "Count of log entries by logger and level.", ["logger", "level"]
+)
 
 
 class ExportingLogHandler(logging.Handler):
