@@ -34,6 +34,7 @@ from cognite.client.data_classes import Asset
 
 from .authentication import Authenticator, AuthenticatorConfig
 from .exceptions import InvalidConfigError
+from .logging_prometheus import export_log_stats_on_root_logger
 from .metrics import AbstractMetricsPusher, CognitePusher, PrometheusPusher
 from .statestore import AbstractStateStore, LocalStateStore, NoStateStore, RawStateStore
 
@@ -191,6 +192,10 @@ class LoggingConfig:
 
     console: Optional[_ConsoleLoggingConfig]
     file: Optional[_FileLoggingConfig]
+    # enables metrics on the number of log messages recorded (per logger and level)
+    # In order to collect/see result MetricsConfig should be set as well, so metrics are propagated to
+    # Prometheus and/or Cognite
+    metrics: Optional[bool] = False
 
     def setup_logging(self, suppress_console=False) -> None:
         """
@@ -207,6 +212,9 @@ class LoggingConfig:
         fmt.converter = time.gmtime
 
         root = logging.getLogger()
+
+        if self.metrics:
+            export_log_stats_on_root_logger(root)
 
         if self.console and not suppress_console:
             console_handler = logging.StreamHandler()
