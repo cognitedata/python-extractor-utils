@@ -3,7 +3,7 @@ import logging
 from prometheus_client import Counter
 
 log_entries = Counter(
-    "cognite_python_logging_messages_total", "Count of log entries by logger and level.", ["logger", "level"]
+    "cognite_python_logging_messages", "Count of log entries by logger and level.", ["logger", "level"]
 )
 
 
