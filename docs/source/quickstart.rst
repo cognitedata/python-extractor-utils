@@ -182,7 +182,7 @@ remote server, these can be automatically created with the ``start_pushers`` met
 The configtools contains base classes for configuration, and a YAML loader to automatically serialize these dataclasses
 from a config file.
 
-Configs are described as ``dataclass``es, and use the ``BaseConfig`` class as a superclass to get a few things built-in:
+Configs are described as ``dataclass``\es, and use the ``BaseConfig`` class as a superclass to get a few things built-in:
 config version, Cognite project and logging. Use type hints to specify types, use the ``Optional`` type to specify that
 a config parameter is optional, and give the attribute a value to give it a default.
 
