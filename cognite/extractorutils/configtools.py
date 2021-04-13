@@ -25,6 +25,7 @@ from logging.handlers import TimedRotatingFileHandler
 from threading import Event
 from time import sleep
 from typing import Any, Dict, List, Optional, T, TextIO, Type, Union
+from urllib.parse import urljoin
 
 import dacite
 import yaml
@@ -157,13 +158,24 @@ class CogniteConfig:
     external_id_prefix: str = ""
     host: str = "https://api.cognitedata.com"
 
-    def get_cognite_client(self, client_name: str) -> CogniteClient:
+    def get_cognite_client(self, client_name: str, token_custom_args: Optional[Dict[str, str]] = None) -> CogniteClient:
         kwargs = {}
         if self.api_key:
             kwargs["api_key"] = self.api_key
         elif self.idp_authentication:
-            authorizer = Authenticator(self.idp_authentication)
-            kwargs["token"] = authorizer.get_token
+            if self.idp_authentication.token_url:
+                kwargs["token_url"] = self.idp_authentication.token_url
+            elif self.idp_authentication.tenant:
+                base_url = urljoin(self.idp_authentication.authority, self.idp_authentication.tenant)
+                kwargs["token_url"] = f"{base_url}/oauth2/v2.0/token"
+            kwargs["token_client_id"] = self.idp_authentication.client_id
+            kwargs["token_client_secret"] = self.idp_authentication.secret
+            kwargs["token_scopes"] = self.idp_authentication.scopes
+            if token_custom_args is None:
+                token_custom_args = {}
+            if self.idp_authentication.resource:
+                token_custom_args["resource"] = self.idp_authentication.resource
+            kwargs["token_custom_args"] = token_custom_args
         else:
             raise InvalidConfigError("No CDF credentials")
 
