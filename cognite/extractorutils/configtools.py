@@ -25,6 +25,7 @@ from logging.handlers import TimedRotatingFileHandler
 from threading import Event
 from time import sleep
 from typing import Any, Dict, List, Optional, T, TextIO, Type, Union
+from urllib.parse import urljoin
 
 import dacite
 import yaml
@@ -162,7 +163,11 @@ class CogniteConfig:
         if self.api_key:
             kwargs["api_key"] = self.api_key
         elif self.idp_authentication:
-            kwargs["token_url"] = self.idp_authentication.token_url
+            if self.idp_authentication.token_url:
+                kwargs["token_url"] = self.idp_authentication.token_url
+            elif self.idp_authentication.tenant:
+                base_url = urljoin(self.idp_authentication.authority, self.idp_authentication.tenant)
+                kwargs["token_url"] = f"{base_url}/oauth2/v2.0/token"
             kwargs["token_client_id"] = self.idp_authentication.client_id
             kwargs["token_client_secret"] = self.idp_authentication.secret
             kwargs["token_scopes"] = self.idp_authentication.scopes
