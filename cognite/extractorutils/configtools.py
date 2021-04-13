@@ -166,6 +166,10 @@ class CogniteConfig:
             kwargs["token_client_id"] = self.idp_authentication.client_id
             kwargs["token_client_secret"] = self.idp_authentication.secret
             kwargs["token_scopes"] = self.idp_authentication.scopes
+            if token_custom_args is None:
+                token_custom_args = {}
+            if self.idp_authentication.resource:
+                token_custom_args["resource"] = self.idp_authentication.resource
             kwargs["token_custom_args"] = token_custom_args
         else:
             raise InvalidConfigError("No CDF credentials")
