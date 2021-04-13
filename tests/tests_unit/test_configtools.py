@@ -186,7 +186,6 @@ class TestConfigtoolsMethods(unittest.TestCase):
         self.assertIsNone(config.api_key)
         cdf = config.get_cognite_client("client_name")
         self.assertIsInstance(cdf, CogniteClient)
-        self.assertTrue(callable(cdf._config.token))
         # The api_key is not None, possibly some thread local trick when run in Jenkins
         # self.assertTrue(cdf._config.api_key is None or cdf._config.api_key == "********")
 
