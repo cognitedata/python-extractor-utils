@@ -50,7 +50,9 @@ class AuthenticatorConfig:
 
 class Authenticator:
     """
-    A class gathering an access token
+    A class gathering an access token.
+
+    DEPRECATED. Use the built-in token generation from the Cognite SDK instead.
 
     Args:
         config: Config parameters for the Authenticator
