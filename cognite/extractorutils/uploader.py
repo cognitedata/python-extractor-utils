@@ -205,7 +205,7 @@ RAW_UPLOADER_ROWS_DUPLICATES = Counter(
 RAW_UPLOADER_QUEUE_SIZE = Gauge("cognite_raw_uploader_queue_size", "Internal queue size")
 RAW_UPLOADER_LATENCY = Histogram(
     "cognite_raw_uploader_latency",
-    "Distribution of times in seconds records spend in the queue",
+    "Distribution of times in minutes records spend in the queue",
     labelnames=["destination"],
 )
 
@@ -220,7 +220,8 @@ TIMESERIES_UPLOADER_POINTS_WRITTEN = Counter(
 TIMESERIES_UPLOADER_QUEUE_SIZE = Gauge("cognite_timeseries_uploader_queue_size", "Internal queue size")
 
 TIMESERIES_UPLOADER_LATENCY = Histogram(
-    "cognite_timeseries_uploader_latency", "Distribution of times in seconds records spend in the queue",
+    "cognite_timeseries_uploader_latency",
+    "Distribution of times in minutes records spend in the queue",
 )
 
 SEQUENCES_UPLOADER_POINTS_QUEUED = Counter(
@@ -234,7 +235,8 @@ SEQUENCES_UPLOADER_POINTS_WRITTEN = Counter(
 SEQUENCES_UPLOADER_QUEUE_SIZE = Gauge("cognite_sequences_uploader_queue_size", "Internal queue size")
 
 SEQUENCES_UPLOADER_LATENCY = Histogram(
-    "cognite_sequences_uploader_latency", "Distribution of times in seconds records spend in the queue",
+    "cognite_sequences_uploader_latency",
+    "Distribution of times in minutes records spend in the queue",
 )
 
 EVENTS_UPLOADER_QUEUED = Counter("cognite_events_uploader_queued", "Total number of events queued")
@@ -244,7 +246,8 @@ EVENTS_UPLOADER_WRITTEN = Counter("cognite_events_uploader_written", "Total numb
 EVENTS_UPLOADER_QUEUE_SIZE = Gauge("cognite_events_uploader_queue_size", "Internal queue size")
 
 EVENTS_UPLOADER_LATENCY = Histogram(
-    "cognite_events_uploader_latency", "Distribution of times in seconds records spend in the queue",
+    "cognite_events_uploader_latency",
+    "Distribution of times in minutes records spend in the queue",
 )
 
 FILES_UPLOADER_QUEUED = Counter("cognite_files_uploader_queued", "Total number of files queued")
@@ -254,7 +257,8 @@ FILES_UPLOADER_WRITTEN = Counter("cognite_files_uploader_written", "Total number
 FILES_UPLOADER_QUEUE_SIZE = Gauge("cognite_files_uploader_queue_size", "Internal queue size")
 
 FILES_UPLOADER_LATENCY = Histogram(
-    "cognite_files_uploader_latency", "Distribution of times in seconds records spend in the queue",
+    "cognite_files_uploader_latency",
+    "Distribution of times in minutes records spend in the queue",
 )
 
 
