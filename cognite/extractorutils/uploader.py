@@ -193,28 +193,6 @@ class TimestampedObject:
     created: Arrow
 
 
-CUSTOM_BUCKET_LATENCY = (
-    0.005,
-    0.01,
-    0.025,
-    0.05,
-    0.075,
-    0.1,
-    0.25,
-    0.5,
-    0.75,
-    1.0,
-    2.5,
-    5.0,
-    7.5,
-    10.0,
-    20.0,
-    30.0,
-    60.0,
-    120.0,
-    float("inf"),
-)
-
 RAW_UPLOADER_ROWS_QUEUED = Counter(
     "cognite_raw_uploader_rows_queued", "Total number of records queued", labelnames=["destination"]
 )
@@ -229,7 +207,7 @@ RAW_UPLOADER_LATENCY = Histogram(
     "cognite_raw_uploader_latency",
     "Distribution of times in seconds records spend in the queue",
     labelnames=["destination"],
-    buckets=CUSTOM_BUCKET_LATENCY,
+    unit="minutes",
 )
 
 TIMESERIES_UPLOADER_POINTS_QUEUED = Counter(
@@ -245,7 +223,7 @@ TIMESERIES_UPLOADER_QUEUE_SIZE = Gauge("cognite_timeseries_uploader_queue_size",
 TIMESERIES_UPLOADER_LATENCY = Histogram(
     "cognite_timeseries_uploader_latency",
     "Distribution of times in seconds records spend in the queue",
-    buckets=CUSTOM_BUCKET_LATENCY,
+    unit="minutes",
 )
 
 SEQUENCES_UPLOADER_POINTS_QUEUED = Counter(
@@ -261,7 +239,7 @@ SEQUENCES_UPLOADER_QUEUE_SIZE = Gauge("cognite_sequences_uploader_queue_size", "
 SEQUENCES_UPLOADER_LATENCY = Histogram(
     "cognite_sequences_uploader_latency",
     "Distribution of times in seconds records spend in the queue",
-    buckets=CUSTOM_BUCKET_LATENCY,
+    unit="minutes",
 )
 
 EVENTS_UPLOADER_QUEUED = Counter("cognite_events_uploader_queued", "Total number of events queued")
@@ -273,7 +251,7 @@ EVENTS_UPLOADER_QUEUE_SIZE = Gauge("cognite_events_uploader_queue_size", "Intern
 EVENTS_UPLOADER_LATENCY = Histogram(
     "cognite_events_uploader_latency",
     "Distribution of times in seconds records spend in the queue",
-    buckets=CUSTOM_BUCKET_LATENCY,
+    unit="minutes",
 )
 
 FILES_UPLOADER_QUEUED = Counter("cognite_files_uploader_queued", "Total number of files queued")
@@ -285,7 +263,7 @@ FILES_UPLOADER_QUEUE_SIZE = Gauge("cognite_files_uploader_queue_size", "Internal
 FILES_UPLOADER_LATENCY = Histogram(
     "cognite_files_uploader_latency",
     "Distribution of times in seconds records spend in the queue",
-    buckets=CUSTOM_BUCKET_LATENCY,
+    unit="minutes",
 )
 
 
