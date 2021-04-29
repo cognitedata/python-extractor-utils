@@ -211,7 +211,7 @@ CUSTOM_BUCKET_LATENCY = (
     20.0,
     30.0,
     60.0,
-    120.0,
+    120.0
     float("inf"),
 )
 
