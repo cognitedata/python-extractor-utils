@@ -205,7 +205,7 @@ RAW_UPLOADER_ROWS_DUPLICATES = Counter(
 RAW_UPLOADER_QUEUE_SIZE = Gauge("cognite_raw_uploader_queue_size", "Internal queue size")
 RAW_UPLOADER_LATENCY = Histogram(
     "cognite_raw_uploader_latency",
-    "Distribution of times in seconds records spend in the queue",
+    "Distribution of times in minutes records spend in the queue",
     labelnames=["destination"],
 )
 
@@ -220,7 +220,7 @@ TIMESERIES_UPLOADER_POINTS_WRITTEN = Counter(
 TIMESERIES_UPLOADER_QUEUE_SIZE = Gauge("cognite_timeseries_uploader_queue_size", "Internal queue size")
 
 TIMESERIES_UPLOADER_LATENCY = Histogram(
-    "cognite_timeseries_uploader_latency", "Distribution of times in seconds records spend in the queue"
+    "cognite_timeseries_uploader_latency", "Distribution of times in minutes records spend in the queue",
 )
 
 SEQUENCES_UPLOADER_POINTS_QUEUED = Counter(
@@ -234,7 +234,7 @@ SEQUENCES_UPLOADER_POINTS_WRITTEN = Counter(
 SEQUENCES_UPLOADER_QUEUE_SIZE = Gauge("cognite_sequences_uploader_queue_size", "Internal queue size")
 
 SEQUENCES_UPLOADER_LATENCY = Histogram(
-    "cognite_sequences_uploader_latency", "Distribution of times in seconds records spend in the queue"
+    "cognite_sequences_uploader_latency", "Distribution of times in minutes records spend in the queue",
 )
 
 EVENTS_UPLOADER_QUEUED = Counter("cognite_events_uploader_queued", "Total number of events queued")
@@ -244,7 +244,7 @@ EVENTS_UPLOADER_WRITTEN = Counter("cognite_events_uploader_written", "Total numb
 EVENTS_UPLOADER_QUEUE_SIZE = Gauge("cognite_events_uploader_queue_size", "Internal queue size")
 
 EVENTS_UPLOADER_LATENCY = Histogram(
-    "cognite_events_uploader_latency", "Distribution of times in seconds records spend in the queue"
+    "cognite_events_uploader_latency", "Distribution of times in minutes records spend in the queue",
 )
 
 FILES_UPLOADER_QUEUED = Counter("cognite_files_uploader_queued", "Total number of files queued")
@@ -254,7 +254,7 @@ FILES_UPLOADER_WRITTEN = Counter("cognite_files_uploader_written", "Total number
 FILES_UPLOADER_QUEUE_SIZE = Gauge("cognite_files_uploader_queue_size", "Internal queue size")
 
 FILES_UPLOADER_LATENCY = Histogram(
-    "cognite_files_uploader_latency", "Distribution of times in seconds records spend in the queue"
+    "cognite_files_uploader_latency", "Distribution of times in minutes records spend in the queue",
 )
 
 
@@ -345,7 +345,9 @@ class RawUploadQueue(AbstractUploadQueue):
                     self.rows_written.labels(_labels).inc(len(patch))
                     _written: Arrow = arrow.utcnow()
                     for r in rows:
-                        self.latency.labels(_labels).observe((_written - r.created).total_seconds())
+                        self.latency.labels(_labels).observe(
+                            (_written - r.created).total_seconds() / 60
+                        )  # show data in minutes
 
                     # Perform post-upload logic if applicable
                     try:
@@ -496,7 +498,9 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
 
             self.upload_queue[either_id].extend(datapoints)
             self.points_queued.inc(len(datapoints))
-            self.latency.observe((arrow.utcnow() - self.latency_zero_point).total_seconds())
+            self.latency.observe(
+                (arrow.utcnow() - self.latency_zero_point).total_seconds() / 60
+            )  # show data in minutes
             self.upload_queue_size += len(datapoints)
             self.queue_size.set(self.upload_queue_size)
 
@@ -697,7 +701,9 @@ class EventUploadQueue(AbstractUploadQueue):
         with self.lock:
             self._upload_batch()
 
-            self.latency.observe((arrow.utcnow() - self.latency_zero_point).total_seconds())
+            self.latency.observe(
+                (arrow.utcnow() - self.latency_zero_point).total_seconds() / 60
+            )  # show data in minutes
             self.events_written.inc(self.upload_queue_size)
 
             try:
@@ -911,7 +917,9 @@ class SequenceUploadQueue(AbstractUploadQueue):
             for either_id, upload_this in self.upload_queue.items():
                 _labels = str(either_id.content())
                 self._upload_single(either_id, upload_this)
-                self.latency.observe((arrow.utcnow() - self.latency_zero_point).total_seconds())
+                self.latency.observe(
+                    (arrow.utcnow() - self.latency_zero_point).total_seconds() / 60
+                )  # show data in minutes
                 self.points_written.inc()
 
             try:
@@ -1095,7 +1103,9 @@ class FileUploadQueue(AbstractUploadQueue):
         with self.lock:
             self._upload_batch()
 
-            self.latency.observe((arrow.utcnow() - self.latency_zero_point).total_seconds())
+            self.latency.observe(
+                (arrow.utcnow() - self.latency_zero_point).total_seconds() / 60
+            )  # show data in minutes
             self.files_written.inc(self.upload_queue_size)
 
             try:
