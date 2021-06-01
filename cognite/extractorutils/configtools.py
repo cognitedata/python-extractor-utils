@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from logging.handlers import TimedRotatingFileHandler
 from threading import Event
 from time import sleep
-from typing import Any, Dict, List, Optional, T, TextIO, Type, Union
+from typing import Any, Dict, List, Optional, T, TextIO, Type, TypeVar, Union
 from urllib.parse import urljoin
 
 import dacite
@@ -97,51 +97,6 @@ def _to_snake_case(dictionary: Dict[str, Any], case_style: str) -> Dict[str, Any
         return fix_dict(dictionary, translate_camel)
     else:
         raise ValueError(f"Invalid case style: {case_style}")
-
-
-def load_yaml(source: Union[TextIO, str], config_type: Type[T], case_style: str = "hyphen", expand_envvars=True) -> T:
-    """
-    Read a YAML file, and create a config object based on its contents.
-
-    Args:
-        source: Input stream (as returned by open(...)) or string containing YAML.
-        config_type: Class of config type (i.e. your custom subclass of BaseConfig).
-        case_style: Casing convention of config file. Valid options are 'snake', 'hyphen' or 'camel'. Should be
-            'hyphen'.
-        expand_envvars: Substitute values with the pattern ${VAR} with the content of the environment variable VAR
-
-    Returns:
-        An initialized config object.
-
-    Raises:
-        InvalidConfigError: If any config field is given as an invalid type, is missing or is unknown
-    """
-
-    def env_constructor(_, node):
-        # Expnadvars uses same syntax as our env var substitution
-        return os.path.expandvars(node.value)
-
-    class EnvLoader(yaml.SafeLoader):
-        pass
-
-    EnvLoader.add_implicit_resolver("!env", re.compile(r"\$\{([^}^{]+)\}"), None)
-    EnvLoader.add_constructor("!env", env_constructor)
-
-    loader = EnvLoader if expand_envvars else yaml.SafeLoader
-
-    # Safe to use load instead of safe_load since both loader classes are based on SafeLoader
-    config_dict = yaml.load(source, Loader=loader)
-
-    config_dict = _to_snake_case(config_dict, case_style)
-
-    try:
-        config = dacite.from_dict(data=config_dict, data_class=config_type, config=dacite.Config(strict=True))
-    except (dacite.WrongTypeError, dacite.MissingValueError, dacite.UnionMatchError, dacite.UnexpectedDataError) as e:
-        raise InvalidConfigError(str(e))
-    except dacite.ForwardReferenceError as e:
-        raise ValueError(f"Invalid config class: {str(e)}")
-
-    return config
 
 
 @dataclass
@@ -240,7 +195,7 @@ class LoggingConfig:
 
         if self.file:
             file_handler = TimedRotatingFileHandler(
-                filename=self.file.path, when="D", utc=True, backupCount=self.file.retention,
+                filename=self.file.path, when="midnight", utc=True, backupCount=self.file.retention,
             )
             file_handler.setLevel(self.file.level)
             file_handler.setFormatter(fmt)
@@ -400,3 +355,53 @@ class StateStoreConfig:
             return LocalStateStore(file_path="states.json")
         else:
             return NoStateStore()
+
+
+CustomConfigClass = TypeVar("CustomConfigClass", bound=BaseConfig)
+
+
+def load_yaml(
+    source: Union[TextIO, str], config_type: Type[CustomConfigClass], case_style: str = "hyphen", expand_envvars=True
+) -> CustomConfigClass:
+    """
+    Read a YAML file, and create a config object based on its contents.
+
+    Args:
+        source: Input stream (as returned by open(...)) or string containing YAML.
+        config_type: Class of config type (i.e. your custom subclass of BaseConfig).
+        case_style: Casing convention of config file. Valid options are 'snake', 'hyphen' or 'camel'. Should be
+            'hyphen'.
+        expand_envvars: Substitute values with the pattern ${VAR} with the content of the environment variable VAR
+
+    Returns:
+        An initialized config object.
+
+    Raises:
+        InvalidConfigError: If any config field is given as an invalid type, is missing or is unknown
+    """
+
+    def env_constructor(_, node):
+        # Expnadvars uses same syntax as our env var substitution
+        return os.path.expandvars(node.value)
+
+    class EnvLoader(yaml.SafeLoader):
+        pass
+
+    EnvLoader.add_implicit_resolver("!env", re.compile(r"\$\{([^}^{]+)\}"), None)
+    EnvLoader.add_constructor("!env", env_constructor)
+
+    loader = EnvLoader if expand_envvars else yaml.SafeLoader
+
+    # Safe to use load instead of safe_load since both loader classes are based on SafeLoader
+    config_dict = yaml.load(source, Loader=loader)
+
+    config_dict = _to_snake_case(config_dict, case_style)
+
+    try:
+        config = dacite.from_dict(data=config_dict, data_class=config_type, config=dacite.Config(strict=True))
+    except (dacite.WrongTypeError, dacite.MissingValueError, dacite.UnionMatchError, dacite.UnexpectedDataError) as e:
+        raise InvalidConfigError(str(e))
+    except dacite.ForwardReferenceError as e:
+        raise ValueError(f"Invalid config class: {str(e)}")
+
+    return config
