@@ -896,8 +896,8 @@ class SequenceUploadQueue(AbstractUploadQueue):
             seq = self.upload_queue.get(either_id)
             if seq is not None:
                 # Update sequence
-                seq.values = [*seq.values, *rows.values]
-                seq.row_numbers = [*seq.row_numbers, *rows.row_numbers]
+                seq.values.extend(rows.values)
+                seq.row_numbers.extend(rows.row_numbers)
 
                 self.upload_queue[either_id] = seq
             else:
