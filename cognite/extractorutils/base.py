@@ -61,16 +61,21 @@ class Extractor(Generic[CustomConfigClass]):
         else:
             self.metrics = BaseMetrics(extractor_name=name, extractor_version=version)
 
-    def _load_config(self) -> None:
-        argument_parser = argparse.ArgumentParser(sys.argv[0], description=self.description)
-        argument_parser.add_argument(
-            "config", nargs=1, type=str, help="The YAML file containing configuration for the extractor."
-        )
-        argument_parser.add_argument("-v", "--version", action="version", version=f"{self.name} v{self.version}")
-        args = argument_parser.parse_args()
+    def _load_config(self, override_path: Optional[str] = None) -> None:
+        if override_path:
+            with open(override_path) as stream:
+                self.config = load_yaml(source=stream, config_type=self.config_class)
 
-        with open(args.config[0], "r") as stream:
-            self.config = load_yaml(source=stream, config_type=self.config_class)
+        else:
+            argument_parser = argparse.ArgumentParser(sys.argv[0], description=self.description)
+            argument_parser.add_argument(
+                "config", nargs=1, type=str, help="The YAML file containing configuration for the extractor."
+            )
+            argument_parser.add_argument("-v", "--version", action="version", version=f"{self.name} v{self.version}")
+            args = argument_parser.parse_args()
+
+            with open(args.config[0], "r") as stream:
+                self.config = load_yaml(source=stream, config_type=self.config_class)
 
     def _load_state_store(self) -> None:
         def recursive_find_state_store(d: Dict[str, Any]) -> Optional[StateStoreConfig]:

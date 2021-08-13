@@ -1,0 +1,12 @@
+version: "1"
+
+logger:
+  console:
+    level: INFO
+
+cognite:
+  project: mathiaslohne-develop
+  api-key: OWJhYzUyZDEtNmQxNy00OTc2LWI1MWYtYjA4Yjk0YmI3MzFj
+
+source:
+  frequency: 0.1
