@@ -16,9 +16,9 @@ import unittest
 from unittest.mock import Mock, patch
 
 from cognite.client import CogniteClient
-from cognite.client.data_classes import TimeSeries
+from cognite.client.data_classes import Asset, TimeSeries
 from cognite.client.exceptions import CogniteNotFoundError
-from cognite.extractorutils.util import EitherId, ensure_time_series
+from cognite.extractorutils.util import EitherId, ensure_assets, ensure_time_series
 
 
 class TestEnsureTimeSeries(unittest.TestCase):
@@ -55,6 +55,42 @@ class TestEnsureTimeSeries(unittest.TestCase):
         ensure_time_series(self.client, time_series)
 
         self.client.time_series.create.assert_not_called()
+
+
+class TestEnsureAssets(unittest.TestCase):
+    @patch("cognite.client.CogniteClient")
+    def setUp(self, MockCogniteClient) -> None:
+        self.client: CogniteClient = MockCogniteClient()
+
+    def test_nothing_in_cdf(self):
+        assets = [Asset(external_id="a"), Asset(external_id="b")]
+
+        self.client.assets.retrieve_multiple = Mock(
+            side_effect=CogniteNotFoundError([{"externalId": ts.external_id} for ts in assets])
+        )
+
+        ensure_assets(self.client, assets)
+
+        self.client.assets.create.assert_called_once_with(assets)
+
+    def test_some_in_cdf(self):
+        existing = [Asset(external_id="a")]
+        new = [Asset(external_id="b")]
+
+        self.client.assets.retrieve_multiple = Mock(
+            side_effect=CogniteNotFoundError([{"externalId": ts.external_id} for ts in new])
+        )
+
+        ensure_assets(self.client, existing + new)
+
+        self.client.assets.create.assert_called_once_with(new)
+
+    def test_all_in_cdf(self):
+        assets = [Asset(external_id="a"), Asset(external_id="b")]
+
+        ensure_assets(self.client, assets)
+
+        self.client.assets.create.assert_not_called()
 
 
 class TestEitherId(unittest.TestCase):
