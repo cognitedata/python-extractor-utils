@@ -22,8 +22,23 @@ from threading import Event
 from typing import Any, Dict, Iterable, Union
 
 from cognite.client import CogniteClient
-from cognite.client.data_classes import TimeSeries
+from cognite.client.data_classes import Asset, TimeSeries
 from cognite.client.exceptions import CogniteNotFoundError
+
+
+def _ensure(endpoint: Any, items: Iterable[Any]) -> None:
+    try:
+        external_ids = [ts.external_id for ts in items]
+
+        # Not doing anything with the result, only want to make sure they exist. This will throw an exception if not.
+        endpoint.retrieve_multiple(external_ids=external_ids)
+
+    except CogniteNotFoundError as e:
+        # Create the missing time series
+        external_ids = [obj["externalId"] for obj in e.not_found]
+
+        create_these = [ts for ts in items if ts.external_id in external_ids]
+        endpoint.create(create_these)
 
 
 def ensure_time_series(cdf_client: CogniteClient, time_series: Iterable[TimeSeries]) -> None:
@@ -36,18 +51,20 @@ def ensure_time_series(cdf_client: CogniteClient, time_series: Iterable[TimeSeri
         cdf_client: Tenant to create time series in
         time_series: Time series to create
     """
-    try:
-        external_ids = [ts.external_id for ts in time_series]
+    _ensure(cdf_client.time_series, time_series)
 
-        # Not doing anything with the result, only want to make sure they exist. This will throw an exception if not.
-        cdf_client.time_series.retrieve_multiple(external_ids=external_ids)
 
-    except CogniteNotFoundError as e:
-        # Create the missing time series
-        external_ids = [obj["externalId"] for obj in e.not_found]
+def ensure_assets(cdf_client: CogniteClient, assets: Iterable[Asset]) -> None:
+    """
+    Ensure that all the given assets exists in CDF.
 
-        create_these = [ts for ts in time_series if ts.external_id in external_ids]
-        cdf_client.time_series.create(create_these)
+    Searches through the tenant after the external IDs of the assets given, and creates those that are missing.
+
+    Args:
+        cdf_client: Tenant to create assets in
+        assets: Assets to create
+    """
+    _ensure(cdf_client.assets, assets)
 
 
 def set_event_on_interrupt(stop_event: Event) -> None:
