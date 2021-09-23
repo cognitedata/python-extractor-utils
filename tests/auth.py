@@ -30,7 +30,10 @@ def main():
 
     config = load_yaml(open("config.yaml"), CogniteConfig)
     cdf = config.get_cognite_client("AAD test")
-    print("Login status", cdf.login.status())
+    if config.api_key:
+        print("Login status", cdf.login.status())
+    else:
+        print("Token status", cdf.iam.token.inspect())
 
     tss = cdf.time_series.list(limit=100)
     print("Found %d time series" % len(tss))
