@@ -4,6 +4,16 @@ Package reference
 .. toctree::
 
 
+Base class for extractors
+-------------------------
+
+.. autoclass:: cognite.extractorutils.Extractor
+    :members:
+    :undoc-members:
+    :inherited-members:
+    :show-inheritance:
+
+
 ``configtools`` - Utilities for reading, parsing and validating config files
 ----------------------------------------------------------------------------
 
@@ -63,6 +73,17 @@ Exceptions
 ^^^^^^^^^^
 
 .. autoexception:: cognite.extractorutils.configtools.InvalidConfigError
+
+
+``throttle`` - Tools for throttling
+-----------------------------------
+
+.. automodule:: cognite.extractorutils.throttle
+    :members:
+    :undoc-members:
+    :inherited-members:
+    :show-inheritance:
+
 
 
 ``metrics`` - Automatic pushers of performance metrics

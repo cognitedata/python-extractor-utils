@@ -29,6 +29,29 @@ from cognite.extractorutils.util import set_event_on_interrupt
 
 
 class Extractor(Generic[CustomConfigClass]):
+    """
+    Base class for extractors.
+
+    When used as a context manager, the Extractor class will parse command line arguments, load a configuration file,
+    set up everything needed for the extractor to run, and call the ``run_handle``. If the extractor raises an
+    exception, the exception will be handled by the Extractor class and logged and reported as an error.
+
+    Args:
+        name: Name of the extractor, how it's invoked from the command line.
+        description: A short 1-2 sentence description of the extractor.
+        version: Version number, following semantic versioning.
+        run_handle: A function to call when setup is done that runs the extractor, taking a cognite client, state store
+            config object and a shutdown event as arguments.
+        config_class: A class (based on the BaseConfig class) that defines the configuration schema for the extractor
+        metrics: Metrics collection, a default one with be created if omitted.
+        use_default_state_store: Create a simple instance of the LocalStateStore to provide to the run handle. If false
+            a NoStateStore will be created in its place.
+        cancelation_token: An event that will be set when the extractor should shut down, an empty one will be created
+            if omitted.
+        config_file_path: If supplied, the extractor will not use command line arguments to get a config file, but
+            rather use the supplied path.
+    """
+
     def __init__(
         self,
         *,
@@ -64,6 +87,13 @@ class Extractor(Generic[CustomConfigClass]):
             self.metrics = BaseMetrics(extractor_name=name, extractor_version=version)
 
     def _load_config(self, override_path: Optional[str] = None) -> None:
+        """
+        Load a configuration file, either from the specified path, or by a path specified by the user in a command line
+        arg. Will quit further execution of no path is given.
+
+        Args:
+            override_path: Optional override for file path, ie don't parse command line arguments
+        """
         if override_path:
             with open(override_path) as stream:
                 self.config = load_yaml(source=stream, config_type=self.config_class)
@@ -81,6 +111,14 @@ class Extractor(Generic[CustomConfigClass]):
                 self.config = load_yaml(source=stream, config_type=self.config_class)
 
     def _load_state_store(self) -> None:
+        """
+        Searches through the config object for a StateStoreConfig. If found, it will use that configuration to generate
+        a state store, if no such config is found it will either create a LocalStateStore or a NoStateStore depending
+        on whether the  ``use_default_state_store`` argument to the constructor was true or false.
+
+        Either way, the state_store attribute is guaranteed to be set after calling this method.
+        """
+
         def recursive_find_state_store(d: Dict[str, Any]) -> Optional[StateStoreConfig]:
             for k in d:
                 if is_dataclass(d[k]):
@@ -98,13 +136,30 @@ class Extractor(Generic[CustomConfigClass]):
             self.state_store = NoStateStore()
 
     def _report_success(self) -> None:
+        """
+        Called on a successful exit of the extractor
+        """
         pass
 
     def _report_error(self, exc_type: Type[BaseException], exc_val: BaseException, exc_tb: TracebackType) -> None:
+        """
+        Called on an unsuccessful exit of the extractor
+
+        Args:
+            exc_type: Type of exception that caused the extractor to fail
+            exc_val: Exception object that caused the extractor to fail
+            exc_tb: Stack trace of where the extractor failed
+        """
         logger = logging.getLogger(__name__)
         logger.error("Unexpected error during extraction", exc_info=exc_val)
 
     def __enter__(self) -> "Extractor":
+        """
+        Configures and initializes the global logger, cognite client, loads config file, state store, etc.
+
+        Returns:
+            self
+        """
         self._load_config(override_path=self.config_file_path)
 
         set_event_on_interrupt(self.cancelation_token)
@@ -125,7 +180,7 @@ class Extractor(Generic[CustomConfigClass]):
 
         def heartbeat_loop():
             while not self.cancelation_token.is_set():
-                self.cancelation_token.wait(60)
+                self.cancelation_token.wait(600)
 
         Thread(target=heartbeat_loop, name="HeartbeatLoop", daemon=True).start()
 
@@ -135,6 +190,20 @@ class Extractor(Generic[CustomConfigClass]):
     def __exit__(
         self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
     ) -> bool:
+        """
+        Shuts down the extractor. Makes sure states are preserved, that all uploads of data and metrics are done, etc.
+
+        Args:
+            exc_type: Will be provided by runtime. If an unhandled exception occurred, this will be the type of that
+                exception.
+            exc_val: Will be provided by runtime. If an unhandled exception occurred, this will be the instance of that
+                exception.
+            exc_tb: Will be provided by runtime. If an unhandled exception occurred, this will be the stack trace of
+                that exception.
+
+        Returns:
+            True if the extractor shut down cleanly, False if the extractor was shut down due to an unhandled error
+        """
         self.cancelation_token.set()
 
         if self.state_store:
@@ -153,6 +222,12 @@ class Extractor(Generic[CustomConfigClass]):
         return exc_val is None
 
     def run(self) -> None:
+        """
+        Run the extractor. Ensures that the Extractor is set up correctly (``run`` called within a ``with``) and calls
+        the ``run_handle``.
+
+        Can be overrided in subclasses.
+        """
         if not self.started:
             raise ValueError("You must run the extractor in a context manager")
         if self.run_handle:
