@@ -338,7 +338,7 @@ class CognitePusher(AbstractMetricsPusher):
 
         self._init_cdf()
 
-        self._cdf_project = cdf_client.login.status().project
+        self._cdf_project = cdf_client.config.project
 
     def _init_cdf(self) -> None:
         """
