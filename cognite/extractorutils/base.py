@@ -19,7 +19,7 @@ import traceback
 from dataclasses import is_dataclass
 from threading import Event, Thread
 from types import TracebackType
-from typing import Any, Callable, Dict, Generic, Optional, Type, TypeVar
+from typing import Any, Callable, Dict, Generic, Optional, Type
 
 from cognite.client import CogniteClient
 from cognite.extractorutils.configtools import CustomConfigClass, StateStoreConfig, load_yaml
@@ -40,6 +40,7 @@ class Extractor(Generic[CustomConfigClass]):
         metrics: Optional[BaseMetrics] = None,
         use_default_state_store: bool = True,
         cancelation_token: Event = Event(),
+        config_file_path: Optional[str] = None,
     ):
         self.name = name
         self.description = description
@@ -48,6 +49,7 @@ class Extractor(Generic[CustomConfigClass]):
         self.use_default_state_store = use_default_state_store
         self.version = version
         self.cancelation_token = cancelation_token
+        self.config_file_path = config_file_path
 
         self.started = False
         self.configured_logger = False
@@ -75,6 +77,7 @@ class Extractor(Generic[CustomConfigClass]):
             args = argument_parser.parse_args()
 
             with open(args.config[0], "r") as stream:
+                self.config_file_path = args.config[0]
                 self.config = load_yaml(source=stream, config_type=self.config_class)
 
     def _load_state_store(self) -> None:
@@ -98,10 +101,11 @@ class Extractor(Generic[CustomConfigClass]):
         pass
 
     def _report_error(self, exc_type: Type[BaseException], exc_val: BaseException, exc_tb: TracebackType) -> None:
-        pass
+        logger = logging.getLogger(__name__)
+        logger.error("Unexpected error during extraction", exc_info=exc_val)
 
     def __enter__(self) -> "Extractor":
-        self._load_config()
+        self._load_config(override_path=self.config_file_path)
 
         set_event_on_interrupt(self.cancelation_token)
 
