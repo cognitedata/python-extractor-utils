@@ -11,6 +11,11 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+
+"""
+Module containing tools for throttling extractors to avoid overloading a source system
+"""
+
 import logging
 from threading import Event
 from time import time
