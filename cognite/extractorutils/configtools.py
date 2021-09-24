@@ -31,13 +31,14 @@ import dacite
 import yaml
 
 from cognite.client import CogniteClient
-from cognite.client.data_classes import Asset
+from cognite.client.data_classes import Asset, DataSet
 
 from .authentication import Authenticator, AuthenticatorConfig
 from .exceptions import InvalidConfigError
 from .logging_prometheus import export_log_stats_on_root_logger
 from .metrics import AbstractMetricsPusher, CognitePusher, PrometheusPusher
 from .statestore import AbstractStateStore, LocalStateStore, NoStateStore, RawStateStore
+from .util import EitherId
 
 _logger = logging.getLogger(__name__)
 
@@ -100,6 +101,16 @@ def _to_snake_case(dictionary: Dict[str, Any], case_style: str) -> Dict[str, Any
 
 
 @dataclass
+class EitherIdConfig:
+    id: Optional[int]
+    external_id: Optional[str]
+
+    @property
+    def either_id(self) -> EitherId:
+        return EitherId(internal_id=self.id, external_id=self.external_id)
+
+
+@dataclass
 class CogniteConfig:
     """
     Configuration parameters for CDF connection, such as project name, host address and API key
@@ -108,6 +119,7 @@ class CogniteConfig:
     project: str
     api_key: Optional[str]
     idp_authentication: Optional[AuthenticatorConfig]
+    data_set: Optional[EitherIdConfig]
     data_set_id: Optional[int]
     data_set_external_id: Optional[str]
     external_id_prefix: str = ""
@@ -136,6 +148,21 @@ class CogniteConfig:
 
         return CogniteClient(
             project=self.project, base_url=self.host, client_name=client_name, disable_pypi_version_check=True, **kwargs
+        )
+
+    def get_data_set(self, cdf_client: CogniteClient) -> DataSet:
+        if self.data_set_external_id:
+            logging.getLogger(__name__).warning(
+                "Using data-set-external-id is deprecated, please use data-set-id/external-id instead"
+            )
+            return cdf_client.data_sets.retrieve(external_id=self.data_set_external_id)
+
+        if self.data_set_id:
+            logging.getLogger(__name__).warning("Using data-set-id is deprecated, please use data-set/id instead")
+            return cdf_client.data_sets.retrieve(external_id=self.data_set_external_id)
+
+        return cdf_client.data_sets.retrieve(
+            id=self.data_set.either_id.internal_id, external_id=self.data_set.either_id.external_id
         )
 
 
