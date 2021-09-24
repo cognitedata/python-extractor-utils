@@ -40,10 +40,6 @@ class TestConfigtools(unittest.TestCase):
         except CogniteDuplicatedError:
             cls.data_set_id = cls.client.data_sets.retrieve(external_id=cls.data_set_extid).id
 
-    @classmethod
-    def tearDownClass(cls) -> None:
-        pass
-
     def test_dataset_resolve(self):
         config_file_id = StringIO(
             f"""
