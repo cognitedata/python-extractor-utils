@@ -56,9 +56,10 @@ class TestConfigtools(unittest.TestCase):
         """
         )
 
-        config: CogniteConfig = load_yaml(config_file_id, BaseConfig)
-        self.assertEqual(config.get_data_set(self.client).external_id, TestConfigtools.data_set_extid)
-        self.assertEqual(config.get_data_set(self.client).name, TestConfigtools.data_set_name)
+        config: BaseConfig = load_yaml(config_file_id, BaseConfig)
+        print(config)
+        self.assertEqual(config.cognite.get_data_set(self.client).external_id, TestConfigtools.data_set_extid)
+        self.assertEqual(config.cognite.get_data_set(self.client).name, TestConfigtools.data_set_name)
 
         config_file_extid = StringIO(
             f"""
@@ -75,6 +76,6 @@ class TestConfigtools(unittest.TestCase):
         """
         )
 
-        config: CogniteConfig = load_yaml(config_file_id, BaseConfig)
-        self.assertEqual(config.get_data_set(self.client).external_id, TestConfigtools.data_set_extid)
-        self.assertEqual(config.get_data_set(self.client).name, TestConfigtools.data_set_name)
+        config2: BaseConfig = load_yaml(config_file_extid, BaseConfig)
+        self.assertEqual(config2.cognite.get_data_set(self.client).id, TestConfigtools.data_set_id)
+        self.assertEqual(config2.cognite.get_data_set(self.client).name, TestConfigtools.data_set_name)

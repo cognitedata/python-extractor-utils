@@ -107,7 +107,7 @@ class EitherIdConfig:
 
     @property
     def either_id(self) -> EitherId:
-        return EitherId(internal_id=self.id, external_id=self.external_id)
+        return EitherId(id=self.id, external_id=self.external_id)
 
 
 @dataclass
@@ -161,6 +161,8 @@ class CogniteConfig:
             logging.getLogger(__name__).warning("Using data-set-id is deprecated, please use data-set/id instead")
             return cdf_client.data_sets.retrieve(external_id=self.data_set_external_id)
 
+        eihter = self.data_set.either_id
+        print(eihter)
         return cdf_client.data_sets.retrieve(
             id=self.data_set.either_id.internal_id, external_id=self.data_set.either_id.external_id
         )
