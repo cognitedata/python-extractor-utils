@@ -21,6 +21,7 @@ import os
 import re
 import time
 from dataclasses import dataclass
+from enum import Enum
 from logging.handlers import TimedRotatingFileHandler
 from threading import Event
 from time import sleep
@@ -427,7 +428,9 @@ def load_yaml(
     config_dict = _to_snake_case(config_dict, case_style)
 
     try:
-        config = dacite.from_dict(data=config_dict, data_class=config_type, config=dacite.Config(strict=True))
+        config = dacite.from_dict(
+            data=config_dict, data_class=config_type, config=dacite.Config(strict=True, cast=[Enum])
+        )
     except (dacite.WrongTypeError, dacite.MissingValueError, dacite.UnionMatchError, dacite.UnexpectedDataError) as e:
         raise InvalidConfigError(str(e))
     except dacite.ForwardReferenceError as e:
