@@ -98,6 +98,8 @@ class EitherId:
     """
 
     def __init__(self, **kwargs):
+        print(kwargs)
+
         internal_id = kwargs.get("id")
         external_id = kwargs.get("externalId") or kwargs.get("external_id")
 
