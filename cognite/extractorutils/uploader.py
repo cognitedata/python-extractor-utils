@@ -1176,6 +1176,21 @@ class FileUploadQueue(AbstractUploadQueue):
 
 
 class BytesUploadQueue(AbstractUploadQueue):
+    """
+    Upload queue for bytes
+
+    Args:
+        cdf_client: Cognite Data Fusion client to use
+        post_upload_function: A function that will be called after each upload. The function will be given one argument:
+            A list of the events that were uploaded.
+        max_queue_size: Maximum size of upload queue. Defaults to no max size.
+        max_upload_interval: Automatically trigger an upload each m seconds when run as a thread (use start/stop
+            methods).
+        trigger_log_level: Log level to log upload triggers to.
+        thread_name: Thread name of uploader thread.
+        overwrite_existing: If 'overwrite' is set to true, fields for the files found for externalIds can be overwritten
+    """
+
     def __init__(
         self,
         cdf_client: CogniteClient,
@@ -1201,29 +1216,32 @@ class BytesUploadQueue(AbstractUploadQueue):
         self.upload_queue_size = 0
         self.latency_zero_point = arrow.utcnow()
 
-        # Prometheus
         self.bytes_queued = BYTES_UPLOADER_QUEUED
         self.queue_size = BYTES_UPLOADER_QUEUE_SIZE
         self.latency = BYTES_UPLOADER_LATENCY
         self.bytes_written = BYTES_UPLOADER_WRITTEN
 
-    def add_to_upload_queue(self, frame: bytes, metadata: FileMetadata) -> None:
+    def add_to_upload_queue(self, content: bytes, metadata: FileMetadata) -> None:
         """
-        Add the frame to the upload queue
-        :param frame: bytes
-        :param metadata:
-        :return:
+        Add object to upload queue. The queue will be uploaded if the queue size is larger than the threshold
+        specified in the __init__.
+        Args:
+            content: bytes object to upload
+            metadata: metadata for the given bytes object
         """
         with self.lock:
             if self.upload_queue_size == 0:
                 self.latency_zero_point = arrow.utcnow()
 
-            self.upload_queue.append((frame, metadata))
+            self.upload_queue.append((content, metadata))
             self.upload_queue_size += 1
             self.bytes_queued.inc()
             self.queue_size.set(self.upload_queue_size)
 
     def upload(self) -> None:
+        """
+        Trigger an upload of the queue, clears queue afterwards
+        """
         if len(self.upload_queue) == 0:
             return
 
@@ -1260,20 +1278,14 @@ class BytesUploadQueue(AbstractUploadQueue):
         max_delay=RETRY_MAX_DELAY,
         backoff=RETRY_BACKOFF_FACTOR,
     )
-    def _upload_single(self, index: int, frame: bytes, metadata: FileMetadata):
-        """
-        Upload single frame to CDF
-        :param index:
-        :param frame:
-        :param metadata:
-        :return:
-        """
+    def _upload_single(self, index: int, content: bytes, metadata: FileMetadata):
+        # Upload object
         file_meta_data: FileMetadata = self.cdf_client.files.upload_bytes(
-            frame, overwrite=self.overwrite_existing, **metadata.dump()
+            content, overwrite=self.overwrite_existing, **metadata.dump()
         )
 
         # Update meta-object in queue
-        self.upload_queue[index] = (frame, file_meta_data)
+        self.upload_queue[index] = (content, file_meta_data)
 
     def __enter__(self) -> "BytesUploadQueue":
         """
