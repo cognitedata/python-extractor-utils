@@ -22,6 +22,7 @@ from types import TracebackType
 from typing import Any, Callable, Dict, Generic, Optional, Type
 
 from cognite.client import CogniteClient
+from cognite.client.data_classes import ExtractionPipeline, ExtractionPipelineRun
 from cognite.extractorutils.configtools import CustomConfigClass, StateStoreConfig, load_yaml
 from cognite.extractorutils.metrics import BaseMetrics
 from cognite.extractorutils.statestore import AbstractStateStore, NoStateStore
@@ -64,6 +65,7 @@ class Extractor(Generic[CustomConfigClass]):
         use_default_state_store: bool = True,
         cancelation_token: Event = Event(),
         config_file_path: Optional[str] = None,
+        continuous_extractor: bool = False,
     ):
         self.name = name
         self.description = description
@@ -73,6 +75,7 @@ class Extractor(Generic[CustomConfigClass]):
         self.version = version
         self.cancelation_token = cancelation_token
         self.config_file_path = config_file_path
+        self.continuous_extractor = continuous_extractor
 
         self.started = False
         self.configured_logger = False
@@ -80,6 +83,8 @@ class Extractor(Generic[CustomConfigClass]):
         self.cognite_client: CogniteClient
         self.state_store: AbstractStateStore
         self.config: CustomConfigClass
+        self.extraction_pipeline: Optional[ExtractionPipeline]
+        self.logger: logging.Logger
 
         if metrics:
             self.metrics = metrics
@@ -135,11 +140,19 @@ class Extractor(Generic[CustomConfigClass]):
         else:
             self.state_store = NoStateStore()
 
+        self.state_store.initialize()
+
     def _report_success(self) -> None:
         """
         Called on a successful exit of the extractor
         """
-        pass
+        if self.extraction_pipeline:
+            self.logger.info("Reporting new successful run")
+            self.cognite_client.extraction_pipeline_runs.create(
+                ExtractionPipelineRun(
+                    external_id=self.extraction_pipeline.external_id, status="success", message="Successful shutdown"
+                )
+            )
 
     def _report_error(self, exc_type: Type[BaseException], exc_val: BaseException, exc_tb: TracebackType) -> None:
         """
@@ -150,8 +163,16 @@ class Extractor(Generic[CustomConfigClass]):
             exc_val: Exception object that caused the extractor to fail
             exc_tb: Stack trace of where the extractor failed
         """
-        logger = logging.getLogger(__name__)
-        logger.error("Unexpected error during extraction", exc_info=exc_val)
+        self.logger.error("Unexpected error during extraction", exc_info=exc_val)
+        if self.extraction_pipeline:
+            message = f"{exc_type.__name__}: {str(exc_val)}"[:1000]
+
+            self.logger.info(f"Reporting new failed run: {message}")
+            self.cognite_client.extraction_pipeline_runs.create(
+                ExtractionPipelineRun(
+                    external_id=self.extraction_pipeline.external_id, status="failure", message=message
+                )
+            )
 
     def __enter__(self) -> "Extractor":
         """
@@ -168,8 +189,12 @@ class Extractor(Generic[CustomConfigClass]):
             self.config.logger.setup_logging()
             self.configured_logger = True
 
+        self.logger = logging.getLogger(__name__)
+
         self.cognite_client = self.config.cognite.get_cognite_client(self.name)
         self._load_state_store()
+
+        self.extraction_pipeline = self.config.cognite.get_extraction_pipeline(self.cognite_client)
 
         try:
             self.config.metrics.start_pushers(self.cognite_client)
@@ -182,7 +207,26 @@ class Extractor(Generic[CustomConfigClass]):
             while not self.cancelation_token.is_set():
                 self.cancelation_token.wait(600)
 
-        Thread(target=heartbeat_loop, name="HeartbeatLoop", daemon=True).start()
+                if not self.cancelation_token.is_set():
+                    self.logger.info("Reporting new heartbeat")
+                    self.cognite_client.extraction_pipeline_runs.create(
+                        ExtractionPipelineRun(external_id=self.extraction_pipeline.external_id, status="seen")
+                    )
+
+        if self.extraction_pipeline:
+            self.logger.info("Starting heartbeat loop")
+            Thread(target=heartbeat_loop, name="HeartbeatLoop", daemon=True).start()
+        else:
+            self.logger.info("No extraction pipeline configured")
+
+        if self.extraction_pipeline and self.continuous_extractor:
+            self.cognite_client.extraction_pipeline_runs.create(
+                ExtractionPipelineRun(
+                    external_id=self.extraction_pipeline.external_id,
+                    status="success",
+                    message=f"New startup of {self.name}",
+                )
+            )
 
         self.started = True
         return self

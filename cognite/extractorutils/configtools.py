@@ -32,9 +32,10 @@ import dacite
 import yaml
 
 from cognite.client import CogniteClient
-from cognite.client.data_classes import Asset, DataSet
+from cognite.client.data_classes import Asset, DataSet, ExtractionPipeline
+from cognite.client.exceptions import CogniteNotFoundError
 
-from .authentication import Authenticator, AuthenticatorConfig
+from .authentication import AuthenticatorConfig
 from .exceptions import InvalidConfigError
 from .logging_prometheus import export_log_stats_on_root_logger
 from .metrics import AbstractMetricsPusher, CognitePusher, PrometheusPusher
@@ -123,6 +124,7 @@ class CogniteConfig:
     data_set: Optional[EitherIdConfig]
     data_set_id: Optional[int]
     data_set_external_id: Optional[str]
+    extraction_pipeline: Optional[EitherIdConfig]
     external_id_prefix: str = ""
     host: str = "https://api.cognitedata.com"
 
@@ -151,7 +153,7 @@ class CogniteConfig:
             project=self.project, base_url=self.host, client_name=client_name, disable_pypi_version_check=True, **kwargs
         )
 
-    def get_data_set(self, cdf_client: CogniteClient) -> DataSet:
+    def get_data_set(self, cdf_client: CogniteClient) -> Optional[DataSet]:
         if self.data_set_external_id:
             logging.getLogger(__name__).warning(
                 "Using data-set-external-id is deprecated, please use data-set-id/external-id instead"
@@ -162,10 +164,20 @@ class CogniteConfig:
             logging.getLogger(__name__).warning("Using data-set-id is deprecated, please use data-set/id instead")
             return cdf_client.data_sets.retrieve(external_id=self.data_set_external_id)
 
-        eihter = self.data_set.either_id
-        print(eihter)
+        if not self.data_set:
+            return None
+
         return cdf_client.data_sets.retrieve(
             id=self.data_set.either_id.internal_id, external_id=self.data_set.either_id.external_id
+        )
+
+    def get_extraction_pipeline(self, cdf_client: CogniteClient) -> Optional[ExtractionPipeline]:
+        if not self.extraction_pipeline:
+            return None
+
+        return cdf_client.extraction_pipelines.retrieve(
+            id=self.extraction_pipeline.either_id.internal_id,
+            external_id=self.extraction_pipeline.either_id.external_id,
         )
 
 
