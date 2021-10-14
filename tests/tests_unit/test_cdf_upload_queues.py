@@ -19,6 +19,7 @@ from unittest.mock import patch
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Event, FileMetadata, Row
 from cognite.extractorutils.uploader import (
+    BytesUploadQueue,
     EventUploadQueue,
     FileUploadQueue,
     RawUploadQueue,
@@ -232,6 +233,25 @@ class TestUploadQueue(unittest.TestCase):
         queue.start()
 
         queue.add_to_upload_queue(FileMetadata(name="hello.txt"), None)
+
+        time.sleep(2.1)
+
+        self.assertEqual(post_upload_test["value"], 1)
+
+    @patch("cognite.client.CogniteClient")
+    def test_bytes_uploader(self, MockCogniteClient):
+        client: CogniteClient = MockCogniteClient()
+        client.config.max_workers = 5
+
+        post_upload_test = {"value": 0}
+
+        def post(x):
+            post_upload_test["value"] += 1
+
+        queue = BytesUploadQueue(client, max_upload_interval=2, post_upload_function=post)
+        queue.start()
+
+        queue.add_to_upload_queue(b"bytes", FileMetadata(name="example.png"))
 
         time.sleep(2.1)
 
