@@ -27,5 +27,3 @@ Contents
    quickstart
 
    docs
-
-
