@@ -31,6 +31,10 @@ extractor-specific metrics, as such:
             self.a_counter = Counter("my_extractor_example_counter", "An example counter")
             ...
 
+The metrics module also contains some Pusher classes that are used to routinely send metrics to a
+remote server, these can be automatically created with the ``start_pushers`` method described in
+``configtools``.
+
 """
 
 import logging
