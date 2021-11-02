@@ -53,7 +53,7 @@ relative) path to a config file.
 Python is not available at production environment
 -------------------------------------------------
 
-If Python is not available, we have make a completely self-contained executable of the extractor. We can use
+If Python is not available, we have to make a completely self-contained executable of the extractor. We can use
 `PyInstaller <https://www.pyinstaller.org/>`_ for this, however ``cogex`` contains functionality that wraps around
 PyInstaller with suitable defaults and configuration to ease the process further. To build a self-contained executable
 of the extractor, run
