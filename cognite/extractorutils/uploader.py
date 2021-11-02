@@ -285,6 +285,13 @@ FILES_UPLOADER_LATENCY = Histogram(
     "cognite_files_uploader_latency", "Distribution of times in minutes records spend in the queue",
 )
 
+BYTES_UPLOADER_QUEUED = Counter("cognite_bytes_uploader_queued", "Total number of frames queued")
+BYTES_UPLOADER_WRITTEN = Counter("cognite_bytes_uploader_written", "Total number of frames written")
+BYTES_UPLOADER_QUEUE_SIZE = Gauge("cognite_bytes_uploader_queue_size", "Internal queue size")
+BYTES_UPLOADER_LATENCY = Histogram(
+    "cognite_bytes_uploader_latency", "Distribution of times in minutes records spend in the queue",
+)
+
 
 class RawUploadQueue(AbstractUploadQueue):
     """
@@ -1166,6 +1173,149 @@ class FileUploadQueue(AbstractUploadQueue):
                 pool.submit(self._upload_single, i, file_name, file_meta)
 
     def __enter__(self) -> "FileUploadQueue":
+        """
+        Wraps around start method, for use as context manager
+
+        Returns:
+            self
+        """
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """
+        Wraps around stop method, for use as context manager
+
+        Args:
+            exc_type: Exception type
+            exc_val: Exception value
+            exc_tb: Traceback
+        """
+        self.stop()
+
+    def __len__(self) -> int:
+        """
+        The size of the upload queue
+
+        Returns:
+            Number of events in queue
+        """
+        return self.upload_queue_size
+
+
+class BytesUploadQueue(AbstractUploadQueue):
+    """
+    Upload queue for bytes
+
+    Args:
+        cdf_client: Cognite Data Fusion client to use
+        post_upload_function: A function that will be called after each upload. The function will be given one argument:
+            A list of the events that were uploaded.
+        max_queue_size: Maximum size of upload queue. Defaults to no max size.
+        max_upload_interval: Automatically trigger an upload each m seconds when run as a thread (use start/stop
+            methods).
+        trigger_log_level: Log level to log upload triggers to.
+        thread_name: Thread name of uploader thread.
+        overwrite_existing: If 'overwrite' is set to true, fields for the files found for externalIds can be overwritten
+    """
+
+    def __init__(
+        self,
+        cdf_client: CogniteClient,
+        post_upload_function: Optional[Callable[[List[Any]], None]] = None,
+        max_queue_size: Optional[int] = None,
+        max_upload_interval: Optional[int] = None,
+        trigger_log_level: str = "DEBUG",
+        thread_name: Optional[str] = None,
+        overwrite_existing: bool = False,
+        cancelation_token: threading.Event = threading.Event(),
+    ):
+        super().__init__(
+            cdf_client,
+            post_upload_function,
+            max_queue_size,
+            max_upload_interval,
+            trigger_log_level,
+            thread_name,
+            cancelation_token,
+        )
+        self.upload_queue: List[Tuple[bytes, FileMetadata]] = []
+        self.overwrite_existing = overwrite_existing
+        self.upload_queue_size = 0
+        self.latency_zero_point = arrow.utcnow()
+
+        self.bytes_queued = BYTES_UPLOADER_QUEUED
+        self.queue_size = BYTES_UPLOADER_QUEUE_SIZE
+        self.latency = BYTES_UPLOADER_LATENCY
+        self.bytes_written = BYTES_UPLOADER_WRITTEN
+
+    def add_to_upload_queue(self, content: bytes, metadata: FileMetadata) -> None:
+        """
+        Add object to upload queue. The queue will be uploaded if the queue size is larger than the threshold
+        specified in the __init__.
+        Args:
+            content: bytes object to upload
+            metadata: metadata for the given bytes object
+        """
+        with self.lock:
+            if self.upload_queue_size == 0:
+                self.latency_zero_point = arrow.utcnow()
+
+            self.upload_queue.append((content, metadata))
+            self.upload_queue_size += 1
+            self.bytes_queued.inc()
+            self.queue_size.set(self.upload_queue_size)
+
+    def upload(self) -> None:
+        """
+        Trigger an upload of the queue, clears queue afterwards
+        """
+        if len(self.upload_queue) == 0:
+            return
+
+        with self.lock:
+            # Upload frames in batches
+            self._upload_batch()
+
+            # Log stats
+            self.latency.observe(
+                (arrow.utcnow() - self.latency_zero_point).total_seconds() / 60
+            )  # show data in minutes
+            self.bytes_written.inc(self.upload_queue_size)
+
+            try:
+                self._post_upload(self.upload_queue)
+            except Exception as e:
+                self.logger.error("Error in upload callback: %s", str(e))
+
+            # Clear queue
+            self.upload_queue.clear()
+            self.upload_queue_size = 0
+            self.queue_size.set(self.upload_queue_size)
+
+    def _upload_batch(self):
+        # Concurrently execute bytes-uploads
+        with ThreadPoolExecutor(self.cdf_client.config.max_workers) as pool:
+            for i, (frame, metadata) in enumerate(self.upload_queue):
+                pool.submit(self._upload_single, i, frame, metadata)
+
+    @retry(
+        exceptions=(CogniteAPIError, ConnectionError),
+        tries=RETRIES,
+        delay=RETRY_DELAY,
+        max_delay=RETRY_MAX_DELAY,
+        backoff=RETRY_BACKOFF_FACTOR,
+    )
+    def _upload_single(self, index: int, content: bytes, metadata: FileMetadata):
+        # Upload object
+        file_meta_data: FileMetadata = self.cdf_client.files.upload_bytes(
+            content, overwrite=self.overwrite_existing, **metadata.dump()
+        )
+
+        # Update meta-object in queue
+        self.upload_queue[index] = (content, file_meta_data)
+
+    def __enter__(self) -> "BytesUploadQueue":
         """
         Wraps around start method, for use as context manager
 
