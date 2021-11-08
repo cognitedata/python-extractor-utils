@@ -27,8 +27,9 @@ in a shell. To initialize a new extractor project, run
 in the directory you want your extractor project in.
 
 Running ``cogex init`` will first prompt you for some information about your extractor, and then set up a poetry
-environment, git repository, commit hooks with type and style checks and load a template. You can read more about
-``cogex`` `in the project repository <https://github.com/cognitedata/python-extractor-manager>`_.
+environment, git repository, commit hooks with type and style checks and load a template.
+
+.. You can read more about ``cogex`` `in the project repository <https://github.com/cognitedata/python-extractor-manager>`_.
 
 
 
