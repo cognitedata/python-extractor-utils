@@ -50,7 +50,7 @@ The ``configtools`` module contains several prebuilt config classes for many com
         extractor: ExtractorConfig
         source: SourceConfig
 
-
+.. BaseConfig:
 .. autoclass:: cognite.extractorutils.configtools.BaseConfig
     :undoc-members:
 .. autoclass:: cognite.extractorutils.configtools.CogniteConfig

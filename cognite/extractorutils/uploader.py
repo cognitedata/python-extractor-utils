@@ -23,17 +23,45 @@ delayed. To ensure that everything is uploaded you should set the `post_upload_f
 example, for a time series queue you might want to check the latest time stamp, as such (assuming incremental time
 stamps and using timestamp-value tuples as data point format):
 
+You can create an upload queue manually like this:
 
 .. code-block:: python
 
-    state_store = LocalStateStore("states.json")
+    queue = TimeSeriesUploadQueue(cdf_client=my_cognite_client)
 
-    queue = TimeSeriesUploadQueue(
-        cdf_client=my_cognite_client,
-        post_upload_function=state_store.post_upload_handler(),
-        max_upload_interval=1
-    )
+and then call ``queue.upload()`` to upload all data in the queue to CDF. However you could set some upload conditions
+and have the queue perform the uploads automatically, for example:
 
+.. code-block:: python
+
+    client = CogniteClient()
+    upload_queue = TimeSeriesUploadQueue(cdf_client=client, max_upload_interval=10)
+
+    upload_queue.start()
+
+    while not stop:
+        timestamp, value = source.query()
+        upload_queue.add_to_upload_queue((timestamp, value), external_id="my-timeseries")
+
+    upload_queue.stop()
+
+The ``max_upload_interval`` specifies the maximum time (in seconds) between each API call. The upload method will be
+called on ``stop()`` as well so no datapoints are lost. You can also use the queue as a context:
+
+.. code-block:: python
+
+    client = CogniteClient()
+
+    with TimeSeriesUploadQueue(cdf_client=client, max_upload_interval=1) as upload_queue:
+        while not stop:
+            timestamp, value = source.query()
+
+            upload_queue.add_to_upload_queue((timestamp, value), external_id="my-timeseries")
+
+This will call the ``start()`` and ``stop()`` methods automatically.
+
+You can also trigger uploads after a given amount of data is added, by using the ``max_queue_size`` keyword argument
+instead. If both are used, the condition being met first will trigger the upload.
 """
 
 import logging
