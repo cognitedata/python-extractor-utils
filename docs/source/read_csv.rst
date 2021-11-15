@@ -61,9 +61,6 @@ Our final ``extract_file`` function looks like the following:
         with open(file.path) as infile:
             reader = csv.DictReader(infile, delimiter=",")
 
-            # Skip header
-            next(reader)
-
             for row in reader:
                 queue.add_to_upload_queue(
                     database=file.destination.database,
