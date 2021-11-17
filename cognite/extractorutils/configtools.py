@@ -194,11 +194,13 @@ class CogniteConfig:
     data_set_id: Optional[int]
     data_set_external_id: Optional[str]
     extraction_pipeline: Optional[EitherIdConfig]
+    timeout: int = 30
     external_id_prefix: str = ""
     host: str = "https://api.cognitedata.com"
 
     def get_cognite_client(self, client_name: str, token_custom_args: Optional[Dict[str, str]] = None) -> CogniteClient:
         kwargs = {}
+
         if self.api_key:
             kwargs["api_key"] = self.api_key
         elif self.idp_authentication:
@@ -219,7 +221,12 @@ class CogniteConfig:
             raise InvalidConfigError("No CDF credentials")
 
         return CogniteClient(
-            project=self.project, base_url=self.host, client_name=client_name, disable_pypi_version_check=True, **kwargs
+            project=self.project,
+            base_url=self.host,
+            client_name=client_name,
+            disable_pypi_version_check=True,
+            timeout=self.timeout,
+            **kwargs,
         )
 
     def get_data_set(self, cdf_client: CogniteClient) -> Optional[DataSet]:
