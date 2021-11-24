@@ -429,7 +429,7 @@ class RawDestinationConfig:
 
 @dataclass
 class RawStateStoreConfig(RawDestinationConfig):
-    save_interval: int = 30
+    upload_interval: int = 30
 
 
 @dataclass
