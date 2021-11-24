@@ -12,6 +12,8 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import datetime
+import math
 import time
 import unittest
 from unittest.mock import patch
@@ -77,18 +79,20 @@ class TestUploadQueue(unittest.TestCase):
 
         queue = TimeSeriesUploadQueue(client)
 
-        queue.add_to_upload_queue(id=1, datapoints=[(1, 1), (2, 2)])
-        queue.add_to_upload_queue(id=2, datapoints=[(3, 3), (4, 4)])
-        queue.add_to_upload_queue(id=1, datapoints=[(5, 5), (6, 6)])
-        queue.add_to_upload_queue(id=3, datapoints=[(7, 7), (8, 8)])
+        start: float = datetime.datetime.now().timestamp() * 1000.0
+
+        queue.add_to_upload_queue(id=1, datapoints=[(start + 1, 1), (start + 2, 2)])
+        queue.add_to_upload_queue(id=2, datapoints=[(start + 3, 3), (start + 4, 4)])
+        queue.add_to_upload_queue(id=1, datapoints=[(start + 5, 5), (start + 6, 6)])
+        queue.add_to_upload_queue(id=3, datapoints=[(start + 7, 7), (start + 8, 8)])
 
         client.datapoints.insert_multiple.assert_not_called()
         queue.upload()
         client.datapoints.insert_multiple.assert_called_with(
             [
-                {"id": 1, "datapoints": [(1, 1), (2, 2), (5, 5), (6, 6)]},
-                {"id": 2, "datapoints": [(3, 3), (4, 4)]},
-                {"id": 3, "datapoints": [(7, 7), (8, 8)]},
+                {"id": 1, "datapoints": [(start + 1, 1), (start + 2, 2), (start + 5, 5), (start + 6, 6)]},
+                {"id": 2, "datapoints": [(start + 3, 3), (start + 4, 4)]},
+                {"id": 3, "datapoints": [(start + 7, 7), (start + 8, 8)]},
             ]
         )
 
@@ -104,18 +108,58 @@ class TestUploadQueue(unittest.TestCase):
         queue = TimeSeriesUploadQueue(client, max_upload_interval=2, post_upload_function=post)
         queue.start()
 
-        queue.add_to_upload_queue(id=1, datapoints=[(1, 1), (2, 2)])
-        queue.add_to_upload_queue(id=2, datapoints=[(3, 3), (4, 4)])
-        queue.add_to_upload_queue(id=1, datapoints=[(5, 5), (6, 6)])
-        queue.add_to_upload_queue(id=3, datapoints=[(7, 7), (8, 8)])
+        start: float = datetime.datetime.now().timestamp() * 1000.0
+
+        queue.add_to_upload_queue(id=1, datapoints=[(start + 1, 1), (start + 2, 2)])
+        queue.add_to_upload_queue(id=2, datapoints=[(start + 3, 3), (start + 4, 4)])
+        queue.add_to_upload_queue(id=1, datapoints=[(start + 5, 5), (start + 6, 6)])
+        queue.add_to_upload_queue(id=3, datapoints=[(start + 7, 7), (start + 8, 8)])
 
         time.sleep(2.1)
 
         client.datapoints.insert_multiple.assert_called_with(
             [
-                {"id": 1, "datapoints": [(1, 1), (2, 2), (5, 5), (6, 6)]},
-                {"id": 2, "datapoints": [(3, 3), (4, 4)]},
-                {"id": 3, "datapoints": [(7, 7), (8, 8)]},
+                {"id": 1, "datapoints": [(start + 1, 1), (start + 2, 2), (start + 5, 5), (start + 6, 6)]},
+                {"id": 2, "datapoints": [(start + 3, 3), (start + 4, 4)]},
+                {"id": 3, "datapoints": [(start + 7, 7), (start + 8, 8)]},
+            ]
+        )
+        self.assertTrue(post_upload_test["value"])
+
+        queue.stop()
+
+    @patch("cognite.client.CogniteClient")
+    def test_ts_uploader_discard(self, MockCogniteClient):
+        client: CogniteClient = MockCogniteClient()
+
+        post_upload_test = {"value": False}
+
+        def post(x):
+            post_upload_test["value"] = True
+
+        queue = TimeSeriesUploadQueue(client, max_upload_interval=2, post_upload_function=post)
+        queue.start()
+
+        start: float = datetime.datetime.now().timestamp() * 1000.0
+
+        queue.add_to_upload_queue(
+            id=1, datapoints=[(start + 1, 1), (math.nan, 1), (start + 1, math.nan), (start + 2, 2)]
+        )
+        queue.add_to_upload_queue(
+            id=2, datapoints=[(start + 3, 3), (start + 1, 1e101), (start + 1, -1e101), (start + 4, 4)]
+        )
+        queue.add_to_upload_queue(
+            id=1, datapoints=[(start + 5, 5), (start + 1, math.inf), (start + 2, -math.inf), (start + 6, 6)]
+        )
+        queue.add_to_upload_queue(id=3, datapoints=[(start + 7, "str1"), (start + 9, ("t" * 300)), (start + 8, "str2")])
+
+        time.sleep(2.1)
+
+        client.datapoints.insert_multiple.assert_called_with(
+            [
+                {"id": 1, "datapoints": [(start + 1, 1), (start + 2, 2), (start + 5, 5), (start + 6, 6)]},
+                {"id": 2, "datapoints": [(start + 3, 3), (start + 4, 4)]},
+                {"id": 3, "datapoints": [(start + 7, "str1"), (start + 8, "str2")]},
             ]
         )
         self.assertTrue(post_upload_test["value"])
