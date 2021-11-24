@@ -429,7 +429,7 @@ class RawDestinationConfig:
 
 @dataclass
 class RawStateStoreConfig(RawDestinationConfig):
-    upload_interval: int = 30
+    save_interval: int = 30
 
 
 @dataclass
@@ -464,10 +464,15 @@ class StateStoreConfig:
             if cdf_client is None:
                 raise TypeError("A cognite client object must be provided when state store is RAW")
 
-            return RawStateStore(cdf_client=cdf_client, database=self.raw.database, table=self.raw.table)
+            return RawStateStore(
+                cdf_client=cdf_client,
+                database=self.raw.database,
+                table=self.raw.table,
+                save_interval=self.raw.upload_interval,
+            )
 
         if self.local:
-            return LocalStateStore(file_path=self.local.path)
+            return LocalStateStore(file_path=self.local.path, save_interval=self.local.save_interval)
 
         if default_to_local:
             return LocalStateStore(file_path="states.json")
