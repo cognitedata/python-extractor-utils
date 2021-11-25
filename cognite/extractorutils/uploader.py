@@ -94,10 +94,10 @@ RETRY_MAX_DELAY = 15
 RETRY_DELAY = 5
 RETRIES = 10
 
-DataPointList = Union[
-    List[Dict[Union[int, float, datetime], Union[int, float, str]]],
-    List[Tuple[Union[int, float, datetime], Union[int, float, str]]],
+DataPoint = Union[
+    Dict[str, Union[int, float, str, datetime]], Tuple[Union[int, float, datetime], Union[int, float, str]]
 ]
+DataPointList = List[DataPoint]
 
 
 class AbstractUploadQueue(ABC):
@@ -540,19 +540,12 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         else:
             return True
 
-    def _is_datapoint_valid(
-        self,
-        dp: Union[
-            Dict[Union[int, float, datetime], Union[int, float, str]],
-            Tuple[Union[int, float, datetime], Union[int, float, str]],
-        ],
-    ) -> bool:
+    def _is_datapoint_valid(self, dp: DataPoint,) -> bool:
         if isinstance(dp, Dict):
             return self._verify_datapoint_time(dp["timestamp"]) and self._verify_datapoint_value(dp["value"])
         elif isinstance(dp, Tuple):
             return self._verify_datapoint_time(dp[0]) and self._verify_datapoint_value(dp[1])
         else:
-            # I don't know how many different legal permutations there are, since the type hints are incomplete.
             return True
 
     def add_to_upload_queue(self, *, id: int = None, external_id: str = None, datapoints: DataPointList = []) -> None:
