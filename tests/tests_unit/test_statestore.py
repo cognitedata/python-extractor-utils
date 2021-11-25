@@ -13,6 +13,7 @@
 #  limitations under the License.
 
 import os
+import time
 import unittest
 from unittest.mock import Mock, patch
 
@@ -259,5 +260,39 @@ class TestLocalStateStore(unittest.TestCase):
         self.assertTupleEqual(new_state_store.get_state("ext2"), (None, 10))
         self.assertTupleEqual(new_state_store.get_state("ext3"), (8, None))
         self.assertTupleEqual(new_state_store.get_state("ext4"), (None, None))
+
+        os.remove(filename)
+
+    def test_start_stop(self):
+        filename = "testfile-startstop.json"
+        try:
+            os.remove(filename)
+        except FileNotFoundError:
+            pass
+
+        state_store = LocalStateStore(filename, 1)
+
+        state_store.set_state("ext1", low=1, high=6)
+        state_store.set_state("ext2", high=10)
+        state_store.set_state("ext3", low=8)
+        state_store.set_state("ext4")
+
+        state_store.start()
+
+        time.sleep(1.5)
+
+        state_store.stop()
+
+        new_state_store = LocalStateStore(filename, 10)
+        new_state_store.start()
+
+        time.sleep(0.5)
+
+        self.assertTupleEqual(new_state_store.get_state("ext1"), (1, 6))
+        self.assertTupleEqual(new_state_store.get_state("ext2"), (None, 10))
+        self.assertTupleEqual(new_state_store.get_state("ext3"), (8, None))
+        self.assertTupleEqual(new_state_store.get_state("ext4"), (None, None))
+
+        new_state_store.stop()
 
         os.remove(filename)

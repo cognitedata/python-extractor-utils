@@ -193,6 +193,7 @@ class Extractor(Generic[CustomConfigClass]):
 
         self.cognite_client = self.config.cognite.get_cognite_client(self.name)
         self._load_state_store()
+        self.state_store.start()
 
         self.extraction_pipeline = self.config.cognite.get_extraction_pipeline(self.cognite_client)
 

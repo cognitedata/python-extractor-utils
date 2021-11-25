@@ -86,6 +86,8 @@ You can set a state store to automatically update on upload triggers from an upl
 """
 
 import json
+import logging
+import threading
 from abc import ABC, abstractmethod
 from threading import Lock
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
@@ -97,6 +99,8 @@ from cognite.client import CogniteClient
 from cognite.client.exceptions import CogniteAPIError
 from cognite.extractorutils.uploader import DataPointList
 
+from ._inner_util import _resolve_log_level
+
 RETRY_BACKOFF_FACTOR = 1.5
 RETRY_MAX_DELAY = 15
 RETRY_DELAY = 5
@@ -106,15 +110,71 @@ RETRIES = 10
 class AbstractStateStore(ABC):
     """
     Base class for a state store.
+
+    Args:
+        save_interval: Automatically trigger synchronize each m seconds when run as a thread (use start/stop
+            methods).
+        trigger_log_level: Log level to log synchronize triggers to.
+        thread_name: Thread name of synchronize thread.
+        cancelation_token: Token to cancel event from elsewhere. Cancelled when stop is called.
     """
 
-    def __init__(self):
+    def __init__(
+        self,
+        save_interval: Optional[int] = None,
+        trigger_log_level: str = "DEBUG",
+        thread_name: Optional[str] = None,
+        cancelation_token: threading.Event = threading.Event(),
+    ):
         self._initialized = False
         self._local_state: Dict[str, Dict[str, Any]] = {}
+        self.save_interval = save_interval
+        self.trigger_log_level = _resolve_log_level(trigger_log_level)
+
+        self.logger = logging.getLogger(__name__)
+
+        self.thread = threading.Thread(target=self._run, daemon=True, name=thread_name)
+        self.lock = threading.RLock()
+        self.cancelation_token: threading.Event = cancelation_token
 
         self._deleted: List[str] = []
 
         self.lock = Lock()
+
+    def start(self) -> None:
+        """
+        Start saving state periodically if save_interval is set.
+        This calls the synchronize method every save_interval seconds.
+        """
+        if self.save_interval is not None:
+            self.cancelation_token.clear()
+            self.thread.start()
+
+    def stop(self, ensure_synchronize: bool = True) -> None:
+        """
+        Stop synchronize thread if running, and ensure state is saved if ensure_synchronize is True.
+
+        Args:
+            ensure_synchronize (bool): (Optional). Call synchronize one last time after shutting down thread.
+        """
+        self.cancelation_token.set()
+        if ensure_synchronize:
+            self.synchronize()
+
+    def _run(self) -> None:
+        """
+        Internal run method for synchronize thread
+        """
+        self.initialize()
+        while not self.cancelation_token.wait(timeout=self.save_interval):
+            try:
+                self.logger.log(self.trigger_log_level, "Triggering scheduled state store synchronization")
+                self.synchronize()
+            except Exception as e:
+                self.logger.error("Unexpected error while synchronizing state store: %s.", str(e))
+
+        # trigger stop event explicitly to drain the queue
+        self.stop(ensure_synchronize=True)
 
     @abstractmethod
     def initialize(self, force: bool = False) -> None:
@@ -248,10 +308,24 @@ class RawStateStore(AbstractStateStore):
         cdf_client: Cognite client to use
         database: Name of CDF database
         table: Name of CDF table
+        save_interval: Automatically trigger synchronize each m seconds when run as a thread (use start/stop
+            methods).
+        trigger_log_level: Log level to log synchronize triggers to.
+        thread_name: Thread name of synchronize thread.
+        cancelation_token: Token to cancel event from elsewhere. Cancelled when stop is called.
     """
 
-    def __init__(self, cdf_client: CogniteClient, database: str, table: str):
-        super().__init__()
+    def __init__(
+        self,
+        cdf_client: CogniteClient,
+        database: str,
+        table: str,
+        save_interval: Optional[int] = None,
+        trigger_log_level: str = "DEBUG",
+        thread_name: Optional[str] = None,
+        cancelation_token: threading.Event = threading.Event(),
+    ):
+        super().__init__(save_interval, trigger_log_level, thread_name, cancelation_token)
 
         self._cdf_client = cdf_client
         self.database = database
@@ -328,6 +402,27 @@ class RawStateStore(AbstractStateStore):
         with self.lock:
             self._deleted.clear()
 
+    def __enter__(self) -> "RawStateStore":
+        """
+        Wraps around start method, for use as context manager
+
+        Returns:
+            self
+        """
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """
+        Wraps around stop method, for use as context manager
+
+        Args:
+            exc_type: Exception type
+            exc_val: Exception value
+            exc_tb: Traceback
+        """
+        self.stop()
+
 
 class LocalStateStore(AbstractStateStore):
     """
@@ -335,10 +430,22 @@ class LocalStateStore(AbstractStateStore):
 
     Args:
         file_path: File path to JSON file to use
+        save_interval: Automatically trigger synchronize each m seconds when run as a thread (use start/stop
+            methods).
+        trigger_log_level: Log level to log synchronize triggers to.
+        thread_name: Thread name of synchronize thread.
+        cancelation_token: Token to cancel event from elsewhere. Cancelled when stop is called.
     """
 
-    def __init__(self, file_path: str):
-        super().__init__()
+    def __init__(
+        self,
+        file_path: str,
+        save_interval: Optional[int] = None,
+        trigger_log_level: str = "DEBUG",
+        thread_name: Optional[str] = None,
+        cancelation_token: threading.Event = threading.Event(),
+    ):
+        super().__init__(save_interval, trigger_log_level, thread_name, cancelation_token)
 
         self._file_path = file_path
 
@@ -371,11 +478,35 @@ class LocalStateStore(AbstractStateStore):
         with self.lock:
             self._deleted.clear()
 
+    def __enter__(self) -> "LocalStateStore":
+        """
+        Wraps around start method, for use as context manager
+
+        Returns:
+            self
+        """
+        self.start()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+        """
+        Wraps around stop method, for use as context manager
+
+        Args:
+            exc_type: Exception type
+            exc_val: Exception value
+            exc_tb: Traceback
+        """
+        self.stop()
+
 
 class NoStateStore(AbstractStateStore):
     """
     A state store that only keeps states in memory and never stores or initializes from external sources.
     """
+
+    def __init__(self):
+        super().__init__()
 
     def initialize(self, force: bool = False) -> None:
         pass
