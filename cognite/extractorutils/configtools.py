@@ -85,6 +85,7 @@ Get a state store object as configured:
 However, all of these things will be automatically done for you if you are using the base Extractor class.
 """
 
+import copy
 import logging
 import os
 import re
@@ -503,9 +504,20 @@ def load_yaml(
         InvalidConfigError: If any config field is given as an invalid type, is missing or is unknown
     """
 
-    def env_constructor(_, node):
-        # Expnadvars uses same syntax as our env var substitution
-        return os.path.expandvars(node.value)
+    def env_constructor(_: yaml.SafeLoader, node):
+        bool_values = {
+            "yes": True,
+            "no": False,
+            "true": True,
+            "false": False,
+            "on": True,
+            "off": False,
+        }
+        expanded_value = os.path.expandvars(node.value)
+        return bool_values.get(expanded_value.lower())
+
+    class EnvLoader:
+        pass
 
     class EnvLoader(yaml.SafeLoader):
         pass

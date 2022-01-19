@@ -13,10 +13,20 @@
 #  limitations under the License.
 
 import unittest
+from dataclasses import dataclass
 
 from cognite.client import CogniteClient
 from cognite.extractorutils.configtools import BaseConfig, CogniteConfig, _to_snake_case, load_yaml
 from cognite.extractorutils.exceptions import InvalidConfigError
+
+
+@dataclass
+class TestCastingClass:
+    boolean_field: bool
+    another_boolean_field: bool
+    yet_another_boolean_field: bool
+    string_field: str
+    another_string_field: str
 
 
 class TestConfigtoolsMethods(unittest.TestCase):
@@ -198,3 +208,29 @@ class TestConfigtoolsMethods(unittest.TestCase):
         with self.assertRaises(InvalidConfigError) as cm:
             config.get_cognite_client("client_name")
         self.assertEqual(str(cm.exception), "Invalid config: No CDF credentials")
+
+    def test_read_boolean_casting(self):
+        config_raw = """ 
+        boolean-field: ${TRUE_FLAG}
+        another-boolean-field: ${FALSE_FLAG}
+        yet_another-boolean-field: false
+        string-field: "true"
+        another-string-field: "test" 
+        """
+        config: TestCastingClass = load_yaml(config_raw, TestCastingClass)
+        self.assertTrue(config.boolean_field)
+        self.assertFalse(config.another_boolean_field)
+        self.assertFalse(config.yet_another_boolean_field)
+        self.assertEqual(config.string_field, "true")
+        self.assertEqual(config.another_string_field, "test")
+
+    def test_read_invalid_boolean_casting(self):
+        config = """    
+        boolean-field: ${FALSE_FLAG}
+        another-boolean-field: ${INVALID_FLAG}
+        yet_another-boolean-field: false
+        string-field: "true"
+        another-string-field: "test"
+        """
+        with self.assertRaises(InvalidConfigError):
+            load_yaml(config, TestCastingClass)

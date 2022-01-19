@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "cognite-extractor-utils"
-version = "1.5.4"
+version = "1.5.5"
 description = "Utilities for easier development of extractors for CDF"
 authors = ["Mathias Lohne <mathias.lohne@cognite.com>"]
 license = "Apache-2.0"
@@ -43,6 +43,9 @@ setenv =
     COGNITE_API_KEY={env:COGNITE_API_KEY}
     COGNITE_BASE_URL={env:COGNITE_BASE_URL}
     COGNITE_PROJECT={env:COGNITE_PROJECT}
+    TRUE_FLAG=true
+    FALSE_FLAG=FALSE
+    INVALID_FLAG=TEST
 deps =
     pytest
     pytest-cov
