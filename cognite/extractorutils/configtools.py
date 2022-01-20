@@ -85,7 +85,6 @@ Get a state store object as configured:
 However, all of these things will be automatically done for you if you are using the base Extractor class.
 """
 
-import copy
 import logging
 import os
 import re
@@ -514,7 +513,7 @@ def load_yaml(
             "off": False,
         }
         expanded_value = os.path.expandvars(node.value)
-        return bool_values.get(expanded_value.lower())
+        return bool_values.get(expanded_value.lower(), node.value)
 
     class EnvLoader:
         pass
