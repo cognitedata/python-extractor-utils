@@ -505,12 +505,8 @@ def load_yaml(
 
     def env_constructor(_: yaml.SafeLoader, node):
         bool_values = {
-            "yes": True,
-            "no": False,
             "true": True,
             "false": False,
-            "on": True,
-            "off": False,
         }
         expanded_value = os.path.expandvars(node.value)
         return bool_values.get(expanded_value.lower(), node.value)
