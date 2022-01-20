@@ -372,6 +372,9 @@ class RawUploadQueue(AbstractUploadQueue):
         """
         Trigger an upload of the queue, clears queue afterwards
         """
+        if len(self.upload_queue) == 0:
+            return
+
         with self.lock:
             for database, tables in self.upload_queue.items():
                 for table, rows in tables.items():
@@ -397,7 +400,7 @@ class RawUploadQueue(AbstractUploadQueue):
                         self.logger.error("Error in upload callback: %s", str(e))
 
             self.upload_queue.clear()
-            self.logger.info(f"Uploaded {self.upload_queue_size} rows in total")
+            self.logger.info(f"Uploaded {self.upload_queue_size} raw rows")
             self.upload_queue_size = 0
             self.queue_size.set(self.upload_queue_size)
 
@@ -612,6 +615,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
                 self.logger.error("Error in upload callback: %s", str(e))
 
             self.upload_queue.clear()
+            self.logger.info(f"Uploaded {self.upload_queue_size} datapoints")
             self.upload_queue_size = 0
             self.queue_size.set(self.upload_queue_size)
 
@@ -792,6 +796,7 @@ class EventUploadQueue(AbstractUploadQueue):
             except Exception as e:
                 self.logger.error("Error in upload callback: %s", str(e))
             self.upload_queue.clear()
+            self.logger.info(f"Uploaded {self.upload_queue_size} events")
             self.upload_queue_size = 0
             self.queue_size.set(self.upload_queue_size)
 
@@ -1010,6 +1015,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
 
             self.upload_queue.clear()
             self.upload_queue_size = 0
+            self.logger.info(f"Uploaded {self.upload_queue_size} sequence rows")
             self.queue_size.set(self.upload_queue_size)
 
     @retry(
@@ -1194,6 +1200,7 @@ class FileUploadQueue(AbstractUploadQueue):
             except Exception as e:
                 self.logger.error("Error in upload callback: %s", str(e))
             self.upload_queue.clear()
+            self.logger.info(f"Uploaded {self.upload_queue_size} files")
             self.upload_queue_size = 0
             self.queue_size.set(self.upload_queue_size)
 
@@ -1337,6 +1344,7 @@ class BytesUploadQueue(AbstractUploadQueue):
             # Clear queue
             self.upload_queue.clear()
             self.upload_queue_size = 0
+            self.logger.info(f"Uploaded {self.upload_queue_size} files")
             self.queue_size.set(self.upload_queue_size)
 
     def _upload_batch(self):
