@@ -213,7 +213,7 @@ class TestConfigtoolsMethods(unittest.TestCase):
         config_raw = """ 
         boolean-field: ${TRUE_FLAG}
         another-boolean-field: ${FALSE_FLAG}
-        yet_another-boolean-field: false
+        yet-another-boolean-field: false
         string-field: "true"
         another-string-field: "test" 
         """
@@ -228,7 +228,7 @@ class TestConfigtoolsMethods(unittest.TestCase):
         config = """    
         boolean-field: ${FALSE_FLAG}
         another-boolean-field: ${INVALID_FLAG}
-        yet_another-boolean-field: false
+        yet-another-boolean-field: false
         string-field: "true"
         another-string-field: "test"
         """
