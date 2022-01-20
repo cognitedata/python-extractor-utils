@@ -32,9 +32,6 @@ jobs:
         COGNITE_API_KEY: ${{ secrets.COGNITE_API_KEY }}
         COGNITE_PROJECT: extractor-tests
         COGNITE_BASE_URL: https://greenfield.cognitedata.com
-        TRUE_FLAG: true
-        FALSE_FLAG: FALSE
-        INVALID_FLAG: TEST
       run: |
         coverage run --source cognite.extractorutils -m pytest -v tests
         coverage xml

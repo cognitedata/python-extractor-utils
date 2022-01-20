@@ -12,6 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import os
 import unittest
 from dataclasses import dataclass
 
@@ -210,6 +211,8 @@ class TestConfigtoolsMethods(unittest.TestCase):
         self.assertEqual(str(cm.exception), "Invalid config: No CDF credentials")
 
     def test_read_boolean_casting(self):
+        os.environ["TRUE_FLAG"] = "true"
+        os.environ["FALSE_FLAG"] = "FALSE"
         config_raw = """ 
         boolean-field: ${TRUE_FLAG}
         another-boolean-field: ${FALSE_FLAG}
@@ -225,6 +228,9 @@ class TestConfigtoolsMethods(unittest.TestCase):
         self.assertEqual(config.another_string_field, "test")
 
     def test_read_invalid_boolean_casting(self):
+        os.environ["TRUE_FLAG"] = "true"
+        os.environ["FALSE_FLAG"] = "FALSE"
+        os.environ["INVALID_FLAG"] = "TEST"
         config = """    
         boolean-field: ${FALSE_FLAG}
         another-boolean-field: ${INVALID_FLAG}
