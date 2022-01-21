@@ -12,6 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import datetime
 import os
 import time
 import unittest
@@ -121,25 +122,27 @@ class TestBaseStateStore(unittest.TestCase):
             cdf_client=MockCogniteClient(), post_upload_function=state_store.post_upload_handler()
         )
 
-        upload_queue.add_to_upload_queue(external_id="testId", datapoints=[(1, 1), (4, 4)])
+        start: float = datetime.datetime.now().timestamp() * 1000.0
+
+        upload_queue.add_to_upload_queue(external_id="testId", datapoints=[(start + 1, 1), (start + 4, 4)])
         upload_queue.upload()
 
-        self.assertTupleEqual(state_store.get_state("testId"), (1, 4))
+        self.assertTupleEqual(state_store.get_state("testId"), (start + 1, start + 4))
 
-        upload_queue.add_to_upload_queue(external_id="testId", datapoints=[(2, 2), (3, 3)])
+        upload_queue.add_to_upload_queue(external_id="testId", datapoints=[(start + 2, 2), (start + 3, 3)])
         upload_queue.upload()
 
-        self.assertTupleEqual(state_store.get_state("testId"), (1, 4))
+        self.assertTupleEqual(state_store.get_state("testId"), (start + 1, start + 4))
 
-        upload_queue.add_to_upload_queue(external_id="testId", datapoints=[(5, 5)])
+        upload_queue.add_to_upload_queue(external_id="testId", datapoints=[(start + 5, 5)])
         upload_queue.upload()
 
-        self.assertTupleEqual(state_store.get_state("testId"), (1, 5))
+        self.assertTupleEqual(state_store.get_state("testId"), (start + 1, start + 5))
 
-        upload_queue.add_to_upload_queue(external_id="testId", datapoints=[(0, 0)])
+        upload_queue.add_to_upload_queue(external_id="testId", datapoints=[(start + 0, 0)])
         upload_queue.upload()
 
-        self.assertTupleEqual(state_store.get_state("testId"), (0, 5))
+        self.assertTupleEqual(state_store.get_state("testId"), (start + 0, start + 5))
 
 
 class TestRawStateStore(unittest.TestCase):

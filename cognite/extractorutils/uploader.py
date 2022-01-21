@@ -65,6 +65,7 @@ instead. If both are used, the condition being met first will trigger the upload
 """
 
 import logging
+import math
 import threading
 import time
 from abc import ABC, abstractmethod
@@ -93,10 +94,10 @@ RETRY_MAX_DELAY = 15
 RETRY_DELAY = 5
 RETRIES = 10
 
-DataPointList = Union[
-    List[Dict[Union[int, float, datetime], Union[int, float, str]]],
-    List[Tuple[Union[int, float, datetime], Union[int, float, str]]],
+DataPoint = Union[
+    Dict[str, Union[int, float, str, datetime]], Tuple[Union[int, float, datetime], Union[int, float, str]]
 ]
+DataPointList = List[DataPoint]
 
 
 class AbstractUploadQueue(ABC):
@@ -249,6 +250,11 @@ TIMESERIES_UPLOADER_QUEUE_SIZE = Gauge("cognite_timeseries_uploader_queue_size",
 
 TIMESERIES_UPLOADER_LATENCY = Histogram(
     "cognite_timeseries_uploader_latency", "Distribution of times in minutes records spend in the queue",
+)
+
+TIMESERIES_UPLOADER_POINTS_DISCARDED = Counter(
+    "cognite_timeseries_uploader_points_discarded",
+    "Total number of datapoints discarded due to invalid timestamp or value",
 )
 
 SEQUENCES_UPLOADER_POINTS_QUEUED = Counter(
@@ -459,6 +465,12 @@ def default_time_series_factory(external_id: str, datapoints: DataPointList) -> 
     return TimeSeries(external_id=external_id, is_string=is_string)
 
 
+MIN_DATAPOINT_TIMESTAMP = 31536000000
+MAX_DATAPOINT_STRING_LENGTH = 255
+MAX_DATAPOINT_VALUE = 1e100
+MIN_DATAPOINT_VALUE = -1e100
+
+
 class TimeSeriesUploadQueue(AbstractUploadQueue):
     """
     Upload queue for time series
@@ -515,6 +527,30 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         self.latency = TIMESERIES_UPLOADER_LATENCY
         self.latency_zero_point = arrow.utcnow()
 
+    def _verify_datapoint_time(self, time: Union[int, float, datetime]) -> bool:
+        if isinstance(time, int) or isinstance(time, float):
+            return not math.isnan(time) and time >= MIN_DATAPOINT_TIMESTAMP
+        else:
+            return time.timestamp() * 1000.0 >= MIN_DATAPOINT_TIMESTAMP
+
+    def _verify_datapoint_value(self, value: Union[int, float, str]) -> bool:
+        if isinstance(value, float):
+            return not (
+                math.isnan(value) or math.isinf(value) or value > MAX_DATAPOINT_VALUE or value < MIN_DATAPOINT_VALUE
+            )
+        elif isinstance(value, str):
+            return len(value) <= MAX_DATAPOINT_STRING_LENGTH
+        else:
+            return True
+
+    def _is_datapoint_valid(self, dp: DataPoint,) -> bool:
+        if isinstance(dp, Dict):
+            return self._verify_datapoint_time(dp["timestamp"]) and self._verify_datapoint_value(dp["value"])
+        elif isinstance(dp, Tuple):
+            return self._verify_datapoint_time(dp[0]) and self._verify_datapoint_value(dp[1])
+        else:
+            return True
+
     def add_to_upload_queue(self, *, id: int = None, external_id: str = None, datapoints: DataPointList = []) -> None:
         """
         Add data points to upload queue. The queue will be uploaded if the queue size is larger than the threshold
@@ -525,6 +561,16 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
             external_id: External ID of time series. Either this or external_id must be set.
             datapoints: List of data points to add
         """
+        old_len = len(datapoints)
+        datapoints = list(filter(self._is_datapoint_valid, datapoints))
+
+        new_len = len(datapoints)
+
+        if old_len > new_len:
+            diff = old_len - new_len
+            self.logger.warning(f"Discarding {diff} datapoints due to bad timestamp or value")
+            TIMESERIES_UPLOADER_POINTS_DISCARDED.inc(diff)
+
         either_id = EitherId(id=id, external_id=external_id)
 
         with self.lock:
