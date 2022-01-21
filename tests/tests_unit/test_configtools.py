@@ -16,8 +16,6 @@ import os
 import unittest
 from dataclasses import dataclass
 
-import pytest
-
 from cognite.client import CogniteClient
 from cognite.extractorutils.configtools import BaseConfig, CogniteConfig, _to_snake_case, load_yaml
 from cognite.extractorutils.exceptions import InvalidConfigError
@@ -30,6 +28,7 @@ class TestCastingClass:
     yet_another_boolean_field: bool
     string_field: str
     another_string_field: str
+    yet_another_string_field: str
 
 
 class TestConfigtoolsMethods(unittest.TestCase):
@@ -212,16 +211,17 @@ class TestConfigtoolsMethods(unittest.TestCase):
             config.get_cognite_client("client_name")
         self.assertEqual(str(cm.exception), "Invalid config: No CDF credentials")
 
-    @pytest.mark.skip(reason="Masked because this feature is reverted temporarily")
     def test_read_boolean_casting(self):
         os.environ["TRUE_FLAG"] = "true"
         os.environ["FALSE_FLAG"] = "FALSE"
+        os.environ["STR_VAL"] = "TeST"
         config_raw = """ 
         boolean-field: ${TRUE_FLAG}
         another-boolean-field: ${FALSE_FLAG}
         yet-another-boolean-field: false
         string-field: "true"
-        another-string-field: "test" 
+        another-string-field: "test"
+        yet-another-string-field: ${STR_VAL}
         """
         config: TestCastingClass = load_yaml(config_raw, TestCastingClass)
         self.assertTrue(config.boolean_field)
@@ -229,8 +229,8 @@ class TestConfigtoolsMethods(unittest.TestCase):
         self.assertFalse(config.yet_another_boolean_field)
         self.assertEqual(config.string_field, "true")
         self.assertEqual(config.another_string_field, "test")
+        self.assertEqual(config.yet_another_string_field, "TeST")
 
-    @pytest.mark.skip(reason="Masked because this feature is reverted temporarily")
     def test_read_invalid_boolean_casting(self):
         os.environ["TRUE_FLAG"] = "true"
         os.environ["FALSE_FLAG"] = "FALSE"
@@ -241,6 +241,7 @@ class TestConfigtoolsMethods(unittest.TestCase):
         yet-another-boolean-field: false
         string-field: "true"
         another-string-field: "test"
+        yet-another-string-field: "test" 
         """
         with self.assertRaises(InvalidConfigError):
             load_yaml(config, TestCastingClass)
