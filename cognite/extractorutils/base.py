@@ -68,7 +68,7 @@ class Extractor(Generic[CustomConfigClass]):
         cancelation_token: Event = Event(),
         config_file_path: Optional[str] = None,
         continuous_extractor: bool = False,
-        heartbeat_waiting_time: int = 600
+        heartbeat_waiting_time: int = 600,
     ):
         self.name = name
         self.description = description
