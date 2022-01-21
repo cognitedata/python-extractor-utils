@@ -503,9 +503,16 @@ def load_yaml(
         InvalidConfigError: If any config field is given as an invalid type, is missing or is unknown
     """
 
-    def env_constructor(_, node):
-        # Expnadvars uses same syntax as our env var substitution
-        return os.path.expandvars(node.value)
+    def env_constructor(_: yaml.SafeLoader, node):
+        bool_values = {
+            "true": True,
+            "false": False,
+        }
+        expanded_value = os.path.expandvars(node.value)
+        return bool_values.get(expanded_value.lower(), node.value)
+
+    class EnvLoader:
+        pass
 
     class EnvLoader(yaml.SafeLoader):
         pass
