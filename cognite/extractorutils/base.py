@@ -69,6 +69,7 @@ class Extractor(Generic[CustomConfigClass]):
         config_file_path: Optional[str] = None,
         continuous_extractor: bool = False,
         heartbeat_waiting_time: int = 600,
+        handle_interrupts: bool = True,
     ):
         self.name = name
         self.description = description
@@ -80,6 +81,7 @@ class Extractor(Generic[CustomConfigClass]):
         self.config_file_path = config_file_path
         self.continuous_extractor = continuous_extractor
         self.heartbeat_waiting_time = heartbeat_waiting_time
+        self.handle_interrupts = handle_interrupts
 
         self.started = False
         self.configured_logger = False
@@ -187,13 +189,14 @@ class Extractor(Generic[CustomConfigClass]):
         """
         self._load_config(override_path=self.config_file_path)
 
-        set_event_on_interrupt(self.cancelation_token)
-
         if not self.configured_logger:
             self.config.logger.setup_logging()
             self.configured_logger = True
 
         self.logger = logging.getLogger(__name__)
+
+        if self.handle_interrupts:
+            set_event_on_interrupt(self.cancelation_token)
 
         self.cognite_client = self.config.cognite.get_cognite_client(self.name)
         self._load_state_store()
