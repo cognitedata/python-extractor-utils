@@ -51,6 +51,8 @@ class Extractor(Generic[CustomConfigClass]):
             if omitted.
         config_file_path: If supplied, the extractor will not use command line arguments to get a config file, but
             rather use the supplied path.
+        continuous_extractor: If True, extractor will both successful start and end time. Else, only show run on exit.
+        heartbeat_waiting_time: Time interval between each heartbeat to the extraction pipeline in seconds.
     """
 
     def __init__(
@@ -66,6 +68,7 @@ class Extractor(Generic[CustomConfigClass]):
         cancelation_token: Event = Event(),
         config_file_path: Optional[str] = None,
         continuous_extractor: bool = False,
+        heartbeat_waiting_time: int = 600,
     ):
         self.name = name
         self.description = description
@@ -76,6 +79,7 @@ class Extractor(Generic[CustomConfigClass]):
         self.cancelation_token = cancelation_token
         self.config_file_path = config_file_path
         self.continuous_extractor = continuous_extractor
+        self.heartbeat_waiting_time = heartbeat_waiting_time
 
         self.started = False
         self.configured_logger = False
@@ -206,7 +210,7 @@ class Extractor(Generic[CustomConfigClass]):
 
         def heartbeat_loop():
             while not self.cancelation_token.is_set():
-                self.cancelation_token.wait(600)
+                self.cancelation_token.wait(self.heartbeat_waiting_time)
 
                 if not self.cancelation_token.is_set():
                     self.logger.info("Reporting new heartbeat")
