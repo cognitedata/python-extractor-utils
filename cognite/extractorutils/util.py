@@ -81,7 +81,10 @@ def set_event_on_interrupt(stop_event: Event) -> None:
         stop_event.set()
         logger.info("Waiting for threads to complete")
 
-    signal.signal(signal.SIGINT, sigint_handler)
+    try:
+        signal.signal(signal.SIGINT, sigint_handler)
+    except ValueError as e:
+        logging.getLogger(__name__).warning(f"Could not register handler for interrupt signals: {str(e)}")
 
 
 class EitherId:
