@@ -16,6 +16,7 @@ A package containing convenient utilities for developing extractors in Python.
 
 Documentation is hosted [here](https://cognite-extractor-utils.readthedocs-hosted.com/en/latest/).
 
+The changelog is found [here](./CHANGELOG.md)
 
 ### Contributing
 
