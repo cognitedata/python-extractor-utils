@@ -93,13 +93,13 @@ from threading import Lock
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from requests.exceptions import ConnectionError
-from retry import retry
 
 from cognite.client import CogniteClient
 from cognite.client.exceptions import CogniteAPIError
 from cognite.extractorutils.uploader import DataPointList
 
 from ._inner_util import _resolve_log_level
+from .retry import retry
 
 RETRY_BACKOFF_FACTOR = 1.5
 RETRY_MAX_DELAY = 15
