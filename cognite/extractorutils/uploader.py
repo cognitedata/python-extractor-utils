@@ -79,7 +79,6 @@ import arrow
 from arrow import Arrow
 from prometheus_client import Counter, Gauge, Histogram
 from requests.exceptions import ConnectionError
-from retry import retry
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Event, FileMetadata, Sequence, SequenceData, TimeSeries
@@ -87,6 +86,7 @@ from cognite.client.data_classes.raw import Row
 from cognite.client.exceptions import CogniteAPIError, CogniteDuplicatedError, CogniteNotFoundError, CogniteReadTimeout
 
 from ._inner_util import _resolve_log_level
+from .retry import retry
 from .util import EitherId
 
 RETRY_BACKOFF_FACTOR = 1.5
