@@ -58,17 +58,17 @@ def retry(
 
     This is adapted from https://github.com/invl/retry
 
-    :param cancelation_token: a threading token that is waited on.
-    :param exceptions: an exception or a tuple of exceptions to catch. default: Exception.
-    :param tries: the maximum number of attempts. default: -1 (infinite).
-    :param delay: initial delay between attempts. default: 0.
-    :param max_delay: the maximum value of delay. default: None (no limit).
-    :param backoff: multiplier applied to delay between attempts. default: 1 (no backoff).
-    :param jitter: extra seconds added to delay between attempts. default: 0.
+    Args:
+        cancelation_token: a threading token that is waited on.
+        exceptions: an exception or a tuple of exceptions to catch. default: Exception.
+        tries: the maximum number of attempts. default: -1 (infinite).
+        delay: initial delay between attempts. default: 0.
+        max_delay: the maximum value of delay. default: None (no limit).
+        backoff: multiplier applied to delay between attempts. default: 1 (no backoff).
+        jitter: extra seconds added to delay between attempts. default: 0.
                    fixed if a number, random if a range tuple (min, max)
-    :param logger: logger.warning(fmt, error, delay) will be called on failed attempts.
+        logger: logger.warning(fmt, error, delay) will be called on failed attempts.
                    default: retry.logging_logger. if None, logging is disabled.
-    :returns: a retry decorator.
     """
 
     @decorator
