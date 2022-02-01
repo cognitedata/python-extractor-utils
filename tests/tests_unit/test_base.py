@@ -60,3 +60,16 @@ class TestExtractorClass(unittest.TestCase):
         e3.cognite_client = get_client_mock()
         e3._load_state_store()
         self.assertIsInstance(e3.state_store, NoStateStore)
+
+    def test_config_getter(self):
+        with self.assertRaises(ValueError):
+            Extractor.get_current_config()
+
+        e1 = Extractor(name="my_extractor4", description="description", config_class=ConfigWithStates)
+
+        with self.assertRaises(ValueError):
+            Extractor.get_current_config()
+
+        e1._load_config("tests/tests_unit/dummyconfig.yaml")
+
+        self.assertIsInstance(Extractor.get_current_config(), ConfigWithStates)

@@ -15,6 +15,17 @@ Changes are grouped as follows
 
 ## Next release
 
+## [2.0.1] - 2022-02-01
+
+### Fixed
+
+ * Fixed retries to not block the GIL and respect the cancellation token
+ 
+### Added
+
+ * A `get_current_config` class method on the Extractor class which returns the most recent config file read
+
+
 ## [2.0.0] - 2022-01-24
 
 ### Added
