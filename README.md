@@ -50,3 +50,4 @@ $ poetry run pre-commit install
 This project adheres to the [Contributor Covenant v2.0](https://www.contributor-covenant.org/version/2/0/code_of_conduct/)
 as a code of conduct.
 
+Each public method, class and module should have docstrings. Docstrings are written in the [Google style](https://google.github.io/styleguide/pyguide.html#38-comments-and-docstrings)
