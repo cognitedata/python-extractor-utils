@@ -19,11 +19,11 @@ import traceback
 from dataclasses import is_dataclass
 from threading import Event, Thread
 from types import TracebackType
-from typing import Any, Callable, Dict, Generic, Optional, Type
+from typing import Any, Callable, Dict, Generic, Optional, Type, TypeVar
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import ExtractionPipeline, ExtractionPipelineRun
-from cognite.extractorutils.configtools import CustomConfigClass, StateStoreConfig, load_yaml
+from cognite.extractorutils.configtools import BaseConfig, CustomConfigClass, StateStoreConfig, load_yaml
 from cognite.extractorutils.metrics import BaseMetrics
 from cognite.extractorutils.statestore import AbstractStateStore, NoStateStore
 from cognite.extractorutils.util import set_event_on_interrupt
@@ -54,6 +54,8 @@ class Extractor(Generic[CustomConfigClass]):
         continuous_extractor: If True, extractor will both successful start and end time. Else, only show run on exit.
         heartbeat_waiting_time: Time interval between each heartbeat to the extraction pipeline in seconds.
     """
+
+    _config_singleton: Optional[CustomConfigClass] = None
 
     def __init__(
         self,
@@ -120,6 +122,8 @@ class Extractor(Generic[CustomConfigClass]):
             with open(args.config[0], "r") as stream:
                 self.config_file_path = args.config[0]
                 self.config = load_yaml(source=stream, config_type=self.config_class)
+
+        Extractor._config_singleton = self.config
 
     def _load_state_store(self) -> None:
         """
@@ -286,3 +290,9 @@ class Extractor(Generic[CustomConfigClass]):
             self.run_handle(self.cognite_client, self.state_store, self.config, self.cancelation_token)
         else:
             raise ValueError("No run_handle defined")
+
+    @classmethod
+    def get_current_config(cls) -> CustomConfigClass:
+        if Extractor._config_singleton is None:
+            raise ValueError("No config singleton created. Have a config file been loaded?")
+        return Extractor._config_singleton
