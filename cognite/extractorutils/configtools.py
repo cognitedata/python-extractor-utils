@@ -102,7 +102,6 @@ import yaml
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset, DataSet, ExtractionPipeline
-from cognite.client.exceptions import CogniteNotFoundError
 
 from .authentication import AuthenticatorConfig
 from .exceptions import InvalidConfigError

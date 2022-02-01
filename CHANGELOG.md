@@ -15,6 +15,13 @@ Changes are grouped as follows
 
 ## Next release
 
+## [2.0.1] - 2022-02-01
+
+### Added
+
+ * A `get_current_config` class method on the Extractor class which returns the most recent config file read
+
+
 ## [2.0.0] - 2022-01-24
 
 ### Added
