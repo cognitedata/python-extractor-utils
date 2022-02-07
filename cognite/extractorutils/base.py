@@ -56,6 +56,7 @@ class Extractor(Generic[CustomConfigClass]):
     """
 
     _config_singleton: Optional[CustomConfigClass] = None
+    _statestore_singleton: Optional[AbstractStateStore] = None
 
     def __init__(
         self,
@@ -151,6 +152,7 @@ class Extractor(Generic[CustomConfigClass]):
             self.state_store = NoStateStore()
 
         self.state_store.initialize()
+        Extractor._statestore_singleton = self.state_store
 
     def _report_success(self) -> None:
         """
@@ -296,3 +298,9 @@ class Extractor(Generic[CustomConfigClass]):
         if Extractor._config_singleton is None:
             raise ValueError("No config singleton created. Have a config file been loaded?")
         return Extractor._config_singleton
+
+    @classmethod
+    def get_current_statestore(cls) -> AbstractStateStore:
+        if Extractor._statestore_singleton is None:
+            raise ValueError("No state store singleton created. Have a state store been loaded?")
+        return Extractor._statestore_singleton
