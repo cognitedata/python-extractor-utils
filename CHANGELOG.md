@@ -15,6 +15,13 @@ Changes are grouped as follows
 
 ## Next release
 
+## [2.0.2] - 2022-02-07
+
+### Added
+
+ * A `get_current_state_store` class method on the Extractor class which returns the most recent state store loaded
+
+
 ## [2.0.1] - 2022-02-01
 
 ### Fixed
