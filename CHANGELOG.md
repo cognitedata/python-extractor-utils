@@ -15,6 +15,12 @@ Changes are grouped as follows
 
 ## Next release
 
+## [2.0.3] - 2022-02-08
+
+### Fixed
+
+ * Fixed an issue where the base class would not always load a default `LocalStateStore` if requested
+
 ## [2.0.2] - 2022-02-07
 
 ### Added

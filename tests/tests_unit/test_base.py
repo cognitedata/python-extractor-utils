@@ -57,11 +57,27 @@ class TestExtractorClass(unittest.TestCase):
         e2._load_state_store()
         self.assertIsInstance(e2.state_store, LocalStateStore)
 
-        e3 = Extractor(name="my_extractor3", description="description", config_class=ConfigWithoutStates)
+        e3 = Extractor(
+            name="my_extractor3",
+            description="description",
+            config_class=ConfigWithoutStates,
+            use_default_state_store=True,
+        )
         e3._load_config("tests/tests_unit/dummyconfig.yaml")
         e3.cognite_client = get_client_mock()
         e3._load_state_store()
-        self.assertIsInstance(e3.state_store, NoStateStore)
+        self.assertIsInstance(e3.state_store, LocalStateStore)
+
+        e6 = Extractor(
+            name="my_extractor6",
+            description="description",
+            config_class=ConfigWithoutStates,
+            use_default_state_store=False,
+        )
+        e6._load_config("tests/tests_unit/dummyconfig.yaml")
+        e6.cognite_client = get_client_mock()
+        e6._load_state_store()
+        self.assertIsInstance(e6.state_store, NoStateStore)
 
     @pytest.mark.order(1)
     def test_config_getter(self):
