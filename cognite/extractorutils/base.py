@@ -25,7 +25,7 @@ from cognite.client import CogniteClient
 from cognite.client.data_classes import ExtractionPipeline, ExtractionPipelineRun
 from cognite.extractorutils.configtools import BaseConfig, CustomConfigClass, StateStoreConfig, load_yaml
 from cognite.extractorutils.metrics import BaseMetrics
-from cognite.extractorutils.statestore import AbstractStateStore, NoStateStore
+from cognite.extractorutils.statestore import AbstractStateStore, LocalStateStore, NoStateStore
 from cognite.extractorutils.util import set_event_on_interrupt
 
 
@@ -149,7 +149,7 @@ class Extractor(Generic[CustomConfigClass]):
         if state_store_config:
             self.state_store = state_store_config.create_state_store(self.cognite_client, self.use_default_state_store)
         else:
-            self.state_store = NoStateStore()
+            self.state_store = LocalStateStore("states.json") if self.use_default_state_store else NoStateStore()
 
         self.state_store.initialize()
         Extractor._statestore_singleton = self.state_store
