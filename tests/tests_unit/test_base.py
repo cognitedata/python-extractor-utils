@@ -15,9 +15,11 @@ import unittest
 from dataclasses import dataclass
 from unittest.mock import patch
 
+import pytest
+
 from cognite.extractorutils import Extractor
 from cognite.extractorutils.configtools import BaseConfig, StateStoreConfig
-from cognite.extractorutils.statestore import LocalStateStore, NoStateStore
+from cognite.extractorutils.statestore import AbstractStateStore, LocalStateStore, NoStateStore
 
 
 @dataclass
@@ -61,15 +63,32 @@ class TestExtractorClass(unittest.TestCase):
         e3._load_state_store()
         self.assertIsInstance(e3.state_store, NoStateStore)
 
+    @pytest.mark.order(1)
     def test_config_getter(self):
         with self.assertRaises(ValueError):
             Extractor.get_current_config()
 
-        e1 = Extractor(name="my_extractor4", description="description", config_class=ConfigWithStates)
+        e4 = Extractor(name="my_extractor4", description="description", config_class=ConfigWithStates)
 
         with self.assertRaises(ValueError):
             Extractor.get_current_config()
 
-        e1._load_config("tests/tests_unit/dummyconfig.yaml")
+        e4._load_config("tests/tests_unit/dummyconfig.yaml")
 
         self.assertIsInstance(Extractor.get_current_config(), ConfigWithStates)
+
+    @pytest.mark.order(2)
+    def test_state_store_getter(self):
+        with self.assertRaises(ValueError):
+            Extractor.get_current_statestore()
+
+        e5 = Extractor(name="my_extractor5", description="description", config_class=ConfigWithStates)
+
+        with self.assertRaises(ValueError):
+            Extractor.get_current_statestore()
+
+        e5._load_config("tests/tests_unit/dummyconfig.yaml")
+        e5.cognite_client = e5.config.cognite.get_cognite_client(e5.name)
+        e5._load_state_store()
+
+        self.assertIsInstance(Extractor.get_current_statestore(), LocalStateStore)
