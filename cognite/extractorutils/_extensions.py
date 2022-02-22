@@ -20,16 +20,15 @@ from datetime import datetime
 from types import TracebackType
 from typing import Callable, Iterable, List, Optional, Tuple, Type, Union
 
+from more_itertools import peekable
+
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Event as _Event
 from cognite.client.data_classes import Row as _Row
-
-from cognite.extractorutils.configtools import CustomConfigClass
 from cognite.extractorutils.base import Extractor
-from cognite.extractorutils.statestore import AbstractStateStore
+from cognite.extractorutils.configtools import CustomConfigClass
 from cognite.extractorutils.metrics import BaseMetrics
-from more_itertools import peekable
-
+from cognite.extractorutils.statestore import AbstractStateStore
 from cognite.extractorutils.uploader import EventUploadQueue, RawUploadQueue, TimeSeriesUploadQueue
 
 try:
@@ -122,14 +121,13 @@ class BaseExtensionExtractor(Extractor[CustomConfigClass]):
             config_file_path=config_file_path,
             continuous_extractor=continuous_extractor,
             heartbeat_waiting_time=heartbeat_waiting_time,
-            handle_interrupts=handle_interrupts
+            handle_interrupts=handle_interrupts,
         )
 
         self._event_queue_size = 10_000
         self._raw_queue_size = 100_000
         self._timeseries_queue_size = 1_000_000
         self._upload_interval = 60
-
 
     def handle_output(self, output: CdfTypes) -> None:
         if not isinstance(output, Iterable):
@@ -156,7 +154,6 @@ class BaseExtensionExtractor(Extractor[CustomConfigClass]):
         else:
             raise ValueError(f"Unexpected type: {type(peek)}")
 
-
     def __enter__(self) -> "BaseExtensionExtractor":
         super(BaseExtensionExtractor, self).__enter__()
         self.event_queue = EventUploadQueue(
@@ -180,7 +177,6 @@ class BaseExtensionExtractor(Extractor[CustomConfigClass]):
         ).__enter__()
 
         return self
-        
 
     def __exit__(
         self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
