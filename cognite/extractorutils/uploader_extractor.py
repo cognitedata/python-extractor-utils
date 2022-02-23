@@ -13,12 +13,13 @@
 #  limitations under the License.
 
 """
-A module containing utilities for developing extensions for generic source systems.
+A module containing a slightly more advanced base extractor class, sorting a generic output into upload queues.
 """
 
+from dataclasses import dataclass
 from datetime import datetime
 from types import TracebackType
-from typing import Callable, Iterable, List, Optional, Tuple, Type, Union
+from typing import Callable, Iterable, List, Optional, Tuple, Type, TypeVar, Union
 
 from more_itertools import peekable
 
@@ -26,7 +27,7 @@ from cognite.client import CogniteClient
 from cognite.client.data_classes import Event as _Event
 from cognite.client.data_classes import Row as _Row
 from cognite.extractorutils.base import Extractor
-from cognite.extractorutils.configtools import CustomConfigClass
+from cognite.extractorutils.configtools import BaseConfig
 from cognite.extractorutils.metrics import BaseMetrics
 from cognite.extractorutils.statestore import AbstractStateStore
 from cognite.extractorutils.uploader import EventUploadQueue, RawUploadQueue, TimeSeriesUploadQueue
@@ -48,7 +49,22 @@ class RawRow:
             self.rows = [row]
 
 
+@dataclass
+class QueueConfigClass:
+    event_size: int = 10_000
+    raw_size: int = 100_000
+    timeseries_size: int = 1_000_000
+    upload_interval: int = 60
+
+
+@dataclass
+class UploaderExtractorConfig(BaseConfig):
+    queues: QueueConfigClass
+
+
 TimeStamp = Union[int, datetime]
+
+UploaderExtractorConfigClass = TypeVar("UploaderExtractorConfigClass", bound=UploaderExtractorConfig)
 
 
 class InsertDatapoints:
@@ -69,11 +85,11 @@ Event: TypeAlias = _Event
 CdfTypes = Union[Event, Iterable[Event], RawRow, Iterable[RawRow], InsertDatapoints, Iterable[InsertDatapoints]]
 
 
-class BaseExtensionExtractor(Extractor[CustomConfigClass]):
+class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
     """
-    Base class for extension extractors.
+    Base class for simple extractors producing an output that can be described by the CdfTypes type alias.
 
-    Intended for use with an extractor that is capable of producing CdfTypes from some underlying source.
+    Feed output to the handle_output method and it will sort them into appropriate upload queues.
 
     Args:
         name: Name of the extractor, how it's invoked from the command line.
@@ -99,8 +115,10 @@ class BaseExtensionExtractor(Extractor[CustomConfigClass]):
         name: str,
         description: str,
         version: Optional[str] = None,
-        run_handle: Optional[Callable[[CogniteClient, AbstractStateStore, CustomConfigClass, Event], None]] = None,
-        config_class: Type[CustomConfigClass],
+        run_handle: Optional[
+            Callable[[CogniteClient, AbstractStateStore, UploaderExtractorConfigClass, Event], None]
+        ] = None,
+        config_class: Type[UploaderExtractorConfigClass],
         metrics: Optional[BaseMetrics] = None,
         use_default_state_store: bool = True,
         cancelation_token: Event = Event(),
@@ -109,7 +127,7 @@ class BaseExtensionExtractor(Extractor[CustomConfigClass]):
         heartbeat_waiting_time: int = 600,
         handle_interrupts: bool = True,
     ):
-        super(BaseExtensionExtractor, self).__init__(
+        super(UploaderExtractor, self).__init__(
             name=name,
             description=description,
             version=version,
@@ -123,11 +141,6 @@ class BaseExtensionExtractor(Extractor[CustomConfigClass]):
             heartbeat_waiting_time=heartbeat_waiting_time,
             handle_interrupts=handle_interrupts,
         )
-
-        self._event_queue_size = 10_000
-        self._raw_queue_size = 100_000
-        self._timeseries_queue_size = 1_000_000
-        self._upload_interval = 60
 
     def handle_output(self, output: CdfTypes) -> None:
         if not isinstance(output, Iterable):
@@ -154,24 +167,24 @@ class BaseExtensionExtractor(Extractor[CustomConfigClass]):
         else:
             raise ValueError(f"Unexpected type: {type(peek)}")
 
-    def __enter__(self) -> "BaseExtensionExtractor":
-        super(BaseExtensionExtractor, self).__enter__()
+    def __enter__(self) -> "UploaderExtractor":
+        super(UploaderExtractor, self).__enter__()
         self.event_queue = EventUploadQueue(
             self.cognite_client,
-            max_queue_size=self._event_queue_size,
-            max_upload_interval=self._upload_interval,
+            max_queue_size=self.config.queues.event_size,
+            max_upload_interval=self.config.queues.upload_interval,
             trigger_log_level="INFO",
         ).__enter__()
         self.raw_queue = RawUploadQueue(
             self.cognite_client,
-            max_queue_size=self._raw_queue_size,
-            max_upload_interval=self._upload_interval,
+            max_queue_size=self.config.queues.raw_size,
+            max_upload_interval=self.config.queues.upload_interval,
             trigger_log_level="INFO",
         ).__enter__()
         self.time_series_queue = TimeSeriesUploadQueue(
             self.cognite_client,
-            max_queue_size=self._timeseries_queue_size,
-            max_upload_interval=self._upload_interval,
+            max_queue_size=self.config.queues.timeseries_size,
+            max_upload_interval=self.config.queues.upload_interval,
             trigger_log_level="INFO",
             create_missing=True,
         ).__enter__()
@@ -184,4 +197,4 @@ class BaseExtensionExtractor(Extractor[CustomConfigClass]):
         self.event_queue.__exit__(exc_type, exc_val, exc_tb)
         self.raw_queue.__exit__(exc_type, exc_val, exc_tb)
         self.time_series_queue.__exit__(exc_type, exc_val, exc_tb)
-        return super(BaseExtensionExtractor, self).__exit__(exc_type, exc_val, exc_tb)
+        return super(UploaderExtractor, self).__exit__(exc_type, exc_val, exc_tb)

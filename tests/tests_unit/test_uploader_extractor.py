@@ -13,26 +13,29 @@
 #  limitations under the License.
 import datetime
 import unittest
-from dataclasses import dataclass
-from sqlite3 import Timestamp
 from unittest.mock import patch
 
 import pytest
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Row
-from cognite.extractorutils._extensions import BaseExtensionExtractor, Event, InsertDatapoints, RawRow
-from cognite.extractorutils.configtools import BaseConfig
 from cognite.extractorutils.uploader import EventUploadQueue, RawUploadQueue, TimeSeriesUploadQueue
+from cognite.extractorutils.uploader_extractor import (
+    Event,
+    InsertDatapoints,
+    RawRow,
+    UploaderExtractor,
+    UploaderExtractorConfig,
+)
 
 
-class TestExtensionExtractorClass(unittest.TestCase):
+class TestUploaderExtractorClass(unittest.TestCase):
     @patch("cognite.client.CogniteClient")
     def test_handle_events(self, MockCogniteClient):
         client: CogniteClient = MockCogniteClient()
 
-        ex = BaseExtensionExtractor[BaseConfig](
-            name="ext_extractor1", description="description", config_class=BaseConfig
+        ex = UploaderExtractor[UploaderExtractorConfig](
+            name="ext_extractor1", description="description", config_class=UploaderExtractorConfig
         )
         ex.event_queue = EventUploadQueue(client)
 
@@ -41,21 +44,21 @@ class TestExtensionExtractorClass(unittest.TestCase):
         ex.handle_output(evt)
 
         ex.event_queue.upload()
-        client.events.create.ssert_called_with([evt])
+        client.events.create.assert_called_with([evt])
 
         # Iterable
         evts = [Event(external_id="some-event"), Event(external_id="some-other-event")]
         ex.handle_output(evts)
 
         ex.event_queue.upload()
-        client.events.create.ssert_called_with(evts)
+        client.events.create.assert_called_with(evts)
 
     @patch("cognite.client.CogniteClient")
     def test_handle_raw_rows(self, MockCogniteClient):
         client: CogniteClient = MockCogniteClient()
 
-        ex = BaseExtensionExtractor[BaseConfig](
-            name="ext_extractor2", description="description", config_class=BaseConfig
+        ex = UploaderExtractor[UploaderExtractorConfig](
+            name="ext_extractor2", description="description", config_class=UploaderExtractorConfig
         )
         ex.raw_queue = RawUploadQueue(client)
 
@@ -65,7 +68,7 @@ class TestExtensionExtractorClass(unittest.TestCase):
         ex.handle_output(row)
 
         ex.raw_queue.upload()
-        client.raw.rows.insert.ssert_called_with("some-db", "some-table", r)
+        client.raw.rows.insert.assert_called_with(db_name="some-db", table_name="some-table", row=[r], ensure_parent=True)
 
         # Iterable
         r2 = Row()
@@ -76,14 +79,15 @@ class TestExtensionExtractorClass(unittest.TestCase):
         ex.handle_output(rows)
 
         ex.raw_queue.upload()
-        client.raw.rows.insert.ssert_called_with("some-db", "some-table", [r, r2])
+        client.raw.rows.insert.assert_called_with(db_name="some-db", table_name="some-table", row=[r], ensure_parent=True)
+        client.raw.rows.insert.assert_called_with(db_name="some-db", table_name="some-table", row=[r2], ensure_parent=True)
 
     @patch("cognite.client.CogniteClient")
     def test_handle_timeseries(self, MockCogniteClient):
         client: CogniteClient = MockCogniteClient()
 
-        ex = BaseExtensionExtractor[BaseConfig](
-            name="ext_extractor3", description="description", config_class=BaseConfig
+        ex = UploaderExtractor[UploaderExtractorConfig](
+            name="ext_extractor3", description="description", config_class=UploaderExtractorConfig
         )
         ex.time_series_queue = TimeSeriesUploadQueue(client)
 
