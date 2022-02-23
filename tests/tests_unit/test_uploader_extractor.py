@@ -68,7 +68,9 @@ class TestUploaderExtractorClass(unittest.TestCase):
         ex.handle_output(row)
 
         ex.raw_queue.upload()
-        client.raw.rows.insert.assert_called_with(db_name="some-db", table_name="some-table", row=[r], ensure_parent=True)
+        client.raw.rows.insert.assert_called_with(
+            db_name="some-db", table_name="some-table", row=[r], ensure_parent=True
+        )
 
         # Iterable
         r2 = Row()
@@ -79,8 +81,12 @@ class TestUploaderExtractorClass(unittest.TestCase):
         ex.handle_output(rows)
 
         ex.raw_queue.upload()
-        client.raw.rows.insert.assert_called_with(db_name="some-db", table_name="some-table", row=[r], ensure_parent=True)
-        client.raw.rows.insert.assert_called_with(db_name="some-db", table_name="some-table", row=[r2], ensure_parent=True)
+        client.raw.rows.insert.assert_called_with(
+            db_name="some-db", table_name="some-table", row=[r], ensure_parent=True
+        )
+        client.raw.rows.insert.assert_called_with(
+            db_name="some-db", table_name="some-table", row=[r2], ensure_parent=True
+        )
 
     @patch("cognite.client.CogniteClient")
     def test_handle_timeseries(self, MockCogniteClient):

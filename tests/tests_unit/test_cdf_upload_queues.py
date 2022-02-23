@@ -180,7 +180,7 @@ class TestUploadQueue(unittest.TestCase):
 
         client.events.create.assert_not_called()
         queue.upload()
-        client.events.create.ssert_called_with([event1, event2])
+        client.events.create.assert_called_with([event1, event2])
 
     @patch("cognite.client.CogniteClient")
     def test_event_uploader2(self, MockCogniteClient):
@@ -202,7 +202,7 @@ class TestUploadQueue(unittest.TestCase):
 
         time.sleep(2.1)
 
-        client.events.create.ssert_called_with([event1, event2])
+        client.events.create.assert_called_with([event1, event2])
         self.assertTrue(post_upload_test["value"])
 
         queue.stop()
