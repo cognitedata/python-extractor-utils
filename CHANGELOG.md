@@ -15,17 +15,25 @@ Changes are grouped as follows
 
 ## Next release
 
+### Fixed
+
+ * Fixed a signature bug in `SequenceUploadQueue`'s `__enter__` method
+   preventing it to be used as a context.
+
+
 ## [2.0.3] - 2022-02-08
 
 ### Fixed
 
- * Fixed an issue where the base class would not always load a default `LocalStateStore` if requested
+ * Fixed an issue where the base class would not always load a default
+   `LocalStateStore` if requested
 
 ## [2.0.2] - 2022-02-07
 
 ### Added
 
- * A `get_current_state_store` class method on the Extractor class which returns the most recent state store loaded
+ * A `get_current_state_store` class method on the Extractor class which returns
+   the most recent state store loaded
 
 
 ## [2.0.1] - 2022-02-01
@@ -36,7 +44,8 @@ Changes are grouped as follows
  
 ### Added
 
- * A `get_current_config` class method on the Extractor class which returns the most recent config file read
+ * A `get_current_config` class method on the Extractor class which returns the
+   most recent config file read
 
 
 ## [2.0.0] - 2022-01-24

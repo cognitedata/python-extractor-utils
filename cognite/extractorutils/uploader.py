@@ -1082,7 +1082,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
         cseq = self.upload_queue[either_id]
         cseq.columns = seq.columns
 
-    def __enter__(self, exc_type, exc_val, exc_tb) -> "SequenceUploadQueue":
+    def __enter__(self) -> "SequenceUploadQueue":
         """
         Wraps around start method, for use as context manager
 
