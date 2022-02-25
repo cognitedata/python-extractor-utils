@@ -20,13 +20,8 @@ import pytest
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Row
 from cognite.extractorutils.uploader import EventUploadQueue, RawUploadQueue, TimeSeriesUploadQueue
-from cognite.extractorutils.uploader_extractor import (
-    Event,
-    InsertDatapoints,
-    RawRow,
-    UploaderExtractor,
-    UploaderExtractorConfig,
-)
+from cognite.extractorutils.uploader_extractor import UploaderExtractor, UploaderExtractorConfig
+from cognite.extractorutils.uploader_types import CdfTypes, Event, InsertDatapoints, RawRow
 
 
 class TestUploaderExtractorClass(unittest.TestCase):
