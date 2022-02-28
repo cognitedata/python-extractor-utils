@@ -15,6 +15,15 @@ Changes are grouped as follows
 
 ## Next release
 
+## [2.1.0] - 2022-02-25
+
+### Added
+ 
+ * `uploader_extractor` and `uploader_types` modules used to create extractors
+   writing to events, timeseries, or raw, by calling a common method.
+   This is primarily used for the utils extensions, but can be useful for
+   very simple extractors in general. 
+
 ### Fixed
 
  * Fixed a signature bug in `SequenceUploadQueue`'s `__enter__` method
