@@ -15,6 +15,15 @@ Changes are grouped as follows
 
 ## Next release
 
+## [2.1.1] - 2022-03-04
+
+### Changed
+
+ * Allow wider ranges for certain dependencies
+   - Allow `>=3.7.4, <5` for typing-extensions
+   - Allow `>=5.3.0, <7` for PyYAML
+
+
 ## [2.1.0] - 2022-02-25
 
 ### Added
