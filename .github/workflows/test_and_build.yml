@@ -25,6 +25,7 @@ jobs:
       run: |
         python3 -m pip install --upgrade pip poetry
         poetry config virtualenvs.create false
+        poetry lock
         poetry install
 
     - name: Check codestyle
