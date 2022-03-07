@@ -15,6 +15,15 @@ Changes are grouped as follows
 
 ## Next release
 
+## [2.1.3] - 2022-03-07
+
+### Fixed
+
+ * Use Optional with defaults in code instead of dataclass defaults in
+   `UploaderExtractorConfig`, as this allows non-default config sections in
+   subclasses.
+
+
 ## [2.1.2] - 2022-03-07
 
 ### Fixed
