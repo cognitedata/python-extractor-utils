@@ -101,6 +101,8 @@ ipython_config.py
 #   install all needed dependencies.
 #Pipfile.lock
 
+poetry.lock
+
 # pyenv
 .python-version
 

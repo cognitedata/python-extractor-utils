@@ -41,7 +41,7 @@ class QueueConfigClass:
 
 @dataclass
 class UploaderExtractorConfig(BaseConfig):
-    queues: QueueConfigClass
+    queues: QueueConfigClass = QueueConfigClass()
 
 
 UploaderExtractorConfigClass = TypeVar("UploaderExtractorConfigClass", bound=UploaderExtractorConfig)
