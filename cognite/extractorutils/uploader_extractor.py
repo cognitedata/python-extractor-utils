@@ -41,7 +41,7 @@ class QueueConfigClass:
 
 @dataclass
 class UploaderExtractorConfig(BaseConfig):
-    queues: QueueConfigClass = QueueConfigClass()
+    queues: Optional[QueueConfigClass]
 
 
 UploaderExtractorConfigClass = TypeVar("UploaderExtractorConfigClass", bound=UploaderExtractorConfig)
@@ -131,22 +131,24 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
 
     def __enter__(self) -> "UploaderExtractor":
         super(UploaderExtractor, self).__enter__()
+
+        queue_config = self.config.queues if self.config.queues else QueueConfigClass()
         self.event_queue = EventUploadQueue(
             self.cognite_client,
-            max_queue_size=self.config.queues.event_size,
-            max_upload_interval=self.config.queues.upload_interval,
+            max_queue_size=queue_config.event_size,
+            max_upload_interval=queue_config.upload_interval,
             trigger_log_level="INFO",
         ).__enter__()
         self.raw_queue = RawUploadQueue(
             self.cognite_client,
-            max_queue_size=self.config.queues.raw_size,
-            max_upload_interval=self.config.queues.upload_interval,
+            max_queue_size=queue_config.raw_size,
+            max_upload_interval=queue_config.upload_interval,
             trigger_log_level="INFO",
         ).__enter__()
         self.time_series_queue = TimeSeriesUploadQueue(
             self.cognite_client,
-            max_queue_size=self.config.queues.timeseries_size,
-            max_upload_interval=self.config.queues.upload_interval,
+            max_queue_size=queue_config.timeseries_size,
+            max_upload_interval=queue_config.upload_interval,
             trigger_log_level="INFO",
             create_missing=True,
         ).__enter__()
