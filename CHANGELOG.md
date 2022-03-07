@@ -15,6 +15,13 @@ Changes are grouped as follows
 
 ## Next release
 
+## [2.1.2] - 2022-03-07
+
+### Fixed
+
+ * Include defaults for queue sizes in `UploaderExtractor`
+
+
 ## [2.1.1] - 2022-03-04
 
 ### Changed
