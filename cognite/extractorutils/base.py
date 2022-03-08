@@ -21,6 +21,8 @@ from threading import Event, Thread
 from types import TracebackType
 from typing import Any, Callable, Dict, Generic, Optional, Type, TypeVar
 
+from dotenv import find_dotenv, load_dotenv
+
 from cognite.client import CogniteClient
 from cognite.client.data_classes import ExtractionPipeline, ExtractionPipelineRun
 from cognite.extractorutils.configtools import BaseConfig, CustomConfigClass, StateStoreConfig, load_yaml
@@ -193,6 +195,15 @@ class Extractor(Generic[CustomConfigClass]):
         Returns:
             self
         """
+
+        # Environment Variables
+        env_file_path = find_dotenv()
+        if env_file_path:
+            load_dotenv(dotenv_path=env_file_path, override=True)
+            dotenv_message = f"Successfully ingested environment variables from {env_file_path}"
+        else:
+            dotenv_message = "Could not ingest environment variables from .env file"
+
         self._load_config(override_path=self.config_file_path)
 
         if not self.configured_logger:
@@ -200,6 +211,7 @@ class Extractor(Generic[CustomConfigClass]):
             self.configured_logger = True
 
         self.logger = logging.getLogger(__name__)
+        self.logger.info(dotenv_message)
 
         if self.handle_interrupts:
             set_event_on_interrupt(self.cancelation_token)
