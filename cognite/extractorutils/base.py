@@ -197,12 +197,12 @@ class Extractor(Generic[CustomConfigClass]):
         """
 
         # Environment Variables
-        self.env_file_path = find_dotenv()
-        if len(self.env_file_path) > 0:
-            load_dotenv(dotenv_path=self.env_file_path, override=True)
-            self.dotenv_message = f"Successfully ingested environment variables from\n{self.env_file_path}"
+        env_file_path = find_dotenv()
+        if env_file_path:
+            load_dotenv(dotenv_path=env_file_path, override=True)
+            dotenv_message = f"Successfully ingested environment variables from {env_file_path}"
         else:
-            self.dotenv_message = "Could not ingest environment variables from .env file"
+            dotenv_message = "Could not ingest environment variables from .env file"
 
         self._load_config(override_path=self.config_file_path)
 
@@ -211,7 +211,7 @@ class Extractor(Generic[CustomConfigClass]):
             self.configured_logger = True
 
         self.logger = logging.getLogger(__name__)
-        self.logger.info(self.dotenv_message)
+        self.logger.info(dotenv_message)
 
         if self.handle_interrupts:
             set_event_on_interrupt(self.cancelation_token)
