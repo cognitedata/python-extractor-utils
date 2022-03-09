@@ -250,10 +250,14 @@ class CogniteConfig:
         if not self.extraction_pipeline:
             return None
 
-        return cdf_client.extraction_pipelines.retrieve(
-            id=self.extraction_pipeline.either_id.internal_id,
-            external_id=self.extraction_pipeline.either_id.external_id,
+        either_id = self.extraction_pipeline.either_id
+        extraction_pipeline = cdf_client.extraction_pipelines.retrieve(
+            id=either_id.internal_id,
+            external_id=either_id.external_id,
         )
+        if extraction_pipeline is None:
+            raise ValueError(f"Extraction pipeline with {either_id.type()} {either_id.content()} not found")
+        return extraction_pipeline
 
 
 @dataclass
