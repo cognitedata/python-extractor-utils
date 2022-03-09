@@ -2,7 +2,7 @@ import logging
 import random
 import threading
 from functools import partial
-from typing import Iterable, Optional, Type
+from typing import Iterable, Optional, Tuple, Type, Union
 
 from decorator import decorator
 
@@ -14,10 +14,10 @@ def _retry_internal(
     cancelation_token: threading.Event = threading.Event(),
     exceptions: Iterable[Type[Exception]] = Exception,
     tries: int = -1,
-    delay: int = 0,
-    max_delay: Optional[int] = None,
+    delay: float = 0,
+    max_delay: Optional[float] = None,
     backoff: float = 1,
-    jitter: float = 0,
+    jitter: Union[float, Tuple[float, float]] = 0,
     logger: logging.Logger = logging_logger,
 ):
     _tries, _delay = tries, delay
@@ -48,10 +48,10 @@ def retry(
     cancelation_token: threading.Event = threading.Event(),
     exceptions: Iterable[Type[Exception]] = Exception,
     tries: int = -1,
-    delay: int = 0,
-    max_delay: Optional[int] = None,
+    delay: float = 0,
+    max_delay: Optional[float] = None,
     backoff: float = 1,
-    jitter: float = 0,
+    jitter: Union[float, Tuple[float, float]] = 0,
     logger: logging.Logger = logging_logger,
 ):
     """Returns a retry decorator.
