@@ -18,6 +18,7 @@ from io import StringIO
 from cognite.client import CogniteClient
 from cognite.client.data_classes import DataSet
 from cognite.client.exceptions import CogniteDuplicatedError
+
 from cognite.extractorutils.configtools import BaseConfig, CogniteConfig, load_yaml
 
 
@@ -31,7 +32,9 @@ class TestConfigtools(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        cls.client = CogniteClient(client_name="extractor-utils-integration-tests",)
+        cls.client = CogniteClient(
+            client_name="extractor-utils-integration-tests",
+        )
 
         try:
             cls.data_set_id = cls.client.data_sets.create(

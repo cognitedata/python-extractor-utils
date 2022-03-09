@@ -20,9 +20,9 @@ from dataclasses import dataclass
 from types import TracebackType
 from typing import Callable, Iterable, Optional, Type, TypeVar
 
+from cognite.client import CogniteClient
 from more_itertools import peekable
 
-from cognite.client import CogniteClient
 from cognite.extractorutils.base import Extractor
 from cognite.extractorutils.configtools import BaseConfig
 from cognite.extractorutils.metrics import BaseMetrics

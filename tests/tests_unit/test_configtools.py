@@ -17,8 +17,8 @@ import unittest
 from dataclasses import dataclass
 
 import pytest
-
 from cognite.client import CogniteClient
+
 from cognite.extractorutils.configtools import BaseConfig, CogniteConfig, _to_snake_case, load_yaml
 from cognite.extractorutils.exceptions import InvalidConfigError
 

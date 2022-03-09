@@ -21,10 +21,10 @@ from threading import Event, Thread
 from types import TracebackType
 from typing import Any, Callable, Dict, Generic, Optional, Type, TypeVar
 
-from dotenv import find_dotenv, load_dotenv
-
 from cognite.client import CogniteClient
 from cognite.client.data_classes import ExtractionPipeline, ExtractionPipelineRun
+from dotenv import find_dotenv, load_dotenv
+
 from cognite.extractorutils.configtools import BaseConfig, CustomConfigClass, StateStoreConfig, load_yaml
 from cognite.extractorutils.metrics import BaseMetrics
 from cognite.extractorutils.statestore import AbstractStateStore, LocalStateStore, NoStateStore
