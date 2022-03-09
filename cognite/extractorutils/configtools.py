@@ -99,6 +99,7 @@ from urllib.parse import urljoin
 
 import dacite
 import yaml
+
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset, DataSet, ExtractionPipeline
 
