@@ -19,6 +19,11 @@ Changes are grouped as follows
 
  * `.env` files will now be loaded if present at runtime
 
+### Fixed
+
+ * A few type hints in retry module were more restrictive than needed (such as 
+   requiring `int` when `float` would work).
+
 
 ## [2.1.3] - 2022-03-07
 

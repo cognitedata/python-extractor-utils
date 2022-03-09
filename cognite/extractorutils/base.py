@@ -202,7 +202,7 @@ class Extractor(Generic[CustomConfigClass]):
             load_dotenv(dotenv_path=env_file_path, override=True)
             dotenv_message = f"Successfully ingested environment variables from {env_file_path}"
         else:
-            dotenv_message = "Could not ingest environment variables from .env file"
+            dotenv_message = "No .env file found"
 
         self._load_config(override_path=self.config_file_path)
 
