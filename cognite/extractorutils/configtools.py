@@ -99,7 +99,6 @@ from urllib.parse import urljoin
 
 import dacite
 import yaml
-
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset, DataSet, ExtractionPipeline
 
@@ -252,8 +251,7 @@ class CogniteConfig:
 
         either_id = self.extraction_pipeline.either_id
         extraction_pipeline = cdf_client.extraction_pipelines.retrieve(
-            id=either_id.internal_id,
-            external_id=either_id.external_id,
+            id=either_id.internal_id, external_id=either_id.external_id,
         )
         if extraction_pipeline is None:
             raise ValueError(f"Extraction pipeline with {either_id.type()} {either_id.content()} not found")
