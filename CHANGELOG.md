@@ -18,6 +18,8 @@ Changes are grouped as follows
 ### Added
 
  * `.env` files will now be loaded if present at runtime
+ * Check that a configured extraction pipeline actually exists, and report an
+   appropriate error if not.
 
 ### Fixed
 
