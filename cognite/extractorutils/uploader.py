@@ -77,13 +77,12 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import arrow
 from arrow import Arrow
-from prometheus_client import Counter, Gauge, Histogram
-from requests.exceptions import ConnectionError
-
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Event, FileMetadata, Sequence, SequenceData, TimeSeries
 from cognite.client.data_classes.raw import Row
 from cognite.client.exceptions import CogniteAPIError, CogniteDuplicatedError, CogniteNotFoundError, CogniteReadTimeout
+from prometheus_client import Counter, Gauge, Histogram
+from requests.exceptions import ConnectionError
 
 from ._inner_util import _resolve_log_level
 from .retry import retry
@@ -249,7 +248,8 @@ TIMESERIES_UPLOADER_POINTS_WRITTEN = Counter(
 TIMESERIES_UPLOADER_QUEUE_SIZE = Gauge("cognite_timeseries_uploader_queue_size", "Internal queue size")
 
 TIMESERIES_UPLOADER_LATENCY = Histogram(
-    "cognite_timeseries_uploader_latency", "Distribution of times in minutes records spend in the queue",
+    "cognite_timeseries_uploader_latency",
+    "Distribution of times in minutes records spend in the queue",
 )
 
 TIMESERIES_UPLOADER_POINTS_DISCARDED = Counter(
@@ -268,7 +268,8 @@ SEQUENCES_UPLOADER_POINTS_WRITTEN = Counter(
 SEQUENCES_UPLOADER_QUEUE_SIZE = Gauge("cognite_sequences_uploader_queue_size", "Internal queue size")
 
 SEQUENCES_UPLOADER_LATENCY = Histogram(
-    "cognite_sequences_uploader_latency", "Distribution of times in minutes records spend in the queue",
+    "cognite_sequences_uploader_latency",
+    "Distribution of times in minutes records spend in the queue",
 )
 
 EVENTS_UPLOADER_QUEUED = Counter("cognite_events_uploader_queued", "Total number of events queued")
@@ -278,7 +279,8 @@ EVENTS_UPLOADER_WRITTEN = Counter("cognite_events_uploader_written", "Total numb
 EVENTS_UPLOADER_QUEUE_SIZE = Gauge("cognite_events_uploader_queue_size", "Internal queue size")
 
 EVENTS_UPLOADER_LATENCY = Histogram(
-    "cognite_events_uploader_latency", "Distribution of times in minutes records spend in the queue",
+    "cognite_events_uploader_latency",
+    "Distribution of times in minutes records spend in the queue",
 )
 
 FILES_UPLOADER_QUEUED = Counter("cognite_files_uploader_queued", "Total number of files queued")
@@ -288,14 +290,16 @@ FILES_UPLOADER_WRITTEN = Counter("cognite_files_uploader_written", "Total number
 FILES_UPLOADER_QUEUE_SIZE = Gauge("cognite_files_uploader_queue_size", "Internal queue size")
 
 FILES_UPLOADER_LATENCY = Histogram(
-    "cognite_files_uploader_latency", "Distribution of times in minutes records spend in the queue",
+    "cognite_files_uploader_latency",
+    "Distribution of times in minutes records spend in the queue",
 )
 
 BYTES_UPLOADER_QUEUED = Counter("cognite_bytes_uploader_queued", "Total number of frames queued")
 BYTES_UPLOADER_WRITTEN = Counter("cognite_bytes_uploader_written", "Total number of frames written")
 BYTES_UPLOADER_QUEUE_SIZE = Gauge("cognite_bytes_uploader_queue_size", "Internal queue size")
 BYTES_UPLOADER_LATENCY = Histogram(
-    "cognite_bytes_uploader_latency", "Distribution of times in minutes records spend in the queue",
+    "cognite_bytes_uploader_latency",
+    "Distribution of times in minutes records spend in the queue",
 )
 
 
@@ -543,7 +547,10 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         else:
             return True
 
-    def _is_datapoint_valid(self, dp: DataPoint,) -> bool:
+    def _is_datapoint_valid(
+        self,
+        dp: DataPoint,
+    ) -> bool:
         if isinstance(dp, Dict):
             return self._verify_datapoint_time(dp["timestamp"]) and self._verify_datapoint_value(dp["value"])
         elif isinstance(dp, Tuple):

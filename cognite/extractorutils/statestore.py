@@ -92,10 +92,10 @@ from abc import ABC, abstractmethod
 from threading import Lock
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
-from requests.exceptions import ConnectionError
-
 from cognite.client import CogniteClient
 from cognite.client.exceptions import CogniteAPIError
+from requests.exceptions import ConnectionError
+
 from cognite.extractorutils.uploader import DataPointList
 
 from ._inner_util import _resolve_log_level

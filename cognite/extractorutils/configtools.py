@@ -99,7 +99,6 @@ from urllib.parse import urljoin
 
 import dacite
 import yaml
-
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset, DataSet, ExtractionPipeline
 
@@ -290,7 +289,8 @@ class LoggingConfig:
                 service
         """
         fmt = logging.Formatter(
-            "%(asctime)s.%(msecs)03d UTC [%(levelname)-8s] %(threadName)s - %(message)s", "%Y-%m-%d %H:%M:%S",
+            "%(asctime)s.%(msecs)03d UTC [%(levelname)-8s] %(threadName)s - %(message)s",
+            "%Y-%m-%d %H:%M:%S",
         )
         # Set logging to UTC
         fmt.converter = time.gmtime
@@ -312,7 +312,10 @@ class LoggingConfig:
 
         if self.file:
             file_handler = TimedRotatingFileHandler(
-                filename=self.file.path, when="midnight", utc=True, backupCount=self.file.retention,
+                filename=self.file.path,
+                when="midnight",
+                utc=True,
+                backupCount=self.file.retention,
             )
             file_handler.setLevel(self.file.level)
             file_handler.setFormatter(fmt)
