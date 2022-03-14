@@ -22,9 +22,10 @@ from datetime import datetime, timezone
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Row, TimeSeries
 from cognite.client.exceptions import CogniteAPIError, CogniteNotFoundError
+
 from cognite.extractorutils.uploader import RawUploadQueue, TimeSeriesUploadQueue
 
-test_id = random.randint(0, 2 ** 31)
+test_id = random.randint(0, 2**31)
 
 
 class IntegrationTests(unittest.TestCase):
@@ -36,7 +37,9 @@ class IntegrationTests(unittest.TestCase):
     time_series3: str = f"util_integration_ts_test_3-{test_id}"
 
     def setUp(self):
-        self.client = CogniteClient(client_name="extractor-utils-integration-tests",)
+        self.client = CogniteClient(
+            client_name="extractor-utils-integration-tests",
+        )
 
         # Delete stuff we will use if it exists
         try:

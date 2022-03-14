@@ -17,10 +17,10 @@ import unittest
 from unittest.mock import Mock, patch
 
 import arrow
-from prometheus_client import Gauge
-
 from cognite.client.data_classes import Asset, TimeSeries
 from cognite.client.exceptions import CogniteDuplicatedError, CogniteNotFoundError
+from prometheus_client import Gauge
+
 from cognite.extractorutils.metrics import CognitePusher, safe_get
 
 
@@ -135,7 +135,11 @@ class TestCognitePusher(unittest.TestCase):
         self.assertDictEqual(
             self.client.time_series.create.call_args_list[0][0][0][0].dump(),
             TimeSeries(
-                external_id="pre_gauge", name="gauge", legacy_name="pre_gauge", description="Test gauge", asset_id=123,
+                external_id="pre_gauge",
+                name="gauge",
+                legacy_name="pre_gauge",
+                description="Test gauge",
+                asset_id=123,
             ).dump(),
         )
 

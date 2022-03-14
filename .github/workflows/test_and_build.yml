@@ -29,9 +29,7 @@ jobs:
         poetry install
 
     - name: Check codestyle
-      run: |
-        black --check .
-        isort --check-only -rc .
+      run: pre-commit run --all
 
     - name: Run tests
       env:
