@@ -19,7 +19,7 @@ from dataclasses import dataclass
 import pytest
 from cognite.client import CogniteClient
 
-from cognite.extractorutils.configtools import BaseConfig, CogniteConfig, _to_snake_case, load_yaml
+from cognite.extractorutils.configtools import BaseConfig, CogniteConfig, TimeIntervalConfig, _to_snake_case, load_yaml
 from cognite.extractorutils.exceptions import InvalidConfigError
 
 
@@ -248,3 +248,13 @@ class TestConfigtoolsMethods(unittest.TestCase):
         """
         with self.assertRaises(InvalidConfigError):
             load_yaml(config, CastingClass)
+
+    def test_parse_time_interval(self):
+        self.assertEqual(TimeIntervalConfig("54").seconds, 54)
+        self.assertEqual(TimeIntervalConfig("54s").seconds, 54)
+        self.assertEqual(TimeIntervalConfig("120s").seconds, 120)
+        self.assertEqual(TimeIntervalConfig("2m").seconds, 120)
+        self.assertEqual(TimeIntervalConfig("1h").seconds, 3600)
+        self.assertAlmostEqual(TimeIntervalConfig("15m").hours, 0.25)
+        self.assertAlmostEqual(TimeIntervalConfig("15m").minutes, 15)
+        self.assertAlmostEqual(TimeIntervalConfig("1h").minutes, 60)

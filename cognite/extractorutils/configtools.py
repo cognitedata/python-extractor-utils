@@ -90,11 +90,12 @@ import os
 import re
 import time
 from dataclasses import dataclass
+from datetime import timedelta
 from enum import Enum
 from logging.handlers import TimedRotatingFileHandler
 from threading import Event
 from time import sleep
-from typing import Any, Dict, List, Optional, T, TextIO, Type, TypeVar, Union
+from typing import Any, Dict, List, Optional, T, TextIO, Tuple, Type, TypeVar, Union
 from urllib.parse import urljoin
 
 import dacite
@@ -179,6 +180,62 @@ class EitherIdConfig:
         return EitherId(id=self.id, external_id=self.external_id)
 
 
+class TimeIntervalConfig:
+    def __init__(self, expression):
+        self._interval, self._expression = TimeIntervalConfig._parse_expression(expression)
+
+    @classmethod
+    def _parse_expression(cls, expression: str) -> Tuple[int, str]:
+        # First, try to parse pure number and assume seconds (for backwards compatibility)
+        try:
+            return int(expression), f"{expression}s"
+        except ValueError:
+            pass
+
+        match = re.match(r"(\d+)(s|m|h|d)", expression)
+        if not match:
+            raise InvalidConfigError("Invalid interval pattern")
+
+        number, unit = match.groups()
+        numeric_unit = {"s": 1, "m": 60, "h": 60 * 60, "d": 60 * 60 * 24}[unit]
+
+        return int(number) * numeric_unit, expression
+
+    @property
+    def seconds(self) -> int:
+        return self._interval
+
+    @property
+    def minutes(self) -> float:
+        return self._interval / 60
+
+    @property
+    def hours(self) -> float:
+        return self._interval / (60 * 60)
+
+    @property
+    def days(self) -> float:
+        return self._interval / (60 * 60 * 24)
+
+    @property
+    def timedelta(self) -> timedelta:
+        days = self._interval // (60 * 60 * 24)
+        seconds = self._interval % (60 * 60 * 24)
+        return timedelta(days=days, seconds=seconds)
+
+    def __int__(self) -> int:
+        return int(self._interval)
+
+    def __float__(self) -> float:
+        return float(self._interval)
+
+    def __str__(self) -> str:
+        return self._expression
+
+    def __repr__(self) -> str:
+        return self._expression
+
+
 @dataclass
 class CogniteConfig:
     """
@@ -192,7 +249,7 @@ class CogniteConfig:
     data_set_id: Optional[int]
     data_set_external_id: Optional[str]
     extraction_pipeline: Optional[EitherIdConfig]
-    timeout: int = 30
+    timeout: TimeIntervalConfig = TimeIntervalConfig("30s")
     external_id_prefix: str = ""
     host: str = "https://api.cognitedata.com"
 
@@ -223,7 +280,7 @@ class CogniteConfig:
             base_url=self.host,
             client_name=client_name,
             disable_pypi_version_check=True,
-            timeout=self.timeout,
+            timeout=self.timeout.seconds,
             **kwargs,
         )
 
@@ -337,8 +394,8 @@ class _PushGatewayConfig:
     username: Optional[str]
     password: Optional[str]
 
-    clear_after: Optional[int]
-    push_interval: int = 30
+    clear_after: Optional[TimeIntervalConfig]
+    push_interval: TimeIntervalConfig = TimeIntervalConfig("30s")
 
 
 @dataclass
@@ -347,7 +404,7 @@ class _CogniteMetricsConfig:
     asset_name: Optional[str]
     asset_external_id: Optional[str]
 
-    push_interval: int = 30
+    push_interval: TimeIntervalConfig = TimeIntervalConfig("30s")
 
 
 @dataclass
@@ -372,7 +429,7 @@ class MetricsConfig:
                 username=push_gateway.username,
                 password=push_gateway.password,
                 url=push_gateway.host,
-                push_interval=push_gateway.push_interval,
+                push_interval=push_gateway.push_interval.seconds,
                 thread_name=f"MetricsPusher_{counter}",
                 cancelation_token=cancelation_token,
             )
@@ -380,7 +437,7 @@ class MetricsConfig:
             pusher.start()
             self._pushers.append(pusher)
             if push_gateway.clear_after is not None:
-                self._clear_on_stop[pusher] = push_gateway.clear_after
+                self._clear_on_stop[pusher] = push_gateway.clear_after.seconds
 
         if self.cognite:
             asset = None
@@ -391,7 +448,7 @@ class MetricsConfig:
             pusher = CognitePusher(
                 cdf_client=cdf_client,
                 external_id_prefix=self.cognite.external_id_prefix,
-                push_interval=self.cognite.push_interval,
+                push_interval=self.cognite.push_interval.seconds,
                 asset=asset,
                 thread_name="CogniteMetricsPusher",  # There is only one Cognite project as a target
                 cancelation_token=cancelation_token,
@@ -435,13 +492,13 @@ class RawDestinationConfig:
 
 @dataclass
 class RawStateStoreConfig(RawDestinationConfig):
-    upload_interval: int = 30
+    upload_interval: TimeIntervalConfig = TimeIntervalConfig("30s")
 
 
 @dataclass
 class LocalStateStoreConfig:
     path: str
-    save_interval: int = 30
+    save_interval: TimeIntervalConfig = TimeIntervalConfig("30s")
 
 
 @dataclass
@@ -474,11 +531,11 @@ class StateStoreConfig:
                 cdf_client=cdf_client,
                 database=self.raw.database,
                 table=self.raw.table,
-                save_interval=self.raw.upload_interval,
+                save_interval=self.raw.upload_interval.seconds,
             )
 
         if self.local:
-            return LocalStateStore(file_path=self.local.path, save_interval=self.local.save_interval)
+            return LocalStateStore(file_path=self.local.path, save_interval=self.local.save_interval.seconds)
 
         if default_to_local:
             return LocalStateStore(file_path="states.json")
@@ -535,7 +592,7 @@ def load_yaml(
 
     try:
         config = dacite.from_dict(
-            data=config_dict, data_class=config_type, config=dacite.Config(strict=True, cast=[Enum])
+            data=config_dict, data_class=config_type, config=dacite.Config(strict=True, cast=[Enum, TimeIntervalConfig])
         )
     except (dacite.WrongTypeError, dacite.MissingValueError, dacite.UnionMatchError, dacite.UnexpectedDataError) as e:
         raise InvalidConfigError(str(e))
