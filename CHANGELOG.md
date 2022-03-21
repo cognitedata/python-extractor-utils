@@ -17,22 +17,28 @@ Changes are grouped as follows
 
 ### Changed
 
- * Allow any interval to be configured as a string in addition to integers, so e.g. upload intervals can be configured
-   as
+ * Allow any interval to be configured as a string in addition to integers, so
+   e.g. upload intervals can be configured as
+
    ```yaml
    upload-interval: 2m
    ```
-   with `s`/`m`/`h`/`d` being valid units, and `s` being implied when units are missing (to preserve backwards 
-   compatibility with old config files). If your extractor reads from these config fields directly you need to update
-   to read the `seconds` (or the computed `minutes`, `hours` or `days` ) attribute instead of the fields directly, for
-   example:
+
+   with `s`/`m`/`h`/`d` being valid units, and `s` being implied when units are
+   missing (to preserve backwards compatibility with old config files). If your
+   extractor reads from these config fields you need to update to read the
+   `seconds` (or the computed `minutes`, `hours` or `days` ) attribute instead
+   of the fields directly, for example:
+
    ```python
    RawUploadQueue(
        cognite_client,
        max_upload_interval=config.upload_interval,
    )
    ```
+
    must be changed to
+
    ```python
    RawUploadQueue(
        cognite_client,
