@@ -153,7 +153,11 @@ class Extractor(Generic[CustomConfigClass]):
         else:
             self.state_store = LocalStateStore("states.json") if self.use_default_state_store else NoStateStore()
 
-        self.state_store.initialize()
+        try:
+            self.state_store.initialize()
+        except ValueError as e:
+            self.logger.exception("Could not load state store, using an empty state store as default")
+
         Extractor._statestore_singleton = self.state_store
 
     def _report_success(self) -> None:
@@ -226,8 +230,6 @@ class Extractor(Generic[CustomConfigClass]):
             self.config.metrics.start_pushers(self.cognite_client)
         except AttributeError:
             pass
-
-        self.state_store.initialize()
 
         def heartbeat_loop():
             while not self.cancelation_token.is_set():

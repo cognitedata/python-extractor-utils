@@ -300,3 +300,16 @@ class TestLocalStateStore(unittest.TestCase):
         new_state_store.stop()
 
         os.remove(filename)
+
+    def test_invalid_file(self):
+        filename = "testfile-invalid.json"
+        try:
+            os.remove(filename)
+        except FileNotFoundError:
+            pass
+
+        with open(filename, "w") as f:
+            f.write("Not json :(")
+
+        with self.assertRaises(ValueError):
+            LocalStateStore(filename).initialize()
