@@ -25,6 +25,8 @@ Changes are grouped as follows
 
  * A few type hints in retry module were more restrictive than needed (such as 
    requiring `int` when `float` would work).
+ * Gracefully handle wrongful data in state stores. If JSON parsing fails, use
+   an empty state store as default.
 
 
 ## [2.1.3] - 2022-03-07

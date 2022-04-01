@@ -465,6 +465,8 @@ class LocalStateStore(AbstractStateStore):
                     self._local_state = json.load(f)
             except FileNotFoundError:
                 pass
+            except json.decoder.JSONDecodeError as e:
+                raise ValueError(f"Invalid JSON in state store file: {str(e)}") from e
 
         self._initialized = True
 
