@@ -26,6 +26,7 @@ from cognite.client.data_classes import ExtractionPipeline, ExtractionPipelineRu
 from dotenv import find_dotenv, load_dotenv
 
 from cognite.extractorutils.configtools import BaseConfig, CustomConfigClass, StateStoreConfig, load_yaml
+from cognite.extractorutils.exceptions import InvalidConfigError
 from cognite.extractorutils.metrics import BaseMetrics
 from cognite.extractorutils.statestore import AbstractStateStore, LocalStateStore, NoStateStore
 from cognite.extractorutils.util import set_event_on_interrupt
@@ -153,7 +154,11 @@ class Extractor(Generic[CustomConfigClass]):
         else:
             self.state_store = LocalStateStore("states.json") if self.use_default_state_store else NoStateStore()
 
-        self.state_store.initialize()
+        try:
+            self.state_store.initialize()
+        except ValueError as e:
+            self.logger.exception("Could not load state store, using an empty state store as default")
+
         Extractor._statestore_singleton = self.state_store
 
     def _report_success(self) -> None:
@@ -204,7 +209,12 @@ class Extractor(Generic[CustomConfigClass]):
         else:
             dotenv_message = "No .env file found"
 
-        self._load_config(override_path=self.config_file_path)
+        try:
+            self._load_config(override_path=self.config_file_path)
+        except InvalidConfigError as e:
+            print("Critical error: Could not read config file", file=sys.stderr)
+            print(str(e), file=sys.stderr)
+            sys.exit(1)
 
         if not self.configured_logger:
             self.config.logger.setup_logging()
@@ -226,8 +236,6 @@ class Extractor(Generic[CustomConfigClass]):
             self.config.metrics.start_pushers(self.cognite_client)
         except AttributeError:
             pass
-
-        self.state_store.initialize()
 
         def heartbeat_loop():
             while not self.cancelation_token.is_set():

@@ -95,13 +95,14 @@ from enum import Enum
 from logging.handlers import TimedRotatingFileHandler
 from threading import Event
 from time import sleep
-from typing import Any, Dict, List, Optional, T, TextIO, Tuple, Type, TypeVar, Union
+from typing import Any, Dict, Iterable, List, Optional, T, TextIO, Tuple, Type, TypeVar, Union
 from urllib.parse import urljoin
 
 import dacite
 import yaml
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset, DataSet, ExtractionPipeline
+from yaml.scanner import ScannerError
 
 from .authentication import AuthenticatorConfig
 from .exceptions import InvalidConfigError
@@ -574,9 +575,6 @@ def load_yaml(
         expanded_value = os.path.expandvars(node.value)
         return bool_values.get(expanded_value.lower(), expanded_value)
 
-    class EnvLoader:
-        pass
-
     class EnvLoader(yaml.SafeLoader):
         pass
 
@@ -586,7 +584,13 @@ def load_yaml(
     loader = EnvLoader if expand_envvars else yaml.SafeLoader
 
     # Safe to use load instead of safe_load since both loader classes are based on SafeLoader
-    config_dict = yaml.load(source, Loader=loader)
+    try:
+        config_dict = yaml.load(source, Loader=loader)
+    except ScannerError as e:
+        location = e.problem_mark or e.context_mark
+        formatted_location = f" at line {location.line+1}, column {location.column+1}" if location is not None else ""
+        cause = e.problem or e.context
+        raise InvalidConfigError(f"Invalid YAML{formatted_location}: {cause or ''}") from e
 
     config_dict = _to_snake_case(config_dict, case_style)
 
@@ -594,8 +598,28 @@ def load_yaml(
         config = dacite.from_dict(
             data=config_dict, data_class=config_type, config=dacite.Config(strict=True, cast=[Enum, TimeIntervalConfig])
         )
-    except (dacite.WrongTypeError, dacite.MissingValueError, dacite.UnionMatchError, dacite.UnexpectedDataError) as e:
-        raise InvalidConfigError(str(e))
+    except dacite.UnexpectedDataError as e:
+        unknowns = [f'"{k.replace("_", "-") if case_style == "hyphen" else k}"' for k in e.keys]
+        raise InvalidConfigError(f"Unknown config parameter{'s' if len(unknowns) > 1 else ''} {', '.join(unknowns)}")
+
+    except (dacite.WrongTypeError, dacite.MissingValueError, dacite.UnionMatchError) as e:
+        path = e.field_path.replace("_", "-") if case_style == "hyphen" else e.field_path
+
+        def name(type_: Type) -> str:
+            return type_.__name__ if hasattr(type_, "__name__") else str(type_)
+
+        def all_types(type_: Type) -> Iterable[Type]:
+            return type_.__args__ if hasattr(type_, "__args__") else [type_]
+
+        if isinstance(e, (dacite.WrongTypeError, dacite.UnionMatchError)) and e.value is not None:
+            got_type = name(type(e.value))
+            need_type = ", ".join(name(t) for t in all_types(e.field_type))
+
+            raise InvalidConfigError(
+                f'Wrong type for field "{path}" - got "{e.value}" of type {got_type} instead of {need_type}'
+            )
+        raise InvalidConfigError(f'Missing mandatory field "{path}"')
+
     except dacite.ForwardReferenceError as e:
         raise ValueError(f"Invalid config class: {str(e)}")
 

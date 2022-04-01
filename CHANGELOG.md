@@ -47,6 +47,8 @@ Changes are grouped as follows
    ```
 
 
+## [2.2.0] - 2022-04-01
+
 ### Added
 
  * `.env` files will now be loaded if present at runtime
@@ -57,6 +59,14 @@ Changes are grouped as follows
 
  * A few type hints in retry module were more restrictive than needed (such as 
    requiring `int` when `float` would work).
+ * Gracefully handle wrongful data in state stores. If JSON parsing fails, use
+   an empty state store as default.
+
+### Changed
+
+ * Exception messages for `InvalidConfigError`s have been improved, and when
+   using the extractor base class it will print them in a formatted way instead
+   of dumping a stack trace on invalid configs.
 
 
 ## [2.1.3] - 2022-03-07
