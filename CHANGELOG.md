@@ -25,6 +25,144 @@ Changes are grouped as follows
  * Dataset and linked asset information are correctly set on created sequences.
  * Type hint for sequence column definitions updated to be more consistent.
 
+
+## [2.3.0-beta1]
+
+Preview release of remote configuration of extractors. This allows users of your
+extractors to configure their extractors from CDF.
+
+### Migration guide
+
+In this section we will go through how you can start using remote configuration
+in your extractors.
+
+
+#### Loading configs on startup
+
+If you have based your extractor on the `Extractor` base class, remote
+configuration is already implemented for your extractor without any need for
+further changes to your code. Just update extractor-utils and you should be good
+to go.
+
+Otherwise, you must use the new `ConfigResolver` class in the `configtools`
+module:
+
+``` python
+# With automatic CLI (ie, read config from command line args):
+resolver = ConfigResolver.from_cli(
+    name="my extractor",
+    description="Short description of my extractor",
+    version="1.2.3",
+    config_type=MyConfig,
+)
+config: MyConfig = resolver.config
+
+
+# With path to a yaml file:
+resolver = ConfigResolver(
+    config_path="/path/to/config.yaml",
+    config_type=MyConfig
+)
+config: MyConfig = resolver.config
+```
+
+The resolver will automatically fetch configuration from CDF if remote
+configuration is used, otherwise it will return the same as `load_yaml`.
+
+#### Detecting config changes (only when using the base class)
+
+When using the base class, you have the option to automatically detect new
+config revisions, and do one of several predefined actions (keep in mind that
+this is not exclusive to remote configs, if the extractor is running with a
+local configuration that changes, it will do the same action). You specify which
+with an `reload_config_action` enum. The enum can be one of the following values:
+
+ * `DO_NOTHING` which is the __default__
+ * `REPLACE_ATTRIBUTE` which will replace the `config` attribute on the object
+   (keep in mind that if you are using the `run_handle` instead of subclassing,
+   this will have no effect). Be also aware that anything that is set up based
+   on the config (upload queues, cognite client objects, loggers, connections to
+   source, etc) will __not__ change in this case.
+ * `SHUTDOWN` will set the `cancelation_token` event, and wait for the extractor
+   to shut down. It is then intended that the service layer running the
+   extractor (ie, windows services, systemd, docker, etc) will be configured to
+   always restart the service if it shuts down. This is the reccomended approach
+   for reloading configs, as it is always guaranteed that everything will be
+   re-initialized according to the new configuration.
+ * `CALLBACK` is similar to `REPLACE_ATTRIBUTE` with one difference. After
+   replacing the `config` attribute on the extractor object, it will call the
+   `reload_config_callback` method, which you will have to override in your
+   subclass. This method should then do any necessary cleanup or
+   re-initialization needed for your particular extractor.
+
+To enable detection of config changes, set the `reload_config_action` argument
+to the `Extractor` constructor to your chosen action:
+
+```python
+# Using run handle:
+with Extractor(
+    name="my_extractor",
+    description="Short description of my extractor",
+    config_class=MyConfig,
+    version="1.2.3",
+    run_handle=run_extractor,
+    reload_config_action=ReloadConfigAction.SHUTDOWN,
+) as extractor:
+    extractor.run()
+
+# Using subclass:
+class MyExtractor(Extractor):
+    def __init__(self):
+        super().__init__(
+            name="my_extractor",
+            description="Short description of my extractor",
+            config_class=MyConfig,
+            version="1.2.3",
+            reload_config_action=ReloadConfigAction.SHUTDOWN,
+        )
+```
+
+The extractor will then periodically check if the config file has changed. The
+default interval is 5 minutes, you can change this by setting the
+`reload_config_interval` attribute. As with any other interval in
+extractor-utils, the unit is seconds.
+
+#### Using remote configuration
+
+When using remote configuration, you will still need to configure the extractor
+with some minimal parameters - namely a CDF project, credentials for that
+project, and an extraction pipeline ID to fetch configs from. There is also a
+new global config field named `type` which is either `remote` or `local` (which
+is the default).
+
+An example for this minimal config follows:
+
+``` yaml
+type: remote
+
+cognite:
+    # Read these from environment variables
+    host: ${COGNITE_BASE_URL}
+    project: ${COGNITE_PROJECT}
+
+    idp-authentication:
+        token-url: ${COGNITE_TOKEN_URL}
+        client-id: ${COGNITE_CLIENT_ID}
+        secret: ${COGNITE_CLIENT_SECRET}
+        scopes:
+            - ${COGNITE_BASE_URL}/.default
+
+    extraction-pipeline:
+        external-id: my-extraction-pipeline
+
+```
+
+The config file stored in CDF should omit all of these fields, as they will be
+overwritten by the `ConfigResolver` to be the values given here. In other words,
+for most extractor deployments, you should be able to leave out the `cognite`
+field in the config stored in CDF.
+
+
 ## [2.2.0] - 2022-04-01
 
 ### Added

@@ -79,7 +79,8 @@ def set_event_on_interrupt(stop_event: Event) -> None:
         logger = logging.getLogger(__name__)
         logger.warning("Interrupt signal received, stopping extractor gracefully")
         stop_event.set()
-        logger.info("Waiting for threads to complete")
+        logger.info("Waiting for threads to complete. Send another interrupt to force quit.")
+        signal.signal(signal.SIGINT, signal.default_int_handler)
 
     try:
         signal.signal(signal.SIGINT, sigint_handler)
