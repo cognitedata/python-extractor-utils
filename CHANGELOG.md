@@ -15,6 +15,16 @@ Changes are grouped as follows
 
 ## Next release
 
+### Added
+
+ * `SequenceUploadQueue`'s `create_missing` funtionality can now be used to set
+   Name and Description values on newly created sequences.
+
+### Fixed
+
+ * Dataset and linked asset information are correctly set on created sequences.
+ * Type hint for sequence column definitions updated to be more consistent.
+
 ## [2.2.0] - 2022-04-01
 
 ### Added
