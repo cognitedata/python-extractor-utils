@@ -946,7 +946,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
             List[Dict[str, Any]],
             SequenceData,
         ],
-        column_external_ids: Optional[List[str]] = None,
+        column_external_ids: Optional[List[dict]] = None,
         id: int = None,
         external_id: str = None,
     ) -> None:
