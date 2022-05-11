@@ -887,6 +887,8 @@ class SequenceUploadQueue(AbstractUploadQueue):
         self.sequence_metadata: Dict[EitherId, Dict[str, Union[str, int, float]]] = dict()
         self.sequence_asset_ids: Dict[EitherId, str] = dict()
         self.sequence_dataset_ids: Dict[EitherId, str] = dict()
+        self.sequence_names: Dict[EitherId, str] = dict()
+        self.sequence_descriptions: Dict[EitherId, str] = dict()
         self.column_definitions: Dict[EitherId, List[Dict[str, str]]] = dict()
         self.create_missing = create_missing
 
@@ -903,6 +905,8 @@ class SequenceUploadQueue(AbstractUploadQueue):
         external_id: str = None,
         asset_external_id: str = None,
         dataset_external_id: str = None,
+        name: str = None,
+        description: str = None,
     ) -> None:
         """
         Set sequence metadata. Metadata will be cached until the sequence is created. The metadata will be updated
@@ -916,11 +920,15 @@ class SequenceUploadQueue(AbstractUploadQueue):
                 Us if id is None
             asset_external_id: Sequence asset ID
             dataset_external_id: Sequence dataset id
+            name: Sequence name
+            description: Sequence description
         """
         either_id = EitherId(id=id, external_id=external_id)
         self.sequence_metadata[either_id] = metadata
         self.sequence_asset_ids[either_id] = asset_external_id
         self.sequence_dataset_ids[either_id] = dataset_external_id
+        self.sequence_names[either_id] = name
+        self.sequence_descriptions[either_id] = description
 
     def set_sequence_column_definition(
         self, col_def: List[Dict[str, str]], id: int = None, external_id: str = None
@@ -1073,6 +1081,8 @@ class SequenceUploadQueue(AbstractUploadQueue):
                 Sequence(
                     id=either_id.internal_id,
                     external_id=either_id.external_id,
+                    name=self.sequence_names.get(either_id, None),
+                    description=self.sequence_descriptions.get(either_id, None),
                     metadata=self.sequence_metadata.get(either_id, None),
                     asset_id=self.sequence_asset_ids.get(either_id, None),
                     data_set_id=self.sequence_asset_ids.get(either_id, None),
