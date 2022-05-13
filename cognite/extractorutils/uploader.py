@@ -885,9 +885,13 @@ class SequenceUploadQueue(AbstractUploadQueue):
         )
         self.upload_queue: Dict[EitherId, SequenceData] = dict()
         self.sequence_metadata: Dict[EitherId, Dict[str, Union[str, int, float]]] = dict()
-        self.sequence_asset_ids: Dict[EitherId, str] = dict()
-        self.sequence_dataset_ids: Dict[EitherId, str] = dict()
+        self.sequence_asset_external_ids: Dict[EitherId, str] = dict()
+        self.sequence_dataset_external_ids: Dict[EitherId, str] = dict()
+        self.sequence_names: Dict[EitherId, str] = dict()
+        self.sequence_descriptions: Dict[EitherId, str] = dict()
         self.column_definitions: Dict[EitherId, List[Dict[str, str]]] = dict()
+        self.asset_ids: Dict[str, int] = dict()
+        self.dataset_ids: Dict[str, int] = dict()
         self.create_missing = create_missing
 
         self.points_queued = SEQUENCES_UPLOADER_POINTS_QUEUED
@@ -903,6 +907,8 @@ class SequenceUploadQueue(AbstractUploadQueue):
         external_id: str = None,
         asset_external_id: str = None,
         dataset_external_id: str = None,
+        name: str = None,
+        description: str = None,
     ) -> None:
         """
         Set sequence metadata. Metadata will be cached until the sequence is created. The metadata will be updated
@@ -913,14 +919,18 @@ class SequenceUploadQueue(AbstractUploadQueue):
             id: Sequence internal ID
                 Use if external_id is None
             external_id: Sequence external ID
-                Us if id is None
-            asset_external_id: Sequence asset ID
-            dataset_external_id: Sequence dataset id
+                Use if id is None
+            asset_external_id: Sequence asset external ID
+            dataset_external_id: Sequence dataset external ID
+            name: Sequence name
+            description: Sequence description
         """
         either_id = EitherId(id=id, external_id=external_id)
         self.sequence_metadata[either_id] = metadata
-        self.sequence_asset_ids[either_id] = asset_external_id
-        self.sequence_dataset_ids[either_id] = dataset_external_id
+        self.sequence_asset_external_ids[either_id] = asset_external_id
+        self.sequence_dataset_external_ids[either_id] = dataset_external_id
+        self.sequence_names[either_id] = name
+        self.sequence_descriptions[either_id] = description
 
     def set_sequence_column_definition(
         self, col_def: List[Dict[str, str]], id: int = None, external_id: str = None
@@ -946,7 +956,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
             List[Dict[str, Any]],
             SequenceData,
         ],
-        column_external_ids: Optional[List[str]] = None,
+        column_external_ids: Optional[List[dict]] = None,
         id: int = None,
         external_id: str = None,
     ) -> None:
@@ -1007,6 +1017,10 @@ class SequenceUploadQueue(AbstractUploadQueue):
             return
 
         with self.lock:
+            if self.create_missing:
+                self._resolve_asset_ids()
+                self._resolve_dataset_ids()
+
             for either_id, upload_this in self.upload_queue.items():
                 _labels = str(either_id.content())
                 self._upload_single(either_id, upload_this)
@@ -1073,9 +1087,11 @@ class SequenceUploadQueue(AbstractUploadQueue):
                 Sequence(
                     id=either_id.internal_id,
                     external_id=either_id.external_id,
+                    name=self.sequence_names.get(either_id, None),
+                    description=self.sequence_descriptions.get(either_id, None),
                     metadata=self.sequence_metadata.get(either_id, None),
-                    asset_id=self.sequence_asset_ids.get(either_id, None),
-                    data_set_id=self.sequence_asset_ids.get(either_id, None),
+                    asset_id=self.asset_ids.get(self.sequence_asset_external_ids.get(either_id, None), None),
+                    data_set_id=self.dataset_ids.get(self.sequence_dataset_external_ids.get(either_id, None), None),
                     columns=column_def,
                 )
             )
@@ -1088,6 +1104,44 @@ class SequenceUploadQueue(AbstractUploadQueue):
         # Update definition of cached sequence
         cseq = self.upload_queue[either_id]
         cseq.columns = seq.columns
+
+    def _resolve_asset_ids(self) -> None:
+        """
+        Resolve id of assets if specified, for use in sequence creation
+        """
+        assets = set(self.sequence_asset_external_ids.values())
+        assets.discard(None)
+
+        if len(assets) > 0:
+            try:
+                self.asset_ids = {
+                    asset.external_id: asset.id
+                    for asset in self.cdf_client.assets.retrieve_multiple(
+                        external_ids=list(assets), ignore_unknown_ids=True
+                    )
+                }
+            except Exception as e:
+                self.logger.error("Error in resolving asset id: %s", str(e))
+                self.asset_ids = dict()
+
+    def _resolve_dataset_ids(self) -> None:
+        """
+        Resolve id of datasets if specified, for use in sequence creation
+        """
+        datasets = set(self.sequence_dataset_external_ids.values())
+        datasets.discard(None)
+
+        if len(datasets) > 0:
+            try:
+                self.dataset_ids = {
+                    dataset.external_id: dataset.id
+                    for dataset in self.cdf_client.data_sets.retrieve_multiple(
+                        external_ids=list(datasets), ignore_unknown_ids=True
+                    )
+                }
+            except Exception as e:
+                self.logger.error("Error in resolving dataset id: %s", str(e))
+                self.dataset_ids = dict()
 
     def __enter__(self) -> "SequenceUploadQueue":
         """
