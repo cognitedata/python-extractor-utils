@@ -41,8 +41,11 @@ in your extractors.
 
 If you have based your extractor on the `Extractor` base class, remote
 configuration is already implemented for your extractor without any need for
-further changes to your code. Just update extractor-utils and you should be good
-to go.
+further changes to your code.
+
+To include the feature, you must update `cognite-extractor-utils` to
+`2.3.0-beta1`, and add a dependency to `cognite-sdk-experimental` version
+`>=0.76.0`.
 
 Otherwise, you must use the new `ConfigResolver` class in the `configtools`
 module:
@@ -86,7 +89,7 @@ with an `reload_config_action` enum. The enum can be one of the following values
  * `SHUTDOWN` will set the `cancelation_token` event, and wait for the extractor
    to shut down. It is then intended that the service layer running the
    extractor (ie, windows services, systemd, docker, etc) will be configured to
-   always restart the service if it shuts down. This is the reccomended approach
+   always restart the service if it shuts down. This is the recomended approach
    for reloading configs, as it is always guaranteed that everything will be
    re-initialized according to the new configuration.
  * `CALLBACK` is similar to `REPLACE_ATTRIBUTE` with one difference. After
