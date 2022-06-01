@@ -17,6 +17,7 @@ import logging
 import sys
 import traceback
 from dataclasses import is_dataclass
+from enum import Enum
 from threading import Event, Thread
 from types import TracebackType
 from typing import Any, Callable, Dict, Generic, Optional, Type, TypeVar
@@ -25,11 +26,25 @@ from cognite.client import CogniteClient
 from cognite.client.data_classes import ExtractionPipeline, ExtractionPipelineRun
 from dotenv import find_dotenv, load_dotenv
 
-from cognite.extractorutils.configtools import BaseConfig, CustomConfigClass, StateStoreConfig, load_yaml
+from cognite.extractorutils.configtools import (
+    BaseConfig,
+    ConfigResolver,
+    CustomConfigClass,
+    StateStoreConfig,
+    _BaseConfig,
+    load_yaml,
+)
 from cognite.extractorutils.exceptions import InvalidConfigError
 from cognite.extractorutils.metrics import BaseMetrics
 from cognite.extractorutils.statestore import AbstractStateStore, LocalStateStore, NoStateStore
 from cognite.extractorutils.util import set_event_on_interrupt
+
+
+class ReloadConfigAction(Enum):
+    DO_NOTHING = 1
+    REPLACE_ATTRIBUTE = 2
+    SHUTDOWN = 3
+    CALLBACK = 4
 
 
 class Extractor(Generic[CustomConfigClass]):
@@ -76,6 +91,8 @@ class Extractor(Generic[CustomConfigClass]):
         continuous_extractor: bool = False,
         heartbeat_waiting_time: int = 600,
         handle_interrupts: bool = True,
+        reload_config_interval: Optional[int] = 300,
+        reload_config_action: ReloadConfigAction = ReloadConfigAction.DO_NOTHING,
     ):
         self.name = name
         self.description = description
@@ -88,6 +105,8 @@ class Extractor(Generic[CustomConfigClass]):
         self.continuous_extractor = continuous_extractor
         self.heartbeat_waiting_time = heartbeat_waiting_time
         self.handle_interrupts = handle_interrupts
+        self.reload_config_interval = reload_config_interval
+        self.reload_config_action = reload_config_action
 
         self.started = False
         self.configured_logger = False
@@ -98,12 +117,14 @@ class Extractor(Generic[CustomConfigClass]):
         self.extraction_pipeline: Optional[ExtractionPipeline]
         self.logger: logging.Logger
 
+        self.should_be_restarted = False
+
         if metrics:
             self.metrics = metrics
         else:
             self.metrics = BaseMetrics(extractor_name=name, extractor_version=version)
 
-    def _load_config(self, override_path: Optional[str] = None) -> None:
+    def _initial_load_config(self, override_path: Optional[str] = None) -> None:
         """
         Load a configuration file, either from the specified path, or by a path specified by the user in a command line
         arg. Will quit further execution of no path is given.
@@ -112,22 +133,43 @@ class Extractor(Generic[CustomConfigClass]):
             override_path: Optional override for file path, ie don't parse command line arguments
         """
         if override_path:
-            with open(override_path) as stream:
-                self.config = load_yaml(source=stream, config_type=self.config_class)
-
+            self.config_resolver = ConfigResolver(override_path, self.config_class)
         else:
-            argument_parser = argparse.ArgumentParser(sys.argv[0], description=self.description)
-            argument_parser.add_argument(
-                "config", nargs=1, type=str, help="The YAML file containing configuration for the extractor."
-            )
-            argument_parser.add_argument("-v", "--version", action="version", version=f"{self.name} v{self.version}")
-            args = argument_parser.parse_args()
+            self.config_resolver = ConfigResolver.from_cli(self.name, self.description, self.version, self.config_class)
 
-            with open(args.config[0], "r") as stream:
-                self.config_file_path = args.config[0]
-                self.config = load_yaml(source=stream, config_type=self.config_class)
-
+        self.config = self.config_resolver.config
         Extractor._config_singleton = self.config
+
+        def config_refresher():
+            while not self.cancelation_token.is_set():
+                self.cancelation_token.wait(self.reload_config_interval)
+                if self.config_resolver.has_changed:
+                    self._reload_config()
+
+        if self.reload_config_interval and self.reload_config_action != ReloadConfigAction.DO_NOTHING:
+            Thread(target=config_refresher, name="ConfigReloader", daemon=True).start()
+
+    def reload_config_callback(self):
+        self.logger.error("Method for reloading configs has not been overridden in subclass")
+
+    def _reload_config(self) -> None:
+        self.logger.info("Config file has changed")
+
+        if self.reload_config_action == ReloadConfigAction.REPLACE_ATTRIBUTE:
+            self.logger.info("Loading in new config file")
+            self.config_resolver.accept_new_config()
+            self.config = self.config_resolver.config
+            Extractor._config_singleton = self.config
+
+        elif self.reload_config_action == ReloadConfigAction.SHUTDOWN:
+            self.logger.info("Shutting down, expecting to be restarted")
+            self.cancelation_token.set()
+
+        elif self.reload_config_action == ReloadConfigAction.CALLBACK:
+            self.logger.info("Loading in new config file")
+            self.config_resolver.accept_new_config()
+            self.config = self.config_resolver.config
+            self.reload_config_callback()
 
     def _load_state_store(self) -> None:
         """
@@ -210,7 +252,7 @@ class Extractor(Generic[CustomConfigClass]):
             dotenv_message = "No .env file found"
 
         try:
-            self._load_config(override_path=self.config_file_path)
+            self._initial_load_config(override_path=self.config_file_path)
         except InvalidConfigError as e:
             print("Critical error: Could not read config file", file=sys.stderr)
             print(str(e), file=sys.stderr)
@@ -222,6 +264,7 @@ class Extractor(Generic[CustomConfigClass]):
 
         self.logger = logging.getLogger(__name__)
         self.logger.info(dotenv_message)
+        self.logger.info(f"Loaded {'remote' if self.config_resolver.is_remote else 'local'} config file")
 
         if self.handle_interrupts:
             set_event_on_interrupt(self.cancelation_token)
@@ -297,6 +340,7 @@ class Extractor(Generic[CustomConfigClass]):
         else:
             self._report_success()
 
+        self.started = False
         return exc_val is None
 
     def run(self) -> None:
