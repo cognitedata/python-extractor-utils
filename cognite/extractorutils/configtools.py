@@ -316,7 +316,7 @@ class LoggingConfig:
         if self.metrics:
             export_log_stats_on_root_logger(root)
 
-        if self.console and not suppress_console:
+        if self.console and not suppress_console and not root.hasHandlers():
             console_handler = logging.StreamHandler()
             console_handler.setLevel(self.console.level)
             console_handler.setFormatter(fmt)
@@ -335,6 +335,10 @@ class LoggingConfig:
             )
             file_handler.setLevel(self.file.level)
             file_handler.setFormatter(fmt)
+
+            for handler in root.handlers:
+                if hasattr(handler, "baseFilename") and handler.baseFilename == file_handler.baseFilename:
+                    return
 
             root.addHandler(file_handler)
 
