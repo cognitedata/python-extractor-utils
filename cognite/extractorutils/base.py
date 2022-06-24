@@ -286,9 +286,12 @@ class Extractor(Generic[CustomConfigClass]):
 
                 if not self.cancelation_token.is_set():
                     self.logger.info("Reporting new heartbeat")
-                    self.cognite_client.extraction_pipeline_runs.create(
-                        ExtractionPipelineRun(external_id=self.extraction_pipeline.external_id, status="seen")
-                    )
+                    try:
+                        self.cognite_client.extraction_pipeline_runs.create(
+                            ExtractionPipelineRun(external_id=self.extraction_pipeline.external_id, status="seen")
+                        )
+                    except e:
+                        self.logger.error("Failed to report heartbeat: %s", str(e))
 
         if self.extraction_pipeline:
             self.logger.info("Starting heartbeat loop")
