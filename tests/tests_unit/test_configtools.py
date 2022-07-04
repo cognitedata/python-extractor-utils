@@ -12,6 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import logging
 import os
 import unittest
 from dataclasses import dataclass
@@ -248,3 +249,65 @@ class TestConfigtoolsMethods(unittest.TestCase):
         """
         with self.assertRaises(InvalidConfigError):
             load_yaml(config, CastingClass)
+
+    def test_multiple_logging_console(self):
+        config_file = """
+        logger:
+            console:
+                level: INFO
+        cognite:
+            project: test
+            api-key: test
+            """
+
+        config: BaseConfig = load_yaml(config_file, BaseConfig)
+        logger = logging.getLogger()
+        logger.handlers.clear()
+
+        config.logger.setup_logging()
+
+        self.assertEqual(1, len(logger.handlers))
+
+        config.logger.setup_logging()
+
+        self.assertEqual(1, len(logger.handlers))
+
+        logger.handlers.clear()
+
+    def test_multiple_logging_file(self):
+        config_file_1 = """
+        logger:
+            file:
+                level: INFO
+                path: foo
+        cognite:
+            project: test
+            api-key: test
+            """
+        config_file_2 = """
+        logger:
+            file:
+                level: INFO
+                path: bar
+        cognite:
+            project: test
+            api-key: test
+        """
+        config_1: BaseConfig = load_yaml(config_file_1, BaseConfig)
+        config_2: BaseConfig = load_yaml(config_file_2, BaseConfig)
+        logger = logging.getLogger()
+        logger.handlers.clear()
+
+        config_1.logger.setup_logging()
+        self.assertEqual(1, len(logger.handlers))
+
+        config_2.logger.setup_logging()
+        self.assertEqual(2, len(logger.handlers))
+
+        config_1.logger.setup_logging()
+        self.assertEqual(2, len(logger.handlers))
+
+        config_2.logger.setup_logging()
+        self.assertEqual(2, len(logger.handlers))
+
+        logger.handlers.clear()
