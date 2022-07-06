@@ -91,7 +91,7 @@ import os
 import re
 import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import Enum
 from hashlib import sha256
 from logging.handlers import TimedRotatingFileHandler
@@ -438,7 +438,7 @@ class ConfigType(Enum):
 
 @dataclass
 class _BaseConfig:
-    _file_hash: Optional[str]
+    _file_hash: Optional[str] = field(init=False, repr=False)
 
     type: Optional[ConfigType]
     cognite: CogniteConfig
