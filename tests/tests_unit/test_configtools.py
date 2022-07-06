@@ -12,15 +12,17 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import dataclasses
 import logging
 import os
 import unittest
 from dataclasses import dataclass
 
 import pytest
+import yaml
 from cognite.client import CogniteClient
 
-from cognite.extractorutils.configtools import BaseConfig, CogniteConfig, _to_snake_case, load_yaml
+from cognite.extractorutils.configtools import BaseConfig, CogniteConfig, LoggingConfig, _to_snake_case, load_yaml
 from cognite.extractorutils.exceptions import InvalidConfigError
 
 
@@ -311,3 +313,25 @@ class TestConfigtoolsMethods(unittest.TestCase):
         self.assertEqual(2, len(logger.handlers))
 
         logger.handlers.clear()
+
+    def test_dump_and_reload_config(self):
+        # Verify that dumping and reloading a config file doesn't fail due to _file_hash
+        config = BaseConfig(
+            type=None,
+            cognite=CogniteConfig(
+                project="project",
+                api_key="api-key",
+                idp_authentication=None,
+                data_set=None,
+                data_set_external_id=None,
+                extraction_pipeline=None,
+                data_set_id=None,
+            ),
+            version=None,
+            logger=LoggingConfig(console=None, file=None, metrics=None),
+        )
+        yaml.emitter.Emitter.process_tag = lambda self, *args, **kwargs: None
+        with open("test_dump_config.yml", "w") as config_file:
+            yaml.dump(dataclasses.asdict(config), config_file)
+        with open("test_dump_config.yml", "r") as config_file:
+            load_yaml(config_file, BaseConfig)

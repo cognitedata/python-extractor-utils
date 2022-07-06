@@ -438,7 +438,7 @@ class ConfigType(Enum):
 
 @dataclass
 class _BaseConfig:
-    _file_hash: Optional[str] = field(init=False, repr=False)
+    _file_hash: Optional[str] = field(init=False, repr=False, default=None)
 
     type: Optional[ConfigType]
     cognite: CogniteConfig
