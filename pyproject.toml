@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "cognite-extractor-utils"
-version = "2.3.0-beta4"
+version = "3.0.0-beta"
 description = "Utilities for easier development of extractors for CDF"
 authors = ["Mathias Lohne <mathias.lohne@cognite.com>"]
 license = "Apache-2.0"
@@ -24,8 +24,8 @@ skip_glob = '^((?!py$).)*$'    # this makes sort all Python files
 known_third_party = ["arrow", "dacite", "decorator", "dotenv", "more_itertools", "prometheus_client", "psutil", "pytest", "requests", "yaml"]
 
 [tool.poetry.dependencies]
-python = "^3.7.0"
-cognite-sdk-core = "^2.32.0"
+python = "^3.8.0"
+cognite-sdk = "^3"
 prometheus-client = ">0.7.0<=1.0.0"
 arrow = "^1.0.0"
 pyyaml = ">=5.3.0, <7"

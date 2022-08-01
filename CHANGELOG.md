@@ -25,8 +25,11 @@ Changes are grouped as follows
  * Dataset and linked asset information are correctly set on created sequences.
  * Type hint for sequence column definitions updated to be more consistent.
 
+## [3.0.0-beta]
 
-## [2.3.0-beta1]
+### Removed
+
+ * Python 3.7 support
 
 Preview release of remote configuration of extractors. This allows users of your
 extractors to configure their extractors from CDF.

@@ -142,3 +142,12 @@ dmypy.json
 
 # jetbrains
 .idea/
+
+# vscode
+.vscode/
+
+# unit tests output
+/test_dump_config.yml
+/testfile-invalid.json
+/bar
+/foo
