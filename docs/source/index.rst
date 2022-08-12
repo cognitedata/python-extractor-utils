@@ -26,4 +26,6 @@ Contents
 
    quickstart
 
+   remoteconfigs
+
    docs
