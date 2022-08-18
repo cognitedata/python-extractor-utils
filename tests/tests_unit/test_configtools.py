@@ -21,7 +21,6 @@ from dataclasses import dataclass
 import pytest
 import yaml
 from cognite.client import CogniteClient
-from cognite.client.credentials import APIKey, OAuthClientCredentials
 
 from cognite.extractorutils.configtools import BaseConfig, CogniteConfig, LoggingConfig, _to_snake_case, load_yaml
 from cognite.extractorutils.exceptions import InvalidConfigError
