@@ -20,6 +20,8 @@ import unittest
 from datetime import datetime, timezone
 
 from cognite.client import CogniteClient
+from cognite.client.config import ClientConfig
+from cognite.client.credentials import APIKey
 from cognite.client.data_classes import Row, TimeSeries
 from cognite.client.exceptions import CogniteAPIError, CogniteNotFoundError
 
@@ -37,9 +39,16 @@ class IntegrationTests(unittest.TestCase):
     time_series3: str = f"util_integration_ts_test_3-{test_id}"
 
     def setUp(self):
-        self.client = CogniteClient(
+        api_key = os.environ["COGNITE_API_KEY"]
+        cognite_project = os.environ["COGNITE_PROJECT"]
+        cognite_base_url = os.environ["COGNITE_BASE_URL"]
+        client_config = ClientConfig(
+            project=cognite_project,
+            base_url=cognite_base_url,
+            credentials=APIKey(api_key),
             client_name="extractor-utils-integration-tests",
         )
+        self.client = CogniteClient(client_config)
 
         # Delete stuff we will use if it exists
         try:

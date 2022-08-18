@@ -102,7 +102,8 @@ from urllib.parse import urljoin
 
 import dacite
 import yaml
-from cognite.client import CogniteClient
+from cognite.client import ClientConfig, CogniteClient
+from cognite.client.credentials import APIKey, OAuthClientCredentials
 from cognite.client.data_classes import Asset, DataSet, ExtractionPipeline
 from yaml.scanner import ScannerError
 
@@ -206,7 +207,10 @@ class CogniteConfig:
         kwargs = {}
 
         if self.api_key:
-            kwargs["api_key"] = self.api_key
+            if use_experimental_sdk:
+                kwargs["api_key"] = self.api_key
+            else:
+                credential_provider = APIKey(self.api_key)
         elif self.idp_authentication:
             if self.idp_authentication.token_url:
                 kwargs["token_url"] = self.idp_authentication.token_url
@@ -220,7 +224,7 @@ class CogniteConfig:
                 token_custom_args = {}
             if self.idp_authentication.resource:
                 token_custom_args["resource"] = self.idp_authentication.resource
-            kwargs["token_custom_args"] = token_custom_args
+            credential_provider = OAuthClientCredentials(**kwargs, **token_custom_args)
         else:
             raise InvalidConfigError("No CDF credentials")
 
@@ -228,16 +232,23 @@ class CogniteConfig:
         if use_experimental_sdk:
             from cognite.experimental import CogniteClient as ExperimentalCogniteClient
 
-            cls = ExperimentalCogniteClient
-
-        return cls(
+            return ExperimentalCogniteClient(
+                project=self.project,
+                base_url=self.host,
+                client_name=client_name,
+                disable_pypi_version_check=True,
+                timeout=self.timeout,
+                token_custom_args=token_custom_args,
+                **kwargs,
+            )
+        client_config = ClientConfig(
             project=self.project,
             base_url=self.host,
             client_name=client_name,
-            disable_pypi_version_check=True,
             timeout=self.timeout,
-            **kwargs,
+            credentials=credential_provider,
         )
+        return CogniteClient(client_config)
 
     def get_data_set(self, cdf_client: CogniteClient) -> Optional[DataSet]:
         if self.data_set_external_id:

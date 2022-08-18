@@ -11,11 +11,14 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+import os
 import random
 import unittest
 from io import StringIO
 
 from cognite.client import CogniteClient
+from cognite.client.config import ClientConfig
+from cognite.client.credentials import APIKey
 from cognite.client.data_classes import DataSet
 from cognite.client.exceptions import CogniteDuplicatedError
 
@@ -32,9 +35,16 @@ class TestConfigtools(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        cls.client = CogniteClient(
+        api_key = os.environ["COGNITE_API_KEY"]
+        cognite_project = os.environ["COGNITE_PROJECT"]
+        cognite_base_url = os.environ["COGNITE_BASE_URL"]
+        client_config = ClientConfig(
+            project=cognite_project,
+            base_url=cognite_base_url,
+            credentials=APIKey(api_key),
             client_name="extractor-utils-integration-tests",
         )
+        cls.client = CogniteClient(client_config)
 
         try:
             cls.data_set_id = cls.client.data_sets.create(

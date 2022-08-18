@@ -89,7 +89,8 @@ class TestConfigtoolsMethods(unittest.TestCase):
         self.assertIsInstance(client, CogniteClient)
         self.assertEqual(client.config.base_url, "https://api.cognitedata.com")
         self.assertEqual(client.config.project, "tenant-name")
-        self.assertEqual(client.config.api_key, "COGNITE_API_KEY")
+        _, api_key = client.config.credentials.authorization_header()
+        self.assertEqual(api_key, "COGNITE_API_KEY")
         self.assertEqual(client.config.client_name, "test-client")
 
     def test_read_base_config(self):
@@ -182,10 +183,10 @@ class TestConfigtoolsMethods(unittest.TestCase):
         config = load_yaml(config_raw, CogniteConfig)
         cdf = config.get_cognite_client("client_name")
         self.assertIsInstance(cdf, CogniteClient)
-        print("CONFIG", repr(cdf._config))
-        print("API_KEY", repr(cdf._config.api_key))
-        self.assertEqual(cdf._config.api_key, "COGNITE_API_KEY")
-        self.assertIsNone(cdf._config.token)
+        print("CONFIG", repr(cdf.config))
+        _, api_key = cdf.config.credentials.authorization_header()
+        print("API_KEY", api_key)
+        self.assertEqual(api_key, "COGNITE_API_KEY")
 
     @pytest.mark.skip("The SDK is now calling the backend to generate a token. This needs to be mocked.")
     def test_get_cognite_client_from_aad(self):
