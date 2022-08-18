@@ -31,11 +31,6 @@ Changes are grouped as follows
 
  * Update cognite-sdk to version 4.0.1, which removes the support for reserved environment variables such as `COGNITE_API_KEY` and `COGNITE_CLIENT_ID`.
 
-### Migration guide
-
-In this section we will go through how you can start using remote configuration
-in your extractors.
-
 ## [3.0.0-beta]
 
 ### Removed
