@@ -217,9 +217,14 @@ class CogniteConfig:
             elif self.idp_authentication.tenant:
                 base_url = urljoin(self.idp_authentication.authority, self.idp_authentication.tenant)
                 kwargs["token_url"] = f"{base_url}/oauth2/v2.0/token"
-            kwargs["token_client_id"] = self.idp_authentication.client_id
-            kwargs["token_client_secret"] = self.idp_authentication.secret
-            kwargs["token_scopes"] = self.idp_authentication.scopes
+            if use_experimental_sdk:
+                kwargs["token_client_id"] = self.idp_authentication.client_id
+                kwargs["token_client_secret"] = self.idp_authentication.secret
+                kwargs["token_scopes"] = self.idp_authentication.scopes
+            else:
+                kwargs["client_id"] = self.idp_authentication.client_id
+                kwargs["client_secret"] = self.idp_authentication.secret
+                kwargs["scopes"] = self.idp_authentication.scopes
             if token_custom_args is None:
                 token_custom_args = {}
             if self.idp_authentication.resource:

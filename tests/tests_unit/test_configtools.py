@@ -18,9 +18,9 @@ import os
 import unittest
 from dataclasses import dataclass
 
-import pytest
 import yaml
 from cognite.client import CogniteClient
+from cognite.client.credentials import OAuthClientCredentials
 
 from cognite.extractorutils.configtools import BaseConfig, CogniteConfig, LoggingConfig, _to_snake_case, load_yaml
 from cognite.extractorutils.exceptions import InvalidConfigError
@@ -188,7 +188,6 @@ class TestConfigtoolsMethods(unittest.TestCase):
         print("API_KEY", api_key)
         self.assertEqual(api_key, "COGNITE_API_KEY")
 
-    @pytest.mark.skip("The SDK is now calling the backend to generate a token. This needs to be mocked.")
     def test_get_cognite_client_from_aad(self):
         config_raw = """    
         idp-authentication:
@@ -203,10 +202,13 @@ class TestConfigtoolsMethods(unittest.TestCase):
         """
         config = load_yaml(config_raw, CogniteConfig)
         self.assertIsNone(config.api_key)
-        cdf = config.get_cognite_client("client_name")
+        cdf = config.get_cognite_client("client_name", token_custom_args={"audience": "lol"})
+        self.assertEqual(cdf.config.credentials.token_custom_args, {"audience": "lol"})
+        self.assertEqual(type(cdf.config.credentials), OAuthClientCredentials)
+        self.assertEqual(cdf.config.credentials.client_id, "cid")
+        self.assertEqual(cdf.config.credentials.client_secret, "scrt")
+        self.assertEqual(cdf.config.credentials.scopes, ["scp"])
         self.assertIsInstance(cdf, CogniteClient)
-        # The api_key is not None, possibly some thread local trick when run in Jenkins
-        # self.assertTrue(cdf._config.api_key is None or cdf._config.api_key == "********")
 
     def test_get_cognite_client_no_credentials(self):
         config_raw = """
