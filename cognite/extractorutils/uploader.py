@@ -492,6 +492,9 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         create_missing: Create missing time series if possible (ie, if external id is used). Either given as a boolean
             (True would auto-create a time series with nothing but an external ID), or as a factory function taking an
             external ID and a list of datapoints about to be inserted and returning a TimeSeries object.
+        data_set_id: Data set id passed to create_missing. Does nothing if create_missing is False.
+            If a custom timeseries creation method is set in create_missing, this is used as fallback if
+            that method does not set data set id on its own.
     """
 
     def __init__(
@@ -503,6 +506,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
         create_missing: Union[Callable[[str, DataPointList], TimeSeries], bool] = False,
+        data_set_id: Optional[int] = None,
         cancelation_token: threading.Event = threading.Event(),
     ):
         # Super sets post_upload and threshold
@@ -530,6 +534,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         self.queue_size = TIMESERIES_UPLOADER_QUEUE_SIZE
         self.latency = TIMESERIES_UPLOADER_LATENCY
         self.latency_zero_point = arrow.utcnow()
+        self.data_set_id = data_set_id
 
     def _verify_datapoint_time(self, time: Union[int, float, datetime]) -> bool:
         if isinstance(time, int) or isinstance(time, float):
@@ -660,12 +665,14 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
                 }
 
                 self.logger.info(f"Creating {len(create_these_ids)} time series")
-                self.cdf_client.time_series.create(
-                    [
-                        self.missing_factory(external_id, datapoints_lists[external_id])
-                        for external_id in create_these_ids
-                    ]
-                )
+                to_create: List[TimeSeries] = [
+                    self.missing_factory(external_id, datapoints_lists[external_id]) for external_id in create_these_ids
+                ]
+                if self.data_set_id is not None:
+                    for ts in to_create:
+                        if ts.data_set_id is None:
+                            ts.data_set_id = self.data_set_id
+                self.cdf_client.time_series.create(to_create)
 
                 retry_these.extend([EitherId(external_id=i) for i in create_these_ids])
 
@@ -870,7 +877,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
                 methods).
             trigger_log_level: Log level to log upload triggers to.
             thread_name: Thread name of uploader thread.
-            create_missing: Create missing time series if possible (ie, if external id is used)
+            create_missing: Create missing sequences if possible (ie, if external id is used)
         """
 
         # Super sets post_upload and threshold

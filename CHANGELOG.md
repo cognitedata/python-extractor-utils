@@ -25,7 +25,13 @@ Changes are grouped as follows
  * Dataset and linked asset information are correctly set on created sequences.
  * Type hint for sequence column definitions updated to be more consistent.
 
- ## [3.0.0-beta2]
+## [3.0.0-beta4]
+
+### Added
+
+ * Option to set data set id when creating missing time series in the time series upload queue.
+
+## [3.0.0-beta2]
 
 ### Changed
 
