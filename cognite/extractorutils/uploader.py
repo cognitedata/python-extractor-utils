@@ -657,7 +657,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
 
             if self.create_missing:
                 # Get the time series that can be created
-                create_these_ids = [id_dict["externalId"] for id_dict in ex.not_found if "externalId" in id_dict]
+                create_these_ids = set([id_dict["externalId"] for id_dict in ex.not_found if "externalId" in id_dict])
                 datapoints_lists: Dict[str, DataPointList] = {
                     ts_dict["externalId"]: ts_dict["datapoints"]
                     for ts_dict in upload_this
