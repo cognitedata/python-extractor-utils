@@ -233,19 +233,6 @@ class CogniteConfig:
         else:
             raise InvalidConfigError("No CDF credentials")
 
-        cls = CogniteClient
-        if use_experimental_sdk:
-            from cognite.experimental import CogniteClient as ExperimentalCogniteClient
-
-            return ExperimentalCogniteClient(
-                project=self.project,
-                base_url=self.host,
-                client_name=client_name,
-                disable_pypi_version_check=True,
-                timeout=self.timeout,
-                token_custom_args=token_custom_args,
-                **kwargs,
-            )
         client_config = ClientConfig(
             project=self.project,
             base_url=self.host,
@@ -253,6 +240,12 @@ class CogniteConfig:
             timeout=self.timeout,
             credentials=credential_provider,
         )
+
+        if use_experimental_sdk:
+            from cognite.experimental import CogniteClient as ExperimentalCogniteClient
+
+            return ExperimentalCogniteClient(client_config)
+
         return CogniteClient(client_config)
 
     def get_data_set(self, cdf_client: CogniteClient) -> Optional[DataSet]:
