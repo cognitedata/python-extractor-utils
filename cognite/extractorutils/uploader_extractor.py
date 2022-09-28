@@ -88,7 +88,7 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
         continuous_extractor: bool = False,
         heartbeat_waiting_time: int = 600,
         handle_interrupts: bool = True,
-        middleware: List[Callable[[dict], dict]] = []
+        middleware: List[Callable[[dict], dict]] = [],
     ):
         super(UploaderExtractor, self).__init__(
             name=name,
