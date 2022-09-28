@@ -18,7 +18,7 @@ A module containing a slightly more advanced base extractor class, sorting a gen
 
 from dataclasses import dataclass
 from types import TracebackType
-from typing import Callable, Iterable, Optional, Type, TypeVar
+from typing import Callable, Iterable, List, Optional, Type, TypeVar
 
 from cognite.client import CogniteClient
 from more_itertools import peekable
@@ -88,6 +88,7 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
         continuous_extractor: bool = False,
         heartbeat_waiting_time: int = 600,
         handle_interrupts: bool = True,
+        middleware: List[Callable[[dict], dict]] = []
     ):
         super(UploaderExtractor, self).__init__(
             name=name,
@@ -103,6 +104,7 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
             heartbeat_waiting_time=heartbeat_waiting_time,
             handle_interrupts=handle_interrupts,
         )
+        self.middleware = middleware if isinstance(middleware, list) else []
 
     def handle_output(self, output: CdfTypes) -> None:
         if not isinstance(output, Iterable):
@@ -120,6 +122,7 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
         elif isinstance(peek, RawRow):
             for raw_row in peekable_output:
                 for row in raw_row.rows:
+                    row = self._apply_middleware(row)
                     self.raw_queue.add_to_upload_queue(database=raw_row.db_name, table=raw_row.table_name, raw_row=row)
         elif isinstance(peek, InsertDatapoints):
             for datapoints in peekable_output:
@@ -128,6 +131,11 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
                 )
         else:
             raise ValueError(f"Unexpected type: {type(peek)}")
+
+    def _apply_middleware(self, peek):
+        for mw in self.middleware:
+            peek = mw(peek)
+        return peek
 
     def __enter__(self) -> "UploaderExtractor":
         super(UploaderExtractor, self).__enter__()

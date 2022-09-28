@@ -22,6 +22,7 @@ from cognite.client.data_classes import Row
 from cognite.extractorutils.uploader import EventUploadQueue, RawUploadQueue, TimeSeriesUploadQueue
 from cognite.extractorutils.uploader_extractor import UploaderExtractor, UploaderExtractorConfig
 from cognite.extractorutils.uploader_types import CdfTypes, Event, InsertDatapoints, RawRow
+from cognite.extractorutils.middleware import JQMiddleware
 
 
 class TestUploaderExtractorClass(unittest.TestCase):
@@ -118,3 +119,29 @@ class TestUploaderExtractorClass(unittest.TestCase):
                 {"externalId": "some-other-id", "datapoints": tss[1].datapoints},
             ]
         )
+
+    @patch("cognite.client.CogniteClient")
+    def test_middleware_jq(self, MockCogniteClient):
+        client: CogniteClient = MockCogniteClient()
+
+        ex = UploaderExtractor[UploaderExtractorConfig](
+            name="ext_extractor4", description="testing jq middleware", config_class=UploaderExtractorConfig
+        )
+        
+        ex.raw_queue = RawUploadQueue(client)
+        
+        jq_payload = """
+                {
+                    "new_foo": .foo,
+                    "new_baz": .baz,
+                    "new_val": "some val"
+                }
+        """
+        ex.middleware = [JQMiddleware(jq_rules=jq_payload)]
+        r = Row("foo", columns={"foo": "bar", "baz": "bax"})
+        row = RawRow(db_name="some-db", table_name="some-table", row=r)
+        ex.handle_output(row)
+
+        ex.raw_queue.upload() # just to clear the queue
+
+        assert r.columns.get('new_foo') == 'bar' and r.columns.get('new_baz') == 'bax' and r.columns.get('new_val') == 'some val'
