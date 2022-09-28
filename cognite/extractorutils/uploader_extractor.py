@@ -132,10 +132,10 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
         else:
             raise ValueError(f"Unexpected type: {type(peek)}")
 
-    def _apply_middleware(self, peek):
+    def _apply_middleware(self, item):
         for mw in self.middleware:
-            peek = mw(peek)
-        return peek
+            item = mw(item)
+        return item
 
     def __enter__(self) -> "UploaderExtractor":
         super(UploaderExtractor, self).__enter__()
