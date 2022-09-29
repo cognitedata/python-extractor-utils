@@ -1,6 +1,7 @@
 from sys import platform
+from typing import Union
 
-from cognite.client.data_classes import Row
+from cognite.client.data_classes import Event, Row
 
 
 class JQMiddleware:
@@ -11,12 +12,20 @@ class JQMiddleware:
 
         self._jq = jq.compile(jq_rules)
 
-    def __call__(self, data: Row) -> Row:
-        if not isinstance(data, Row):
+    def __call__(self, data: Union[Row, dict]) -> Union[Row, dict]:
+        if not isinstance(data, (Row, dict)):
             raise ValueError(f"type {type(data).__name__} is not currently supported")
 
-        data.columns = self._jq.input(data.columns).first()
-        if not isinstance(data.columns, dict):
-            raise ValueError("output of jq middleware must be a dict")
+        if isinstance(data, Row):
+            data.columns = self._jq.input(data.columns).first()
+            self._raise_for_non_dict(data.columns)
+
+        if isinstance(data, dict):
+            data = self._jq.input(data).first()
+            self._raise_for_non_dict(data)
 
         return data
+
+    def _raise_for_non_dict(self, data):
+        if not isinstance(data, dict):
+            raise ValueError("output of jq middleware must be a dict")

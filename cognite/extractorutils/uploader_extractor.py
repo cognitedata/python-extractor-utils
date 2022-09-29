@@ -118,6 +118,7 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
 
         if isinstance(peek, Event):
             for event in peekable_output:
+                event = self._apply_middleware(event)
                 self.event_queue.add_to_upload_queue(event)
         elif isinstance(peek, RawRow):
             for raw_row in peekable_output:
