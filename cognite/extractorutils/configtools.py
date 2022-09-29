@@ -204,27 +204,20 @@ class CogniteConfig:
     def get_cognite_client(
         self, client_name: str, token_custom_args: Optional[Dict[str, str]] = None, use_experimental_sdk=False
     ) -> CogniteClient:
-        kwargs = {}
+        
 
         if self.api_key:
-            if use_experimental_sdk:
-                kwargs["api_key"] = self.api_key
-            else:
-                credential_provider = APIKey(self.api_key)
+            credential_provider = APIKey(self.api_key)
         elif self.idp_authentication:
+            kwargs = {}
             if self.idp_authentication.token_url:
                 kwargs["token_url"] = self.idp_authentication.token_url
             elif self.idp_authentication.tenant:
                 base_url = urljoin(self.idp_authentication.authority, self.idp_authentication.tenant)
                 kwargs["token_url"] = f"{base_url}/oauth2/v2.0/token"
-            if use_experimental_sdk:
-                kwargs["token_client_id"] = self.idp_authentication.client_id
-                kwargs["token_client_secret"] = self.idp_authentication.secret
-                kwargs["token_scopes"] = self.idp_authentication.scopes
-            else:
-                kwargs["client_id"] = self.idp_authentication.client_id
-                kwargs["client_secret"] = self.idp_authentication.secret
-                kwargs["scopes"] = self.idp_authentication.scopes
+            kwargs["client_id"] = self.idp_authentication.client_id
+            kwargs["client_secret"] = self.idp_authentication.secret
+            kwargs["scopes"] = self.idp_authentication.scopes
             if token_custom_args is None:
                 token_custom_args = {}
             if self.idp_authentication.resource:
