@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "cognite-extractor-utils"
-version = "3.0.0-beta6"
+version = "3.0.0-beta7"
 description = "Utilities for easier development of extractors for CDF"
 authors = ["Mathias Lohne <mathias.lohne@cognite.com>"]
 license = "Apache-2.0"
@@ -13,7 +13,7 @@ packages = [
 
 [tool.black]
 line-length = 120
-target_version = ['py37']
+target_version = ['py38']
 include = '\.py$'
 
 [tool.isort]
@@ -45,7 +45,7 @@ experimental = ["cognite-sdk-experimental"]
 legacy_tox_ini = """
 [tox]
 isolated_build = true
-envlist = py36,py37,py38
+envlist = py38
 [testenv]
 setenv =
     COGNITE_API_KEY={env:COGNITE_API_KEY}
