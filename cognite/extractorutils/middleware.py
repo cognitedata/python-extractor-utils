@@ -11,7 +11,7 @@ class JQMiddleware:
 
         self._jq = jq.compile(jq_rules)
 
-    def __call__(self, data: Row) -> dict:
+    def __call__(self, data: Row) -> Row:
         if not isinstance(data, Row):
             raise ValueError(f"type {type(data).__name__} is not currently supported")
 
