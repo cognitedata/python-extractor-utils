@@ -691,7 +691,7 @@ class ConfigResolver(Generic[T]):
         if self.is_remote:
             _logger.debug("Loading remote config file")
             tmp_config: _BaseConfig = load_yaml(self._config_text, _BaseConfig)
-            client = tmp_config.cognite.get_cognite_client("config_resolver", use_experimental_sdk=True)
+            client = tmp_config.cognite.get_cognite_client("config_resolver")
             response = client.extraction_pipelines.config.retrieve(
                 tmp_config.cognite.get_extraction_pipeline(client).external_id
             )
