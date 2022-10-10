@@ -209,7 +209,7 @@ class Extractor(Generic[CustomConfigClass]):
         """
         if self.extraction_pipeline:
             self.logger.info("Reporting new successful run")
-            self.cognite_client.extraction_pipeline_runs.create(
+            self.cognite_client.extraction_pipelines.runs.create(
                 ExtractionPipelineRun(
                     external_id=self.extraction_pipeline.external_id, status="success", message="Successful shutdown"
                 )
@@ -229,7 +229,7 @@ class Extractor(Generic[CustomConfigClass]):
             message = f"{exc_type.__name__}: {str(exc_val)}"[:1000]
 
             self.logger.info(f"Reporting new failed run: {message}")
-            self.cognite_client.extraction_pipeline_runs.create(
+            self.cognite_client.extraction_pipelines.runs.create(
                 ExtractionPipelineRun(
                     external_id=self.extraction_pipeline.external_id, status="failure", message=message
                 )
@@ -287,7 +287,7 @@ class Extractor(Generic[CustomConfigClass]):
                 if not self.cancelation_token.is_set():
                     self.logger.info("Reporting new heartbeat")
                     try:
-                        self.cognite_client.extraction_pipeline_runs.create(
+                        self.cognite_client.extraction_pipelines.runs.create(
                             ExtractionPipelineRun(external_id=self.extraction_pipeline.external_id, status="seen")
                         )
                     except e:
@@ -300,7 +300,7 @@ class Extractor(Generic[CustomConfigClass]):
             self.logger.info("No extraction pipeline configured")
 
         if self.extraction_pipeline and self.continuous_extractor:
-            self.cognite_client.extraction_pipeline_runs.create(
+            self.cognite_client.extraction_pipelines.runs.create(
                 ExtractionPipelineRun(
                     external_id=self.extraction_pipeline.external_id,
                     status="success",

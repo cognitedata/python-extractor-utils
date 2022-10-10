@@ -13,12 +13,13 @@ Changes are grouped as follows
 - `Security` in case of vulnerabilities.
 
 
-## Next release
+## [3.0.0]
 
 ### Added
 
  * `SequenceUploadQueue`'s `create_missing` funtionality can now be used to set
    Name and Description values on newly created sequences.
+ * Remote configuration files is now fully released and supported without using the experimental SDK.
 
 ### Fixed
 
