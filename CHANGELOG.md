@@ -13,6 +13,12 @@ Changes are grouped as follows
 - `Security` in case of vulnerabilities.
 
 
+## [3.0.1]
+
+### Fixed
+ 
+ * Correctly do not request the experimental SDK  when using remote configuration files
+
 ## [3.0.0]
 
 ### Added
