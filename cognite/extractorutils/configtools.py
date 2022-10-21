@@ -204,6 +204,9 @@ class CogniteConfig:
     def get_cognite_client(
         self, client_name: str, token_custom_args: Optional[Dict[str, str]] = None, use_experimental_sdk=False
     ) -> CogniteClient:
+        from cognite.client.config import global_config
+
+        global_config.disable_pypi_version_check = True
 
         if self.api_key:
             credential_provider = APIKey(self.api_key)

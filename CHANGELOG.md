@@ -13,6 +13,12 @@ Changes are grouped as follows
 - `Security` in case of vulnerabilities.
 
 
+## [3.0.2]
+
+### Fixed
+
+ * Remove old version warning from the cognite SDK.
+
 ## [3.0.1]
 
 ### Fixed
