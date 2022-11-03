@@ -1,0 +1,85 @@
+{
+    "$id": "cognite_config.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "description": "Configuration for connecting to Cognite Data Fusion (CDF)",
+    "properties": {
+        "project": {
+            "type": "string",
+            "description": "CDF project to connect to"
+        },
+        "api-key": {
+            "type": "string",
+            "description": "CDF API Key, deprecated in favor of token-based authentication"
+        },
+        "idp-authentication": {
+            "type": "object",
+            "description": "Configure authentication using OIDC tokens",
+            "properties": {
+                "authority": {
+                    "type": "string",
+                    "default": "https://login.microsoftonline.com/",
+                    "description": "Authority using together with `tenant` to authenticate against azure tenants."
+                },
+                "client-id": {
+                    "type": "string",
+                    "description": "Service principal client id."
+                },
+                "tenant": {
+                    "type": "string",
+                    "description": "Azure tenant"
+                },
+                "token-url": {
+                    "type": "string",
+                    "description": "URL used to obtain tokens given client credentials."
+                },
+                "secret": {
+                    "type": "string",
+                    "description": "Service principal client secret"
+                },
+                "resource": {
+                    "type": "string",
+                    "description": "Resource parameter passed along with request"
+                },
+                "scopes": {
+                    "type": "array",
+                    "description": "A list of scopes requested for the token",
+                    "items": {
+                        "type": "string",
+                        "description": "A scope requested for the token"
+                    }
+                },
+                "min-ttl": {
+                    "type": "integer",
+                    "default": 30,
+                    "description": "Requested minimum time-to-live in seconds for the token"
+                }
+            },
+            "oneOf": [{ "required": ["tenant"] }, { "required": ["token-url"] }],
+            "unevaluatedProperties": false,
+            "required": ["client-id", "secret"]
+        },
+        "data-set": {
+            "description": "Data set the extractor writes to",
+            "$ref": "either_id.schema.json"
+        },
+        "extraction-pipeline": {
+            "description": "Extraction pipeline used for remote config and reporting status",
+            "$ref": "either_id.schema.json"
+        },
+        "host": {
+            "type": "string",
+            "default": "https://api.cognitedata.com",
+            "description": "Cognite service URL."
+        },
+        "timeout": {
+            "type": "integer",
+            "description": "Timeout on requests to CDF, in seconds",
+            "default": 30
+        },
+        "external-id-prefix": {
+            "type": "string",
+            "description": "Prefix on externalId used when creating CDF resources"
+        }
+    }
+}

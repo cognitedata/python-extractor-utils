@@ -1,0 +1,46 @@
+{
+    "$id": "state_store_config.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "Configuration for storing extraction progress either locally or in CDF Raw",
+    "type": "object",
+    "properties": {
+        "raw": {
+            "type": "object",
+            "unevaluatedProperties": false,
+            "description": "Store state in a Raw table",
+            "required": ["database", "table"],
+            "properties": {
+                "database": {
+                    "type": "string",
+                    "description": "Raw database"
+                },
+                "table": {
+                    "type": "string",
+                    "description": "Raw table"
+                },
+                "upload-interval": {
+                    "type": "integer",
+                    "description": "Interval in seconds between each upload of state to Raw",
+                    "default": 30
+                }
+            }
+        },
+        "local": {
+            "type": "object",
+            "unevaluatedProperties": false,
+            "description": "Store state in a local JSON file",
+            "required": ["path"],
+            "properties": {
+                "path": {
+                    "type": "string",
+                    "description": "Path to JSON file"
+                },
+                "save-interval": {
+                    "type": "integer",
+                    "description": "Interval in seconds between each time state is saved",
+                    "default": 30
+                }
+            }
+        }
+    }
+}
