@@ -1,0 +1,48 @@
+{
+    "$id": "logging_config.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "description": "Configuration for logging to file or console",
+    "properties": {
+        "console": {
+            "type": "object",
+            "description": "Configuration for logging to the console",
+            "unevaluatedProperties": false,
+            "properties": {
+                "level": {
+                    "type": "string",
+                    "description": "Minimum level of messages sent to console",
+                    "enum": ["NOTSET", "DEBUG", "INFO", "WARNING", "ERROR", "FATAL", "CRITICAL"],
+                    "default": "INFO"
+                }
+            }
+        },
+        "file": {
+            "type": "object",
+            "description": "Configuration for logging to a rotating file",
+            "unevaluatedProperties": false,
+            "required": ["path"],
+            "properties": {
+                "level": {
+                    "type": "string",
+                    "description": "Minimum level of messages sent to file",
+                    "enum": ["NOTSET", "DEBUG", "INFO", "WARNING", "ERROR", "FATAL", "CRITICAL"],
+                    "default": "INFO"
+                },
+                "path": {
+                    "type": "string",
+                    "description": "Path to log file"
+                },
+                "retention": {
+                    "type": "integer",
+                    "description": "Number of log files to keep. Files are rotated daily",
+                    "default": 7
+                }
+            }
+        },
+        "metrics": {
+            "type": "boolean",
+            "description": "Enables metrics on the number of log messages recorded per logger and level. This requires `metrics` to be configured as well"
+        }
+    }
+}
