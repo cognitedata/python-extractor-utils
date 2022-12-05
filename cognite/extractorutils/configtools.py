@@ -105,6 +105,8 @@ import yaml
 from cognite.client import ClientConfig, CogniteClient
 from cognite.client.credentials import APIKey, OAuthClientCredentials
 from cognite.client.data_classes import Asset, DataSet, ExtractionPipeline
+from prometheus_client import start_http_server
+from prometheus_client.core import REGISTRY
 from yaml.scanner import ScannerError
 
 from .authentication import AuthenticatorConfig
@@ -361,6 +363,11 @@ class _PushGatewayConfig:
     push_interval: int = 30
 
 
+class _PromServerConfig:
+    port: int = 9000
+    host: str = "0.0.0.0"
+
+
 @dataclass
 class _CogniteMetricsConfig:
     external_id_prefix: str
@@ -379,6 +386,7 @@ class MetricsConfig:
 
     push_gateways: Optional[List[_PushGatewayConfig]]
     cognite: Optional[_CogniteMetricsConfig]
+    server: Optional[_PromServerConfig]
 
     def start_pushers(self, cdf_client: CogniteClient, cancelation_token: Event = Event()) -> None:
         self._pushers: List[AbstractMetricsPusher] = []
@@ -419,6 +427,9 @@ class MetricsConfig:
 
             pusher.start()
             self._pushers.append(pusher)
+
+        if self.server:
+            start_http_server(self.server.port, self.server.host, registry=REGISTRY)
 
     def stop_pushers(self) -> None:
         pushers = self.__dict__.get("_pushers") or []

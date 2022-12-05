@@ -64,6 +64,23 @@
                     "default": 30
                 }
             }
+        },
+        "server": {
+            "type": "object",
+            "description": "Configure a port to expose prometheus metrics for scraping",
+            "unevaluatedProperties": false,
+            "properties": {
+                "host": {
+                    "type": "string",
+                    "description": "Host to run the prometheus server on",
+                    "default": "0.0.0.0"
+                },
+                "port": {
+                    "type": "integer",
+                    "description": "Local port to expose the prometheus server on",
+                    "default": 9000
+                }
+            }
         }
     }
 }

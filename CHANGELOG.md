@@ -12,6 +12,11 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## [3.1.0]
+
+### Added
+
+ * Support for exposing prometheus metrics on a local port instead of pushing to pushgateway
 
 ## [3.0.2]
 
