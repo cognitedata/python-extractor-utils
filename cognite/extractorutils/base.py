@@ -252,6 +252,8 @@ class Extractor(Generic[CustomConfigClass]):
                 dotenv_message = f"Successfully ingested environment variables from {env_file_path}"
             else:
                 dotenv_message = "No .env file found"
+        else:
+            dotenv_message = "No .env file imported when using Cognite Functions"
 
         try:
             self._initial_load_config(override_path=self.config_file_path)
