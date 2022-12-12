@@ -33,8 +33,8 @@ test_id = random.randint(0, 2**31)
 
 @parameterized_class(
     [
-        {"functions_runtime": True},
-        {"functions_runtime": False},
+        {"functions_runtime": "true"},
+        {"functions_runtime": "false"},
     ]
 )
 class IntegrationTests(unittest.TestCase):
