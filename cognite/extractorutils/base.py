@@ -253,20 +253,20 @@ class Extractor(Generic[CustomConfigClass]):
             else:
                 dotenv_message = "No .env file found"
 
-            try:
-                self._initial_load_config(override_path=self.config_file_path)
-            except InvalidConfigError as e:
-                print("Critical error: Could not read config file", file=sys.stderr)
-                print(str(e), file=sys.stderr)
-                sys.exit(1)
+        try:
+            self._initial_load_config(override_path=self.config_file_path)
+        except InvalidConfigError as e:
+            print("Critical error: Could not read config file", file=sys.stderr)
+            print(str(e), file=sys.stderr)
+            sys.exit(1)
 
-            if not self.configured_logger:
-                self.config.logger.setup_logging()
-                self.configured_logger = True
+        if not self.configured_logger:
+            self.config.logger.setup_logging()
+            self.configured_logger = True
 
-            self.logger = logging.getLogger(__name__)
-            self.logger.info(dotenv_message)
-            self.logger.info(f"Loaded {'remote' if self.config_resolver.is_remote else 'local'} config file")
+        self.logger = logging.getLogger(__name__)
+        self.logger.info(dotenv_message)
+        self.logger.info(f"Loaded {'remote' if self.config_resolver.is_remote else 'local'} config file")
 
         if self.handle_interrupts:
             set_event_on_interrupt(self.cancelation_token)
