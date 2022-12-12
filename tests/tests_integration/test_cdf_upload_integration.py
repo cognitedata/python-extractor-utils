@@ -31,7 +31,12 @@ from cognite.extractorutils.uploader import RawUploadQueue, TimeSeriesUploadQueu
 test_id = random.randint(0, 2**31)
 
 
-@parameterized_class(("functions_runtime"), [(True), (False)])
+@parameterized_class(
+    [
+        {"functions_runtime": True},
+        {"functions_runtime": False},
+    ]
+)
 class IntegrationTests(unittest.TestCase):
     database_name: str = "integrationTests"
     table_name: str = f"extractorUtils-{test_id}"
