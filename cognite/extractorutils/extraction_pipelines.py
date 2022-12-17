@@ -1,7 +1,7 @@
 import logging
 import time
 from functools import wraps
-from threading import Thread
+from threading import Event, Thread
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import ExtractionPipelineRun
@@ -23,13 +23,17 @@ def add_extraction_pipeline(
         logger:
         heartbeat_waiting_time:
         added_message:
+        cancellation_token:
 
     Potential Improvements:
     -- Refactor so this decorator share methods with the Extractor context manager in .base.py as they serve a similar
     purpose
-    -- Add unit tests
+    -- Change 'cognite_client.extraction_pipeline_runs' -> 'cognite_client.extraction_pipelines.runs'
+    when SDK is updated
 
     """
+
+    cancellation_token: Event = Event()
 
     def decorator_ext_pip(input_function):
         @wraps(input_function)
@@ -41,7 +45,7 @@ def add_extraction_pipeline(
 
             def _report_success() -> None:
                 message = f"Successful shutdown of function '{input_function.__name__}'. {added_message}"
-                cognite_client.extraction_pipelines.runs.create(
+                cognite_client.extraction_pipeline_runs.create(  # cognite_client.extraction_pipelines.runs.create(
                     ExtractionPipelineRun(external_id=extraction_pipeline_ext_id, status="success", message=message)
                 )
 
@@ -52,22 +56,24 @@ def add_extraction_pipeline(
                 message = (
                     f"Exception for function '{input_function.__name__}'. {added_message}:\n" f"{str(exception)[:1000]}"
                 )
-                cognite_client.extraction_pipelines.runs.create(
+                cognite_client.extraction_pipeline_runs.create(
                     ExtractionPipelineRun(external_id=extraction_pipeline_ext_id, status="failure", message=message)
                 )
 
             def heartbeat_loop() -> None:
-                cognite_client.extraction_pipelines.runs.create(
-                    ExtractionPipelineRun(external_id=extraction_pipeline_ext_id, status="seen")
-                )
+                while not cancellation_token.is_set():
+                    cognite_client.extraction_pipeline_runs.create(
+                        ExtractionPipelineRun(external_id=extraction_pipeline_ext_id, status="seen")
+                    )
 
-                time.sleep(heartbeat_waiting_time)
+                    cancellation_token.wait(heartbeat_waiting_time)
 
             ##############################
             # Run the extractor function #
             ##############################
             logger.info(f"Starting to run function: {input_function.__name__}")
 
+            print(cancellation_token.is_set())
             try:
                 heartbeat_thread = Thread(target=heartbeat_loop, name="HeartbeatLoop", daemon=True)
                 heartbeat_thread.start()
@@ -79,12 +85,9 @@ def add_extraction_pipeline(
             else:
                 _report_success()
                 logger.info(f"Extraction ran successfully")
-
-            #################################
-            # Clean up Extraction Pipelines #
-            #################################
-            logger.info("Cleaning up after Extraction Pipelines")
-            heartbeat_thread.join()
+            finally:
+                cancellation_token.set()
+                heartbeat_thread.join()
 
             return output
 
