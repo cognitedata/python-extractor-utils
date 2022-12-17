@@ -14,6 +14,7 @@
 
 import argparse
 import logging
+import os
 import sys
 import traceback
 from dataclasses import is_dataclass
@@ -243,13 +244,16 @@ class Extractor(Generic[CustomConfigClass]):
             self
         """
 
-        # Environment Variables
-        env_file_path = find_dotenv()
-        if env_file_path:
-            load_dotenv(dotenv_path=env_file_path, override=True)
-            dotenv_message = f"Successfully ingested environment variables from {env_file_path}"
+        if str(os.getenv("COGNITE_FUNCTION_RUNTIME", False)).lower() != "true":
+            # Environment Variables
+            env_file_path = find_dotenv()
+            if env_file_path:
+                load_dotenv(dotenv_path=env_file_path, override=True)
+                dotenv_message = f"Successfully ingested environment variables from {env_file_path}"
+            else:
+                dotenv_message = "No .env file found"
         else:
-            dotenv_message = "No .env file found"
+            dotenv_message = "No .env file imported when using Cognite Functions"
 
         try:
             self._initial_load_config(override_path=self.config_file_path)

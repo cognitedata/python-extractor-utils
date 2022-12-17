@@ -12,6 +12,13 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## [3.1.1]
+
+### Fixed
+
+ * Support running extractor utils inside Cognite Functions
+
+
 ## [3.1.0]
 
 ### Added
