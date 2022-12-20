@@ -18,7 +18,7 @@ from io import StringIO
 
 from cognite.client import CogniteClient
 from cognite.client.config import ClientConfig
-from cognite.client.credentials import APIKey
+from cognite.client.credentials import OAuthClientCredentials
 from cognite.client.data_classes import DataSet
 from cognite.client.exceptions import CogniteDuplicatedError
 
@@ -35,13 +35,21 @@ class TestConfigtools(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls) -> None:
-        api_key = os.environ["COGNITE_API_KEY"]
         cognite_project = os.environ["COGNITE_PROJECT"]
         cognite_base_url = os.environ["COGNITE_BASE_URL"]
+        cognite_token_url = os.environ['COGNITE_PROJECT_TOKEN_URL']
+        cognite_client_id = os.environ['COGNITE_PROJECT_CLIENT_ID']
+        cognite_client_secret = os.environ['COGNITE_PROJECT_CLIENT_SECRET']
+        cognite_project_scopes = os.environ['COGNITE_PROJECT_SCOPES'].split(',')
         client_config = ClientConfig(
             project=cognite_project,
             base_url=cognite_base_url,
-            credentials=APIKey(api_key),
+            credentials=OAuthClientCredentials(
+                cognite_token_url,
+                cognite_client_id,
+                cognite_client_secret,
+                cognite_project_scopes
+            ),
             client_name="extractor-utils-integration-tests",
         )
         cls.client = CogniteClient(client_config)
