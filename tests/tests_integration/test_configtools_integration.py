@@ -37,18 +37,15 @@ class TestConfigtools(unittest.TestCase):
     def setUpClass(cls) -> None:
         cognite_project = os.environ["COGNITE_PROJECT"]
         cognite_base_url = os.environ["COGNITE_BASE_URL"]
-        cognite_token_url = os.environ['COGNITE_PROJECT_TOKEN_URL']
-        cognite_client_id = os.environ['COGNITE_PROJECT_CLIENT_ID']
-        cognite_client_secret = os.environ['COGNITE_PROJECT_CLIENT_SECRET']
-        cognite_project_scopes = os.environ['COGNITE_PROJECT_SCOPES'].split(',')
+        cognite_token_url = os.environ["COGNITE_PROJECT_TOKEN_URL"]
+        cognite_client_id = os.environ["COGNITE_PROJECT_CLIENT_ID"]
+        cognite_client_secret = os.environ["COGNITE_PROJECT_CLIENT_SECRET"]
+        cognite_project_scopes = os.environ["COGNITE_PROJECT_SCOPES"].split(",")
         client_config = ClientConfig(
             project=cognite_project,
             base_url=cognite_base_url,
             credentials=OAuthClientCredentials(
-                cognite_token_url,
-                cognite_client_id,
-                cognite_client_secret,
-                cognite_project_scopes
+                cognite_token_url, cognite_client_id, cognite_client_secret, cognite_project_scopes
             ),
             client_name="extractor-utils-integration-tests",
         )
