@@ -1,5 +1,4 @@
 import logging
-import time
 from functools import wraps
 from threading import Event, Thread
 
@@ -10,7 +9,7 @@ from cognite.client.data_classes import ExtractionPipelineRun
 def add_extraction_pipeline(
     extraction_pipeline_ext_id: str,
     cognite_client: CogniteClient,
-    logger: logging.Logger,
+    logger: logging.Logger = None,
     heartbeat_waiting_time: int = 5,
     added_message: str = "",
 ):
@@ -23,7 +22,17 @@ def add_extraction_pipeline(
         logger:
         heartbeat_waiting_time:
         added_message:
-        cancellation_token:
+
+    Usage:
+        If you have a function named "extract_data(*args, **kwargs)" and want to connect it to an extraction
+        pipeline, you can use this decorator function as:
+        @add_extraction_pipeline(
+            extraction_pipeline_ext_id=<INSERT EXTERNAL ID>,
+            cognite_client=<INSERT COGNITE CLIENT OBJECT>,
+            logger=<INSERT LOGGER>,
+        )
+        def extract_data(*args, **kwargs):
+            <INSERT FUNCTION BODY>
 
     Potential Improvements:
     -- Refactor so this decorator share methods with the Extractor context manager in .base.py as they serve a similar
@@ -34,6 +43,9 @@ def add_extraction_pipeline(
     """
 
     cancellation_token: Event = Event()
+
+    if logger is None:
+        logger = logging.getLogger(__name__)
 
     def decorator_ext_pip(input_function):
         @wraps(input_function)
