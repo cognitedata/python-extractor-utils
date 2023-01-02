@@ -1,3 +1,17 @@
+#  Copyright 2022 Cognite AS
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+
 import logging
 from functools import wraps
 from threading import Event, Thread
@@ -9,7 +23,6 @@ from cognite.client.data_classes import ExtractionPipelineRun
 def add_extraction_pipeline(
     extraction_pipeline_ext_id: str,
     cognite_client: CogniteClient,
-    logger: logging.Logger = None,
     heartbeat_waiting_time: int = 5,
     added_message: str = "",
 ):
@@ -19,7 +32,6 @@ def add_extraction_pipeline(
     Args:
         extraction_pipeline_ext_id:
         cognite_client:
-        logger:
         heartbeat_waiting_time:
         added_message:
 
@@ -33,19 +45,16 @@ def add_extraction_pipeline(
         )
         def extract_data(*args, **kwargs):
             <INSERT FUNCTION BODY>
-
-    Potential Improvements:
-    -- Refactor so this decorator share methods with the Extractor context manager in .base.py as they serve a similar
-    purpose
-    -- Change 'cognite_client.extraction_pipeline_runs' -> 'cognite_client.extraction_pipelines.runs'
-    when SDK is updated
-
     """
+
+    # TODO 1. Consider refactoring this decorator to share methods with the Extractor context manager in .base.py
+    # as they serve a similar purpose
+    # TODO 2. Change 'cognite_client.extraction_pipeline_runs' -> 'cognite_client.extraction_pipelines.runs'
+    # when Cognite SDK is updated
 
     cancellation_token: Event = Event()
 
-    if logger is None:
-        logger = logging.getLogger(__name__)
+    _logger = logging.getLogger(__name__)
 
     def decorator_ext_pip(input_function):
         @wraps(input_function)
@@ -53,7 +62,7 @@ def add_extraction_pipeline(
             ##############################
             # Setup Extraction Pipelines #
             ##############################
-            logger.info("Setting up Extraction Pipelines")
+            _logger.info("Setting up Extraction Pipelines")
 
             def _report_success() -> None:
                 message = f"Successful shutdown of function '{input_function.__name__}'. {added_message}"
@@ -83,20 +92,19 @@ def add_extraction_pipeline(
             ##############################
             # Run the extractor function #
             ##############################
-            logger.info(f"Starting to run function: {input_function.__name__}")
+            _logger.info(f"Starting to run function: {input_function.__name__}")
 
-            print(cancellation_token.is_set())
             try:
                 heartbeat_thread = Thread(target=heartbeat_loop, name="HeartbeatLoop", daemon=True)
                 heartbeat_thread.start()
                 output = input_function(*args, **kwargs)
             except Exception as e:
                 _report_error(exception=e)
-                logger.error(f"Extraction failed with exception: {e}")
+                _logger.error(f"Extraction failed with exception: {e}")
                 raise e
             else:
                 _report_success()
-                logger.info(f"Extraction ran successfully")
+                _logger.info(f"Extraction ran successfully")
             finally:
                 cancellation_token.set()
                 heartbeat_thread.join()

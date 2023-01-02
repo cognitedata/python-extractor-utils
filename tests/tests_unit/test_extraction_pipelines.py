@@ -28,7 +28,6 @@ class TestExtractionPipelines(unittest.TestCase):
             @add_extraction_pipeline(
                 extraction_pipeline_ext_id="1",
                 cognite_client=self.m_client,
-                logger=Mock(),
             )
             def test_success():
                 print("Starting function 'test_work_as_expected'")
@@ -45,7 +44,6 @@ class TestExtractionPipelines(unittest.TestCase):
             @add_extraction_pipeline(
                 extraction_pipeline_ext_id="2",
                 cognite_client=self.m2_client,
-                logger=Mock(),
             )
             def test_failure():
                 print("Starting function 'test_raise_error'")
@@ -59,7 +57,7 @@ class TestExtractionPipelines(unittest.TestCase):
 
         def test_2_heartbeats(self):
             @add_extraction_pipeline(
-                extraction_pipeline_ext_id="3", cognite_client=self.m3_client, logger=Mock(), heartbeat_waiting_time=1
+                extraction_pipeline_ext_id="3", cognite_client=self.m3_client, heartbeat_waiting_time=1
             )
             def test_success_2():
                 print("Starting function 'test_2_heartbeats'")
