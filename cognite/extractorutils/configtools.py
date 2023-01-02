@@ -651,7 +651,7 @@ class ConfigResolver(Generic[T]):
         try:
             self._resolve_config()
         except Exception as e:
-            _logger.warning(f"Failed to reload configuration file: {str(e)}")
+            _logger.exception("Failed to reload configuration file")
             return False
         return self._config._file_hash != self._next_config._file_hash
 
