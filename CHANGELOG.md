@@ -12,12 +12,17 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## [3.1.4]
+
+### Fixed
+ 
+ * Correctly catch errors when reloading remote configuration files
+
 ## [3.1.1]
 
 ### Fixed
 
  * Support running extractor utils inside Cognite Functions
-
 
 ## [3.1.0]
 
