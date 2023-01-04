@@ -23,7 +23,7 @@ from cognite.client.data_classes import ExtractionPipelineRun
 def add_extraction_pipeline(
     extraction_pipeline_ext_id: str,
     cognite_client: CogniteClient,
-    heartbeat_waiting_time: int = 5,
+    heartbeat_waiting_time: int = 600,
     added_message: str = "",
 ):
     """
