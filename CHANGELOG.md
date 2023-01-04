@@ -12,6 +12,10 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## [3.2.0]
+### Added
+ * Decorator which adds extraction pipeline functionality
+
 ## [3.1.4]
 
 ### Fixed
