@@ -84,24 +84,30 @@ Get a state store object as configured:
 
 However, all of these things will be automatically done for you if you are using the base Extractor class.
 """
-
+import argparse
+import json
 import logging
 import os
 import re
+import sys
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import Enum
+from hashlib import sha256
 from logging.handlers import TimedRotatingFileHandler
 from threading import Event
 from time import sleep
-from typing import Any, Dict, Iterable, List, Optional, T, TextIO, Tuple, Type, TypeVar, Union
+from typing import Any, Callable, Dict, Generic, Iterable, List, Optional, T, TextIO, Tuple, Type, TypeVar, Union
 from urllib.parse import urljoin
 
 import dacite
 import yaml
-from cognite.client import CogniteClient
+from cognite.client import ClientConfig, CogniteClient
+from cognite.client.credentials import APIKey, OAuthClientCredentials
 from cognite.client.data_classes import Asset, DataSet, ExtractionPipeline
+from prometheus_client import start_http_server
+from prometheus_client.core import REGISTRY
 from yaml.scanner import ScannerError
 
 from .authentication import AuthenticatorConfig
@@ -254,36 +260,47 @@ class CogniteConfig:
     external_id_prefix: str = ""
     host: str = "https://api.cognitedata.com"
 
-    def get_cognite_client(self, client_name: str, token_custom_args: Optional[Dict[str, str]] = None) -> CogniteClient:
-        kwargs = {}
+    def get_cognite_client(
+        self, client_name: str, token_custom_args: Optional[Dict[str, str]] = None, use_experimental_sdk=False
+    ) -> CogniteClient:
+        from cognite.client.config import global_config
+
+        global_config.disable_pypi_version_check = True
 
         if self.api_key:
-            kwargs["api_key"] = self.api_key
+            credential_provider = APIKey(self.api_key)
         elif self.idp_authentication:
+            kwargs = {}
             if self.idp_authentication.token_url:
                 kwargs["token_url"] = self.idp_authentication.token_url
             elif self.idp_authentication.tenant:
                 base_url = urljoin(self.idp_authentication.authority, self.idp_authentication.tenant)
                 kwargs["token_url"] = f"{base_url}/oauth2/v2.0/token"
-            kwargs["token_client_id"] = self.idp_authentication.client_id
-            kwargs["token_client_secret"] = self.idp_authentication.secret
-            kwargs["token_scopes"] = self.idp_authentication.scopes
+            kwargs["client_id"] = self.idp_authentication.client_id
+            kwargs["client_secret"] = self.idp_authentication.secret
+            kwargs["scopes"] = self.idp_authentication.scopes
             if token_custom_args is None:
                 token_custom_args = {}
             if self.idp_authentication.resource:
                 token_custom_args["resource"] = self.idp_authentication.resource
-            kwargs["token_custom_args"] = token_custom_args
+            credential_provider = OAuthClientCredentials(**kwargs, **token_custom_args)
         else:
             raise InvalidConfigError("No CDF credentials")
 
-        return CogniteClient(
+        client_config = ClientConfig(
             project=self.project,
             base_url=self.host,
             client_name=client_name,
-            disable_pypi_version_check=True,
             timeout=self.timeout.seconds,
-            **kwargs,
+            credentials=credential_provider,
         )
+
+        if use_experimental_sdk:
+            from cognite.experimental import CogniteClient as ExperimentalCogniteClient
+
+            return ExperimentalCogniteClient(client_config)
+
+        return CogniteClient(client_config)
 
     def get_data_set(self, cdf_client: CogniteClient) -> Optional[DataSet]:
         if self.data_set_external_id:
@@ -362,7 +379,7 @@ class LoggingConfig:
         if self.metrics:
             export_log_stats_on_root_logger(root)
 
-        if self.console and not suppress_console:
+        if self.console and not suppress_console and not root.hasHandlers():
             console_handler = logging.StreamHandler()
             console_handler.setLevel(self.console.level)
             console_handler.setFormatter(fmt)
@@ -382,6 +399,10 @@ class LoggingConfig:
             file_handler.setLevel(self.file.level)
             file_handler.setFormatter(fmt)
 
+            for handler in root.handlers:
+                if hasattr(handler, "baseFilename") and handler.baseFilename == file_handler.baseFilename:
+                    return
+
             root.addHandler(file_handler)
 
             if root.getEffectiveLevel() > file_handler.level:
@@ -397,6 +418,11 @@ class _PushGatewayConfig:
 
     clear_after: Optional[TimeIntervalConfig]
     push_interval: TimeIntervalConfig = TimeIntervalConfig("30s")
+
+
+class _PromServerConfig:
+    port: int = 9000
+    host: str = "0.0.0.0"
 
 
 @dataclass
@@ -417,6 +443,7 @@ class MetricsConfig:
 
     push_gateways: Optional[List[_PushGatewayConfig]]
     cognite: Optional[_CogniteMetricsConfig]
+    server: Optional[_PromServerConfig]
 
     def start_pushers(self, cdf_client: CogniteClient, cancelation_token: Event = Event()) -> None:
         self._pushers: List[AbstractMetricsPusher] = []
@@ -458,6 +485,9 @@ class MetricsConfig:
             pusher.start()
             self._pushers.append(pusher)
 
+        if self.server:
+            start_http_server(self.server.port, self.server.host, registry=REGISTRY)
+
     def stop_pushers(self) -> None:
         pushers = self.__dict__.get("_pushers") or []
 
@@ -473,15 +503,26 @@ class MetricsConfig:
                 pusher.clear_gateway()
 
 
+class ConfigType(Enum):
+    LOCAL = "local"
+    REMOTE = "remote"
+
+
 @dataclass
-class BaseConfig:
+class _BaseConfig:
+    _file_hash: Optional[str] = field(init=False, repr=False, default=None)
+
+    type: Optional[ConfigType]
+    cognite: CogniteConfig
+
+
+@dataclass
+class BaseConfig(_BaseConfig):
     """
     Basis for an extractor config, containing config version, ``CogniteConfig`` and ``LoggingConfig``
     """
 
     version: Optional[Union[str, int]]
-
-    cognite: CogniteConfig
     logger: LoggingConfig
 
 
@@ -547,26 +588,13 @@ class StateStoreConfig:
 CustomConfigClass = TypeVar("CustomConfigClass", bound=BaseConfig)
 
 
-def load_yaml(
-    source: Union[TextIO, str], config_type: Type[CustomConfigClass], case_style: str = "hyphen", expand_envvars=True
+def _load_yaml(
+    source: Union[TextIO, str],
+    config_type: Type[CustomConfigClass],
+    case_style: str = "hyphen",
+    expand_envvars=True,
+    dict_manipulator: Callable[[Dict[str, Any]], Dict[str, Any]] = lambda x: x,
 ) -> CustomConfigClass:
-    """
-    Read a YAML file, and create a config object based on its contents.
-
-    Args:
-        source: Input stream (as returned by open(...)) or string containing YAML.
-        config_type: Class of config type (i.e. your custom subclass of BaseConfig).
-        case_style: Casing convention of config file. Valid options are 'snake', 'hyphen' or 'camel'. Should be
-            'hyphen'.
-        expand_envvars: Substitute values with the pattern ${VAR} with the content of the environment variable VAR
-
-    Returns:
-        An initialized config object.
-
-    Raises:
-        InvalidConfigError: If any config field is given as an invalid type, is missing or is unknown
-    """
-
     def env_constructor(_: yaml.SafeLoader, node):
         bool_values = {
             "true": True,
@@ -592,6 +620,7 @@ def load_yaml(
         cause = e.problem or e.context
         raise InvalidConfigError(f"Invalid YAML{formatted_location}: {cause or ''}") from e
 
+    config_dict = dict_manipulator(config_dict)
     config_dict = _to_snake_case(config_dict, case_style)
 
     try:
@@ -623,4 +652,131 @@ def load_yaml(
     except dacite.ForwardReferenceError as e:
         raise ValueError(f"Invalid config class: {str(e)}")
 
+    config._file_hash = sha256(json.dumps(config_dict).encode("utf-8")).hexdigest()
+
     return config
+
+
+def load_yaml(
+    source: Union[TextIO, str], config_type: Type[CustomConfigClass], case_style: str = "hyphen", expand_envvars=True
+) -> CustomConfigClass:
+    """
+    Read a YAML file, and create a config object based on its contents.
+
+    Args:
+        source: Input stream (as returned by open(...)) or string containing YAML.
+        config_type: Class of config type (i.e. your custom subclass of BaseConfig).
+        case_style: Casing convention of config file. Valid options are 'snake', 'hyphen' or 'camel'. Should be
+            'hyphen'.
+        expand_envvars: Substitute values with the pattern ${VAR} with the content of the environment variable VAR
+
+    Returns:
+        An initialized config object.
+
+    Raises:
+        InvalidConfigError: If any config field is given as an invalid type, is missing or is unknown
+    """
+    return _load_yaml(source=source, config_type=config_type, case_style=case_style, expand_envvars=expand_envvars)
+
+
+T = TypeVar("T", bound=BaseConfig)
+
+
+class ConfigResolver(Generic[T]):
+    def __init__(self, config_path: str, config_type: Type[T]):
+        self.config_path = config_path
+        self.config_type = config_type
+
+        self._config: Optional[T] = None
+        self._next_config: Optional[T] = None
+
+    def _reload_file(self):
+        with open(self.config_path, "r") as stream:
+            self._config_text = stream.read()
+
+    @property
+    def is_remote(self) -> bool:
+        raw_config_type = yaml.safe_load(self._config_text).get("type")
+        if raw_config_type is None:
+            _logger.warning("No config type specified, default to local")
+            raw_config_type = "local"
+        config_type = ConfigType(raw_config_type)
+        return config_type == ConfigType.REMOTE
+
+    @property
+    def has_changed(self) -> bool:
+        try:
+            self._resolve_config()
+        except Exception as e:
+            _logger.exception("Failed to reload configuration file")
+            return False
+        return self._config._file_hash != self._next_config._file_hash
+
+    @property
+    def config(self) -> T:
+        if self._config is None:
+            self._resolve_config()
+            self.accept_new_config()
+        return self._config
+
+    def accept_new_config(self) -> None:
+        self._config = self._next_config
+
+    @classmethod
+    def from_cli(cls, name: str, description: str, version: str, config_type: Type[T]) -> "ConfigResolver":
+        argument_parser = argparse.ArgumentParser(sys.argv[0], description=description)
+        argument_parser.add_argument(
+            "config", nargs=1, type=str, help="The YAML file containing configuration for the extractor."
+        )
+        argument_parser.add_argument("-v", "--version", action="version", version=f"{name} v{version}")
+        args = argument_parser.parse_args()
+
+        return cls(args.config[0], config_type)
+
+    def _inject_cognite(self, local_part: _BaseConfig, remote_part: Dict[str, Any]) -> Dict[str, Any]:
+        if "cognite" not in remote_part:
+            remote_part["cognite"] = {}
+
+        if local_part.cognite.idp_authentication is not None:
+            remote_part["cognite"]["idp-authentication"] = {
+                "client_id": local_part.cognite.idp_authentication.client_id,
+                "scopes": local_part.cognite.idp_authentication.scopes,
+                "secret": local_part.cognite.idp_authentication.secret,
+                "tenant": local_part.cognite.idp_authentication.tenant,
+                "token_url": local_part.cognite.idp_authentication.token_url,
+                "resource": local_part.cognite.idp_authentication.resource,
+                "authority": local_part.cognite.idp_authentication.authority,
+            }
+        if local_part.cognite.api_key is not None:
+            remote_part["cognite"]["api-key"] = local_part.cognite.api_key
+        if local_part.cognite.host is not None:
+            remote_part["cognite"]["host"] = local_part.cognite.host
+        remote_part["cognite"]["project"] = local_part.cognite.project
+        remote_part["cognite"]["extraction-pipeline"] = {}
+        remote_part["cognite"]["extraction-pipeline"]["id"] = local_part.cognite.extraction_pipeline.id
+        remote_part["cognite"]["extraction-pipeline"][
+            "external_id"
+        ] = local_part.cognite.extraction_pipeline.external_id
+
+        return remote_part
+
+    def _resolve_config(self) -> None:
+        self._reload_file()
+
+        if self.is_remote:
+            _logger.debug("Loading remote config file")
+            tmp_config: _BaseConfig = load_yaml(self._config_text, _BaseConfig)
+            client = tmp_config.cognite.get_cognite_client("config_resolver")
+            response = client.extraction_pipelines.config.retrieve(
+                tmp_config.cognite.get_extraction_pipeline(client).external_id
+            )
+
+            self._next_config = _load_yaml(
+                source=response.config,
+                config_type=self.config_type,
+                dict_manipulator=lambda d: self._inject_cognite(tmp_config, d),
+            )
+
+        else:
+            _logger.debug("Loading local config file")
+            self._next_config = load_yaml(self._config_text, self.config_type)

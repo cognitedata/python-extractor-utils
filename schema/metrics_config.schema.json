@@ -1,0 +1,86 @@
+{
+    "$id": "metrics_config.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "description": "Configuration for publishing prometheus metrics, supports pushing to CDF timeseries instead",
+    "type": "object",
+    "properties": {
+        "push-gateways": {
+            "type": "array",
+            "description": "List of prometheus push gateway destinations",
+            "items": {
+                "type": "object",
+                "description": "Configuration for pushing to a prometheus PushGateway",
+                "unevaluatedProperties": false,
+                "properties": {
+                    "host": {
+                        "type": "string",
+                        "description": "PushGateway host"
+                    },
+                    "job-name": {
+                        "type": "string",
+                        "description": "Job name, uniquely identifies this extractor in prometheus"
+                    },
+                    "username": {
+                        "type": "string",
+                        "description": "PushGateway username"
+                    },
+                    "password": {
+                        "type": "string",
+                        "description": "PushGateway password"
+                    },
+                    "clear-after": {
+                        "type": ["null", "integer"],
+                        "description": "Clear metrics after this many seconds when the extractor stops. Default is disabled"
+                    },
+                    "push-interval": {
+                        "type": "integer",
+                        "description": "Interval in seconds between each push to prometheus",
+                        "default": 30
+                    }
+                }
+            }
+        },
+        "cognite": {
+            "type": "object",
+            "description": "Push metrics to CDF timeseries. Requires CDF credentials to be configured",
+            "unevaluatedProperties": false,
+            "required": ["external-id-prefix"],
+            "properties": {
+                "external-id-prefix": {
+                    "type": "string",
+                    "description": "Prefix on external id on created metrics"
+                },
+                "asset-name": {
+                    "type": "string",
+                    "description": "Name of created root asset for the metrics"
+                },
+                "asset-external-id": {
+                    "type": "string",
+                    "description": "ExternalId of created root asset for the metrics"
+                },
+                "push-interval": {
+                    "type": "integer",
+                    "description": "Interval in seconds between each push to CDF",
+                    "default": 30
+                }
+            }
+        },
+        "server": {
+            "type": "object",
+            "description": "Configure a port to expose prometheus metrics for scraping",
+            "unevaluatedProperties": false,
+            "properties": {
+                "host": {
+                    "type": "string",
+                    "description": "Host to run the prometheus server on",
+                    "default": "0.0.0.0"
+                },
+                "port": {
+                    "type": "integer",
+                    "description": "Local port to expose the prometheus server on",
+                    "default": 9000
+                }
+            }
+        }
+    }
+}

@@ -20,14 +20,23 @@ import unittest
 from datetime import datetime, timezone
 
 from cognite.client import CogniteClient
+from cognite.client.config import ClientConfig
+from cognite.client.credentials import OAuthClientCredentials
 from cognite.client.data_classes import Row, TimeSeries
 from cognite.client.exceptions import CogniteAPIError, CogniteNotFoundError
+from parameterized import parameterized_class
 
 from cognite.extractorutils.uploader import RawUploadQueue, TimeSeriesUploadQueue
 
 test_id = random.randint(0, 2**31)
 
 
+@parameterized_class(
+    [
+        {"functions_runtime": "true"},
+        {"functions_runtime": "false"},
+    ]
+)
 class IntegrationTests(unittest.TestCase):
     database_name: str = "integrationTests"
     table_name: str = f"extractorUtils-{test_id}"
@@ -37,9 +46,22 @@ class IntegrationTests(unittest.TestCase):
     time_series3: str = f"util_integration_ts_test_3-{test_id}"
 
     def setUp(self):
-        self.client = CogniteClient(
+        os.environ["COGNITE_FUNCTION_RUNTIME"] = self.functions_runtime
+        cognite_project = os.environ["COGNITE_PROJECT"]
+        cognite_base_url = os.environ["COGNITE_BASE_URL"]
+        cognite_token_url = os.environ["COGNITE_PROJECT_TOKEN_URL"]
+        cognite_client_id = os.environ["COGNITE_PROJECT_CLIENT_ID"]
+        cognite_client_secret = os.environ["COGNITE_PROJECT_CLIENT_SECRET"]
+        cognite_project_scopes = os.environ["COGNITE_PROJECT_SCOPES"].split(",")
+        client_config = ClientConfig(
+            project=cognite_project,
+            base_url=cognite_base_url,
+            credentials=OAuthClientCredentials(
+                cognite_token_url, cognite_client_id, cognite_client_secret, cognite_project_scopes
+            ),
             client_name="extractor-utils-integration-tests",
         )
+        self.client = CogniteClient(client_config)
 
         # Delete stuff we will use if it exists
         try:

@@ -12,14 +12,24 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import dataclasses
+import logging
 import os
 import unittest
 from dataclasses import dataclass
 
-import pytest
+import yaml
 from cognite.client import CogniteClient
+from cognite.client.credentials import OAuthClientCredentials
 
-from cognite.extractorutils.configtools import BaseConfig, CogniteConfig, TimeIntervalConfig, _to_snake_case, load_yaml
+from cognite.extractorutils.configtools import (
+    BaseConfig,
+    CogniteConfig,
+    LoggingConfig,
+    TimeIntervalConfig,
+    _to_snake_case,
+    load_yaml,
+)
 from cognite.extractorutils.exceptions import InvalidConfigError
 
 
@@ -86,7 +96,8 @@ class TestConfigtoolsMethods(unittest.TestCase):
         self.assertIsInstance(client, CogniteClient)
         self.assertEqual(client.config.base_url, "https://api.cognitedata.com")
         self.assertEqual(client.config.project, "tenant-name")
-        self.assertEqual(client.config.api_key, "COGNITE_API_KEY")
+        _, api_key = client.config.credentials.authorization_header()
+        self.assertEqual(api_key, "COGNITE_API_KEY")
         self.assertEqual(client.config.client_name, "test-client")
 
     def test_read_base_config(self):
@@ -179,12 +190,11 @@ class TestConfigtoolsMethods(unittest.TestCase):
         config = load_yaml(config_raw, CogniteConfig)
         cdf = config.get_cognite_client("client_name")
         self.assertIsInstance(cdf, CogniteClient)
-        print("CONFIG", repr(cdf._config))
-        print("API_KEY", repr(cdf._config.api_key))
-        self.assertEqual(cdf._config.api_key, "COGNITE_API_KEY")
-        self.assertIsNone(cdf._config.token)
+        print("CONFIG", repr(cdf.config))
+        _, api_key = cdf.config.credentials.authorization_header()
+        print("API_KEY", api_key)
+        self.assertEqual(api_key, "COGNITE_API_KEY")
 
-    @pytest.mark.skip("The SDK is now calling the backend to generate a token. This needs to be mocked.")
     def test_get_cognite_client_from_aad(self):
         config_raw = """    
         idp-authentication:
@@ -199,10 +209,13 @@ class TestConfigtoolsMethods(unittest.TestCase):
         """
         config = load_yaml(config_raw, CogniteConfig)
         self.assertIsNone(config.api_key)
-        cdf = config.get_cognite_client("client_name")
+        cdf = config.get_cognite_client("client_name", token_custom_args={"audience": "lol"})
+        self.assertEqual(cdf.config.credentials.token_custom_args, {"audience": "lol"})
+        self.assertEqual(type(cdf.config.credentials), OAuthClientCredentials)
+        self.assertEqual(cdf.config.credentials.client_id, "cid")
+        self.assertEqual(cdf.config.credentials.client_secret, "scrt")
+        self.assertEqual(cdf.config.credentials.scopes, ["scp"])
         self.assertIsInstance(cdf, CogniteClient)
-        # The api_key is not None, possibly some thread local trick when run in Jenkins
-        # self.assertTrue(cdf._config.api_key is None or cdf._config.api_key == "********")
 
     def test_get_cognite_client_no_credentials(self):
         config_raw = """
@@ -258,3 +271,87 @@ class TestConfigtoolsMethods(unittest.TestCase):
         self.assertAlmostEqual(TimeIntervalConfig("15m").hours, 0.25)
         self.assertAlmostEqual(TimeIntervalConfig("15m").minutes, 15)
         self.assertAlmostEqual(TimeIntervalConfig("1h").minutes, 60)
+
+    def test_multiple_logging_console(self):
+        config_file = """
+        logger:
+            console:
+                level: INFO
+        cognite:
+            project: test
+            api-key: test
+            """
+
+        config: BaseConfig = load_yaml(config_file, BaseConfig)
+        logger = logging.getLogger()
+        logger.handlers.clear()
+
+        config.logger.setup_logging()
+
+        self.assertEqual(1, len(logger.handlers))
+
+        config.logger.setup_logging()
+
+        self.assertEqual(1, len(logger.handlers))
+
+        logger.handlers.clear()
+
+    def test_multiple_logging_file(self):
+        config_file_1 = """
+        logger:
+            file:
+                level: INFO
+                path: foo
+        cognite:
+            project: test
+            api-key: test
+            """
+        config_file_2 = """
+        logger:
+            file:
+                level: INFO
+                path: bar
+        cognite:
+            project: test
+            api-key: test
+        """
+        config_1: BaseConfig = load_yaml(config_file_1, BaseConfig)
+        config_2: BaseConfig = load_yaml(config_file_2, BaseConfig)
+        logger = logging.getLogger()
+        logger.handlers.clear()
+
+        config_1.logger.setup_logging()
+        self.assertEqual(1, len(logger.handlers))
+
+        config_2.logger.setup_logging()
+        self.assertEqual(2, len(logger.handlers))
+
+        config_1.logger.setup_logging()
+        self.assertEqual(2, len(logger.handlers))
+
+        config_2.logger.setup_logging()
+        self.assertEqual(2, len(logger.handlers))
+
+        logger.handlers.clear()
+
+    def test_dump_and_reload_config(self):
+        # Verify that dumping and reloading a config file doesn't fail due to _file_hash
+        config = BaseConfig(
+            type=None,
+            cognite=CogniteConfig(
+                project="project",
+                api_key="api-key",
+                idp_authentication=None,
+                data_set=None,
+                data_set_external_id=None,
+                extraction_pipeline=None,
+                data_set_id=None,
+            ),
+            version=None,
+            logger=LoggingConfig(console=None, file=None, metrics=None),
+        )
+        yaml.emitter.Emitter.process_tag = lambda self, *args, **kwargs: None
+        with open("test_dump_config.yml", "w") as config_file:
+            yaml.dump(dataclasses.asdict(config), config_file)
+        with open("test_dump_config.yml", "r") as config_file:
+            load_yaml(config_file, BaseConfig)

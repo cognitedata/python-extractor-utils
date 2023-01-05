@@ -11,7 +11,7 @@ When developing the extractor, running it is fairly easy:
 
 .. code-block:: bash
 
-    potery run <extractor_name>
+    poetry run <extractor_name>
 
 Sometimes we could just send our project to the production environment like this, for example by cloning the git repo
 (which would also make updating to future versions very easy). However, when shipping the extractor to a production

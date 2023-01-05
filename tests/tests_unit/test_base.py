@@ -46,13 +46,13 @@ class ConfigWithoutStates(BaseConfig):
 class TestExtractorClass(unittest.TestCase):
     def test_load_config(self):
         e1 = Extractor(name="my_extractor1", description="description", config_class=ConfigWithStates)
-        e1._load_config("tests/tests_unit/dummyconfig.yaml")
+        e1._initial_load_config("tests/tests_unit/dummyconfig.yaml")
         self.assertIsInstance(e1.config, ConfigWithStates)
 
     @patch("cognite.client.CogniteClient")
     def test_load_state_store(self, get_client_mock):
         e2 = Extractor(name="my_extractor2", description="description", config_class=ConfigWithStates)
-        e2._load_config("tests/tests_unit/dummyconfig.yaml")
+        e2._initial_load_config("tests/tests_unit/dummyconfig.yaml")
         e2.cognite_client = get_client_mock()
         e2._load_state_store()
         self.assertIsInstance(e2.state_store, LocalStateStore)
@@ -63,7 +63,7 @@ class TestExtractorClass(unittest.TestCase):
             config_class=ConfigWithoutStates,
             use_default_state_store=True,
         )
-        e3._load_config("tests/tests_unit/dummyconfig.yaml")
+        e3._initial_load_config("tests/tests_unit/dummyconfig.yaml")
         e3.cognite_client = get_client_mock()
         e3._load_state_store()
         self.assertIsInstance(e3.state_store, LocalStateStore)
@@ -74,7 +74,7 @@ class TestExtractorClass(unittest.TestCase):
             config_class=ConfigWithoutStates,
             use_default_state_store=False,
         )
-        e6._load_config("tests/tests_unit/dummyconfig.yaml")
+        e6._initial_load_config("tests/tests_unit/dummyconfig.yaml")
         e6.cognite_client = get_client_mock()
         e6._load_state_store()
         self.assertIsInstance(e6.state_store, NoStateStore)
@@ -89,7 +89,7 @@ class TestExtractorClass(unittest.TestCase):
         with self.assertRaises(ValueError):
             Extractor.get_current_config()
 
-        e4._load_config("tests/tests_unit/dummyconfig.yaml")
+        e4._initial_load_config("tests/tests_unit/dummyconfig.yaml")
 
         self.assertIsInstance(Extractor.get_current_config(), ConfigWithStates)
 
@@ -103,7 +103,7 @@ class TestExtractorClass(unittest.TestCase):
         with self.assertRaises(ValueError):
             Extractor.get_current_statestore()
 
-        e5._load_config("tests/tests_unit/dummyconfig.yaml")
+        e5._initial_load_config("tests/tests_unit/dummyconfig.yaml")
         e5.cognite_client = e5.config.cognite.get_cognite_client(e5.name)
         e5._load_state_store()
 

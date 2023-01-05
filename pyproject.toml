@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "cognite-extractor-utils"
-version = "2.2.0"
+version = "3.2.0"
 description = "Utilities for easier development of extractors for CDF"
 authors = ["Mathias Lohne <mathias.lohne@cognite.com>"]
 license = "Apache-2.0"
@@ -13,7 +13,7 @@ packages = [
 
 [tool.black]
 line-length = 120
-target_version = ['py37']
+target_version = ['py38']
 include = '\.py$'
 
 [tool.isort]
@@ -21,12 +21,12 @@ line_length=120                # corresponds to -w  flag
 multi_line_output=3            # corresponds to -m  flag
 include_trailing_comma=true    # corresponds to -tc flag
 skip_glob = '^((?!py$).)*$'    # this makes sort all Python files
-known_third_party = ["arrow", "dacite", "decorator", "dotenv", "more_itertools", "prometheus_client", "psutil", "pytest", "requests", "yaml"]
+known_third_party = ["arrow", "dacite", "decorator", "dotenv", "more_itertools", "parameterized", "prometheus_client", "psutil", "pytest", "requests", "yaml"]
 
 [tool.poetry.dependencies]
-python = "^3.7.0"
-cognite-sdk-core = "^2.32.0"
-prometheus-client = ">0.7.0<=1.0.0"
+python = "^3.8.0"
+cognite-sdk = "^4.9"
+prometheus-client = ">0.7.0, <=1.0.0"
 arrow = "^1.0.0"
 pyyaml = ">=5.3.0, <7"
 dacite = "^1.6.0"
@@ -35,12 +35,17 @@ decorator = "^5.1.1"
 more-itertools = "^8.12.0"
 typing-extensions = ">=3.7.4, <5"
 python-dotenv = "^0.19.2"
+cognite-sdk-experimental = {version = "^0.101.0", optional = true}
+jq = [{version = "^1.3.0", platform = "macos"}, {version = "^1.3.0", platform = "linux"}]
+
+[tool.poetry.extras]
+experimental = ["cognite-sdk-experimental"]
 
 [tool.tox]
 legacy_tox_ini = """
 [tox]
 isolated_build = true
-envlist = py36,py37,py38
+envlist = py38
 [testenv]
 setenv =
     COGNITE_API_KEY={env:COGNITE_API_KEY}
@@ -55,8 +60,8 @@ commands =
 """
 
 [tool.poetry.dev-dependencies]
-black = "^19.10b0"
-isort = "^4.3.21"
+black = "*"
+isort = "*"
 mypy = "*"
 pytest = "^6.2.5"
 pytest-cov = "^2.8.1"
@@ -66,6 +71,7 @@ pre-commit = "^2.2.0"
 SecretStorage = "^3.1.2"
 twine = "^3.7.1"
 pytest-order = "^1.0.1"
+parameterized = "*"
 
 [build-system]
 requires = ["poetry>=0.12"]
