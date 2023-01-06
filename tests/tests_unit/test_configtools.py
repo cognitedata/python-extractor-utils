@@ -351,6 +351,8 @@ class TestConfigtoolsMethods(unittest.TestCase):
             logger=LoggingConfig(console=None, file=None, metrics=None),
         )
         yaml.emitter.Emitter.process_tag = lambda self, *args, **kwargs: None
+        yaml.add_representer(TimeIntervalConfig, lambda dump, data: dump.represent_scalar("!timeinterval", str(data)))
+
         with open("test_dump_config.yml", "w") as config_file:
             yaml.dump(dataclasses.asdict(config), config_file)
         with open("test_dump_config.yml", "r") as config_file:

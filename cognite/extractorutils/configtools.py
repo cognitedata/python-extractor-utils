@@ -187,7 +187,7 @@ class EitherIdConfig:
         return EitherId(id=self.id, external_id=self.external_id)
 
 
-class TimeIntervalConfig:
+class TimeIntervalConfig(yaml.YAMLObject):
     def __init__(self, expression):
         self._interval, self._expression = TimeIntervalConfig._parse_expression(expression)
 
