@@ -15,6 +15,25 @@ Changes are grouped as follows
 
 ## Next
 
+### Added
+
+ * Allow indexing state stores. You can now use the indexing notation to access
+   values in a state store like you would do e.g. in a dictionary. Examples:
+
+   ``` python
+   states = LocalStateStore(...)
+
+   # You can now set states like so:
+   states["id"] = (None, 5)
+
+   # Getting current states:
+   low, high = states["another_id"]
+
+   # You can also check if an entry has a stored state with the 'in' operator:
+   if "new_id" not in states:
+       # do something you only do the first time you process an item
+   ```
+
 ### Changed
 
  * Allow any interval to be configured as a string in addition to integers, so
