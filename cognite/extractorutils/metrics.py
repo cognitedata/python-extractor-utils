@@ -166,18 +166,21 @@ class AbstractMetricsPusher(ABC):
     Args:
         push_interval: Seconds between each upload call
         thread_name: Name of thread to start. If omitted, a standard name such as Thread-4 will be generated.
-        cancelation_token: Event object to be used as a thread cancelation event
+        cancellation_token: Event object to be used as a thread cancelation event
     """
 
     def __init__(
-        self, push_interval: Optional[int] = None, thread_name: Optional[str] = None, cancelation_token: Event = Event()
+        self,
+        push_interval: Optional[int] = None,
+        thread_name: Optional[str] = None,
+        cancellation_token: Event = Event(),
     ):
         self.push_interval = push_interval
         self.thread_name = thread_name
 
         self.thread: Optional[threading.Thread] = None
         self.thread_name = thread_name
-        self.cancelation_token = cancelation_token
+        self.cancellation_token = cancellation_token
 
         self.logger = logging.getLogger(__name__)
 
@@ -192,16 +195,16 @@ class AbstractMetricsPusher(ABC):
         """
         Run push loop.
         """
-        while not self.cancelation_token.is_set():
+        while not self.cancellation_token.is_set():
             self._push_to_server()
-            self.cancelation_token.wait(self.push_interval)
+            self.cancellation_token.wait(self.push_interval)
 
     def start(self) -> None:
         """
         Starts a thread that pushes the default registry to the configured gateway at certain intervals.
 
         """
-        self.cancelation_token.clear()
+        self.cancellation_token.clear()
         self.thread = threading.Thread(target=self._run, daemon=True, name=self.thread_name)
         self.thread.start()
 
@@ -211,7 +214,7 @@ class AbstractMetricsPusher(ABC):
         """
         # Make sure everything is pushed
         self._push_to_server()
-        self.cancelation_token.set()
+        self.cancellation_token.set()
 
     def __enter__(self) -> "AbstractMetricsPusher":
         """
@@ -246,7 +249,7 @@ class PrometheusPusher(AbstractMetricsPusher):
         url: URL (with portnum) of push gateway
         push_interval: Seconds between each upload call
         thread_name: Name of thread to start. If omitted, a standard name such as Thread-4 will be generated.
-        cancelation_token: Event object to be used as a thread cancelation event
+        cancellation_token: Event object to be used as a thread cancelation event
     """
 
     def __init__(
@@ -257,9 +260,9 @@ class PrometheusPusher(AbstractMetricsPusher):
         username: Optional[str] = None,
         password: Optional[str] = None,
         thread_name: Optional[str] = None,
-        cancelation_token: Event = Event(),
+        cancellation_token: Event = Event(),
     ):
-        super(PrometheusPusher, self).__init__(push_interval, thread_name, cancelation_token)
+        super(PrometheusPusher, self).__init__(push_interval, thread_name, cancellation_token)
 
         self.username = username
         self.job_name = job_name
@@ -321,7 +324,7 @@ class CognitePusher(AbstractMetricsPusher):
         push_interval: Seconds between each upload call
         asset: Optional contextualization.
         thread_name: Name of thread to start. If omitted, a standard name such as Thread-4 will be generated.
-        cancelation_token: Event object to be used as a thread cancelation event
+        cancellation_token: Event object to be used as a thread cancelation event
     """
 
     def __init__(
@@ -331,9 +334,9 @@ class CognitePusher(AbstractMetricsPusher):
         push_interval: int,
         asset: Optional[Asset] = None,
         thread_name: Optional[str] = None,
-        cancelation_token: Event = Event(),
+        cancellation_token: Event = Event(),
     ):
-        super(CognitePusher, self).__init__(push_interval, thread_name, cancelation_token)
+        super(CognitePusher, self).__init__(push_interval, thread_name, cancellation_token)
 
         self.cdf_client = cdf_client
         self.asset = asset

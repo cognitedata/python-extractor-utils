@@ -22,7 +22,7 @@ from time import time
 from typing import Generator
 
 
-def throttled_loop(target_time: int, cancelation_token: Event) -> Generator[None, None, None]:
+def throttled_loop(target_time: int, cancellation_token: Event) -> Generator[None, None, None]:
     """
     A loop generator that automatically sleeps until each iteration has taken the desired amount of time. Useful for
     when you want to avoid overloading a source system with requests.
@@ -37,14 +37,14 @@ def throttled_loop(target_time: int, cancelation_token: Event) -> Generator[None
 
     Args:
         target_time: How long (in seconds) an iteration should take om total
-        cancelation_token: An Event object that will act as the stop event. When set, the loop will stop.
+        cancellation_token: An Event object that will act as the stop event. When set, the loop will stop.
 
     Returns:
         A generator that will only yield when the target iteration time is met
     """
     logger = logging.getLogger(__name__)
 
-    while not cancelation_token.is_set():
+    while not cancellation_token.is_set():
         start_time = time()
         yield
         iteration_time = time() - start_time
@@ -53,4 +53,4 @@ def throttled_loop(target_time: int, cancelation_token: Event) -> Generator[None
 
         else:
             logger.debug(f"Iteration took {iteration_time:.1f} s, sleeping {target_time - iteration_time:.1f} s")
-            cancelation_token.wait(target_time - iteration_time)
+            cancellation_token.wait(target_time - iteration_time)

@@ -12,8 +12,13 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
-
 ## Next
+
+### Fixed
+
+ * Fixed a typo throughout the library, `cancelation_token` is now called
+   `cancellation_token` everywhere. If you ever e.g. specify a cancellation
+   token in a keyword argument, make sure to update the spelling.
 
 ### Changed
 
@@ -46,9 +51,28 @@ Changes are grouped as follows
    )
    ```
 
+### Migration guide
+
+In order to update from version 3 to version 4, you need to:
+
+ * Change `cancelation_token` to `cancellation_token` every time you pass one as
+   a keyword argument (or read from an attribute)
+ * Access the `seconds` attribute from any time values you read from the default
+   config (such as `upload_interval`s or `timeout`s)
+ * Consider updating any time value you have in your own config parameters to be
+   of `TimeIntervalConfig` instead of `int` to allow users the option of
+   configuring time values in a human-readable format.
+
+A type checker, like mypy, will be able to detect any breaking changes this
+update introduces. We highly reccomend scanning your code with a type checker.
+
+Updating from version 3 to 4 should not introduce breaking changes to your
+extractor.
 
 ## [3.2.0]
+
 ### Added
+
  * Decorator which adds extraction pipeline functionality
 
 ## [3.1.4]

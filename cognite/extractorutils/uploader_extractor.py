@@ -63,7 +63,7 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
         metrics: Metrics collection, a default one with be created if omitted.
         use_default_state_store: Create a simple instance of the LocalStateStore to provide to the run handle. If false
             a NoStateStore will be created in its place.
-        cancelation_token: An event that will be set when the extractor should shut down, an empty one will be created
+        cancellation_token: An event that will be set when the extractor should shut down, an empty one will be created
             if omitted.
         config_file_path: If supplied, the extractor will not use command line arguments to get a config file, but
             rather use the supplied path.
@@ -83,7 +83,7 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
         config_class: Type[UploaderExtractorConfigClass],
         metrics: Optional[BaseMetrics] = None,
         use_default_state_store: bool = True,
-        cancelation_token: Event = Event(),
+        cancellation_token: Event = Event(),
         config_file_path: Optional[str] = None,
         continuous_extractor: bool = False,
         heartbeat_waiting_time: int = 600,
@@ -98,7 +98,7 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
             config_class=config_class,
             metrics=metrics,
             use_default_state_store=use_default_state_store,
-            cancelation_token=cancelation_token,
+            cancellation_token=cancellation_token,
             config_file_path=config_file_path,
             continuous_extractor=continuous_extractor,
             heartbeat_waiting_time=heartbeat_waiting_time,

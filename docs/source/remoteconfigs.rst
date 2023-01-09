@@ -45,7 +45,7 @@ with an ``reload_config_action`` enum. The enum can be one of the following valu
   this will have no effect). Be also aware that anything that is set up based
   on the config (upload queues, cognite client objects, loggers, connections to
   source, etc) will not change in this case.
-* ``SHUTDOWN`` will set the ``cancelation_token`` event, and wait for the extractor
+* ``SHUTDOWN`` will set the ``cancellation_token`` event, and wait for the extractor
   to shut down. It is then intended that the service layer running the
   extractor (ie, windows services, systemd, docker, etc) will be configured to
   always restart the service if it shuts down. This is the recomended approach
