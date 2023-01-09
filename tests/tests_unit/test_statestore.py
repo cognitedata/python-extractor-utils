@@ -313,3 +313,15 @@ class TestLocalStateStore(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             LocalStateStore(filename).initialize()
+
+    def test_indexing(self):
+        state_store = NoStateStore()
+
+        state_store["id1"] = (1, 7)
+        self.assertTrue("id1" in state_store)
+        self.assertFalse("id0" in state_store)
+        self.assertTupleEqual(state_store["id1"], (1, 7))
+
+        state_store["id2"] = (None, 6)
+        self.assertIsNone(state_store["id2"][0])
+        self.assertEqual(state_store["id2"][1], 6)
