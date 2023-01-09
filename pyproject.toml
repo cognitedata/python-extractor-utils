@@ -60,8 +60,8 @@ commands =
 """
 
 [tool.poetry.dev-dependencies]
-black = "^19.10b0"
-isort = "^4.3.21"
+black = "*"
+isort = "*"
 mypy = "*"
 pytest = "^6.2.5"
 pytest-cov = "^2.8.1"

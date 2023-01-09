@@ -24,7 +24,7 @@ from cognite.client import CogniteClient
 from more_itertools import peekable
 
 from cognite.extractorutils.base import Extractor
-from cognite.extractorutils.configtools import BaseConfig
+from cognite.extractorutils.configtools import BaseConfig, TimeIntervalConfig
 from cognite.extractorutils.metrics import BaseMetrics
 from cognite.extractorutils.statestore import AbstractStateStore
 from cognite.extractorutils.uploader import EventUploadQueue, RawUploadQueue, TimeSeriesUploadQueue
@@ -36,7 +36,7 @@ class QueueConfigClass:
     event_size: int = 10_000
     raw_size: int = 100_000
     timeseries_size: int = 1_000_000
-    upload_interval: int = 60
+    upload_interval: TimeIntervalConfig = TimeIntervalConfig("1m")
 
 
 @dataclass
@@ -145,19 +145,19 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
         self.event_queue = EventUploadQueue(
             self.cognite_client,
             max_queue_size=queue_config.event_size,
-            max_upload_interval=queue_config.upload_interval,
+            max_upload_interval=queue_config.upload_interval.seconds,
             trigger_log_level="INFO",
         ).__enter__()
         self.raw_queue = RawUploadQueue(
             self.cognite_client,
             max_queue_size=queue_config.raw_size,
-            max_upload_interval=queue_config.upload_interval,
+            max_upload_interval=queue_config.upload_interval.seconds,
             trigger_log_level="INFO",
         ).__enter__()
         self.time_series_queue = TimeSeriesUploadQueue(
             self.cognite_client,
             max_queue_size=queue_config.timeseries_size,
-            max_upload_interval=queue_config.upload_interval,
+            max_upload_interval=queue_config.upload_interval.seconds,
             trigger_log_level="INFO",
             create_missing=True,
         ).__enter__()

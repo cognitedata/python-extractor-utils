@@ -22,7 +22,14 @@ import yaml
 from cognite.client import CogniteClient
 from cognite.client.credentials import OAuthClientCredentials
 
-from cognite.extractorutils.configtools import BaseConfig, CogniteConfig, LoggingConfig, _to_snake_case, load_yaml
+from cognite.extractorutils.configtools import (
+    BaseConfig,
+    CogniteConfig,
+    LoggingConfig,
+    TimeIntervalConfig,
+    _to_snake_case,
+    load_yaml,
+)
 from cognite.extractorutils.exceptions import InvalidConfigError
 
 
@@ -255,6 +262,16 @@ class TestConfigtoolsMethods(unittest.TestCase):
         with self.assertRaises(InvalidConfigError):
             load_yaml(config, CastingClass)
 
+    def test_parse_time_interval(self):
+        self.assertEqual(TimeIntervalConfig("54").seconds, 54)
+        self.assertEqual(TimeIntervalConfig("54s").seconds, 54)
+        self.assertEqual(TimeIntervalConfig("120s").seconds, 120)
+        self.assertEqual(TimeIntervalConfig("2m").seconds, 120)
+        self.assertEqual(TimeIntervalConfig("1h").seconds, 3600)
+        self.assertAlmostEqual(TimeIntervalConfig("15m").hours, 0.25)
+        self.assertAlmostEqual(TimeIntervalConfig("15m").minutes, 15)
+        self.assertAlmostEqual(TimeIntervalConfig("1h").minutes, 60)
+
     def test_multiple_logging_console(self):
         config_file = """
         logger:
@@ -334,6 +351,8 @@ class TestConfigtoolsMethods(unittest.TestCase):
             logger=LoggingConfig(console=None, file=None, metrics=None),
         )
         yaml.emitter.Emitter.process_tag = lambda self, *args, **kwargs: None
+        yaml.add_representer(TimeIntervalConfig, lambda dump, data: dump.represent_scalar("!timeinterval", str(data)))
+
         with open("test_dump_config.yml", "w") as config_file:
             yaml.dump(dataclasses.asdict(config), config_file)
         with open("test_dump_config.yml", "r") as config_file:
