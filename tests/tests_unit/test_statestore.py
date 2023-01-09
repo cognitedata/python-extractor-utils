@@ -283,7 +283,7 @@ class TestLocalStateStore(unittest.TestCase):
 
         state_store.start()
 
-        time.sleep(1.5)
+        time.sleep(3)
 
         state_store.stop()
 

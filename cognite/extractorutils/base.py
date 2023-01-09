@@ -66,7 +66,7 @@ class Extractor(Generic[CustomConfigClass]):
         metrics: Metrics collection, a default one with be created if omitted.
         use_default_state_store: Create a simple instance of the LocalStateStore to provide to the run handle. If false
             a NoStateStore will be created in its place.
-        cancelation_token: An event that will be set when the extractor should shut down, an empty one will be created
+        cancellation_token: An event that will be set when the extractor should shut down, an empty one will be created
             if omitted.
         config_file_path: If supplied, the extractor will not use command line arguments to get a config file, but
             rather use the supplied path.
@@ -87,7 +87,7 @@ class Extractor(Generic[CustomConfigClass]):
         config_class: Type[CustomConfigClass],
         metrics: Optional[BaseMetrics] = None,
         use_default_state_store: bool = True,
-        cancelation_token: Event = Event(),
+        cancellation_token: Event = Event(),
         config_file_path: Optional[str] = None,
         continuous_extractor: bool = False,
         heartbeat_waiting_time: int = 600,
@@ -101,7 +101,7 @@ class Extractor(Generic[CustomConfigClass]):
         self.config_class = config_class
         self.use_default_state_store = use_default_state_store
         self.version = version
-        self.cancelation_token = cancelation_token
+        self.cancellation_token = cancellation_token
         self.config_file_path = config_file_path
         self.continuous_extractor = continuous_extractor
         self.heartbeat_waiting_time = heartbeat_waiting_time
@@ -142,8 +142,8 @@ class Extractor(Generic[CustomConfigClass]):
         Extractor._config_singleton = self.config
 
         def config_refresher():
-            while not self.cancelation_token.is_set():
-                self.cancelation_token.wait(self.reload_config_interval)
+            while not self.cancellation_token.is_set():
+                self.cancellation_token.wait(self.reload_config_interval)
                 if self.config_resolver.has_changed:
                     self._reload_config()
 
@@ -164,7 +164,7 @@ class Extractor(Generic[CustomConfigClass]):
 
         elif self.reload_config_action == ReloadConfigAction.SHUTDOWN:
             self.logger.info("Shutting down, expecting to be restarted")
-            self.cancelation_token.set()
+            self.cancellation_token.set()
 
         elif self.reload_config_action == ReloadConfigAction.CALLBACK:
             self.logger.info("Loading in new config file")
@@ -271,7 +271,7 @@ class Extractor(Generic[CustomConfigClass]):
         self.logger.info(f"Loaded {'remote' if self.config_resolver.is_remote else 'local'} config file")
 
         if self.handle_interrupts:
-            set_event_on_interrupt(self.cancelation_token)
+            set_event_on_interrupt(self.cancellation_token)
 
         self.cognite_client = self.config.cognite.get_cognite_client(self.name)
         self._load_state_store()
@@ -285,10 +285,10 @@ class Extractor(Generic[CustomConfigClass]):
             pass
 
         def heartbeat_loop():
-            while not self.cancelation_token.is_set():
-                self.cancelation_token.wait(self.heartbeat_waiting_time)
+            while not self.cancellation_token.is_set():
+                self.cancellation_token.wait(self.heartbeat_waiting_time)
 
-                if not self.cancelation_token.is_set():
+                if not self.cancellation_token.is_set():
                     self.logger.info("Reporting new heartbeat")
                     try:
                         self.cognite_client.extraction_pipelines.runs.create(
@@ -332,7 +332,7 @@ class Extractor(Generic[CustomConfigClass]):
         Returns:
             True if the extractor shut down cleanly, False if the extractor was shut down due to an unhandled error
         """
-        self.cancelation_token.set()
+        self.cancellation_token.set()
 
         if self.state_store:
             self.state_store.synchronize()
@@ -360,7 +360,7 @@ class Extractor(Generic[CustomConfigClass]):
         if not self.started:
             raise ValueError("You must run the extractor in a context manager")
         if self.run_handle:
-            self.run_handle(self.cognite_client, self.state_store, self.config, self.cancelation_token)
+            self.run_handle(self.cognite_client, self.state_store, self.config, self.cancellation_token)
         else:
             raise ValueError("No run_handle defined")
 
