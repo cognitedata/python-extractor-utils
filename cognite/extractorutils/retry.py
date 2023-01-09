@@ -11,7 +11,7 @@ logging_logger = logging.getLogger(__name__)
 
 def _retry_internal(
     f,
-    cancelation_token: threading.Event = threading.Event(),
+    cancellation_token: threading.Event = threading.Event(),
     exceptions: Iterable[Type[Exception]] = Exception,
     tries: int = -1,
     delay: float = 0,
@@ -21,7 +21,7 @@ def _retry_internal(
     logger: logging.Logger = logging_logger,
 ):
     _tries, _delay = tries, delay
-    while _tries and not cancelation_token.is_set():
+    while _tries and not cancellation_token.is_set():
         try:
             return f()
         except exceptions as e:
@@ -32,7 +32,7 @@ def _retry_internal(
             if logger is not None:
                 logger.warning("%s, retrying in %s seconds...", e, _delay)
 
-            cancelation_token.wait(_delay)
+            cancellation_token.wait(_delay)
             _delay *= backoff
 
             if isinstance(jitter, tuple):
@@ -45,7 +45,7 @@ def _retry_internal(
 
 
 def retry(
-    cancelation_token: threading.Event = threading.Event(),
+    cancellation_token: threading.Event = threading.Event(),
     exceptions: Iterable[Type[Exception]] = Exception,
     tries: int = -1,
     delay: float = 0,
@@ -59,7 +59,7 @@ def retry(
     This is adapted from https://github.com/invl/retry
 
     Args:
-        cancelation_token: a threading token that is waited on.
+        cancellation_token: a threading token that is waited on.
         exceptions: an exception or a tuple of exceptions to catch. default: Exception.
         tries: the maximum number of attempts. default: -1 (infinite).
         delay: initial delay between attempts. default: 0.
@@ -77,7 +77,15 @@ def retry(
         kwargs = fkwargs if fkwargs else dict()
 
         return _retry_internal(
-            partial(f, *args, **kwargs), cancelation_token, exceptions, tries, delay, max_delay, backoff, jitter, logger
+            partial(f, *args, **kwargs),
+            cancellation_token,
+            exceptions,
+            tries,
+            delay,
+            max_delay,
+            backoff,
+            jitter,
+            logger,
         )
 
     return retry_decorator

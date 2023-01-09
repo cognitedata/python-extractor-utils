@@ -116,7 +116,7 @@ class AbstractStateStore(ABC):
             methods).
         trigger_log_level: Log level to log synchronize triggers to.
         thread_name: Thread name of synchronize thread.
-        cancelation_token: Token to cancel event from elsewhere. Cancelled when stop is called.
+        cancellation_token: Token to cancel event from elsewhere. Cancelled when stop is called.
     """
 
     def __init__(
@@ -124,7 +124,7 @@ class AbstractStateStore(ABC):
         save_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
-        cancelation_token: threading.Event = threading.Event(),
+        cancellation_token: threading.Event = threading.Event(),
     ):
         self._initialized = False
         self._local_state: Dict[str, Dict[str, Any]] = {}
@@ -135,7 +135,7 @@ class AbstractStateStore(ABC):
 
         self.thread = threading.Thread(target=self._run, daemon=True, name=thread_name)
         self.lock = threading.RLock()
-        self.cancelation_token: threading.Event = cancelation_token
+        self.cancellation_token: threading.Event = cancellation_token
 
         self._deleted: List[str] = []
 
@@ -147,7 +147,7 @@ class AbstractStateStore(ABC):
         This calls the synchronize method every save_interval seconds.
         """
         if self.save_interval is not None:
-            self.cancelation_token.clear()
+            self.cancellation_token.clear()
             self.thread.start()
 
     def stop(self, ensure_synchronize: bool = True) -> None:
@@ -157,7 +157,7 @@ class AbstractStateStore(ABC):
         Args:
             ensure_synchronize (bool): (Optional). Call synchronize one last time after shutting down thread.
         """
-        self.cancelation_token.set()
+        self.cancellation_token.set()
         if ensure_synchronize:
             self.synchronize()
 
@@ -166,7 +166,7 @@ class AbstractStateStore(ABC):
         Internal run method for synchronize thread
         """
         self.initialize()
-        while not self.cancelation_token.wait(timeout=self.save_interval):
+        while not self.cancellation_token.wait(timeout=self.save_interval):
             try:
                 self.logger.log(self.trigger_log_level, "Triggering scheduled state store synchronization")
                 self.synchronize()
@@ -312,7 +312,7 @@ class RawStateStore(AbstractStateStore):
             methods).
         trigger_log_level: Log level to log synchronize triggers to.
         thread_name: Thread name of synchronize thread.
-        cancelation_token: Token to cancel event from elsewhere. Cancelled when stop is called.
+        cancellation_token: Token to cancel event from elsewhere. Cancelled when stop is called.
     """
 
     def __init__(
@@ -323,9 +323,9 @@ class RawStateStore(AbstractStateStore):
         save_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
-        cancelation_token: threading.Event = threading.Event(),
+        cancellation_token: threading.Event = threading.Event(),
     ):
-        super().__init__(save_interval, trigger_log_level, thread_name, cancelation_token)
+        super().__init__(save_interval, trigger_log_level, thread_name, cancellation_token)
 
         self._cdf_client = cdf_client
         self.database = database
@@ -434,7 +434,7 @@ class LocalStateStore(AbstractStateStore):
             methods).
         trigger_log_level: Log level to log synchronize triggers to.
         thread_name: Thread name of synchronize thread.
-        cancelation_token: Token to cancel event from elsewhere. Cancelled when stop is called.
+        cancellation_token: Token to cancel event from elsewhere. Cancelled when stop is called.
     """
 
     def __init__(
@@ -443,9 +443,9 @@ class LocalStateStore(AbstractStateStore):
         save_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
-        cancelation_token: threading.Event = threading.Event(),
+        cancellation_token: threading.Event = threading.Event(),
     ):
-        super().__init__(save_interval, trigger_log_level, thread_name, cancelation_token)
+        super().__init__(save_interval, trigger_log_level, thread_name, cancellation_token)
 
         self._file_path = file_path
 

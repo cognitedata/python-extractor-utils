@@ -445,7 +445,7 @@ class MetricsConfig:
     cognite: Optional[_CogniteMetricsConfig]
     server: Optional[_PromServerConfig]
 
-    def start_pushers(self, cdf_client: CogniteClient, cancelation_token: Event = Event()) -> None:
+    def start_pushers(self, cdf_client: CogniteClient, cancellation_token: Event = Event()) -> None:
         self._pushers: List[AbstractMetricsPusher] = []
         self._clear_on_stop: Dict[PrometheusPusher, int] = {}
 
@@ -459,7 +459,7 @@ class MetricsConfig:
                 url=push_gateway.host,
                 push_interval=push_gateway.push_interval.seconds,
                 thread_name=f"MetricsPusher_{counter}",
-                cancelation_token=cancelation_token,
+                cancellation_token=cancellation_token,
             )
 
             pusher.start()
@@ -479,7 +479,7 @@ class MetricsConfig:
                 push_interval=self.cognite.push_interval.seconds,
                 asset=asset,
                 thread_name="CogniteMetricsPusher",  # There is only one Cognite project as a target
-                cancelation_token=cancelation_token,
+                cancellation_token=cancellation_token,
             )
 
             pusher.start()
