@@ -299,6 +299,15 @@ class AbstractStateStore(ABC):
 
         return False
 
+    def __getitem__(self, external_id: str) -> Tuple[Any, Any]:
+        return self.get_state(external_id)
+
+    def __setitem__(self, key: str, value: Tuple[Any, Any]) -> None:
+        self.set_state(external_id=key, low=value[0], high=value[1])
+
+    def __contains__(self, external_id: str) -> bool:
+        return external_id in self._local_state
+
 
 class RawStateStore(AbstractStateStore):
     """
