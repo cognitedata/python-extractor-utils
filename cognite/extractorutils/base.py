@@ -294,8 +294,8 @@ class Extractor(Generic[CustomConfigClass]):
                         self.cognite_client.extraction_pipelines.runs.create(
                             ExtractionPipelineRun(external_id=self.extraction_pipeline.external_id, status="seen")
                         )
-                    except e:
-                        self.logger.error("Failed to report heartbeat: %s", str(e))
+                    except Exception:
+                        self.logger.exception("Failed to report heartbeat")
 
         if self.extraction_pipeline:
             self.logger.info("Starting heartbeat loop")
