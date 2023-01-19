@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## [4.1.0]
+
+### Changed
+
+ * Update cognite-sdk version to 5.1.1
+
 ## [4.0.1]
 
 ### Fixed
