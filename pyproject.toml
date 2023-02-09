@@ -69,7 +69,7 @@ sphinx = "^6.0.0"
 sphinx-rtd-theme = "^1.0.0"
 pre-commit = "^2.2.0"
 SecretStorage = "^3.1.2"
-twine = "^3.7.1"
+twine = "^4.0.0"
 pytest-order = "^1.0.1"
 parameterized = "*"
 
