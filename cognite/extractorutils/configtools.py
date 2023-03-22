@@ -96,6 +96,7 @@ from datetime import timedelta
 from enum import Enum
 from hashlib import sha256
 from logging.handlers import TimedRotatingFileHandler
+from pathlib import Path
 from threading import Event
 from time import sleep
 from typing import Any, Callable, Dict, Generic, Iterable, List, Optional, T, TextIO, Tuple, Type, TypeVar, Union
@@ -104,7 +105,7 @@ from urllib.parse import urljoin
 import dacite
 import yaml
 from cognite.client import ClientConfig, CogniteClient
-from cognite.client.credentials import APIKey, OAuthClientCredentials
+from cognite.client.credentials import APIKey, OAuthClientCertificate, OAuthClientCredentials
 from cognite.client.data_classes import Asset, DataSet, ExtractionPipeline
 from prometheus_client import start_http_server
 from prometheus_client.core import REGISTRY
@@ -270,20 +271,37 @@ class CogniteConfig:
         if self.api_key:
             credential_provider = APIKey(self.api_key)
         elif self.idp_authentication:
-            kwargs = {}
-            if self.idp_authentication.token_url:
-                kwargs["token_url"] = self.idp_authentication.token_url
-            elif self.idp_authentication.tenant:
-                base_url = urljoin(self.idp_authentication.authority, self.idp_authentication.tenant)
-                kwargs["token_url"] = f"{base_url}/oauth2/v2.0/token"
-            kwargs["client_id"] = self.idp_authentication.client_id
-            kwargs["client_secret"] = self.idp_authentication.secret
-            kwargs["scopes"] = self.idp_authentication.scopes
-            if token_custom_args is None:
-                token_custom_args = {}
-            if self.idp_authentication.resource:
-                token_custom_args["resource"] = self.idp_authentication.resource
-            credential_provider = OAuthClientCredentials(**kwargs, **token_custom_args)
+            if self.idp_authentication.certificate:
+                if self.idp_authentication.certificate.authority_url:
+                    authority_url = self.idp_authentication.certificate.authority_url
+                elif self.idp_authentication.tenant:
+                    authority_url = urljoin(self.idp_authentication.authority, self.idp_authentication.tenant)
+                else:
+                    raise InvalidConfigError(
+                        "Either authority-url or tenant is required for certificate authentication"
+                    )
+                credential_provider = OAuthClientCertificate(
+                    authority_url=authority_url,
+                    client_id=self.idp_authentication.client_id,
+                    cert_thumbprint=self.idp_authentication.certificate.thumbprint,
+                    certificate=Path(self.idp_authentication.certificate.path).read_text(),
+                    scopes=self.idp_authentication.scopes,
+                )
+            else:
+                kwargs = {}
+                if self.idp_authentication.token_url:
+                    kwargs["token_url"] = self.idp_authentication.token_url
+                elif self.idp_authentication.tenant:
+                    base_url = urljoin(self.idp_authentication.authority, self.idp_authentication.tenant)
+                    kwargs["token_url"] = f"{base_url}/oauth2/v2.0/token"
+                kwargs["client_id"] = self.idp_authentication.client_id
+                kwargs["client_secret"] = self.idp_authentication.secret
+                kwargs["scopes"] = self.idp_authentication.scopes
+                if token_custom_args is None:
+                    token_custom_args = {}
+                if self.idp_authentication.resource:
+                    token_custom_args["resource"] = self.idp_authentication.resource
+                credential_provider = OAuthClientCredentials(**kwargs, **token_custom_args)
         else:
             raise InvalidConfigError("No CDF credentials")
 

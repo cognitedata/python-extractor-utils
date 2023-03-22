@@ -53,11 +53,35 @@
                     "type": "integer",
                     "default": 30,
                     "description": "Requested minimum time-to-live in seconds for the token"
+                },
+                "certificate": {
+                    "type": "object",
+                    "description": "Authenticate with a client certificate",
+                    "unevaluatedProperties": false,
+                    "required": ["path", "thumbprint"],
+                    "properties": {
+                        "authority-url": {
+                            "type": "string",
+                            "description": "Authentication authority URL"
+                        },
+                        "path": {
+                            "type": "string",
+                            "description": "Path to the private key to be used for authentication"
+                        },
+                        "thumbprint": {
+                            "type": "string",
+                            "description": "Certificate thumbprint"
+                        }
+                    }
                 }
             },
-            "oneOf": [{ "required": ["tenant"] }, { "required": ["token-url"] }],
+            "oneOf": [
+                { "required": ["tenant", "secret"] },
+                { "required": ["token-url", "secret"] },
+                { "required": ["certificate"] }
+            ],
             "unevaluatedProperties": false,
-            "required": ["client-id", "secret"]
+            "required": ["client-id"]
         },
         "data-set": {
             "description": "Data set the extractor writes to",

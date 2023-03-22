@@ -33,6 +33,13 @@ _logger = logging.getLogger(__name__)
 
 
 @dataclass
+class CertificateConfig:
+    path: str
+    thumbprint: str
+    authority_url: Optional[str]
+
+
+@dataclass
 class AuthenticatorConfig:
     """
     Configuration parameters for an OIDC flow
@@ -46,6 +53,7 @@ class AuthenticatorConfig:
     resource: Optional[str] = None
     authority: str = "https://login.microsoftonline.com/"
     min_ttl: float = 30  # minimum time to live: refresh token ahead of expiration
+    certificate: Optional[CertificateConfig] = None
 
 
 class Authenticator:
