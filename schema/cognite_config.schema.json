@@ -58,7 +58,7 @@
                     "type": "object",
                     "description": "Authenticate with a client certificate",
                     "unevaluatedProperties": false,
-                    "required": ["path", "thumbprint"],
+                    "required": ["path"],
                     "properties": {
                         "authority-url": {
                             "type": "string",
@@ -66,11 +66,11 @@
                         },
                         "path": {
                             "type": "string",
-                            "description": "Path to the private key to be used for authentication"
+                            "description": "Path to the .pem or .pfx certificate to be used for authentication"
                         },
-                        "thumbprint": {
+                        "password": {
                             "type": "string",
-                            "description": "Certificate thumbprint"
+                            "description": "Certificate password"
                         }
                     }
                 }

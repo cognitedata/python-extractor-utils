@@ -85,6 +85,7 @@ Get a state store object as configured:
 However, all of these things will be automatically done for you if you are using the base Extractor class.
 """
 import argparse
+import base64
 import json
 import logging
 import os
@@ -102,11 +103,15 @@ from time import sleep
 from typing import Any, Callable, Dict, Generic, Iterable, List, Optional, T, TextIO, Tuple, Type, TypeVar, Union
 from urllib.parse import urljoin
 
+import cryptography.hazmat.primitives.serialization as serialization
+import cryptography.hazmat.primitives.serialization.pkcs12 as pkcs12
 import dacite
 import yaml
 from cognite.client import ClientConfig, CogniteClient
 from cognite.client.credentials import APIKey, OAuthClientCertificate, OAuthClientCredentials
 from cognite.client.data_classes import Asset, DataSet, ExtractionPipeline
+from cryptography.hazmat.primitives import hashes
+from cryptography.x509 import load_der_x509_certificate, load_pem_x509_certificate
 from prometheus_client import start_http_server
 from prometheus_client.core import REGISTRY
 from yaml.scanner import ScannerError
@@ -244,6 +249,33 @@ class TimeIntervalConfig(yaml.YAMLObject):
         return self._expression
 
 
+def _load_certificate_data(cert_path: str, password: Optional[str]) -> Tuple[str, str]:
+    path = Path(cert_path)
+    cert_data = Path(path).read_bytes()
+
+    if path.suffix == ".pem":
+        cert = load_pem_x509_certificate(cert_data)
+        private_key = serialization.load_pem_private_key(cert_data, password=password.encode() if password else None)
+        private_key_str = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+        return (base64.b16encode(cert.fingerprint(hashes.SHA1())), private_key_str)
+    elif path.suffix == ".pfx":
+        (private_key, cert, _) = pkcs12.load_key_and_certificates(
+            cert_data, password=password.encode() if password else None
+        )
+        private_key_str = private_key.private_bytes(
+            encoding=serialization.Encoding.PEM,
+            format=serialization.PrivateFormat.TraditionalOpenSSL,
+            encryption_algorithm=serialization.NoEncryption(),
+        )
+        return (base64.b16encode(cert.fingerprint(hashes.SHA1())), private_key_str)
+    else:
+        raise InvalidConfigError("Unknown certificate format")
+
+
 @dataclass
 class CogniteConfig:
     """
@@ -280,11 +312,14 @@ class CogniteConfig:
                     raise InvalidConfigError(
                         "Either authority-url or tenant is required for certificate authentication"
                     )
+                (thumprint, key) = _load_certificate_data(
+                    self.idp_authentication.certificate.path, self.idp_authentication.certificate.password
+                )
                 credential_provider = OAuthClientCertificate(
                     authority_url=authority_url,
                     client_id=self.idp_authentication.client_id,
-                    cert_thumbprint=self.idp_authentication.certificate.thumbprint,
-                    certificate=Path(self.idp_authentication.certificate.path).read_text(),
+                    cert_thumbprint=thumprint,
+                    certificate=key,
                     scopes=self.idp_authentication.scopes,
                 )
             elif self.idp_authentication.secret:

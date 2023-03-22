@@ -35,7 +35,7 @@ _logger = logging.getLogger(__name__)
 @dataclass
 class CertificateConfig:
     path: str
-    thumbprint: str
+    password: Optional[str]
     authority_url: Optional[str] = None
 
 
