@@ -287,7 +287,7 @@ class CogniteConfig:
                     certificate=Path(self.idp_authentication.certificate.path).read_text(),
                     scopes=self.idp_authentication.scopes,
                 )
-            else:
+            elif self.idp_authentication.secret:
                 kwargs = {}
                 if self.idp_authentication.token_url:
                     kwargs["token_url"] = self.idp_authentication.token_url
@@ -302,6 +302,8 @@ class CogniteConfig:
                 if self.idp_authentication.resource:
                     token_custom_args["resource"] = self.idp_authentication.resource
                 credential_provider = OAuthClientCredentials(**kwargs, **token_custom_args)
+            else:
+                raise InvalidConfigError("No client certificate or secret provided")
         else:
             raise InvalidConfigError("No CDF credentials")
 
