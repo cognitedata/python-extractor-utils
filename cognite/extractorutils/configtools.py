@@ -273,7 +273,7 @@ def _load_certificate_data(cert_path: str, password: Optional[str]) -> Tuple[str
         )
         return (base64.b16encode(cert.fingerprint(hashes.SHA1())), private_key_str)
     else:
-        raise InvalidConfigError("Unknown certificate format")
+        raise InvalidConfigError(f"Unknown certificate format '{path.suffix}'. Allowed formats are 'pem' and 'pfx'")
 
 
 @dataclass
