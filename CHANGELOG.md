@@ -12,6 +12,16 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## [4.2.0]
+
+### Added
+
+ * Add support for certificate authentication
+
+### Changed
+ 
+ * Change minimum cognite-sdk version to 5.8
+
 ## [4.1.0]
 
 ### Changed
