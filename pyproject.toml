@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "cognite-extractor-utils"
-version = "4.2.0"
+version = "4.2.1"
 description = "Utilities for easier development of extractors for CDF"
 authors = ["Mathias Lohne <mathias.lohne@cognite.com>"]
 license = "Apache-2.0"

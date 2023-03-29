@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## [4.2.1]
+
+### Fixed
+
+ * Fixed a bug in the state store when decimal valued incremental fields are used. 
+
 ## [4.2.0]
 
 ### Added
