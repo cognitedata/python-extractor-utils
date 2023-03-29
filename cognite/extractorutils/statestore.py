@@ -89,6 +89,7 @@ import json
 import logging
 import threading
 from abc import ABC, abstractmethod
+from decimal import Decimal
 from threading import Lock
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
@@ -98,7 +99,7 @@ from requests.exceptions import ConnectionError
 
 from cognite.extractorutils.uploader import DataPointList
 
-from ._inner_util import _resolve_log_level
+from ._inner_util import _DecimalDecoder, _DecimalEncoder, _resolve_log_level
 from .retry import retry
 
 RETRY_BACKOFF_FACTOR = 1.5
@@ -471,7 +472,7 @@ class LocalStateStore(AbstractStateStore):
         with self.lock:
             try:
                 with open(self._file_path, "r") as f:
-                    self._local_state = json.load(f)
+                    self._local_state = json.load(f, cls=_DecimalDecoder)
             except FileNotFoundError:
                 pass
             except json.decoder.JSONDecodeError as e:
@@ -484,7 +485,7 @@ class LocalStateStore(AbstractStateStore):
         Save states to specified JSON file
         """
         with open(self._file_path, "w") as f:
-            json.dump(self._local_state, f)
+            json.dump(self._local_state, f, cls=_DecimalEncoder)
 
         with self.lock:
             self._deleted.clear()
