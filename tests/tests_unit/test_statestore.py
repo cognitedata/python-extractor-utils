@@ -13,9 +13,11 @@
 #  limitations under the License.
 
 import datetime
+import math
 import os
 import time
 import unittest
+from decimal import Decimal
 from unittest.mock import Mock, patch
 
 from cognite.client import CogniteClient
@@ -254,6 +256,7 @@ class TestLocalStateStore(unittest.TestCase):
         state_store.set_state("ext2", high=10)
         state_store.set_state("ext3", low=8)
         state_store.set_state("ext4")
+        state_store.set_state("ext5", low=Decimal(math.sqrt(5)), high=Decimal(4))
 
         state_store.synchronize()
 
@@ -264,6 +267,7 @@ class TestLocalStateStore(unittest.TestCase):
         self.assertTupleEqual(new_state_store.get_state("ext2"), (None, 10))
         self.assertTupleEqual(new_state_store.get_state("ext3"), (8, None))
         self.assertTupleEqual(new_state_store.get_state("ext4"), (None, None))
+        self.assertTupleEqual(new_state_store.get_state("ext5"), (Decimal(math.sqrt(5)), Decimal(4)))
 
         os.remove(filename)
 
