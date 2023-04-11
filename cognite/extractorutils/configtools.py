@@ -249,6 +249,84 @@ class TimeIntervalConfig(yaml.YAMLObject):
         return self._expression
 
 
+class FileSizeConfig(yaml.YAMLObject):
+    def __init__(self, expression):
+        self._bytes, self._expression = FileSizeConfig._parse_expression(expression)
+
+    @classmethod
+    def _parse_expression(cls, expression: str) -> Tuple[int, str]:
+        # First, try to parse pure number and assume bytes
+        try:
+            return int(expression), f"{expression}s"
+        except ValueError:
+            pass
+
+        sizes = {
+            "kb": 1000,
+            "mb": 1_000_000,
+            "gb": 1_000_000_000,
+            "tb": 1_000_000_000_000,
+            "kib": 1024,
+            "mib": 1_048_576,  # 1024 ^ 2
+            "gib": 1_073_741_824,  # 1024 ^ 3
+            "tib": 1_099_511_627_776,  # 1024 ^ 4
+        }
+        expression_lower = expression.lower()
+        for size in sizes:
+            if expression_lower.endswith(size):
+                return int(float(expression_lower.replace(size, "")) * sizes[size]), expression
+        else:
+            raise InvalidConfigError(f"Invalid unit for file size: {expression}. Valid units: {sizes.keys()}")
+
+    @property
+    def bytes(self) -> int:
+        return self._bytes
+
+    @property
+    def kilobytes(self) -> float:
+        return self._bytes / 1000
+
+    @property
+    def megabytes(self) -> float:
+        return self._bytes / 1_000_000
+
+    @property
+    def gigabytes(self) -> float:
+        return self._bytes / 1_000_000_000
+
+    @property
+    def terabytes(self) -> float:
+        return self._bytes / 1_000_000_000_000
+
+    @property
+    def kibibytes(self) -> float:
+        return self._bytes / 1024
+
+    @property
+    def mebibytes(self) -> float:
+        return self._bytes / 1_048_576
+
+    @property
+    def gibibytes(self) -> float:
+        return self._bytes / 1_073_741_824
+
+    @property
+    def tebibytes(self) -> float:
+        return self._bytes / 1_099_511_627_776
+
+    def __int__(self) -> int:
+        return int(self._bytes)
+
+    def __float__(self) -> float:
+        return float(self._bytes)
+
+    def __str__(self) -> str:
+        return self._expression
+
+    def __repr__(self) -> str:
+        return self._expression
+
+
 def _load_certificate_data(cert_path: str, password: Optional[str]) -> Tuple[str, str]:
     path = Path(cert_path)
     cert_data = Path(path).read_bytes()

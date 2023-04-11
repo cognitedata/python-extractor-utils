@@ -28,7 +28,7 @@ from cognite.extractorutils.configtools import (
     LoggingConfig,
     TimeIntervalConfig,
     _to_snake_case,
-    load_yaml,
+    load_yaml, FileSizeConfig,
 )
 from cognite.extractorutils.exceptions import InvalidConfigError
 
@@ -271,6 +271,20 @@ class TestConfigtoolsMethods(unittest.TestCase):
         self.assertAlmostEqual(TimeIntervalConfig("15m").hours, 0.25)
         self.assertAlmostEqual(TimeIntervalConfig("15m").minutes, 15)
         self.assertAlmostEqual(TimeIntervalConfig("1h").minutes, 60)
+
+    def test_parse_file_size(self):
+        self.assertEqual(FileSizeConfig("154584").bytes, 154584)
+        self.assertEqual(FileSizeConfig("1kB").bytes, 1000)
+        self.assertEqual(FileSizeConfig("25MB").bytes, 25_000_000)
+        self.assertEqual(FileSizeConfig("1kib").bytes, 1024)
+        self.assertEqual(FileSizeConfig("2.7MiB").bytes, 2831155)
+        self.assertEqual(FileSizeConfig("4 KB").bytes, 4000)
+
+        self.assertAlmostEqual(FileSizeConfig("4 KB").kilobytes, 4)
+        self.assertAlmostEqual(FileSizeConfig("453 kB").megabytes, 0.453)
+        self.assertAlmostEqual(FileSizeConfig("1543 kiB").kilobytes, 1580.032)
+        self.assertAlmostEqual(FileSizeConfig("14.5 mb").kilobytes, 14_500)
+
 
     def test_multiple_logging_console(self):
         config_file = """

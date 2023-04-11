@@ -12,6 +12,14 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## [4.3.0]
+
+### Added
+
+ * `FileSizeConfig` class, similar to `TimeIntervalConfig`, that allows human
+   readable formats such as `1 kb` or `3.7 mib`, as well as bytes directly. It
+   then computes properties for bytes, kilobytes, etc.
+
 ## [4.2.1]
 
 ### Fixed
