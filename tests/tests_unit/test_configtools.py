@@ -25,10 +25,11 @@ from cognite.client.credentials import OAuthClientCredentials
 from cognite.extractorutils.configtools import (
     BaseConfig,
     CogniteConfig,
+    FileSizeConfig,
     LoggingConfig,
     TimeIntervalConfig,
     _to_snake_case,
-    load_yaml, FileSizeConfig,
+    load_yaml,
 )
 from cognite.extractorutils.exceptions import InvalidConfigError
 
@@ -284,7 +285,6 @@ class TestConfigtoolsMethods(unittest.TestCase):
         self.assertAlmostEqual(FileSizeConfig("453 kB").megabytes, 0.453)
         self.assertAlmostEqual(FileSizeConfig("1543 kiB").kilobytes, 1580.032)
         self.assertAlmostEqual(FileSizeConfig("14.5 mb").kilobytes, 14_500)
-
 
     def test_multiple_logging_console(self):
         config_file = """
