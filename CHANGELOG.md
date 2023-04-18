@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## [4.3.1]
+
+### Changed 
+
+ * Default size of RAW queues is now 50 000 for `UploaderExtractor`s as well.
+
 ## [4.3.0]
 
 ### Added
