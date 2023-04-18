@@ -12,6 +12,31 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+
+## Next
+
+### Changed
+
+ * `uploader` and `configtools` have been changed from one module to a package
+   of multiple modules. The content has been re-exported to preserve
+   compatability, so you can still do
+
+   ``` python
+   from cognite.extractorutils.configtools import load_yaml, TimeIntervalConfig
+   from cognite.extractorutils.uploader import TimeSeriesUploadQueue
+   ```
+
+   But now, you can also import from the submodules directly:
+
+   ``` python
+   from cognite.extractorutils.configtools.elements import TimeIntervalConfig
+   from cognite.extractorutils.configtools.loaders import load_yaml
+   from cognite.extractorutils.uploader.time_series import TimeSeriesUploadQueue
+   ```
+
+   This has first and foremost been done to improve the codebase and make it
+   easier to continue to develop.
+
 ## [4.3.1]
 
 ### Changed 

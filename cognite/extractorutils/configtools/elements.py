@@ -1,4 +1,4 @@
-#  Copyright 2020 Cognite AS
+#  Copyright 2023 Cognite AS
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 #  you may not use this file except in compliance with the License.
@@ -11,176 +11,32 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-
-"""
-Module containing tools for loading and verifying config files, and a YAML loader to automatically serialize these
-dataclasses from a config file.
-
-Configs are described as ``dataclass``\es, and use the ``BaseConfig`` class as a superclass to get a few things built-in:
-config version, Cognite project and logging. Use type hints to specify types, use the ``Optional`` type to specify that
-a config parameter is optional, and give the attribute a value to give it a default.
-
-For example, a config class for an extractor may look like the following:
-
-.. code-block:: python
-
-    @dataclass
-    class ExtractorConfig:
-        parallelism: int = 10
-
-        state_store: Optional[StateStoreConfig]
-        ...
-
-    @dataclass
-    class SourceConfig:
-        host: str
-        username: str
-        password: str
-        ...
-
-
-    @dataclass
-    class MyConfig(BaseConfig):
-        extractor: ExtractorConfig
-        source: SourceConfig
-
-You can then load a YAML file into this dataclass with the `load_yaml` function:
-
-.. code-block:: python
-
-    with open("config.yaml") as infile:
-        config: MyConfig = load_yaml(infile, MyConfig)
-
-The config object can additionally do several things, such as:
-
-Creating a ``CogniteClient`` based on the config:
-
-.. code-block:: python
-
-    client = config.cognite.get_cognite_client("my-client")
-
-Setup the logging according to the config:
-
-.. code-block:: python
-
-    config.logger.setup_logging()
-
-Start and stop threads to automatically push all the prometheus metrics in the default prometheus registry to the
-configured push-gateways:
-
-.. code-block:: python
-
-    config.metrics.start_pushers(client)
-
-    # Extractor code
-
-    config.metrics.stop_pushers()
-
-Get a state store object as configured:
-
-.. code-block:: python
-
-    states = config.extractor.state_store.create_state_store()
-
-However, all of these things will be automatically done for you if you are using the base Extractor class.
-"""
-import argparse
-import base64
-import json
 import logging
-import os
 import re
-import sys
 import time
 from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import Enum
-from hashlib import sha256
 from logging.handlers import TimedRotatingFileHandler
-from pathlib import Path
 from threading import Event
 from time import sleep
-from typing import Any, Callable, Dict, Generic, Iterable, List, Optional, T, TextIO, Tuple, Type, TypeVar, Union
+from typing import Dict, List, Optional, Tuple, Union
 from urllib.parse import urljoin
 
-import cryptography.hazmat.primitives.serialization as serialization
-import cryptography.hazmat.primitives.serialization.pkcs12 as pkcs12
-import dacite
 import yaml
 from cognite.client import ClientConfig, CogniteClient
 from cognite.client.credentials import APIKey, OAuthClientCertificate, OAuthClientCredentials
 from cognite.client.data_classes import Asset, DataSet, ExtractionPipeline
-from cryptography.hazmat.primitives import hashes
-from cryptography.x509 import load_der_x509_certificate, load_pem_x509_certificate
-from prometheus_client import start_http_server
-from prometheus_client.core import REGISTRY
-from yaml.scanner import ScannerError
+from prometheus_client import REGISTRY, start_http_server
 
-from .authentication import AuthenticatorConfig
-from .exceptions import InvalidConfigError
-from .logging_prometheus import export_log_stats_on_root_logger
-from .metrics import AbstractMetricsPusher, CognitePusher, PrometheusPusher
-from .statestore import AbstractStateStore, LocalStateStore, NoStateStore, RawStateStore
-from .util import EitherId
-
-_logger = logging.getLogger(__name__)
-
-
-def _to_snake_case(dictionary: Dict[str, Any], case_style: str) -> Dict[str, Any]:
-    """
-    Ensure that all keys in the dictionary follows the snake casing convention (recursively, so any sub-dictionaries are
-    changed too).
-
-    Args:
-        dictionary: Dictionary to update.
-        case_style: Existing casing convention. Either 'snake', 'hyphen' or 'camel'.
-
-    Returns:
-        An updated dictionary with keys in the given convention.
-    """
-
-    def fix_list(list_, key_translator):
-        if list_ is None:
-            return []
-
-        new_list = [None] * len(list_)
-        for i, element in enumerate(list_):
-            if isinstance(element, dict):
-                new_list[i] = fix_dict(element, key_translator)
-            elif isinstance(element, list):
-                new_list[i] = fix_list(element, key_translator)
-            else:
-                new_list[i] = element
-        return new_list
-
-    def fix_dict(dict_, key_translator):
-        if dict_ is None:
-            return {}
-
-        new_dict = {}
-        for key in dict_:
-            if isinstance(dict_[key], dict):
-                new_dict[key_translator(key)] = fix_dict(dict_[key], key_translator)
-            elif isinstance(dict_[key], list):
-                new_dict[key_translator(key)] = fix_list(dict_[key], key_translator)
-            else:
-                new_dict[key_translator(key)] = dict_[key]
-        return new_dict
-
-    def translate_hyphen(key):
-        return key.replace("-", "_")
-
-    def translate_camel(key):
-        return re.sub(r"([A-Z]+)", r"_\1", key).strip("_").lower()
-
-    if case_style == "snake" or case_style == "underscore":
-        return dictionary
-    elif case_style == "hyphen" or case_style == "kebab":
-        return fix_dict(dictionary, translate_hyphen)
-    elif case_style == "camel" or case_style == "pascal":
-        return fix_dict(dictionary, translate_camel)
-    else:
-        raise ValueError(f"Invalid case style: {case_style}")
+from cognite.extractorutils.authentication import AuthenticatorConfig
+from cognite.extractorutils.configtools._util import _load_certificate_data
+from cognite.extractorutils.configtools.configtools import _logger
+from cognite.extractorutils.exceptions import InvalidConfigError
+from cognite.extractorutils.logging_prometheus import export_log_stats_on_root_logger
+from cognite.extractorutils.metrics import AbstractMetricsPusher, CognitePusher, PrometheusPusher
+from cognite.extractorutils.statestore import AbstractStateStore, LocalStateStore, NoStateStore, RawStateStore
+from cognite.extractorutils.util import EitherId
 
 
 @dataclass
@@ -325,33 +181,6 @@ class FileSizeConfig(yaml.YAMLObject):
 
     def __repr__(self) -> str:
         return self._expression
-
-
-def _load_certificate_data(cert_path: str, password: Optional[str]) -> Tuple[str, str]:
-    path = Path(cert_path)
-    cert_data = Path(path).read_bytes()
-
-    if path.suffix == ".pem":
-        cert = load_pem_x509_certificate(cert_data)
-        private_key = serialization.load_pem_private_key(cert_data, password=password.encode() if password else None)
-        private_key_str = private_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.TraditionalOpenSSL,
-            encryption_algorithm=serialization.NoEncryption(),
-        )
-        return (base64.b16encode(cert.fingerprint(hashes.SHA1())), private_key_str)
-    elif path.suffix == ".pfx":
-        (private_key, cert, _) = pkcs12.load_key_and_certificates(
-            cert_data, password=password.encode() if password else None
-        )
-        private_key_str = private_key.private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.TraditionalOpenSSL,
-            encryption_algorithm=serialization.NoEncryption(),
-        )
-        return (base64.b16encode(cert.fingerprint(hashes.SHA1())), private_key_str)
-    else:
-        raise InvalidConfigError(f"Unknown certificate format '{path.suffix}'. Allowed formats are 'pem' and 'pfx'")
 
 
 @dataclass
@@ -716,200 +545,3 @@ class StateStoreConfig:
             return LocalStateStore(file_path="states.json")
         else:
             return NoStateStore()
-
-
-CustomConfigClass = TypeVar("CustomConfigClass", bound=BaseConfig)
-
-
-def _load_yaml(
-    source: Union[TextIO, str],
-    config_type: Type[CustomConfigClass],
-    case_style: str = "hyphen",
-    expand_envvars=True,
-    dict_manipulator: Callable[[Dict[str, Any]], Dict[str, Any]] = lambda x: x,
-) -> CustomConfigClass:
-    def env_constructor(_: yaml.SafeLoader, node):
-        bool_values = {
-            "true": True,
-            "false": False,
-        }
-        expanded_value = os.path.expandvars(node.value)
-        return bool_values.get(expanded_value.lower(), expanded_value)
-
-    class EnvLoader(yaml.SafeLoader):
-        pass
-
-    EnvLoader.add_implicit_resolver("!env", re.compile(r"\$\{([^}^{]+)\}"), None)
-    EnvLoader.add_constructor("!env", env_constructor)
-
-    loader = EnvLoader if expand_envvars else yaml.SafeLoader
-
-    # Safe to use load instead of safe_load since both loader classes are based on SafeLoader
-    try:
-        config_dict = yaml.load(source, Loader=loader)
-    except ScannerError as e:
-        location = e.problem_mark or e.context_mark
-        formatted_location = f" at line {location.line+1}, column {location.column+1}" if location is not None else ""
-        cause = e.problem or e.context
-        raise InvalidConfigError(f"Invalid YAML{formatted_location}: {cause or ''}") from e
-
-    config_dict = dict_manipulator(config_dict)
-    config_dict = _to_snake_case(config_dict, case_style)
-
-    try:
-        config = dacite.from_dict(
-            data=config_dict, data_class=config_type, config=dacite.Config(strict=True, cast=[Enum, TimeIntervalConfig])
-        )
-    except dacite.UnexpectedDataError as e:
-        unknowns = [f'"{k.replace("_", "-") if case_style == "hyphen" else k}"' for k in e.keys]
-        raise InvalidConfigError(f"Unknown config parameter{'s' if len(unknowns) > 1 else ''} {', '.join(unknowns)}")
-
-    except (dacite.WrongTypeError, dacite.MissingValueError, dacite.UnionMatchError) as e:
-        path = e.field_path.replace("_", "-") if case_style == "hyphen" else e.field_path
-
-        def name(type_: Type) -> str:
-            return type_.__name__ if hasattr(type_, "__name__") else str(type_)
-
-        def all_types(type_: Type) -> Iterable[Type]:
-            return type_.__args__ if hasattr(type_, "__args__") else [type_]
-
-        if isinstance(e, (dacite.WrongTypeError, dacite.UnionMatchError)) and e.value is not None:
-            got_type = name(type(e.value))
-            need_type = ", ".join(name(t) for t in all_types(e.field_type))
-
-            raise InvalidConfigError(
-                f'Wrong type for field "{path}" - got "{e.value}" of type {got_type} instead of {need_type}'
-            )
-        raise InvalidConfigError(f'Missing mandatory field "{path}"')
-
-    except dacite.ForwardReferenceError as e:
-        raise ValueError(f"Invalid config class: {str(e)}")
-
-    config._file_hash = sha256(json.dumps(config_dict).encode("utf-8")).hexdigest()
-
-    return config
-
-
-def load_yaml(
-    source: Union[TextIO, str], config_type: Type[CustomConfigClass], case_style: str = "hyphen", expand_envvars=True
-) -> CustomConfigClass:
-    """
-    Read a YAML file, and create a config object based on its contents.
-
-    Args:
-        source: Input stream (as returned by open(...)) or string containing YAML.
-        config_type: Class of config type (i.e. your custom subclass of BaseConfig).
-        case_style: Casing convention of config file. Valid options are 'snake', 'hyphen' or 'camel'. Should be
-            'hyphen'.
-        expand_envvars: Substitute values with the pattern ${VAR} with the content of the environment variable VAR
-
-    Returns:
-        An initialized config object.
-
-    Raises:
-        InvalidConfigError: If any config field is given as an invalid type, is missing or is unknown
-    """
-    return _load_yaml(source=source, config_type=config_type, case_style=case_style, expand_envvars=expand_envvars)
-
-
-T = TypeVar("T", bound=BaseConfig)
-
-
-class ConfigResolver(Generic[T]):
-    def __init__(self, config_path: str, config_type: Type[T]):
-        self.config_path = config_path
-        self.config_type = config_type
-
-        self._config: Optional[T] = None
-        self._next_config: Optional[T] = None
-
-    def _reload_file(self):
-        with open(self.config_path, "r") as stream:
-            self._config_text = stream.read()
-
-    @property
-    def is_remote(self) -> bool:
-        raw_config_type = yaml.safe_load(self._config_text).get("type")
-        if raw_config_type is None:
-            _logger.warning("No config type specified, default to local")
-            raw_config_type = "local"
-        config_type = ConfigType(raw_config_type)
-        return config_type == ConfigType.REMOTE
-
-    @property
-    def has_changed(self) -> bool:
-        try:
-            self._resolve_config()
-        except Exception as e:
-            _logger.exception("Failed to reload configuration file")
-            return False
-        return self._config._file_hash != self._next_config._file_hash
-
-    @property
-    def config(self) -> T:
-        if self._config is None:
-            self._resolve_config()
-            self.accept_new_config()
-        return self._config
-
-    def accept_new_config(self) -> None:
-        self._config = self._next_config
-
-    @classmethod
-    def from_cli(cls, name: str, description: str, version: str, config_type: Type[T]) -> "ConfigResolver":
-        argument_parser = argparse.ArgumentParser(sys.argv[0], description=description)
-        argument_parser.add_argument(
-            "config", nargs=1, type=str, help="The YAML file containing configuration for the extractor."
-        )
-        argument_parser.add_argument("-v", "--version", action="version", version=f"{name} v{version}")
-        args = argument_parser.parse_args()
-
-        return cls(args.config[0], config_type)
-
-    def _inject_cognite(self, local_part: _BaseConfig, remote_part: Dict[str, Any]) -> Dict[str, Any]:
-        if "cognite" not in remote_part:
-            remote_part["cognite"] = {}
-
-        if local_part.cognite.idp_authentication is not None:
-            remote_part["cognite"]["idp-authentication"] = {
-                "client_id": local_part.cognite.idp_authentication.client_id,
-                "scopes": local_part.cognite.idp_authentication.scopes,
-                "secret": local_part.cognite.idp_authentication.secret,
-                "tenant": local_part.cognite.idp_authentication.tenant,
-                "token_url": local_part.cognite.idp_authentication.token_url,
-                "resource": local_part.cognite.idp_authentication.resource,
-                "authority": local_part.cognite.idp_authentication.authority,
-            }
-        if local_part.cognite.api_key is not None:
-            remote_part["cognite"]["api-key"] = local_part.cognite.api_key
-        if local_part.cognite.host is not None:
-            remote_part["cognite"]["host"] = local_part.cognite.host
-        remote_part["cognite"]["project"] = local_part.cognite.project
-        remote_part["cognite"]["extraction-pipeline"] = {}
-        remote_part["cognite"]["extraction-pipeline"]["id"] = local_part.cognite.extraction_pipeline.id
-        remote_part["cognite"]["extraction-pipeline"][
-            "external_id"
-        ] = local_part.cognite.extraction_pipeline.external_id
-
-        return remote_part
-
-    def _resolve_config(self) -> None:
-        self._reload_file()
-
-        if self.is_remote:
-            _logger.debug("Loading remote config file")
-            tmp_config: _BaseConfig = load_yaml(self._config_text, _BaseConfig)
-            client = tmp_config.cognite.get_cognite_client("config_resolver")
-            response = client.extraction_pipelines.config.retrieve(
-                tmp_config.cognite.get_extraction_pipeline(client).external_id
-            )
-
-            self._next_config = _load_yaml(
-                source=response.config,
-                config_type=self.config_type,
-                dict_manipulator=lambda d: self._inject_cognite(tmp_config, d),
-            )
-
-        else:
-            _logger.debug("Loading local config file")
-            self._next_config = load_yaml(self._config_text, self.config_type)
