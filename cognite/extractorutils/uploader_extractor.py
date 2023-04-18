@@ -34,7 +34,7 @@ from cognite.extractorutils.uploader_types import CdfTypes, Event, InsertDatapoi
 @dataclass
 class QueueConfigClass:
     event_size: int = 10_000
-    raw_size: int = 100_000
+    raw_size: int = 50_000
     timeseries_size: int = 1_000_000
     upload_interval: TimeIntervalConfig = TimeIntervalConfig("1m")
 
