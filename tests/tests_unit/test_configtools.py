@@ -28,9 +28,9 @@ from cognite.extractorutils.configtools import (
     FileSizeConfig,
     LoggingConfig,
     TimeIntervalConfig,
-    _to_snake_case,
     load_yaml,
 )
+from cognite.extractorutils.configtools._util import _to_snake_case
 from cognite.extractorutils.exceptions import InvalidConfigError
 
 

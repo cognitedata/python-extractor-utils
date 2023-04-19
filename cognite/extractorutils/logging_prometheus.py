@@ -8,7 +8,11 @@ log_entries = Counter(
 
 
 class ExportingLogHandler(logging.Handler):
-    """A LogHandler that exports logging metrics for Prometheus.io."""
+    """
+    A LogHandler that exports logging metrics for Prometheus.io.
+
+    DEPRECATED
+    """
 
     def emit(self, record):
         log_entries.labels(record.name, record.levelname).inc()
@@ -24,6 +28,8 @@ def export_log_stats_on_root_logger(logger=logging.getLogger()):
     the root logger.
 
     param: logger the logger to attach to (root logger is default)
+
+    DEPRECATED
     """
 
     logger.addHandler(ExportingLogHandler())

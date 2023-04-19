@@ -49,10 +49,10 @@ class IntegrationTests(unittest.TestCase):
         os.environ["COGNITE_FUNCTION_RUNTIME"] = self.functions_runtime
         cognite_project = os.environ["COGNITE_PROJECT"]
         cognite_base_url = os.environ["COGNITE_BASE_URL"]
-        cognite_token_url = os.environ["COGNITE_PROJECT_TOKEN_URL"]
-        cognite_client_id = os.environ["COGNITE_PROJECT_CLIENT_ID"]
-        cognite_client_secret = os.environ["COGNITE_PROJECT_CLIENT_SECRET"]
-        cognite_project_scopes = os.environ["COGNITE_PROJECT_SCOPES"].split(",")
+        cognite_token_url = os.environ["COGNITE_TOKEN_URL"]
+        cognite_client_id = os.environ["COGNITE_CLIENT_ID"]
+        cognite_client_secret = os.environ["COGNITE_CLIENT_SECRET"]
+        cognite_project_scopes = os.environ["COGNITE_TOKEN_SCOPES"].split(",")
         client_config = ClientConfig(
             project=cognite_project,
             base_url=cognite_base_url,

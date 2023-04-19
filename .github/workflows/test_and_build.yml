@@ -34,10 +34,10 @@ jobs:
     - name: Run tests
       env:
           COGNITE_API_KEY: ${{ secrets.COGNITE_API_KEY }}
-          COGNITE_PROJECT_CLIENT_ID: ${{ secrets.COGNITE_PROJECT_CLIENT_ID }}
-          COGNITE_PROJECT_CLIENT_SECRET: ${{ secrets.COGNITE_PROJECT_CLIENT_SECRET }}
-          COGNITE_PROJECT_SCOPES: ${{ secrets.COGNITE_PROJECT_SCOPES }}
-          COGNITE_PROJECT_TOKEN_URL: ${{ secrets.COGNITE_PROJECT_TOKEN_URL }}
+          COGNITE_CLIENT_ID: ${{ secrets.COGNITE_PROJECT_CLIENT_ID }}
+          COGNITE_CLIENT_SECRET: ${{ secrets.COGNITE_PROJECT_CLIENT_SECRET }}
+          COGNITE_TOKEN_SCOPES: ${{ secrets.COGNITE_PROJECT_SCOPES }}
+          COGNITE_TOKEN_URL: ${{ secrets.COGNITE_PROJECT_TOKEN_URL }}
           COGNITE_PROJECT: extractor-tests
           COGNITE_BASE_URL: https://greenfield.cognitedata.com
       run: |

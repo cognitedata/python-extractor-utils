@@ -12,11 +12,9 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-import argparse
 import logging
 import os
 import sys
-import traceback
 from dataclasses import is_dataclass
 from enum import Enum
 from threading import Event, Thread
@@ -27,14 +25,7 @@ from cognite.client import CogniteClient
 from cognite.client.data_classes import ExtractionPipeline, ExtractionPipelineRun
 from dotenv import find_dotenv, load_dotenv
 
-from cognite.extractorutils.configtools import (
-    BaseConfig,
-    ConfigResolver,
-    CustomConfigClass,
-    StateStoreConfig,
-    _BaseConfig,
-    load_yaml,
-)
+from cognite.extractorutils.configtools import BaseConfig, ConfigResolver, StateStoreConfig
 from cognite.extractorutils.exceptions import InvalidConfigError
 from cognite.extractorutils.metrics import BaseMetrics
 from cognite.extractorutils.statestore import AbstractStateStore, LocalStateStore, NoStateStore
@@ -46,6 +37,9 @@ class ReloadConfigAction(Enum):
     REPLACE_ATTRIBUTE = 2
     SHUTDOWN = 3
     CALLBACK = 4
+
+
+CustomConfigClass = TypeVar("CustomConfigClass", bound=BaseConfig)
 
 
 class Extractor(Generic[CustomConfigClass]):
