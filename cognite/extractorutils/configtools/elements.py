@@ -25,7 +25,7 @@ from urllib.parse import urljoin
 
 import yaml
 from cognite.client import ClientConfig, CogniteClient
-from cognite.client.credentials import APIKey, OAuthClientCertificate, OAuthClientCredentials
+from cognite.client.credentials import OAuthClientCertificate, OAuthClientCredentials
 from cognite.client.data_classes import Asset, DataSet, ExtractionPipeline
 from prometheus_client import REGISTRY, start_http_server
 
@@ -187,12 +187,11 @@ class FileSizeConfig(yaml.YAMLObject):
 @dataclass
 class CogniteConfig:
     """
-    Configuration parameters for CDF connection, such as project name, host address and API key
+    Configuration parameters for CDF connection, such as project name, host address and authentication
     """
 
     project: str
-    api_key: Optional[str]
-    idp_authentication: Optional[AuthenticatorConfig]
+    idp_authentication: AuthenticatorConfig
     data_set: Optional[EitherIdConfig]
     data_set_id: Optional[int]
     data_set_external_id: Optional[str]
@@ -208,47 +207,42 @@ class CogniteConfig:
 
         global_config.disable_pypi_version_check = True
 
-        if self.api_key:
-            credential_provider = APIKey(self.api_key)
-        elif self.idp_authentication:
-            if self.idp_authentication.certificate:
-                if self.idp_authentication.certificate.authority_url:
-                    authority_url = self.idp_authentication.certificate.authority_url
-                elif self.idp_authentication.tenant:
-                    authority_url = urljoin(self.idp_authentication.authority, self.idp_authentication.tenant)
-                else:
-                    raise InvalidConfigError(
-                        "Either authority-url or tenant is required for certificate authentication"
-                    )
-                (thumprint, key) = _load_certificate_data(
-                    self.idp_authentication.certificate.path, self.idp_authentication.certificate.password
-                )
-                credential_provider = OAuthClientCertificate(
-                    authority_url=authority_url,
-                    client_id=self.idp_authentication.client_id,
-                    cert_thumbprint=thumprint,
-                    certificate=key,
-                    scopes=self.idp_authentication.scopes,
-                )
-            elif self.idp_authentication.secret:
-                kwargs = {}
-                if self.idp_authentication.token_url:
-                    kwargs["token_url"] = self.idp_authentication.token_url
-                elif self.idp_authentication.tenant:
-                    base_url = urljoin(self.idp_authentication.authority, self.idp_authentication.tenant)
-                    kwargs["token_url"] = f"{base_url}/oauth2/v2.0/token"
-                kwargs["client_id"] = self.idp_authentication.client_id
-                kwargs["client_secret"] = self.idp_authentication.secret
-                kwargs["scopes"] = self.idp_authentication.scopes
-                if token_custom_args is None:
-                    token_custom_args = {}
-                if self.idp_authentication.resource:
-                    token_custom_args["resource"] = self.idp_authentication.resource
-                credential_provider = OAuthClientCredentials(**kwargs, **token_custom_args)
+        if self.idp_authentication.certificate:
+            if self.idp_authentication.certificate.authority_url:
+                authority_url = self.idp_authentication.certificate.authority_url
+            elif self.idp_authentication.tenant:
+                authority_url = urljoin(self.idp_authentication.authority, self.idp_authentication.tenant)
             else:
-                raise InvalidConfigError("No client certificate or secret provided")
+                raise InvalidConfigError("Either authority-url or tenant is required for certificate authentication")
+            (thumprint, key) = _load_certificate_data(
+                self.idp_authentication.certificate.path, self.idp_authentication.certificate.password
+            )
+            credential_provider = OAuthClientCertificate(
+                authority_url=authority_url,
+                client_id=self.idp_authentication.client_id,
+                cert_thumbprint=thumprint,
+                certificate=key,
+                scopes=self.idp_authentication.scopes,
+            )
+
+        elif self.idp_authentication.secret:
+            kwargs = {}
+            if self.idp_authentication.token_url:
+                kwargs["token_url"] = self.idp_authentication.token_url
+            elif self.idp_authentication.tenant:
+                base_url = urljoin(self.idp_authentication.authority, self.idp_authentication.tenant)
+                kwargs["token_url"] = f"{base_url}/oauth2/v2.0/token"
+            kwargs["client_id"] = self.idp_authentication.client_id
+            kwargs["client_secret"] = self.idp_authentication.secret
+            kwargs["scopes"] = self.idp_authentication.scopes
+            if token_custom_args is None:
+                token_custom_args = {}
+            if self.idp_authentication.resource:
+                token_custom_args["resource"] = self.idp_authentication.resource
+            credential_provider = OAuthClientCredentials(**kwargs, **token_custom_args)
+
         else:
-            raise InvalidConfigError("No CDF credentials")
+            raise InvalidConfigError("No client certificate or secret provided")
 
         client_config = ClientConfig(
             project=self.project,

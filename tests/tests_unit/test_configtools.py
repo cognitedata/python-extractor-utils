@@ -22,6 +22,7 @@ import yaml
 from cognite.client import CogniteClient
 from cognite.client.credentials import OAuthClientCredentials
 
+from cognite.extractorutils.authentication import AuthenticatorConfig
 from cognite.extractorutils.configtools import (
     BaseConfig,
     CogniteConfig,
@@ -73,15 +74,19 @@ class TestConfigtoolsMethods(unittest.TestCase):
         self.assertDictEqual(snake_dict, _to_snake_case(pascal_dict, "pascal"))
 
     def test_read_cognite_config(self):
-        config_raw = """    
-        # API key to CDF
-        api-key: COGNITE_API_KEY
-    
+        config_raw = """
         # CDF project (also known as tenant name)
         project: tenant-name
     
         # How to label uploaded data in CDF
         external-id-prefix: "test_"
+        
+        idp-authentication:
+            client-id: abc123
+            secret: def567
+            token-url: https://get-a-token.com/token
+            scopes:
+              - https://api.cognitedata.com/.default
         """
 
         config = load_yaml(config_raw, CogniteConfig)
@@ -90,15 +95,12 @@ class TestConfigtoolsMethods(unittest.TestCase):
         self.assertEqual(config.host, "https://api.cognitedata.com")
         self.assertEqual(config.project, "tenant-name")
         self.assertEqual(config.external_id_prefix, "test_")
-        self.assertEqual(config.api_key, "COGNITE_API_KEY")
 
         client = config.get_cognite_client("test-client")
 
         self.assertIsInstance(client, CogniteClient)
         self.assertEqual(client.config.base_url, "https://api.cognitedata.com")
         self.assertEqual(client.config.project, "tenant-name")
-        _, api_key = client.config.credentials.authorization_header()
-        self.assertEqual(api_key, "COGNITE_API_KEY")
         self.assertEqual(client.config.client_name, "test-client")
 
     def test_read_base_config(self):
@@ -115,14 +117,18 @@ class TestConfigtoolsMethods(unittest.TestCase):
             # CDF server
             host: https://greenfield.cognitedata.com
         
-            # API key to CDF
-            api-key: COGNITE_API_KEY
-        
             # CDF project (also known as tenant name)
             project: tenant-name
         
             # How to label uploaded data in CDF
             external-id-prefix: "test_"
+            
+            idp-authentication:
+                client-id: abc123
+                secret: def567
+                token-url: https://get-a-token.com/token
+                scopes:
+                  - https://api.cognitedata.com/.default
         """
 
         config = load_yaml(config_raw, BaseConfig)
@@ -134,7 +140,6 @@ class TestConfigtoolsMethods(unittest.TestCase):
         self.assertEqual(config.cognite.host, "https://greenfield.cognitedata.com")
         self.assertEqual(config.cognite.project, "tenant-name")
         self.assertEqual(config.cognite.external_id_prefix, "test_")
-        self.assertEqual(config.cognite.api_key, "COGNITE_API_KEY")
 
         self.assertEqual(config.logger.console.level, "INFO")
         self.assertIsNone(config.logger.file)
@@ -150,15 +155,19 @@ class TestConfigtoolsMethods(unittest.TestCase):
             load_yaml(config_raw, CogniteConfig)
 
     def test_read_invalid_extra_fields(self):
-        config_raw = """    
-        # API key to CDF
-        api-key: COGNITE_API_KEY
-        
+        config_raw = """
         # CDF project (also known as tenant name)
         project: tenant-name
     
         # How to label uploaded data in CDF
         external-id-prefix: "test_"
+        
+        idp-authentication:
+            client-id: abc123
+            secret: def567
+            token-url: https://get-a-token.com/token
+            scopes:
+              - https://api.cognitedata.com/.default
         
         # Does not exist:
         no-such-field: value
@@ -169,32 +178,22 @@ class TestConfigtoolsMethods(unittest.TestCase):
 
     def test_read_invalid_wrong_type(self):
         config_raw = """    
-        # API key to CDF
-        api-key: 123
-        
         # CDF project (also known as tenant name)
-        project: tenant-name
+        project: 1234
     
         # How to label uploaded data in CDF
         external-id-prefix: "test_"
+        
+        idp-authentication:
+            client-id: abc123
+            secret: def567
+            token-url: https://get-a-token.com/token
+            scopes:
+              - https://api.cognitedata.com/.default
         """
 
         with self.assertRaises(InvalidConfigError):
             load_yaml(config_raw, CogniteConfig)
-
-    def test_get_cognite_client_from_api_key(self):
-        config_raw = """    
-        api-key: COGNITE_API_KEY
-        project: tenant-name
-        external-id-prefix: "test_"
-        """
-        config = load_yaml(config_raw, CogniteConfig)
-        cdf = config.get_cognite_client("client_name")
-        self.assertIsInstance(cdf, CogniteClient)
-        print("CONFIG", repr(cdf.config))
-        _, api_key = cdf.config.credentials.authorization_header()
-        print("API_KEY", api_key)
-        self.assertEqual(api_key, "COGNITE_API_KEY")
 
     def test_get_cognite_client_from_aad(self):
         config_raw = """    
@@ -209,7 +208,6 @@ class TestConfigtoolsMethods(unittest.TestCase):
         external-id-prefix: "test_"
         """
         config = load_yaml(config_raw, CogniteConfig)
-        self.assertIsNone(config.api_key)
         cdf = config.get_cognite_client("client_name", token_custom_args={"audience": "lol"})
         self.assertEqual(cdf.config.credentials.token_custom_args, {"audience": "lol"})
         self.assertEqual(type(cdf.config.credentials), OAuthClientCredentials)
@@ -217,16 +215,6 @@ class TestConfigtoolsMethods(unittest.TestCase):
         self.assertEqual(cdf.config.credentials.client_secret, "scrt")
         self.assertEqual(cdf.config.credentials.scopes, ["scp"])
         self.assertIsInstance(cdf, CogniteClient)
-
-    def test_get_cognite_client_no_credentials(self):
-        config_raw = """
-        project: tenant-name
-        external-id-prefix: "test_"
-        """
-        config = load_yaml(config_raw, CogniteConfig)
-        with self.assertRaises(InvalidConfigError) as cm:
-            config.get_cognite_client("client_name")
-        self.assertEqual(str(cm.exception), "Invalid config: No CDF credentials")
 
     def test_read_boolean_casting(self):
         os.environ["TRUE_FLAG"] = "true"
@@ -293,7 +281,12 @@ class TestConfigtoolsMethods(unittest.TestCase):
                 level: INFO
         cognite:
             project: test
-            api-key: test
+            idp-authentication:
+                client-id: abc123
+                secret: def567
+                token-url: https://get-a-token.com/token
+                scopes:
+                  - https://api.cognitedata.com/.default
             """
 
         config: BaseConfig = load_yaml(config_file, BaseConfig)
@@ -318,7 +311,13 @@ class TestConfigtoolsMethods(unittest.TestCase):
                 path: foo
         cognite:
             project: test
-            api-key: test
+            idp-authentication:
+                client-id: abc123
+                secret: def567
+                token-url: https://get-a-token.com/token
+                scopes:
+                  - https://api.cognitedata.com/.default
+
             """
         config_file_2 = """
         logger:
@@ -327,7 +326,12 @@ class TestConfigtoolsMethods(unittest.TestCase):
                 path: bar
         cognite:
             project: test
-            api-key: test
+            idp-authentication:
+                client-id: abc123
+                secret: def567
+                token-url: https://get-a-token.com/token
+                scopes:
+                  - https://api.cognitedata.com/.default
         """
         config_1: BaseConfig = load_yaml(config_file_1, BaseConfig)
         config_2: BaseConfig = load_yaml(config_file_2, BaseConfig)
@@ -354,8 +358,12 @@ class TestConfigtoolsMethods(unittest.TestCase):
             type=None,
             cognite=CogniteConfig(
                 project="project",
-                api_key="api-key",
-                idp_authentication=None,
+                idp_authentication=AuthenticatorConfig(
+                    client_id="abc123",
+                    secret="def456",
+                    token_url="https://token",
+                    scopes=["https://api.cognitedata.com/.default"],
+                ),
                 data_set=None,
                 data_set_external_id=None,
                 extraction_pipeline=None,

@@ -68,7 +68,12 @@ class TestConfigtools(unittest.TestCase):
         cognite:
             host: ${{COGNITE_BASE_URL}}
             project: ${{COGNITE_PROJECT}}
-            api-key: ${{COGNITE_API_KEY}}
+            idp-authentication:
+                client-id: ${{COGNITE_CLIENT_ID}}
+                secret: ${{COGNITE_CLIENT_SECRET}}
+                token-url: ${{COGNITE_TOKEN_URL}}
+                scopes:
+                  - ${{COGNITE_BASE_URL}}/.default
             data-set:
                 id: {TestConfigtools.data_set_id}
         """
@@ -88,7 +93,12 @@ class TestConfigtools(unittest.TestCase):
         cognite:
             host: ${{COGNITE_BASE_URL}}
             project: ${{COGNITE_PROJECT}}
-            api-key: ${{COGNITE_API_KEY}}
+            idp-authentication:
+                client-id: ${{COGNITE_CLIENT_ID}}
+                secret: ${{COGNITE_CLIENT_SECRET}}
+                token-url: ${{COGNITE_TOKEN_URL}}
+                scopes:
+                  - ${{COGNITE_BASE_URL}}/.default
             data-set:
                 external-id: {TestConfigtools.data_set_extid}
         """

@@ -6,7 +6,13 @@ logger:
 
 cognite:
   project: mathiaslohne-develop
-  api-key: OWJhYzUyZDEtNmQxNy00OTc2LWI1MWYtYjA4Yjk0YmI3MzFj
+
+  idp-authentication:
+    client-id: abc123
+    secret: def567
+    token-url: https://get-a-token.com/token
+    scopes:
+      - https://api.cognitedata.com/.default
 
 source:
   frequency: 0.1

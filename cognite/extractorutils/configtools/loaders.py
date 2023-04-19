@@ -184,18 +184,15 @@ class ConfigResolver(Generic[CustomConfigClass]):
         if "cognite" not in remote_part:
             remote_part["cognite"] = {}
 
-        if local_part.cognite.idp_authentication is not None:
-            remote_part["cognite"]["idp-authentication"] = {
-                "client_id": local_part.cognite.idp_authentication.client_id,
-                "scopes": local_part.cognite.idp_authentication.scopes,
-                "secret": local_part.cognite.idp_authentication.secret,
-                "tenant": local_part.cognite.idp_authentication.tenant,
-                "token_url": local_part.cognite.idp_authentication.token_url,
-                "resource": local_part.cognite.idp_authentication.resource,
-                "authority": local_part.cognite.idp_authentication.authority,
-            }
-        if local_part.cognite.api_key is not None:
-            remote_part["cognite"]["api-key"] = local_part.cognite.api_key
+        remote_part["cognite"]["idp-authentication"] = {
+            "client_id": local_part.cognite.idp_authentication.client_id,
+            "scopes": local_part.cognite.idp_authentication.scopes,
+            "secret": local_part.cognite.idp_authentication.secret,
+            "tenant": local_part.cognite.idp_authentication.tenant,
+            "token_url": local_part.cognite.idp_authentication.token_url,
+            "resource": local_part.cognite.idp_authentication.resource,
+            "authority": local_part.cognite.idp_authentication.authority,
+        }
         if local_part.cognite.host is not None:
             remote_part["cognite"]["host"] = local_part.cognite.host
         remote_part["cognite"]["project"] = local_part.cognite.project

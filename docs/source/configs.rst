@@ -40,7 +40,14 @@ This means that our users can now configure the extractor like so:
     # This comes from BaseConfig:
     cognite:
       project: publicdata
-      api-key: ${COGNITE_API_KEY}
+
+      idp-authentication:
+        token-url: ${COGNITE_TOKEN_URL}
+
+        client-id: ${COGNITE_CLIENT_ID}
+        secret: ${COGNITE_CLIENT_SECRET}
+        scopes:
+          - ${COGNITE_BASE_URL}/.default
 
     logging:
       console:

@@ -41,24 +41,6 @@ jq = [{version = "^1.3.0", platform = "macos"}, {version = "^1.3.0", platform = 
 [tool.poetry.extras]
 experimental = ["cognite-sdk-experimental"]
 
-[tool.tox]
-legacy_tox_ini = """
-[tox]
-isolated_build = true
-envlist = py38
-[testenv]
-setenv =
-    COGNITE_API_KEY={env:COGNITE_API_KEY}
-    COGNITE_BASE_URL={env:COGNITE_BASE_URL}
-    COGNITE_PROJECT={env:COGNITE_PROJECT}
-deps =
-    pytest
-    pytest-cov
-commands =
-    coverage run --source cognite.extractorutils -m pytest -v tests
-    coverage xml
-"""
-
 [tool.poetry.dev-dependencies]
 black = "*"
 isort = "*"

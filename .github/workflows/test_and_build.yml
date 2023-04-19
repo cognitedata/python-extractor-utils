@@ -33,7 +33,6 @@ jobs:
 
     - name: Run tests
       env:
-          COGNITE_API_KEY: ${{ secrets.COGNITE_API_KEY }}
           COGNITE_CLIENT_ID: ${{ secrets.COGNITE_PROJECT_CLIENT_ID }}
           COGNITE_CLIENT_SECRET: ${{ secrets.COGNITE_PROJECT_CLIENT_SECRET }}
           COGNITE_TOKEN_SCOPES: ${{ secrets.COGNITE_PROJECT_SCOPES }}
