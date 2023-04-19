@@ -31,12 +31,13 @@ from prometheus_client import REGISTRY, start_http_server
 
 from cognite.extractorutils.authentication import AuthenticatorConfig
 from cognite.extractorutils.configtools._util import _load_certificate_data
-from cognite.extractorutils.configtools.configtools import _logger
 from cognite.extractorutils.exceptions import InvalidConfigError
 from cognite.extractorutils.logging_prometheus import export_log_stats_on_root_logger
 from cognite.extractorutils.metrics import AbstractMetricsPusher, CognitePusher, PrometheusPusher
 from cognite.extractorutils.statestore import AbstractStateStore, LocalStateStore, NoStateStore, RawStateStore
 from cognite.extractorutils.util import EitherId
+
+_logger = logging.getLogger(__name__)
 
 
 @dataclass
