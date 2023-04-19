@@ -100,7 +100,7 @@ class TestUploaderExtractorClass(unittest.TestCase):
         ex.handle_output(ts)
 
         ex.time_series_queue.upload()
-        client.datapoints.insert_multiple.assert_called_with(
+        client.time_series.data.insert_multiple.assert_called_with(
             [
                 {"externalId": "some-id", "datapoints": ts.datapoints},
             ]
@@ -113,7 +113,7 @@ class TestUploaderExtractorClass(unittest.TestCase):
         ex.handle_output(tss)
 
         ex.time_series_queue.upload()
-        client.datapoints.insert_multiple.assert_called_with(
+        client.time_series.data.insert_multiple.assert_called_with(
             [
                 {"externalId": "some-id", "datapoints": tss[0].datapoints},
                 {"externalId": "some-other-id", "datapoints": tss[1].datapoints},

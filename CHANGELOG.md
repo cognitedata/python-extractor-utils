@@ -42,6 +42,12 @@ Changes are grouped as follows
    This has first and foremost been done to improve the codebase and make it
    easier to continue to develop.
 
+ * Updated the version of the Cognite SDK to version 6. Refer to the
+   [changelog](https://github.com/cognitedata/cognite-sdk-python/blob/master/CHANGELOG.md#600---19-04-23)
+   and [migration
+   guide](https://github.com/cognitedata/cognite-sdk-python/blob/master/MIGRATION_GUIDE.md#from-v5-to-v6)
+   for the SDK for details on the changes it entails for users.
+
 ## [4.3.1]
 
 ### Changed 
@@ -182,7 +188,8 @@ extractor.
 
 ### Added
 
- * Support for exposing prometheus metrics on a local port instead of pushing to pushgateway
+ * Support for exposing prometheus metrics on a local port instead of pushing to
+   pushgateway
 
 ## [3.0.2]
 
@@ -194,7 +201,8 @@ extractor.
 
 ### Fixed
  
- * Correctly do not request the experimental SDK  when using remote configuration files
+ * Correctly do not request the experimental SDK  when using remote
+   configuration files
 
 ## [3.0.0]
 
@@ -202,7 +210,8 @@ extractor.
 
  * `SequenceUploadQueue`'s `create_missing` funtionality can now be used to set
    Name and Description values on newly created sequences.
- * Remote configuration files is now fully released and supported without using the experimental SDK.
+ * Remote configuration files is now fully released and supported without using
+   the experimental SDK.
 
 ### Fixed
 
@@ -213,13 +222,15 @@ extractor.
 
 ### Added
 
- * Option to set data set id when creating missing time series in the time series upload queue.
+ * Option to set data set id when creating missing time series in the time
+   series upload queue.
 
 ## [3.0.0-beta2]
 
 ### Changed
 
- * Update cognite-sdk to version 4.0.1, which removes the support for reserved environment variables such as `COGNITE_API_KEY` and `COGNITE_CLIENT_ID`.
+ * Update cognite-sdk to version 4.0.1, which removes the support for reserved
+   environment variables such as `COGNITE_API_KEY` and `COGNITE_CLIENT_ID`.
 
 ## [3.0.0-beta]
 

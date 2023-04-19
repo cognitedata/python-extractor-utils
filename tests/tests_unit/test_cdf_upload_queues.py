@@ -87,9 +87,9 @@ class TestUploadQueue(unittest.TestCase):
         queue.add_to_upload_queue(id=1, datapoints=[(start + 5, 5), (start + 6, 6)])
         queue.add_to_upload_queue(id=3, datapoints=[(start + 7, 7), (start + 8, 8)])
 
-        client.datapoints.insert_multiple.assert_not_called()
+        client.time_series.data.insert_multiple.assert_not_called()
         queue.upload()
-        client.datapoints.insert_multiple.assert_called_with(
+        client.time_series.data.insert_multiple.assert_called_with(
             [
                 {"id": 1, "datapoints": [(start + 1, 1), (start + 2, 2), (start + 5, 5), (start + 6, 6)]},
                 {"id": 2, "datapoints": [(start + 3, 3), (start + 4, 4)]},
@@ -118,7 +118,7 @@ class TestUploadQueue(unittest.TestCase):
 
         time.sleep(2.1)
 
-        client.datapoints.insert_multiple.assert_called_with(
+        client.time_series.data.insert_multiple.assert_called_with(
             [
                 {"id": 1, "datapoints": [(start + 1, 1), (start + 2, 2), (start + 5, 5), (start + 6, 6)]},
                 {"id": 2, "datapoints": [(start + 3, 3), (start + 4, 4)]},
@@ -156,7 +156,7 @@ class TestUploadQueue(unittest.TestCase):
 
         time.sleep(2.1)
 
-        client.datapoints.insert_multiple.assert_called_with(
+        client.time_series.data.insert_multiple.assert_called_with(
             [
                 {"id": 1, "datapoints": [(start + 1, 1), (start + 2, 2), (start + 5, 5), (start + 6, 6)]},
                 {"id": 2, "datapoints": [(start + 3, 3), (start + 4, 4)]},

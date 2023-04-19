@@ -396,5 +396,5 @@ class CognitePusher(AbstractMetricsPusher):
                 external_id = self.external_id_prefix + metric.name
                 datapoints.append({"externalId": external_id, "datapoints": [(timestamp, metric.samples[0].value)]})
 
-        self.cdf_client.datapoints.insert_multiple(datapoints)
+        self.cdf_client.time_series.data.insert_multiple(datapoints)
         self.logger.debug("Pushed metrics to CDF tenant '%s'", self._cdf_project)
