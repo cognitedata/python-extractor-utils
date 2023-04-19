@@ -25,7 +25,7 @@ known_third_party = ["arrow", "cryptography", "dacite", "decorator", "dotenv", "
 
 [tool.poetry.dependencies]
 python = "^3.8.0"
-cognite-sdk = ">=5.8, <6"
+cognite-sdk = ">=6, <7"
 prometheus-client = ">0.7.0, <=1.0.0"
 arrow = "^1.0.0"
 pyyaml = ">=5.3.0, <7"
