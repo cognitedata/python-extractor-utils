@@ -8,10 +8,6 @@
             "type": "string",
             "description": "CDF project to connect to"
         },
-        "api-key": {
-            "type": "string",
-            "description": "CDF API Key, deprecated in favor of token-based authentication"
-        },
         "idp-authentication": {
             "type": "object",
             "description": "Configure authentication using OIDC tokens",

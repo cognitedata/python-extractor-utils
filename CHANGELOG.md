@@ -15,6 +15,11 @@ Changes are grouped as follows
 
 ## Next
 
+### Removed
+
+ * Legacy authentication through API keys has been removed throughtout the code
+   base.
+
 ### Changed
 
  * `uploader` and `configtools` have been changed from one module to a package
