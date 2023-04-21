@@ -15,14 +15,13 @@ import datetime
 import unittest
 from unittest.mock import patch
 
-import pytest
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Row
 
 from cognite.extractorutils.middleware import JQMiddleware
 from cognite.extractorutils.uploader import EventUploadQueue, RawUploadQueue, TimeSeriesUploadQueue
 from cognite.extractorutils.uploader_extractor import UploaderExtractor, UploaderExtractorConfig
-from cognite.extractorutils.uploader_types import CdfTypes, Event, InsertDatapoints, RawRow
+from cognite.extractorutils.uploader_types import Event, InsertDatapoints, RawRow
 
 
 class TestUploaderExtractorClass(unittest.TestCase):

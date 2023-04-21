@@ -12,7 +12,6 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 import os
-import random
 import unittest
 from io import StringIO
 
@@ -22,7 +21,7 @@ from cognite.client.credentials import OAuthClientCredentials
 from cognite.client.data_classes import DataSet
 from cognite.client.exceptions import CogniteDuplicatedError
 
-from cognite.extractorutils.configtools import BaseConfig, CogniteConfig, load_yaml
+from cognite.extractorutils.configtools import BaseConfig, load_yaml
 
 
 class TestConfigtools(unittest.TestCase):

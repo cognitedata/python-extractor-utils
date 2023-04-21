@@ -19,7 +19,7 @@ import pytest
 
 from cognite.extractorutils import Extractor
 from cognite.extractorutils.configtools import BaseConfig, StateStoreConfig
-from cognite.extractorutils.statestore import AbstractStateStore, LocalStateStore, NoStateStore
+from cognite.extractorutils.statestore import LocalStateStore, NoStateStore
 
 
 @dataclass

@@ -14,7 +14,6 @@
 
 import time
 import unittest
-from unittest.mock import Mock
 
 from cognite.client.testing import monkeypatch_cognite_client
 
