@@ -100,7 +100,7 @@ from requests.exceptions import ConnectionError
 from cognite.extractorutils.uploader import DataPointList
 
 from ._inner_util import _DecimalDecoder, _DecimalEncoder, _resolve_log_level
-from .retry import retry
+from .util import retry
 
 RETRY_BACKOFF_FACTOR = 1.5
 RETRY_MAX_DELAY = 15

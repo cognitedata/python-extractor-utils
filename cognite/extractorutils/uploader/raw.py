@@ -22,7 +22,6 @@ from cognite.client.data_classes import Row
 from cognite.client.exceptions import CogniteAPIError, CogniteReadTimeout
 from requests import ConnectionError
 
-from cognite.extractorutils.retry import retry
 from cognite.extractorutils.uploader._base import (
     RETRIES,
     RETRY_BACKOFF_FACTOR,
@@ -38,6 +37,7 @@ from cognite.extractorutils.uploader._metrics import (
     RAW_UPLOADER_ROWS_QUEUED,
     RAW_UPLOADER_ROWS_WRITTEN,
 )
+from cognite.extractorutils.util import retry
 
 
 class RawUploadQueue(AbstractUploadQueue):

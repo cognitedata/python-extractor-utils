@@ -21,7 +21,6 @@ from cognite.client.data_classes import Event
 from cognite.client.exceptions import CogniteAPIError
 from requests import ConnectionError
 
-from cognite.extractorutils.retry import retry
 from cognite.extractorutils.uploader._base import (
     RETRIES,
     RETRY_BACKOFF_FACTOR,
@@ -35,6 +34,7 @@ from cognite.extractorutils.uploader._metrics import (
     EVENTS_UPLOADER_QUEUED,
     EVENTS_UPLOADER_WRITTEN,
 )
+from cognite.extractorutils.util import retry
 
 
 class EventUploadQueue(AbstractUploadQueue):

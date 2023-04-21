@@ -23,7 +23,6 @@ from cognite.client.data_classes import Sequence, SequenceData, TimeSeries
 from cognite.client.exceptions import CogniteAPIError, CogniteDuplicatedError, CogniteNotFoundError
 from requests import ConnectionError
 
-from cognite.extractorutils.retry import retry
 from cognite.extractorutils.uploader._base import (
     RETRIES,
     RETRY_BACKOFF_FACTOR,
@@ -42,7 +41,7 @@ from cognite.extractorutils.uploader._metrics import (
     TIMESERIES_UPLOADER_POINTS_WRITTEN,
     TIMESERIES_UPLOADER_QUEUE_SIZE,
 )
-from cognite.extractorutils.util import EitherId
+from cognite.extractorutils.util import EitherId, retry
 
 MIN_DATAPOINT_TIMESTAMP = 31536000000
 MAX_DATAPOINT_STRING_LENGTH = 255

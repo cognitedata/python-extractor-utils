@@ -17,15 +17,18 @@ The ``util`` package contains miscellaneous functions and classes that can some 
 extractors.
 """
 import logging
+import random
 import signal
-from functools import wraps
+import threading
+from functools import partial, wraps
 from threading import Event, Thread
 from time import time
-from typing import Any, Dict, Generator, Iterable, Union
+from typing import Any, Dict, Generator, Iterable, Optional, Tuple, Type, Union
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset, ExtractionPipelineRun, TimeSeries
 from cognite.client.exceptions import CogniteNotFoundError
+from decorator import decorator
 
 
 def _ensure(endpoint: Any, items: Iterable[Any]) -> None:
@@ -307,3 +310,84 @@ def throttled_loop(target_time: int, cancellation_token: Event) -> Generator[Non
         else:
             logger.debug(f"Iteration took {iteration_time:.1f} s, sleeping {target_time - iteration_time:.1f} s")
             cancellation_token.wait(target_time - iteration_time)
+
+
+def _retry_internal(
+    f,
+    cancellation_token: threading.Event = threading.Event(),
+    exceptions: Iterable[Type[Exception]] = Exception,
+    tries: int = -1,
+    delay: float = 0,
+    max_delay: Optional[float] = None,
+    backoff: float = 1,
+    jitter: Union[float, Tuple[float, float]] = 0,
+):
+    logger = logging.getLogger(__name__)
+
+    while tries and not cancellation_token.is_set():
+        try:
+            return f()
+        except exceptions as e:
+            tries -= 1
+            if not tries:
+                raise
+
+            if logger is not None:
+                logger.warning("%s, retrying in %s seconds...", e, delay)
+
+            cancellation_token.wait(delay)
+            delay *= backoff
+
+            if isinstance(jitter, tuple):
+                delay += random.uniform(*jitter)
+            else:
+                delay += jitter
+
+            if max_delay is not None:
+                delay = min(delay, max_delay)
+
+
+def retry(
+    cancellation_token: threading.Event = threading.Event(),
+    exceptions: Iterable[Type[Exception]] = Exception,
+    tries: int = -1,
+    delay: float = 0,
+    max_delay: Optional[float] = None,
+    backoff: float = 1,
+    jitter: Union[float, Tuple[float, float]] = 0,
+):
+    """
+    Returns a retry decorator.
+
+    This is adapted from https://github.com/invl/retry
+
+    Args:
+        cancellation_token: a threading token that is waited on.
+        exceptions: an exception or a tuple of exceptions to catch. default: Exception.
+        tries: the maximum number of attempts. default: -1 (infinite).
+        delay: initial delay between attempts. default: 0.
+        max_delay: the maximum value of delay. default: None (no limit).
+        backoff: multiplier applied to delay between attempts. default: 1 (no backoff).
+        jitter: extra seconds added to delay between attempts. default: 0.
+                   fixed if a number, random if a range tuple (min, max)
+        logger: logger.warning(fmt, error, delay) will be called on failed attempts.
+                   default: retry.logging_logger. if None, logging is disabled.
+    """
+
+    @decorator
+    def retry_decorator(f, *fargs, **fkwargs):
+        args = fargs if fargs else list()
+        kwargs = fkwargs if fkwargs else dict()
+
+        return _retry_internal(
+            partial(f, *args, **kwargs),
+            cancellation_token,
+            exceptions,
+            tries,
+            delay,
+            max_delay,
+            backoff,
+            jitter,
+        )
+
+    return retry_decorator
