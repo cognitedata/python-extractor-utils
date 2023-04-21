@@ -18,7 +18,7 @@ from unittest.mock import Mock
 
 from cognite.client.testing import monkeypatch_cognite_client
 
-from cognite.extractorutils.extraction_pipelines import add_extraction_pipeline
+from cognite.extractorutils.util import add_extraction_pipeline
 
 
 class TestExtractionPipelines(unittest.TestCase):
