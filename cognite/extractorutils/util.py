@@ -20,7 +20,8 @@ import logging
 import signal
 from functools import wraps
 from threading import Event, Thread
-from typing import Any, Dict, Iterable, Union
+from time import time
+from typing import Any, Dict, Generator, Iterable, Union
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset, ExtractionPipelineRun, TimeSeries
@@ -272,3 +273,37 @@ def add_extraction_pipeline(
         return wrapper_ext_pip
 
     return decorator_ext_pip
+
+
+def throttled_loop(target_time: int, cancellation_token: Event) -> Generator[None, None, None]:
+    """
+    A loop generator that automatically sleeps until each iteration has taken the desired amount of time. Useful for
+    when you want to avoid overloading a source system with requests.
+
+    Example:
+        This example will throttle printing to only print every 10th second:
+
+        .. code-block:: python
+
+            for _ in throttled_loop(10, stop_event):
+                print("Hello every 10 seconds!")
+
+    Args:
+        target_time: How long (in seconds) an iteration should take om total
+        cancellation_token: An Event object that will act as the stop event. When set, the loop will stop.
+
+    Returns:
+        A generator that will only yield when the target iteration time is met
+    """
+    logger = logging.getLogger(__name__)
+
+    while not cancellation_token.is_set():
+        start_time = time()
+        yield
+        iteration_time = time() - start_time
+        if iteration_time > target_time:
+            logger.warning("Iteration time longer than target time, will not sleep")
+
+        else:
+            logger.debug(f"Iteration took {iteration_time:.1f} s, sleeping {target_time - iteration_time:.1f} s")
+            cancellation_token.wait(target_time - iteration_time)
