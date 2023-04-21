@@ -206,7 +206,9 @@ class Extractor(Generic[CustomConfigClass]):
             self.logger.info("Reporting new successful run")
             self.cognite_client.extraction_pipelines.runs.create(
                 ExtractionPipelineRun(
-                    external_id=self.extraction_pipeline.external_id, status="success", message="Successful shutdown"
+                    extpipe_external_id=self.extraction_pipeline.external_id,
+                    status="success",
+                    message="Successful shutdown",
                 )
             )
 
@@ -226,7 +228,7 @@ class Extractor(Generic[CustomConfigClass]):
             self.logger.info(f"Reporting new failed run: {message}")
             self.cognite_client.extraction_pipelines.runs.create(
                 ExtractionPipelineRun(
-                    external_id=self.extraction_pipeline.external_id, status="failure", message=message
+                    extpipe_external_id=self.extraction_pipeline.external_id, status="failure", message=message
                 )
             )
 
@@ -286,7 +288,9 @@ class Extractor(Generic[CustomConfigClass]):
                     self.logger.info("Reporting new heartbeat")
                     try:
                         self.cognite_client.extraction_pipelines.runs.create(
-                            ExtractionPipelineRun(external_id=self.extraction_pipeline.external_id, status="seen")
+                            ExtractionPipelineRun(
+                                extpipe_external_id=self.extraction_pipeline.external_id, status="seen"
+                            )
                         )
                     except Exception:
                         self.logger.exception("Failed to report heartbeat")
@@ -300,7 +304,7 @@ class Extractor(Generic[CustomConfigClass]):
         if self.extraction_pipeline and self.continuous_extractor:
             self.cognite_client.extraction_pipelines.runs.create(
                 ExtractionPipelineRun(
-                    external_id=self.extraction_pipeline.external_id,
+                    extpipe_external_id=self.extraction_pipeline.external_id,
                     status="success",
                     message=f"New startup of {self.name}",
                 )

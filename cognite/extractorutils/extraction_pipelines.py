@@ -49,8 +49,6 @@ def add_extraction_pipeline(
 
     # TODO 1. Consider refactoring this decorator to share methods with the Extractor context manager in .base.py
     # as they serve a similar purpose
-    # TODO 2. Change 'cognite_client.extraction_pipeline_runs' -> 'cognite_client.extraction_pipelines.runs'
-    # when Cognite SDK is updated
 
     cancellation_token: Event = Event()
 
@@ -66,8 +64,10 @@ def add_extraction_pipeline(
 
             def _report_success() -> None:
                 message = f"Successful shutdown of function '{input_function.__name__}'. {added_message}"
-                cognite_client.extraction_pipeline_runs.create(  # cognite_client.extraction_pipelines.runs.create(
-                    ExtractionPipelineRun(external_id=extraction_pipeline_ext_id, status="success", message=message)
+                cognite_client.extraction_pipelines.runs.create(  # cognite_client.extraction_pipelines.runs.create(
+                    ExtractionPipelineRun(
+                        extpipe_external_id=extraction_pipeline_ext_id, status="success", message=message
+                    )
                 )
 
             def _report_error(exception: Exception) -> None:
@@ -77,14 +77,16 @@ def add_extraction_pipeline(
                 message = (
                     f"Exception for function '{input_function.__name__}'. {added_message}:\n" f"{str(exception)[:1000]}"
                 )
-                cognite_client.extraction_pipeline_runs.create(
-                    ExtractionPipelineRun(external_id=extraction_pipeline_ext_id, status="failure", message=message)
+                cognite_client.extraction_pipelines.runs.create(
+                    ExtractionPipelineRun(
+                        extpipe_external_id=extraction_pipeline_ext_id, status="failure", message=message
+                    )
                 )
 
             def heartbeat_loop() -> None:
                 while not cancellation_token.is_set():
-                    cognite_client.extraction_pipeline_runs.create(
-                        ExtractionPipelineRun(external_id=extraction_pipeline_ext_id, status="seen")
+                    cognite_client.extraction_pipelines.runs.create(
+                        ExtractionPipelineRun(extpipe_external_id=extraction_pipeline_ext_id, status="seen")
                     )
 
                     cancellation_token.wait(heartbeat_waiting_time)

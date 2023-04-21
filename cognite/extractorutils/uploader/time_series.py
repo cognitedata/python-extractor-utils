@@ -242,7 +242,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
             return upload_this
 
         try:
-            self.cdf_client.datapoints.insert_multiple(upload_this)
+            self.cdf_client.time_series.data.insert_multiple(upload_this)
 
         except CogniteNotFoundError as ex:
             if not retries:

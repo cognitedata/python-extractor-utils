@@ -35,8 +35,8 @@ class TestExtractionPipelines(unittest.TestCase):
 
             test_success()
 
-            print(f"{self.m_client.extraction_pipeline_runs.create.call_count=}")
-            self.assertEqual(self.m_client.extraction_pipeline_runs.create.call_count, 2)
+            print(f"{self.m_client.extraction_pipelines.runs.create.call_count=}")
+            self.assertEqual(self.m_client.extraction_pipelines.runs.create.call_count, 2)
 
     with monkeypatch_cognite_client() as m2_client:
 
@@ -66,8 +66,8 @@ class TestExtractionPipelines(unittest.TestCase):
 
             test_success_2()
 
-            print(f"{self.m3_client.extraction_pipeline_runs.create.call_count=}")
-            self.assertEqual(self.m3_client.extraction_pipeline_runs.create.call_count, 3)
+            print(f"{self.m3_client.extraction_pipelines.runs.create.call_count=}")
+            self.assertEqual(self.m3_client.extraction_pipelines.runs.create.call_count, 3)
 
 
 if __name__ == "__main__":

@@ -169,8 +169,8 @@ class TestCognitePusher(unittest.TestCase):
         TestCognitePusher.gauge.set(5)
         pusher._push_to_server()
 
-        self.client.datapoints.insert_multiple.assert_called_once()
-        args = self.client.datapoints.insert_multiple.call_args_list[0][0][0][-1]
+        self.client.time_series.data.insert_multiple.assert_called_once()
+        args = self.client.time_series.data.insert_multiple.call_args_list[0][0][0][-1]
 
         timestamp = int(arrow.get().float_timestamp * 1000)
         self.assertEqual(args["externalId"], "pre_gauge")

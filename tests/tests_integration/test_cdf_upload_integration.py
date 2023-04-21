@@ -143,10 +143,10 @@ class IntegrationTests(unittest.TestCase):
 
         time.sleep(30)
 
-        recv_points1 = self.client.datapoints.retrieve(
+        recv_points1 = self.client.time_series.data.retrieve(
             external_id=self.time_series1, start="1w-ago", end="now", limit=None
         )
-        recv_points2 = self.client.datapoints.retrieve(
+        recv_points2 = self.client.time_series.data.retrieve(
             external_id=self.time_series2, start="1w-ago", end="now", limit=None
         )
 
@@ -173,7 +173,7 @@ class IntegrationTests(unittest.TestCase):
 
         time.sleep(20)
 
-        recv_points1 = self.client.datapoints.retrieve(
+        recv_points1 = self.client.time_series.data.retrieve(
             external_id=self.time_series1, start="1w-ago", end="now", limit=None
         )
 
@@ -205,9 +205,9 @@ class IntegrationTests(unittest.TestCase):
         queue.upload()
         time.sleep(3)
 
-        recv_points1 = self.client.datapoints.retrieve(external_id=id1, start="1w-ago", end="now", limit=None)
-        recv_points2 = self.client.datapoints.retrieve(external_id=id2, start="1w-ago", end="now", limit=None)
-        recv_points3 = self.client.datapoints.retrieve(external_id=id3, start="1w-ago", end="now", limit=None)
+        recv_points1 = self.client.time_series.data.retrieve(external_id=id1, start="1w-ago", end="now", limit=None)
+        recv_points2 = self.client.time_series.data.retrieve(external_id=id2, start="1w-ago", end="now", limit=None)
+        recv_points3 = self.client.time_series.data.retrieve(external_id=id3, start="1w-ago", end="now", limit=None)
 
         self.assertListEqual([int(p) for p in recv_points1.value], [p[1] for p in points1])
         self.assertListEqual([p for p in recv_points2.value], [p[1] for p in points2])
