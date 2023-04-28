@@ -29,15 +29,37 @@ from cognite.client.credentials import OAuthClientCertificate, OAuthClientCreden
 from cognite.client.data_classes import Asset, DataSet, ExtractionPipeline
 from prometheus_client import REGISTRY, start_http_server
 
-from cognite.extractorutils.authentication import AuthenticatorConfig
 from cognite.extractorutils.configtools._util import _load_certificate_data
 from cognite.extractorutils.exceptions import InvalidConfigError
-from cognite.extractorutils.logging_prometheus import export_log_stats_on_root_logger
 from cognite.extractorutils.metrics import AbstractMetricsPusher, CognitePusher, PrometheusPusher
 from cognite.extractorutils.statestore import AbstractStateStore, LocalStateStore, NoStateStore, RawStateStore
 from cognite.extractorutils.util import EitherId
 
 _logger = logging.getLogger(__name__)
+
+
+@dataclass
+class CertificateConfig:
+    path: str
+    password: Optional[str]
+    authority_url: Optional[str] = None
+
+
+@dataclass
+class AuthenticatorConfig:
+    """
+    Configuration parameters for an OIDC flow
+    """
+
+    client_id: str
+    scopes: List[str]
+    secret: Optional[str]
+    tenant: Optional[str] = None
+    token_url: Optional[str] = None
+    resource: Optional[str] = None
+    authority: str = "https://login.microsoftonline.com/"
+    min_ttl: float = 30  # minimum time to live: refresh token ahead of expiration
+    certificate: Optional[CertificateConfig] = None
 
 
 @dataclass
@@ -332,9 +354,6 @@ class LoggingConfig:
         fmt.converter = time.gmtime
 
         root = logging.getLogger()
-
-        if self.metrics:
-            export_log_stats_on_root_logger(root)
 
         if self.console and not suppress_console and not root.hasHandlers():
             console_handler = logging.StreamHandler()

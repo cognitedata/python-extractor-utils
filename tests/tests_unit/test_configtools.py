@@ -22,7 +22,6 @@ import yaml
 from cognite.client import CogniteClient
 from cognite.client.credentials import OAuthClientCredentials
 
-from cognite.extractorutils.authentication import AuthenticatorConfig
 from cognite.extractorutils.configtools import (
     BaseConfig,
     CogniteConfig,
@@ -32,6 +31,7 @@ from cognite.extractorutils.configtools import (
     load_yaml,
 )
 from cognite.extractorutils.configtools._util import _to_snake_case
+from cognite.extractorutils.configtools.elements import AuthenticatorConfig
 from cognite.extractorutils.exceptions import InvalidConfigError
 
 

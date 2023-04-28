@@ -17,13 +17,18 @@ The ``util`` package contains miscellaneous functions and classes that can some 
 extractors.
 """
 import logging
+import random
 import signal
-from threading import Event
-from typing import Any, Dict, Iterable, Union
+import threading
+from functools import partial, wraps
+from threading import Event, Thread
+from time import time
+from typing import Any, Dict, Generator, Iterable, Optional, Tuple, Type, Union
 
 from cognite.client import CogniteClient
-from cognite.client.data_classes import Asset, TimeSeries
+from cognite.client.data_classes import Asset, ExtractionPipelineRun, TimeSeries
 from cognite.client.exceptions import CogniteNotFoundError
+from decorator import decorator
 
 
 def _ensure(endpoint: Any, items: Iterable[Any]) -> None:
@@ -173,3 +178,216 @@ class EitherId:
             A string rep of the EitherId
         """
         return self.__str__()
+
+
+def add_extraction_pipeline(
+    extraction_pipeline_ext_id: str,
+    cognite_client: CogniteClient,
+    heartbeat_waiting_time: int = 600,
+    added_message: str = "",
+):
+    """
+    This is to be used as a decorator for extractor functions to add extraction pipeline information
+
+    Args:
+        extraction_pipeline_ext_id:
+        cognite_client:
+        heartbeat_waiting_time:
+        added_message:
+
+    Usage:
+        If you have a function named "extract_data(*args, **kwargs)" and want to connect it to an extraction
+        pipeline, you can use this decorator function as:
+        @add_extraction_pipeline(
+            extraction_pipeline_ext_id=<INSERT EXTERNAL ID>,
+            cognite_client=<INSERT COGNITE CLIENT OBJECT>,
+            logger=<INSERT LOGGER>,
+        )
+        def extract_data(*args, **kwargs):
+            <INSERT FUNCTION BODY>
+    """
+
+    # TODO 1. Consider refactoring this decorator to share methods with the Extractor context manager in .base.py
+    # as they serve a similar purpose
+
+    cancellation_token: Event = Event()
+
+    _logger = logging.getLogger(__name__)
+
+    def decorator_ext_pip(input_function):
+        @wraps(input_function)
+        def wrapper_ext_pip(*args, **kwargs):
+            ##############################
+            # Setup Extraction Pipelines #
+            ##############################
+            _logger.info("Setting up Extraction Pipelines")
+
+            def _report_success() -> None:
+                message = f"Successful shutdown of function '{input_function.__name__}'. {added_message}"
+                cognite_client.extraction_pipelines.runs.create(  # cognite_client.extraction_pipelines.runs.create(
+                    ExtractionPipelineRun(
+                        extpipe_external_id=extraction_pipeline_ext_id, status="success", message=message
+                    )
+                )
+
+            def _report_error(exception: Exception) -> None:
+                """
+                Called on an unsuccessful exit of the extractor
+                """
+                message = (
+                    f"Exception for function '{input_function.__name__}'. {added_message}:\n" f"{str(exception)[:1000]}"
+                )
+                cognite_client.extraction_pipelines.runs.create(
+                    ExtractionPipelineRun(
+                        extpipe_external_id=extraction_pipeline_ext_id, status="failure", message=message
+                    )
+                )
+
+            def heartbeat_loop() -> None:
+                while not cancellation_token.is_set():
+                    cognite_client.extraction_pipelines.runs.create(
+                        ExtractionPipelineRun(extpipe_external_id=extraction_pipeline_ext_id, status="seen")
+                    )
+
+                    cancellation_token.wait(heartbeat_waiting_time)
+
+            ##############################
+            # Run the extractor function #
+            ##############################
+            _logger.info(f"Starting to run function: {input_function.__name__}")
+
+            try:
+                heartbeat_thread = Thread(target=heartbeat_loop, name="HeartbeatLoop", daemon=True)
+                heartbeat_thread.start()
+                output = input_function(*args, **kwargs)
+            except Exception as e:
+                _report_error(exception=e)
+                _logger.error(f"Extraction failed with exception: {e}")
+                raise e
+            else:
+                _report_success()
+                _logger.info(f"Extraction ran successfully")
+            finally:
+                cancellation_token.set()
+                heartbeat_thread.join()
+
+            return output
+
+        return wrapper_ext_pip
+
+    return decorator_ext_pip
+
+
+def throttled_loop(target_time: int, cancellation_token: Event) -> Generator[None, None, None]:
+    """
+    A loop generator that automatically sleeps until each iteration has taken the desired amount of time. Useful for
+    when you want to avoid overloading a source system with requests.
+
+    Example:
+        This example will throttle printing to only print every 10th second:
+
+        .. code-block:: python
+
+            for _ in throttled_loop(10, stop_event):
+                print("Hello every 10 seconds!")
+
+    Args:
+        target_time: How long (in seconds) an iteration should take om total
+        cancellation_token: An Event object that will act as the stop event. When set, the loop will stop.
+
+    Returns:
+        A generator that will only yield when the target iteration time is met
+    """
+    logger = logging.getLogger(__name__)
+
+    while not cancellation_token.is_set():
+        start_time = time()
+        yield
+        iteration_time = time() - start_time
+        if iteration_time > target_time:
+            logger.warning("Iteration time longer than target time, will not sleep")
+
+        else:
+            logger.debug(f"Iteration took {iteration_time:.1f} s, sleeping {target_time - iteration_time:.1f} s")
+            cancellation_token.wait(target_time - iteration_time)
+
+
+def _retry_internal(
+    f,
+    cancellation_token: threading.Event = threading.Event(),
+    exceptions: Iterable[Type[Exception]] = Exception,
+    tries: int = -1,
+    delay: float = 0,
+    max_delay: Optional[float] = None,
+    backoff: float = 1,
+    jitter: Union[float, Tuple[float, float]] = 0,
+):
+    logger = logging.getLogger(__name__)
+
+    while tries and not cancellation_token.is_set():
+        try:
+            return f()
+        except exceptions as e:
+            tries -= 1
+            if not tries:
+                raise
+
+            if logger is not None:
+                logger.warning("%s, retrying in %s seconds...", e, delay)
+
+            cancellation_token.wait(delay)
+            delay *= backoff
+
+            if isinstance(jitter, tuple):
+                delay += random.uniform(*jitter)
+            else:
+                delay += jitter
+
+            if max_delay is not None:
+                delay = min(delay, max_delay)
+
+
+def retry(
+    cancellation_token: threading.Event = threading.Event(),
+    exceptions: Iterable[Type[Exception]] = Exception,
+    tries: int = -1,
+    delay: float = 0,
+    max_delay: Optional[float] = None,
+    backoff: float = 1,
+    jitter: Union[float, Tuple[float, float]] = 0,
+):
+    """
+    Returns a retry decorator.
+
+    This is adapted from https://github.com/invl/retry
+
+    Args:
+        cancellation_token: a threading token that is waited on.
+        exceptions: an exception or a tuple of exceptions to catch. default: Exception.
+        tries: the maximum number of attempts. default: -1 (infinite).
+        delay: initial delay between attempts. default: 0.
+        max_delay: the maximum value of delay. default: None (no limit).
+        backoff: multiplier applied to delay between attempts. default: 1 (no backoff).
+        jitter: extra seconds added to delay between attempts. default: 0.
+                   fixed if a number, random if a range tuple (min, max)
+        logger: logger.warning(fmt, error, delay) will be called on failed attempts.
+                   default: retry.logging_logger. if None, logging is disabled.
+    """
+
+    @decorator
+    def retry_decorator(f, *fargs, **fkwargs):
+        args = fargs if fargs else list()
+        kwargs = fkwargs if fkwargs else dict()
+
+        return _retry_internal(
+            partial(f, *args, **kwargs),
+            cancellation_token,
+            exceptions,
+            tries,
+            delay,
+            max_delay,
+            backoff,
+            jitter,
+        )
+
+    return retry_decorator
