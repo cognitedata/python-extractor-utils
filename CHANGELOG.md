@@ -19,6 +19,9 @@ Changes are grouped as follows
 
  * Legacy authentication through API keys has been removed throughtout the code
    base.
+   
+ * A few deprecated modules (`authentication`, `prometheus_logging`) have been
+   deleted.
 
 ### Changed
 
@@ -47,6 +50,63 @@ Changes are grouped as follows
    and [migration
    guide](https://github.com/cognitedata/cognite-sdk-python/blob/master/MIGRATION_GUIDE.md#from-v5-to-v6)
    for the SDK for details on the changes it entails for users.
+
+ * Several small single-function modules have been removed and the content have
+   been moved to the catch-all `util` module. This includes:
+
+    - The `add_extraction_pipeline` decorator from the `extraction_pipelines`
+      module
+
+    - The `throttled_loop` generator from the `throttle` module
+
+    - The `retry` decorator from the `retry` module
+
+
+### Migration guide
+
+The deletion of API keys and the legacy OAuth2 implementation should not affect
+your extractors or your usage of the utils unless you were depending on the old
+OAuth implementation directly and not through `configtools` or the base classes.
+
+To update to version 5 of extractor-utils, you need to
+
+ * Change where you import a few things.
+
+     - Change from 
+       ``` python
+       from cognite.extractorutils.extraction_pipelines import add_extraction_pipeline
+       ```
+       to
+       ``` python 
+       from cognite.extractorutils.util import add_extraction_pipeline
+       ```
+
+     - Change from 
+       ``` python
+       from cognite.extractorutils.throttle import throttled_loop
+       ```
+       to
+       ``` python 
+       from cognite.extractorutils.util import throttled_loop
+       ```
+
+     - Change from 
+       ``` python
+       from cognite.extractorutils.retry import retry
+       ```
+       to
+       ``` python 
+       from cognite.extractorutils.util import retry
+       ```
+
+ * Consult the [migration
+   guide](https://github.com/cognitedata/cognite-sdk-python/blob/master/MIGRATION_GUIDE.md#from-v5-to-v6)
+   for the Cognite SDK version 6 for details on the changes it entails for
+   users.
+
+The changes in this version are only breaking for your usage of the utils. Any
+extractor you have written will not be affected by the changes, meaning you do
+not need to bump the major version for your extractors.
 
 ## [4.3.1]
 
