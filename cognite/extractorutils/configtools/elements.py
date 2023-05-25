@@ -57,6 +57,7 @@ class AuthenticatorConfig:
     tenant: Optional[str] = None
     token_url: Optional[str] = None
     resource: Optional[str] = None
+    audience: Optional[str] = None
     authority: str = "https://login.microsoftonline.com/"
     min_ttl: float = 30  # minimum time to live: refresh token ahead of expiration
     certificate: Optional[CertificateConfig] = None
@@ -261,6 +262,8 @@ class CogniteConfig:
                 token_custom_args = {}
             if self.idp_authentication.resource:
                 token_custom_args["resource"] = self.idp_authentication.resource
+            if self.idp_authentication.audience:
+                token_custom_args["audience"] = self.idp_authentication.audience
             credential_provider = OAuthClientCredentials(**kwargs, **token_custom_args)
 
         else:

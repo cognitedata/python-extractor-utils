@@ -13,7 +13,7 @@ Changes are grouped as follows
 - `Security` in case of vulnerabilities.
 
 
-## Next
+## [5.0.0]
 
 ### Removed
 
@@ -61,6 +61,9 @@ Changes are grouped as follows
 
     - The `retry` decorator from the `retry` module
 
+### Added
+
+  * Support for `audience` parameter in `idp-authentication`
 
 ### Migration guide
 
