@@ -37,6 +37,10 @@
                     "type": "string",
                     "description": "Resource parameter passed along with request"
                 },
+                "audience": {
+                    "type": "string",
+                    "description": "Audience parameter passed along with request"
+                },
                 "scopes": {
                     "type": "array",
                     "description": "A list of scopes requested for the token",
