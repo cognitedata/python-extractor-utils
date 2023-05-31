@@ -64,7 +64,7 @@ class TestUploadQueue(unittest.TestCase):
         def post(x):
             post_upload_test["value"] = True
 
-        queue = RawUploadQueue(client, post_upload_function=post, max_queue_size=1)
+        queue = RawUploadQueue(client, post_upload_function=post, max_queue_size=2)
         queue.add_to_upload_queue("db", "table", Row("key1", {"val": "a"}))
 
         client.raw.rows.insert.assert_not_called()

@@ -69,7 +69,7 @@ class AbstractUploadQueue(ABC):
         """
         Check if upload triggers are met, call upload if they are. Called by subclasses.
         """
-        if self.upload_queue_size > self.threshold >= 0:
+        if self.upload_queue_size >= self.threshold >= 0:
             self.logger.log(
                 self.trigger_log_level,
                 f"Upload queue reached threshold size {self.upload_queue_size}/{self.threshold}, triggering upload",
