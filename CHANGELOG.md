@@ -13,13 +13,20 @@ Changes are grouped as follows
 - `Security` in case of vulnerabilities.
 
 
+## [5.0.1]
+
+### Changed
+
+ * Upload queue size limit now triggers an upload when the size has _reached_
+   the limit, not when it _exceeded_ the limit.
+
 ## [5.0.0]
 
 ### Removed
 
  * Legacy authentication through API keys has been removed throughtout the code
    base.
-   
+
  * A few deprecated modules (`authentication`, `prometheus_logging`) have been
    deleted.
 
@@ -75,30 +82,30 @@ To update to version 5 of extractor-utils, you need to
 
  * Change where you import a few things.
 
-     - Change from 
+     - Change from
        ``` python
        from cognite.extractorutils.extraction_pipelines import add_extraction_pipeline
        ```
        to
-       ``` python 
+       ``` python
        from cognite.extractorutils.util import add_extraction_pipeline
        ```
 
-     - Change from 
+     - Change from
        ``` python
        from cognite.extractorutils.throttle import throttled_loop
        ```
        to
-       ``` python 
+       ``` python
        from cognite.extractorutils.util import throttled_loop
        ```
 
-     - Change from 
+     - Change from
        ``` python
        from cognite.extractorutils.retry import retry
        ```
        to
-       ``` python 
+       ``` python
        from cognite.extractorutils.util import retry
        ```
 
@@ -113,7 +120,7 @@ not need to bump the major version for your extractors.
 
 ## [4.3.1]
 
-### Changed 
+### Changed
 
  * Default size of RAW queues is now 50 000 for `UploaderExtractor`s as well.
 
@@ -129,7 +136,7 @@ not need to bump the major version for your extractors.
 
 ### Fixed
 
- * Fixed a bug in the state store when decimal valued incremental fields are used. 
+ * Fixed a bug in the state store when decimal valued incremental fields are used.
 
 ## [4.2.0]
 
@@ -138,7 +145,7 @@ not need to bump the major version for your extractors.
  * Add support for certificate authentication
 
 ### Changed
- 
+
  * Change minimum cognite-sdk version to 5.8
 
 ## [4.1.0]
@@ -238,7 +245,7 @@ extractor.
 ## [3.1.4]
 
 ### Fixed
- 
+
  * Correctly catch errors when reloading remote configuration files
 
 ## [3.1.1]
@@ -263,7 +270,7 @@ extractor.
 ## [3.0.1]
 
 ### Fixed
- 
+
  * Correctly do not request the experimental SDK  when using remote
    configuration files
 
@@ -449,7 +456,7 @@ field in the config stored in CDF.
 
 ### Fixed
 
- * A few type hints in retry module were more restrictive than needed (such as 
+ * A few type hints in retry module were more restrictive than needed (such as
    requiring `int` when `float` would work).
  * Gracefully handle wrongful data in state stores. If JSON parsing fails, use
    an empty state store as default.
@@ -489,11 +496,11 @@ field in the config stored in CDF.
 ## [2.1.0] - 2022-02-25
 
 ### Added
- 
+
  * `uploader_extractor` and `uploader_types` modules used to create extractors
    writing to events, timeseries, or raw, by calling a common method.
    This is primarily used for the utils extensions, but can be useful for
-   very simple extractors in general. 
+   very simple extractors in general.
 
 ### Fixed
 
@@ -521,7 +528,7 @@ field in the config stored in CDF.
 ### Fixed
 
  * Fixed retries to not block the GIL and respect the cancellation token
- 
+
 ### Added
 
  * A `get_current_config` class method on the Extractor class which returns the
