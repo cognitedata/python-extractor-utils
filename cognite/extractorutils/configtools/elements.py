@@ -76,7 +76,7 @@ class GlobalConfig:
     max_retry_backoff: int = 30
     max_connection_pool_size: int = 50
     disable_ssl: bool = False
-    proxies: dict[str, str] = field(default_factory=dict)
+    proxies: Dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
