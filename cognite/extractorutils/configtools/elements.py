@@ -76,7 +76,7 @@ class GlobalConfig:
     max_retry_backoff: int = 30
     max_connection_pool_size: int = 50
     disable_ssl: bool = False
-    proxies: dict[str, str] = {}
+    proxies: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -236,7 +236,7 @@ class CogniteConfig:
     data_set_external_id: Optional[str]
     extraction_pipeline: Optional[EitherIdConfig]
     timeout: TimeIntervalConfig = TimeIntervalConfig("30s")
-    global_config: GlobalConfig = GlobalConfig()
+    global_config: GlobalConfig = field(default_factory=GlobalConfig)
     external_id_prefix: str = ""
     host: str = "https://api.cognitedata.com"
 
