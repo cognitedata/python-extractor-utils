@@ -49,6 +49,9 @@ This means that our users can now configure the extractor like so:
         scopes:
           - ${COGNITE_BASE_URL}/.default
 
+      global-config:
+        disable-ssl: False
+
     logging:
       console:
         level: INFO

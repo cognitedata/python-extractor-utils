@@ -64,6 +64,22 @@ class AuthenticatorConfig:
 
 
 @dataclass
+class GlobalConfig:
+    """
+    Configuration parameters for the global SDK settings
+    """
+
+    disable_gzip: bool = False
+    status_forcelist: list[int] = field(default_factory=lambda: [429, 502, 503, 504])
+    max_retries: int = 10
+    max_retries_connect: int = 3
+    max_retry_backoff: int = 30
+    max_connection_pool_size: int = 50
+    disable_ssl: bool = False
+    proxies: dict[str, str] = {}
+
+
+@dataclass
 class EitherIdConfig:
     id: Optional[int]
     external_id: Optional[str]
@@ -220,6 +236,7 @@ class CogniteConfig:
     data_set_external_id: Optional[str]
     extraction_pipeline: Optional[EitherIdConfig]
     timeout: TimeIntervalConfig = TimeIntervalConfig("30s")
+    global_config: GlobalConfig = GlobalConfig()
     external_id_prefix: str = ""
     host: str = "https://api.cognitedata.com"
 
@@ -229,6 +246,14 @@ class CogniteConfig:
         from cognite.client.config import global_config
 
         global_config.disable_pypi_version_check = True
+        global_config.disable_gzip = self.global_config.disable_gzip
+        global_config.status_forcelist = set(self.global_config.status_forcelist)
+        global_config.max_retries = self.global_config.max_retries
+        global_config.max_retries_connect = self.global_config.max_retries_connect
+        global_config.max_retry_backoff = self.global_config.max_retry_backoff
+        global_config.max_connection_pool_size = self.global_config.max_connection_pool_size
+        global_config.disable_ssl = self.global_config.disable_ssl
+        global_config.proxies = self.global_config.proxies
 
         if self.idp_authentication.certificate:
             if self.idp_authentication.certificate.authority_url:
