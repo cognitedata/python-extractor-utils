@@ -156,6 +156,7 @@
                         "description": "A scope requested for the token"
                     }
                 }
+            }
         }
     }
 }
