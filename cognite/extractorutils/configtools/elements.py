@@ -70,7 +70,7 @@ class GlobalConfig:
     """
 
     disable_gzip: bool = False
-    status_forcelist: list[int] = field(default_factory=lambda: [429, 502, 503, 504])
+    status_forcelist: List[int] = field(default_factory=lambda: [429, 502, 503, 504])
     max_retries: int = 10
     max_retries_connect: int = 3
     max_retry_backoff: int = 30
