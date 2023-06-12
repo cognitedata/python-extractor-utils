@@ -49,7 +49,7 @@ This means that our users can now configure the extractor like so:
         scopes:
           - ${COGNITE_BASE_URL}/.default
 
-      global-config:
+      connection:
         disable-ssl: False
 
     logging:
