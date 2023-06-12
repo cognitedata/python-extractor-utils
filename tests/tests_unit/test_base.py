@@ -12,7 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 import unittest
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from unittest.mock import patch
 
 import pytest
@@ -29,13 +29,13 @@ class SourceConfig:
 
 @dataclass
 class ExtractorConfig:
-    state_store: StateStoreConfig = StateStoreConfig()
+    state_store: StateStoreConfig = field(default_factory=StateStoreConfig)
 
 
 @dataclass
 class ConfigWithStates(BaseConfig):
     source: SourceConfig
-    extractor: ExtractorConfig = ExtractorConfig()
+    extractor: ExtractorConfig = field(default_factory=ExtractorConfig)
 
 
 @dataclass

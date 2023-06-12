@@ -13,6 +13,12 @@ Changes are grouped as follows
 - `Security` in case of vulnerabilities.
 
 
+## [5.1.0]
+
+### Added
+
+ * Support for `global_config` parameters
+
 ## [5.0.1]
 
 ### Changed
