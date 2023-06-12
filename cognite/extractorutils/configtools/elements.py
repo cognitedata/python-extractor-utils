@@ -64,9 +64,9 @@ class AuthenticatorConfig:
 
 
 @dataclass
-class GlobalConfig:
+class ConnectionConfig:
     """
-    Configuration parameters for the global SDK settings
+    Configuration parameters for the global_config python SDK settings
     """
 
     disable_gzip: bool = False
@@ -236,7 +236,7 @@ class CogniteConfig:
     data_set_external_id: Optional[str]
     extraction_pipeline: Optional[EitherIdConfig]
     timeout: TimeIntervalConfig = TimeIntervalConfig("30s")
-    global_config: GlobalConfig = field(default_factory=GlobalConfig)
+    connection: ConnectionConfig = field(default_factory=ConnectionConfig)
     external_id_prefix: str = ""
     host: str = "https://api.cognitedata.com"
 
@@ -246,14 +246,14 @@ class CogniteConfig:
         from cognite.client.config import global_config
 
         global_config.disable_pypi_version_check = True
-        global_config.disable_gzip = self.global_config.disable_gzip
-        global_config.status_forcelist = set(self.global_config.status_forcelist)
-        global_config.max_retries = self.global_config.max_retries
-        global_config.max_retries_connect = self.global_config.max_retries_connect
-        global_config.max_retry_backoff = self.global_config.max_retry_backoff
-        global_config.max_connection_pool_size = self.global_config.max_connection_pool_size
-        global_config.disable_ssl = self.global_config.disable_ssl
-        global_config.proxies = self.global_config.proxies
+        global_config.disable_gzip = self.connection.disable_gzip
+        global_config.status_forcelist = set(self.connection.status_forcelist)
+        global_config.max_retries = self.connection.max_retries
+        global_config.max_retries_connect = self.connection.max_retries_connect
+        global_config.max_retry_backoff = self.connection.max_retry_backoff
+        global_config.max_connection_pool_size = self.connection.max_connection_pool_size
+        global_config.disable_ssl = self.connection.disable_ssl
+        global_config.proxies = self.connection.proxies
 
         if self.idp_authentication.certificate:
             if self.idp_authentication.certificate.authority_url:

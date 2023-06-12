@@ -105,19 +105,14 @@
             "type": "string",
             "description": "Prefix on externalId used when creating CDF resources"
         },
-        "global-config": {
+        "connection": {
             "type": "object",
-            "description": "Configure authentication using OIDC tokens",
+            "description": "Configure network connection details",
             "properties": {
                 "disable-gzip": {
                     "type": "boolean",
                     "default": false,
                     "description": "Whether or not to disable gzipping of json bodies."
-                },
-                "disable-pypi-version-check": {
-                    "type": "boolean",
-                    "default": false,
-                    "description": "Whether or not to check for newer SDK versions when instantiating a new client."
                 },
                 "status-forcelist": {
                     "type": "string",

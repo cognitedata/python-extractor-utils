@@ -13,7 +13,7 @@ Changes are grouped as follows
 - `Security` in case of vulnerabilities.
 
 
-## [5.0.2]
+## [5.1.0]
 
 ### Added
 
