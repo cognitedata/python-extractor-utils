@@ -148,7 +148,7 @@
                     "description": "Dictionary mapping from protocol to url.",
                     "items": {
                         "type": "string",
-                        "description": "A scope requested for the token"
+                        "description": "Provide protocol as key and value as the corresponding url"
                     }
                 }
             }
