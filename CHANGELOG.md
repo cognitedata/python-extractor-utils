@@ -17,7 +17,7 @@ Changes are grouped as follows
 
 ### Added
 
- * Support for `global_config` parameters
+ * Support for `connection` parameters
 
 ## [5.0.1]
 
