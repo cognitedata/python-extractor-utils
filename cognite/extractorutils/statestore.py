@@ -89,14 +89,13 @@ import json
 import logging
 import threading
 from abc import ABC, abstractmethod
-from decimal import Decimal
 from threading import Lock
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
-from cognite.client import CogniteClient
-from cognite.client.exceptions import CogniteAPIError
 from requests.exceptions import ConnectionError
 
+from cognite.client import CogniteClient
+from cognite.client.exceptions import CogniteAPIError
 from cognite.extractorutils.uploader import DataPointList
 
 from ._inner_util import _DecimalDecoder, _DecimalEncoder, _resolve_log_level
@@ -203,12 +202,12 @@ class AbstractStateStore(ABC):
         """
         with self.lock:
             if isinstance(external_id, list):
-                l = []
+                states = []
                 for e in external_id:
                     state = self._local_state.get(e, {})
-                    l.append((state.get("low"), state.get("high")))
+                    states.append((state.get("low"), state.get("high")))
 
-                return l
+                return states
 
             else:
                 state = self._local_state.get(external_id, {})

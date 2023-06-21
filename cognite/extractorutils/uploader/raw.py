@@ -17,11 +17,11 @@ from typing import Any, Callable, Dict, List, Optional
 
 import arrow
 from arrow import Arrow
+from requests import ConnectionError
+
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Row
 from cognite.client.exceptions import CogniteAPIError, CogniteReadTimeout
-from requests import ConnectionError
-
 from cognite.extractorutils.uploader._base import (
     RETRIES,
     RETRY_BACKOFF_FACTOR,
@@ -75,7 +75,7 @@ class RawUploadQueue(AbstractUploadQueue):
             thread_name,
             cancellation_token,
         )
-        self.upload_queue: Dict[str, Dict[str, List[TimestampedObject]]] = dict()
+        self.upload_queue: Dict[str, Dict[str, List[TimestampedObject]]] = {}
 
         # It is a hack since Prometheus client registers metrics on object creation, so object has to be created once
         self.rows_queued = RAW_UPLOADER_ROWS_QUEUED
@@ -97,7 +97,7 @@ class RawUploadQueue(AbstractUploadQueue):
         with self.lock:
             # Ensure that the dicts has correct keys
             if database not in self.upload_queue:
-                self.upload_queue[database] = dict()
+                self.upload_queue[database] = {}
             if table not in self.upload_queue[database]:
                 self.upload_queue[database][table] = []
 

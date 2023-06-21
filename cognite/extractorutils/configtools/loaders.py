@@ -61,7 +61,7 @@ def _load_yaml(
 
     # Safe to use load instead of safe_load since both loader classes are based on SafeLoader
     try:
-        config_dict = yaml.load(source, Loader=loader)
+        config_dict = yaml.load(source, Loader=loader)  # noqa: S506
     except ScannerError as e:
         location = e.problem_mark or e.context_mark
         formatted_location = f" at line {location.line+1}, column {location.column+1}" if location is not None else ""
@@ -152,7 +152,7 @@ class ConfigResolver(Generic[CustomConfigClass]):
     def has_changed(self) -> bool:
         try:
             self._resolve_config()
-        except Exception as e:
+        except Exception:
             _logger.exception("Failed to reload configuration file")
             return False
         return self._config._file_hash != self._next_config._file_hash

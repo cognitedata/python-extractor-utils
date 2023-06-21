@@ -20,15 +20,14 @@ from cognite.client.config import ClientConfig
 from cognite.client.credentials import OAuthClientCredentials
 from cognite.client.data_classes import DataSet
 from cognite.client.exceptions import CogniteDuplicatedError
-
 from cognite.extractorutils.configtools import BaseConfig, load_yaml
 
 
 class TestConfigtools(unittest.TestCase):
     client: CogniteClient
 
-    data_set_name: str = f"Extractor Utils Test Data Set"
-    data_set_extid: str = f"extractorUtils-testdataset"
+    data_set_name: str = "Extractor Utils Test Data Set"
+    data_set_extid: str = "extractorUtils-testdataset"
 
     data_set_id: int
 
@@ -62,8 +61,8 @@ class TestConfigtools(unittest.TestCase):
             f"""
         logger:
             console:
-                level: INFO    
-        
+                level: INFO
+
         cognite:
             host: ${{COGNITE_BASE_URL}}
             project: ${{COGNITE_PROJECT}}
@@ -87,8 +86,8 @@ class TestConfigtools(unittest.TestCase):
             f"""
         logger:
             console:
-                level: INFO    
-        
+                level: INFO
+
         cognite:
             host: ${{COGNITE_BASE_URL}}
             project: ${{COGNITE_PROJECT}}

@@ -18,11 +18,11 @@ from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 import arrow
+from requests import ConnectionError
+
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Sequence, SequenceData, TimeSeries
 from cognite.client.exceptions import CogniteAPIError, CogniteDuplicatedError, CogniteNotFoundError
-from requests import ConnectionError
-
 from cognite.extractorutils.uploader._base import (
     RETRIES,
     RETRY_BACKOFF_FACTOR,
@@ -125,7 +125,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
             self.create_missing = True
             self.missing_factory = create_missing
 
-        self.upload_queue: Dict[EitherId, DataPointList] = dict()
+        self.upload_queue: Dict[EitherId, DataPointList] = {}
 
         self.points_queued = TIMESERIES_UPLOADER_POINTS_QUEUED
         self.points_written = TIMESERIES_UPLOADER_POINTS_WRITTEN
@@ -276,8 +276,9 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
 
                 if len(ex.not_found) != len(create_these_ids):
                     missing = [id_dict for id_dict in ex.not_found if id_dict.get("externalId") not in retry_these]
+                    missing_num = len(ex.not_found) - len(create_these_ids)
                     self.logger.error(
-                        f"{len(ex.not_found) - len(create_these_ids)} time series not found, and could not be created automatically:\n"
+                        f"{missing_num} time series not found, and could not be created automatically:\n"
                         + str(missing)
                         + "\nData will be dropped"
                     )
@@ -340,8 +341,8 @@ class SequenceUploadQueue(AbstractUploadQueue):
         """
         Args:
             cdf_client: Cognite Data Fusion client to use
-            post_upload_function: A function that will be called after each upload. The function will be given one argument:
-                A list of the events that were uploaded.
+            post_upload_function: A function that will be called after each upload. The function will be given one
+                argument: A list of the events that were uploaded.
             max_queue_size: Maximum size of upload queue. Defaults to no max size.
             max_upload_interval: Automatically trigger an upload each m seconds when run as a thread (use start/stop
                 methods).
@@ -360,15 +361,15 @@ class SequenceUploadQueue(AbstractUploadQueue):
             thread_name,
             cancellation_token,
         )
-        self.upload_queue: Dict[EitherId, SequenceData] = dict()
-        self.sequence_metadata: Dict[EitherId, Dict[str, Union[str, int, float]]] = dict()
-        self.sequence_asset_external_ids: Dict[EitherId, str] = dict()
-        self.sequence_dataset_external_ids: Dict[EitherId, str] = dict()
-        self.sequence_names: Dict[EitherId, str] = dict()
-        self.sequence_descriptions: Dict[EitherId, str] = dict()
-        self.column_definitions: Dict[EitherId, List[Dict[str, str]]] = dict()
-        self.asset_ids: Dict[str, int] = dict()
-        self.dataset_ids: Dict[str, int] = dict()
+        self.upload_queue: Dict[EitherId, SequenceData] = {}
+        self.sequence_metadata: Dict[EitherId, Dict[str, Union[str, int, float]]] = {}
+        self.sequence_asset_external_ids: Dict[EitherId, str] = {}
+        self.sequence_dataset_external_ids: Dict[EitherId, str] = {}
+        self.sequence_names: Dict[EitherId, str] = {}
+        self.sequence_descriptions: Dict[EitherId, str] = {}
+        self.column_definitions: Dict[EitherId, List[Dict[str, str]]] = {}
+        self.asset_ids: Dict[str, int] = {}
+        self.dataset_ids: Dict[str, int] = {}
         self.create_missing = create_missing
 
         self.points_queued = SEQUENCES_UPLOADER_POINTS_QUEUED
@@ -596,7 +597,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
                 }
             except Exception as e:
                 self.logger.error("Error in resolving asset id: %s", str(e))
-                self.asset_ids = dict()
+                self.asset_ids = {}
 
     def _resolve_dataset_ids(self) -> None:
         """
@@ -615,7 +616,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
                 }
             except Exception as e:
                 self.logger.error("Error in resolving dataset id: %s", str(e))
-                self.dataset_ids = dict()
+                self.dataset_ids = {}
 
     def __enter__(self) -> "SequenceUploadQueue":
         """

@@ -67,4 +67,3 @@ Our final ``extract_file`` function looks like the following:
                     table=file.destination.table,
                     raw_row=Row(key=row[file.key_column], columns=row),
                 )
-

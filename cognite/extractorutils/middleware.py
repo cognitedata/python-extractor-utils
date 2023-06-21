@@ -1,7 +1,7 @@
 from sys import platform
 from typing import Union
 
-from cognite.client.data_classes import Event, Row
+from cognite.client.data_classes import Row
 
 
 class JQMiddleware:

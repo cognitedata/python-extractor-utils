@@ -23,7 +23,6 @@ from unittest.mock import Mock, patch
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Row
 from cognite.client.exceptions import CogniteAPIError
-
 from cognite.extractorutils.statestore import LocalStateStore, NoStateStore, RawStateStore
 from cognite.extractorutils.uploader import TimeSeriesUploadQueue
 
