@@ -15,7 +15,8 @@
 import threading
 from concurrent.futures import ThreadPoolExecutor
 from os import PathLike
-from typing import Any, Callable, List, Optional, Tuple, Union
+from types import TracebackType
+from typing import Any, Callable, List, Optional, Tuple, Type, Union
 
 import arrow
 from requests import ConnectionError
@@ -89,7 +90,7 @@ class FileUploadQueue(AbstractUploadQueue):
         self.latency = FILES_UPLOADER_LATENCY
         self.latency_zero_point = arrow.utcnow()
 
-    def add_to_upload_queue(self, file_meta: FileMetadata, file_name: Union[str, PathLike] = None) -> None:
+    def add_to_upload_queue(self, file_meta: FileMetadata, file_name: Union[str, PathLike]) -> None:
         """
         Add file to upload queue. The queue will be uploaded if the queue size is larger than the threshold
         specified in the __init__.
@@ -141,14 +142,14 @@ class FileUploadQueue(AbstractUploadQueue):
         max_delay=RETRY_MAX_DELAY,
         backoff=RETRY_BACKOFF_FACTOR,
     )
-    def _upload_single(self, index, file_name, file_meta):
+    def _upload_single(self, index: int, file_name: Union[str, PathLike], file_meta: FileMetadata) -> None:
         # Upload file
-        file_meta = self.cdf_client.files.upload(file_name, overwrite=self.overwrite_existing, **file_meta.dump())
+        file_meta = self.cdf_client.files.upload(str(file_name), overwrite=self.overwrite_existing, **file_meta.dump())  # type: ignore
 
         # Update meta-object in queue
         self.upload_queue[index] = (file_meta, file_name)
 
-    def _upload_batch(self):
+    def _upload_batch(self) -> None:
         # Concurrently execute file-uploads
 
         with ThreadPoolExecutor(self.cdf_client.config.max_workers) as pool:
@@ -165,7 +166,9 @@ class FileUploadQueue(AbstractUploadQueue):
         self.start()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(
+        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+    ) -> None:
         """
         Wraps around stop method, for use as context manager
 
@@ -212,7 +215,7 @@ class BytesUploadQueue(AbstractUploadQueue):
         thread_name: Optional[str] = None,
         overwrite_existing: bool = False,
         cancellation_token: threading.Event = threading.Event(),
-    ):
+    ) -> None:
         super().__init__(
             cdf_client,
             post_upload_function,
@@ -277,7 +280,7 @@ class BytesUploadQueue(AbstractUploadQueue):
             self.logger.info(f"Uploaded {self.upload_queue_size} files")
             self.queue_size.set(self.upload_queue_size)
 
-    def _upload_batch(self):
+    def _upload_batch(self) -> None:
         # Concurrently execute bytes-uploads
         with ThreadPoolExecutor(self.cdf_client.config.max_workers) as pool:
             for i, (frame, metadata) in enumerate(self.upload_queue):
@@ -290,7 +293,7 @@ class BytesUploadQueue(AbstractUploadQueue):
         max_delay=RETRY_MAX_DELAY,
         backoff=RETRY_BACKOFF_FACTOR,
     )
-    def _upload_single(self, index: int, content: bytes, metadata: FileMetadata):
+    def _upload_single(self, index: int, content: bytes, metadata: FileMetadata) -> None:
         # Upload object
         file_meta_data: FileMetadata = self.cdf_client.files.upload_bytes(
             content, overwrite=self.overwrite_existing, **metadata.dump()
@@ -309,7 +312,9 @@ class BytesUploadQueue(AbstractUploadQueue):
         self.start()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(
+        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+    ) -> None:
         """
         Wraps around stop method, for use as context manager
 

@@ -94,7 +94,7 @@ class Extractor(Generic[CustomConfigClass]):
         self.run_handle = run_handle
         self.config_class = config_class
         self.use_default_state_store = use_default_state_store
-        self.version = version
+        self.version = version or "unknown"
         self.cancellation_token = cancellation_token
         self.config_file_path = config_file_path
         self.continuous_extractor = continuous_extractor
@@ -117,7 +117,7 @@ class Extractor(Generic[CustomConfigClass]):
         if metrics:
             self.metrics = metrics
         else:
-            self.metrics = BaseMetrics(extractor_name=name, extractor_version=version)
+            self.metrics = BaseMetrics(extractor_name=name, extractor_version=self.version)
 
     def _initial_load_config(self, override_path: Optional[str] = None) -> None:
         """
@@ -133,9 +133,9 @@ class Extractor(Generic[CustomConfigClass]):
             self.config_resolver = ConfigResolver.from_cli(self.name, self.description, self.version, self.config_class)
 
         self.config = self.config_resolver.config
-        Extractor._config_singleton = self.config
+        Extractor._config_singleton = self.config  # type: ignore
 
-        def config_refresher():
+        def config_refresher() -> None:
             while not self.cancellation_token.is_set():
                 self.cancellation_token.wait(self.reload_config_interval)
                 if self.config_resolver.has_changed:
@@ -144,7 +144,7 @@ class Extractor(Generic[CustomConfigClass]):
         if self.reload_config_interval and self.reload_config_action != ReloadConfigAction.DO_NOTHING:
             Thread(target=config_refresher, name="ConfigReloader", daemon=True).start()
 
-    def reload_config_callback(self):
+    def reload_config_callback(self) -> None:
         self.logger.error("Method for reloading configs has not been overridden in subclass")
 
     def _reload_config(self) -> None:
@@ -154,7 +154,7 @@ class Extractor(Generic[CustomConfigClass]):
             self.logger.info("Loading in new config file")
             self.config_resolver.accept_new_config()
             self.config = self.config_resolver.config
-            Extractor._config_singleton = self.config
+            Extractor._config_singleton = self.config  # type: ignore
 
         elif self.reload_config_action == ReloadConfigAction.SHUTDOWN:
             self.logger.info("Shutting down, expecting to be restarted")
@@ -212,18 +212,16 @@ class Extractor(Generic[CustomConfigClass]):
                 )
             )
 
-    def _report_error(self, exc_type: Type[BaseException], exc_val: BaseException, exc_tb: TracebackType) -> None:
+    def _report_error(self, exception: BaseException) -> None:
         """
         Called on an unsuccessful exit of the extractor
 
         Args:
-            exc_type: Type of exception that caused the extractor to fail
-            exc_val: Exception object that caused the extractor to fail
-            exc_tb: Stack trace of where the extractor failed
+            exception: Exception object that caused the extractor to fail
         """
-        self.logger.error("Unexpected error during extraction", exc_info=exc_val)
+        self.logger.error("Unexpected error during extraction", exc_info=exception)
         if self.extraction_pipeline:
-            message = f"{exc_type.__name__}: {str(exc_val)}"[:1000]
+            message = f"{type(exception).__name__}: {str(exception)}"[:1000]
 
             self.logger.info(f"Reporting new failed run: {message}")
             self.cognite_client.extraction_pipelines.runs.create(
@@ -276,11 +274,11 @@ class Extractor(Generic[CustomConfigClass]):
         self.extraction_pipeline = self.config.cognite.get_extraction_pipeline(self.cognite_client)
 
         try:
-            self.config.metrics.start_pushers(self.cognite_client)
+            self.config.metrics.start_pushers(self.cognite_client)  # type: ignore
         except AttributeError:
             pass
 
-        def heartbeat_loop():
+        def heartbeat_loop() -> None:
             while not self.cancellation_token.is_set():
                 self.cancellation_token.wait(self.heartbeat_waiting_time)
 
@@ -289,7 +287,7 @@ class Extractor(Generic[CustomConfigClass]):
                     try:
                         self.cognite_client.extraction_pipelines.runs.create(
                             ExtractionPipelineRun(
-                                extpipe_external_id=self.extraction_pipeline.external_id, status="seen"
+                                extpipe_external_id=self.extraction_pipeline.external_id, status="seen"  # type: ignore
                             )
                         )
                     except Exception:
@@ -336,12 +334,12 @@ class Extractor(Generic[CustomConfigClass]):
             self.state_store.synchronize()
 
         try:
-            self.config.metrics.stop_pushers()
+            self.config.metrics.stop_pushers()  # type: ignore
         except AttributeError:
             pass
 
         if exc_val:
-            self._report_error(exc_type, exc_val, exc_tb)
+            self._report_error(exc_val)
         else:
             self._report_success()
 
@@ -364,9 +362,9 @@ class Extractor(Generic[CustomConfigClass]):
 
     @classmethod
     def get_current_config(cls) -> CustomConfigClass:
-        if Extractor._config_singleton is None:
+        if Extractor._config_singleton is None:  # type: ignore
             raise ValueError("No config singleton created. Have a config file been loaded?")
-        return Extractor._config_singleton
+        return Extractor._config_singleton  # type: ignore
 
     @classmethod
     def get_current_statestore(cls) -> AbstractStateStore:

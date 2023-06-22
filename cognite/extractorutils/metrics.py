@@ -43,7 +43,8 @@ import threading
 from abc import ABC, abstractmethod
 from threading import Event
 from time import sleep
-from typing import Any, Callable, Dict, List, Optional, T, Tuple, Type, Union
+from types import TracebackType
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type, TypeVar, Union
 
 import arrow
 import psutil
@@ -52,7 +53,7 @@ from prometheus_client.core import REGISTRY
 from prometheus_client.exposition import basic_auth_handler, delete_from_gateway, pushadd_to_gateway
 
 from cognite.client import CogniteClient
-from cognite.client.data_classes import Asset, TimeSeries
+from cognite.client.data_classes import Asset, Datapoints, DatapointsArray, TimeSeries
 from cognite.client.exceptions import CogniteDuplicatedError
 
 from .util import ensure_time_series
@@ -60,7 +61,10 @@ from .util import ensure_time_series
 _metrics_singularities = {}
 
 
-def safe_get(cls: Type[T], *args, **kwargs) -> T:
+T = TypeVar("T")
+
+
+def safe_get(cls: Type[T], *args: Any, **kwargs: Any) -> T:
     """
     A factory for instances of metrics collections.
 
@@ -227,7 +231,9 @@ class AbstractMetricsPusher(ABC):
         self.start()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(
+        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+    ) -> None:
         """
         Wraps around stop method, for use as context manager
 
@@ -271,7 +277,7 @@ class PrometheusPusher(AbstractMetricsPusher):
 
         self.url = url
 
-    def _auth_handler(self, url: str, method: str, timeout: int, headers: Dict[str, str], data: Any) -> Callable:
+    def _auth_handler(self, url: str, method: str, timeout: int, headers: List[Tuple[str, str]], data: Any) -> Callable:
         """
         Returns a authentication handler against the Prometheus Pushgateway to use in the pushadd_to_gateway method.
 
@@ -355,6 +361,7 @@ class CognitePusher(AbstractMetricsPusher):
 
         if self.asset is not None:
             # Ensure that asset exist, and retrieve internal ID
+            asset: Optional[Asset]
             try:
                 asset = self.cdf_client.assets.create(self.asset)
             except CogniteDuplicatedError:
@@ -375,7 +382,7 @@ class CognitePusher(AbstractMetricsPusher):
                         name=metric.name,
                         legacy_name=external_id,
                         description=metric.documentation,
-                        asset_id=asset_id,
+                        asset_id=asset_id,  # type: ignore  # this is optional. Type hint in SDK is wrong
                     )
                 )
 
@@ -387,7 +394,7 @@ class CognitePusher(AbstractMetricsPusher):
         """
         timestamp = int(arrow.get().float_timestamp * 1000)
 
-        datapoints: List[Dict[str, Union[str, List[Tuple[float, float]]]]] = []
+        datapoints: List[Dict[str, Union[str, int, List[Any], Datapoints, DatapointsArray]]] = []
 
         for metric in REGISTRY.collect():
             if type(metric) == Metric and metric.type in ["gauge", "counter"]:

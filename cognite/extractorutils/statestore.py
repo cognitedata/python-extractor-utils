@@ -89,8 +89,8 @@ import json
 import logging
 import threading
 from abc import ABC, abstractmethod
-from threading import Lock
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from types import TracebackType
+from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
 from requests.exceptions import ConnectionError
 
@@ -138,8 +138,6 @@ class AbstractStateStore(ABC):
         self.cancellation_token: threading.Event = cancellation_token
 
         self._deleted: List[str] = []
-
-        self.lock = Lock()
 
     def start(self) -> None:
         """
@@ -262,14 +260,14 @@ class AbstractStateStore(ABC):
             A function that expands the current states with the values given
         """
 
-        def callback(uploaded_points: List[Dict[str, Union[str, DataPointList]]]):
+        def callback(uploaded_points: List[Dict[str, Union[str, DataPointList]]]) -> None:
             for time_series in uploaded_points:
                 # Use CDF timestamps
                 data_points = time_series["datapoints"]
                 if data_points:
                     high = max(data_points)[0]
                     low = min(data_points)[0]
-                    external_id = time_series["externalId"]
+                    external_id: str = time_series["externalId"]  # type: ignore  # known to be str from where we set it
                     self.expand_state(external_id, low, high)
 
         return callback
@@ -300,7 +298,7 @@ class AbstractStateStore(ABC):
         return False
 
     def __getitem__(self, external_id: str) -> Tuple[Any, Any]:
-        return self.get_state(external_id)
+        return self.get_state(external_id)  # type: ignore  # will not be list if input is single str
 
     def __setitem__(self, key: str, value: Tuple[Any, Any]) -> None:
         self.set_state(external_id=key, low=value[0], high=value[1])
@@ -381,7 +379,8 @@ class RawStateStore(AbstractStateStore):
         if self._initialized and not force:
             return
 
-        rows = self._cdf_client.raw.rows.list(db_name=self.database, table_name=self.table, limit=None)
+        # ignore type since list _is_ optional, sdk types are wrong
+        rows = self._cdf_client.raw.rows.list(db_name=self.database, table_name=self.table, limit=None)  # type: ignore
 
         with self.lock:
             self._local_state.clear()
@@ -421,7 +420,9 @@ class RawStateStore(AbstractStateStore):
         self.start()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(
+        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+    ) -> None:
         """
         Wraps around stop method, for use as context manager
 
@@ -499,7 +500,9 @@ class LocalStateStore(AbstractStateStore):
         self.start()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(
+        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+    ) -> None:
         """
         Wraps around stop method, for use as context manager
 
@@ -516,7 +519,7 @@ class NoStateStore(AbstractStateStore):
     A state store that only keeps states in memory and never stores or initializes from external sources.
     """
 
-    def __init__(self):
+    def __init__(self) -> None:
         super().__init__()
 
     def initialize(self, force: bool = False) -> None:

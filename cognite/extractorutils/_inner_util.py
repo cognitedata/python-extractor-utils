@@ -18,6 +18,7 @@ A module containing utilities meant for use inside the extractor-utils package
 
 import json
 from decimal import Decimal
+from typing import Any, Dict, Union
 
 
 def _resolve_log_level(level: str) -> int:
@@ -25,17 +26,17 @@ def _resolve_log_level(level: str) -> int:
 
 
 class _DecimalEncoder(json.JSONEncoder):
-    def default(self, obj):
+    def default(self, obj: Any) -> Dict[str, str]:
         if isinstance(obj, Decimal):
             return {"type": "decimal_encoded", "value": str(obj)}
         return super(_DecimalEncoder, self).default(obj)
 
 
 class _DecimalDecoder(json.JSONDecoder):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         json.JSONDecoder.__init__(self, object_hook=self.object_hook, *args, **kwargs)
 
-    def object_hook(self, obj_dict):
+    def object_hook(self, obj_dict: Dict[str, str]) -> Union[Dict[str, str], Decimal]:
         if obj_dict.get("type") == "decimal_encoded":
             return Decimal(obj_dict["value"])
         return obj_dict
