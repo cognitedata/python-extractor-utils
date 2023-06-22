@@ -16,9 +16,9 @@
 Module containing tools for loading and verifying config files, and a YAML loader to automatically serialize these
 dataclasses from a config file.
 
-Configs are described as ``dataclass``\es, and use the ``BaseConfig`` class as a superclass to get a few things built-in:
-config version, Cognite project and logging. Use type hints to specify types, use the ``Optional`` type to specify that
-a config parameter is optional, and give the attribute a value to give it a default.
+Configs are described as ``dataclass``\es, and use the ``BaseConfig`` class as a superclass to get a few things
+built-in: config version, Cognite project and logging. Use type hints to specify types, use the ``Optional`` type to
+specify that a config parameter is optional, and give the attribute a value to give it a default.
 
 For example, a config class for an extractor may look like the following:
 

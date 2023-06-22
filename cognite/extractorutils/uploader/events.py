@@ -16,11 +16,11 @@ import threading
 from typing import Callable, List, Optional
 
 import arrow
+from requests import ConnectionError
+
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Event
 from cognite.client.exceptions import CogniteAPIError
-from requests import ConnectionError
-
 from cognite.extractorutils.uploader._base import (
     RETRIES,
     RETRY_BACKOFF_FACTOR,

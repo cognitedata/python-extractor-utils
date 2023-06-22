@@ -17,7 +17,6 @@ from unittest.mock import patch
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Row
-
 from cognite.extractorutils.middleware import JQMiddleware
 from cognite.extractorutils.uploader import EventUploadQueue, RawUploadQueue, TimeSeriesUploadQueue
 from cognite.extractorutils.uploader_extractor import UploaderExtractor, UploaderExtractorConfig

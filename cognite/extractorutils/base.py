@@ -21,10 +21,10 @@ from threading import Event, Thread
 from types import TracebackType
 from typing import Any, Callable, Dict, Generic, Optional, Type, TypeVar
 
-from cognite.client import CogniteClient
-from cognite.client.data_classes import ExtractionPipeline, ExtractionPipelineRun
 from dotenv import find_dotenv, load_dotenv
 
+from cognite.client import CogniteClient
+from cognite.client.data_classes import ExtractionPipeline, ExtractionPipelineRun
 from cognite.extractorutils.configtools import BaseConfig, ConfigResolver, StateStoreConfig
 from cognite.extractorutils.exceptions import InvalidConfigError
 from cognite.extractorutils.metrics import BaseMetrics
@@ -193,7 +193,7 @@ class Extractor(Generic[CustomConfigClass]):
 
         try:
             self.state_store.initialize()
-        except ValueError as e:
+        except ValueError:
             self.logger.exception("Could not load state store, using an empty state store as default")
 
         Extractor._statestore_singleton = self.state_store
@@ -254,8 +254,8 @@ class Extractor(Generic[CustomConfigClass]):
         try:
             self._initial_load_config(override_path=self.config_file_path)
         except InvalidConfigError as e:
-            print("Critical error: Could not read config file", file=sys.stderr)
-            print(str(e), file=sys.stderr)
+            print("Critical error: Could not read config file", file=sys.stderr)  # noqa: T201
+            print(str(e), file=sys.stderr)  # noqa: T201
             sys.exit(1)
 
         if not self.configured_logger:

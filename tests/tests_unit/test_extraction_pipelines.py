@@ -16,7 +16,6 @@ import time
 import unittest
 
 from cognite.client.testing import monkeypatch_cognite_client
-
 from cognite.extractorutils.util import add_extraction_pipeline
 
 

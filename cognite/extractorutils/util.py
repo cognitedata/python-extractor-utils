@@ -23,12 +23,13 @@ import threading
 from functools import partial, wraps
 from threading import Event, Thread
 from time import time
-from typing import Any, Dict, Generator, Iterable, Optional, Tuple, Type, Union
+from typing import Any, Generator, Iterable, Optional, Tuple, Type, Union
+
+from decorator import decorator
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset, ExtractionPipelineRun, TimeSeries
 from cognite.client.exceptions import CogniteNotFoundError
-from decorator import decorator
 
 
 def _ensure(endpoint: Any, items: Iterable[Any]) -> None:
@@ -266,7 +267,7 @@ def add_extraction_pipeline(
                 raise e
             else:
                 _report_success()
-                _logger.info(f"Extraction ran successfully")
+                _logger.info("Extraction ran successfully")
             finally:
                 cancellation_token.set()
                 heartbeat_thread.join()
@@ -376,8 +377,8 @@ def retry(
 
     @decorator
     def retry_decorator(f, *fargs, **fkwargs):
-        args = fargs if fargs else list()
-        kwargs = fkwargs if fkwargs else dict()
+        args = fargs if fargs else []
+        kwargs = fkwargs if fkwargs else {}
 
         return _retry_internal(
             partial(f, *args, **kwargs),

@@ -19,13 +19,13 @@ import time
 import unittest
 from datetime import datetime, timezone
 
+from parameterized import parameterized_class
+
 from cognite.client import CogniteClient
 from cognite.client.config import ClientConfig
 from cognite.client.credentials import OAuthClientCredentials
 from cognite.client.data_classes import Row, TimeSeries
 from cognite.client.exceptions import CogniteAPIError, CogniteNotFoundError
-from parameterized import parameterized_class
-
 from cognite.extractorutils.uploader import RawUploadQueue, TimeSeriesUploadQueue
 
 test_id = random.randint(0, 2**31)

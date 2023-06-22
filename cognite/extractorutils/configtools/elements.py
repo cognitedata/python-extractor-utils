@@ -24,11 +24,11 @@ from typing import Dict, List, Optional, Tuple, Union
 from urllib.parse import urljoin
 
 import yaml
+from prometheus_client import REGISTRY, start_http_server
+
 from cognite.client import ClientConfig, CogniteClient
 from cognite.client.credentials import OAuthClientCertificate, OAuthClientCredentials
 from cognite.client.data_classes import Asset, DataSet, ExtractionPipeline
-from prometheus_client import REGISTRY, start_http_server
-
 from cognite.extractorutils.configtools._util import _load_certificate_data
 from cognite.extractorutils.exceptions import InvalidConfigError
 from cognite.extractorutils.metrics import AbstractMetricsPusher, CognitePusher, PrometheusPusher

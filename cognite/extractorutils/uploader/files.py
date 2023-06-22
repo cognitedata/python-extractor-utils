@@ -18,11 +18,11 @@ from os import PathLike
 from typing import Any, Callable, List, Optional, Tuple, Union
 
 import arrow
+from requests import ConnectionError
+
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Event, FileMetadata
 from cognite.client.exceptions import CogniteAPIError
-from requests import ConnectionError
-
 from cognite.extractorutils.uploader._base import (
     RETRIES,
     RETRY_BACKOFF_FACTOR,

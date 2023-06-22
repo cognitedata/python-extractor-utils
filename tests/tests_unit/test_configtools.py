@@ -19,9 +19,9 @@ import unittest
 from dataclasses import dataclass
 
 import yaml
+
 from cognite.client import CogniteClient
 from cognite.client.credentials import OAuthClientCredentials
-
 from cognite.extractorutils.configtools import (
     BaseConfig,
     CogniteConfig,
@@ -77,10 +77,10 @@ class TestConfigtoolsMethods(unittest.TestCase):
         config_raw = """
         # CDF project (also known as tenant name)
         project: tenant-name
-    
+
         # How to label uploaded data in CDF
         external-id-prefix: "test_"
-        
+
         idp-authentication:
             client-id: abc123
             secret: def567
@@ -106,23 +106,23 @@ class TestConfigtoolsMethods(unittest.TestCase):
     def test_read_base_config(self):
         config_raw = """
         version: "1"
-        
+
         logger:
             # Console logging
             console:
                 level: INFO
-             
+
         # Information about CDF tenant
         cognite:
             # CDF server
             host: https://greenfield.cognitedata.com
-        
+
             # CDF project (also known as tenant name)
             project: tenant-name
-        
+
             # How to label uploaded data in CDF
             external-id-prefix: "test_"
-            
+
             idp-authentication:
                 client-id: abc123
                 secret: def567
@@ -146,7 +146,7 @@ class TestConfigtoolsMethods(unittest.TestCase):
 
     def test_read_invalid_missing_fields(self):
         # missing project
-        config_raw = """    
+        config_raw = """
         # How to label uploaded data in CDF
         external-id-prefix: "test_"
         """
@@ -158,17 +158,17 @@ class TestConfigtoolsMethods(unittest.TestCase):
         config_raw = """
         # CDF project (also known as tenant name)
         project: tenant-name
-    
+
         # How to label uploaded data in CDF
         external-id-prefix: "test_"
-        
+
         idp-authentication:
             client-id: abc123
             secret: def567
             token-url: https://get-a-token.com/token
             scopes:
               - https://api.cognitedata.com/.default
-        
+
         # Does not exist:
         no-such-field: value
         """
@@ -177,13 +177,13 @@ class TestConfigtoolsMethods(unittest.TestCase):
             load_yaml(config_raw, CogniteConfig)
 
     def test_read_invalid_wrong_type(self):
-        config_raw = """    
+        config_raw = """
         # CDF project (also known as tenant name)
         project: 1234
-    
+
         # How to label uploaded data in CDF
         external-id-prefix: "test_"
-        
+
         idp-authentication:
             client-id: abc123
             secret: def567
@@ -196,12 +196,12 @@ class TestConfigtoolsMethods(unittest.TestCase):
             load_yaml(config_raw, CogniteConfig)
 
     def test_get_cognite_client_from_aad(self):
-        config_raw = """    
+        config_raw = """
         idp-authentication:
             tenant: foo
             client_id: cid
             secret: scrt
-            scopes: 
+            scopes:
                 - scp
             min_ttl: 40
         project: tenant-name
@@ -220,7 +220,7 @@ class TestConfigtoolsMethods(unittest.TestCase):
         os.environ["TRUE_FLAG"] = "true"
         os.environ["FALSE_FLAG"] = "FALSE"
         os.environ["STR_VAL"] = "TeST"
-        config_raw = """ 
+        config_raw = """
         boolean-field: ${TRUE_FLAG}
         another-boolean-field: ${FALSE_FLAG}
         yet-another-boolean-field: false
@@ -240,13 +240,13 @@ class TestConfigtoolsMethods(unittest.TestCase):
         os.environ["TRUE_FLAG"] = "true"
         os.environ["FALSE_FLAG"] = "FALSE"
         os.environ["INVALID_FLAG"] = "TEST"
-        config = """    
+        config = """
         boolean-field: ${FALSE_FLAG}
         another-boolean-field: ${INVALID_FLAG}
         yet-another-boolean-field: false
         string-field: "true"
         another-string-field: "test"
-        yet-another-string-field: "test" 
+        yet-another-string-field: "test"
         """
         with self.assertRaises(InvalidConfigError):
             load_yaml(config, CastingClass)

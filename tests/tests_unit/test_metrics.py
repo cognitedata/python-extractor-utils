@@ -17,10 +17,10 @@ import unittest
 from unittest.mock import Mock, patch
 
 import arrow
-from cognite.client.data_classes import Asset, TimeSeries
-from cognite.client.exceptions import CogniteDuplicatedError, CogniteNotFoundError
 from prometheus_client import Gauge
 
+from cognite.client.data_classes import Asset, TimeSeries
+from cognite.client.exceptions import CogniteDuplicatedError, CogniteNotFoundError
 from cognite.extractorutils.metrics import CognitePusher, safe_get
 
 

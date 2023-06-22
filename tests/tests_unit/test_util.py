@@ -18,7 +18,6 @@ from unittest.mock import Mock, patch
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset, TimeSeries
 from cognite.client.exceptions import CogniteNotFoundError
-
 from cognite.extractorutils.util import EitherId, ensure_assets, ensure_time_series
 
 

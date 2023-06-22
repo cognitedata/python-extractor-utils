@@ -14,7 +14,6 @@
 import unittest
 
 from cognite.client.data_classes import Row
-
 from cognite.extractorutils.middleware import JQMiddleware
 
 
@@ -36,7 +35,6 @@ class TestMiddlewareClass(unittest.TestCase):
         self.mw = JQMiddleware(jq_rules=self.jq_rules)
 
     def test_jq_mw_dict(self):
-
         actual_result = self.mw(self.data)
         self.assertDictEqual(actual_result, self.expected_result)
 

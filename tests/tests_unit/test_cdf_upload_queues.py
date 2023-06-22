@@ -20,7 +20,6 @@ from unittest.mock import patch
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Event, FileMetadata, Row
-
 from cognite.extractorutils.uploader import (
     BytesUploadQueue,
     EventUploadQueue,

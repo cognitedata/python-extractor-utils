@@ -19,8 +19,8 @@ from dataclasses import dataclass
 from typing import Any, Callable, List, Optional
 
 from arrow import Arrow
-from cognite.client import CogniteClient
 
+from cognite.client import CogniteClient
 from cognite.extractorutils._inner_util import _resolve_log_level
 
 
@@ -88,15 +88,8 @@ class AbstractUploadQueue(ABC):
         if self.post_upload_function is not None:
             try:
                 self.post_upload_function(uploaded)
-            except Exception as e:
+            except Exception:
                 logging.getLogger(__name__).exception("Error during upload callback")
-
-    @abstractmethod
-    def add_to_upload_queue(self, *args) -> None:
-        """
-        Adds an element to the upload queue. The queue will be uploaded if the queue byte size is larger than the
-        threshold specified in the config.
-        """
 
     @abstractmethod
     def upload(self) -> None:

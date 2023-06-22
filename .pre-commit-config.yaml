@@ -1,14 +1,21 @@
 repos:
--   repo: https://github.com/asottile/seed-isort-config
-    rev: v2.2.0
-    hooks:
-    -   id: seed-isort-config
--   repo: https://github.com/pre-commit/mirrors-isort
-    rev: v5.10.1
-    hooks:
-    -   id: isort
-        additional_dependencies: [toml]
 -   repo: https://github.com/psf/black
-    rev: 22.3.0
+    rev: 23.3.0
     hooks:
       - id: black
+-   repo: https://github.com/charliermarsh/ruff-pre-commit
+    hooks:
+    -   id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+    rev: v0.0.274
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.4.0
+    hooks:
+      - id: check-ast
+      - id: debug-statements
+      - id: trailing-whitespace
+      - id: check-builtin-literals
+      - id: end-of-file-fixer
+        exclude: pluto-worker/sqlx-data.json
+      - id: mixed-line-ending
+        args: [--fix=lf]
