@@ -14,7 +14,7 @@
 import base64
 import re
 from pathlib import Path
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple, Union
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import serialization as serialization
@@ -37,11 +37,11 @@ def _to_snake_case(dictionary: Dict[str, Any], case_style: str) -> Dict[str, Any
         An updated dictionary with keys in the given convention.
     """
 
-    def fix_list(list_, key_translator):
+    def fix_list(list_: List[Any], key_translator: Callable[[str], str]) -> List[Any]:
         if list_ is None:
             return []
 
-        new_list = [None] * len(list_)
+        new_list: List[Any] = [None] * len(list_)
         for i, element in enumerate(list_):
             if isinstance(element, dict):
                 new_list[i] = fix_dict(element, key_translator)
@@ -51,11 +51,11 @@ def _to_snake_case(dictionary: Dict[str, Any], case_style: str) -> Dict[str, Any
                 new_list[i] = element
         return new_list
 
-    def fix_dict(dict_, key_translator):
+    def fix_dict(dict_: Dict[str, Any], key_translator: Callable[[str], str]) -> Dict[str, Any]:
         if dict_ is None:
             return {}
 
-        new_dict = {}
+        new_dict: Dict[str, Any] = {}
         for key in dict_:
             if isinstance(dict_[key], dict):
                 new_dict[key_translator(key)] = fix_dict(dict_[key], key_translator)
@@ -65,10 +65,10 @@ def _to_snake_case(dictionary: Dict[str, Any], case_style: str) -> Dict[str, Any
                 new_dict[key_translator(key)] = dict_[key]
         return new_dict
 
-    def translate_hyphen(key):
+    def translate_hyphen(key: str) -> str:
         return key.replace("-", "_")
 
-    def translate_camel(key):
+    def translate_camel(key: str) -> str:
         return re.sub(r"([A-Z]+)", r"_\1", key).strip("_").lower()
 
     if case_style == "snake" or case_style == "underscore":
@@ -81,7 +81,7 @@ def _to_snake_case(dictionary: Dict[str, Any], case_style: str) -> Dict[str, Any
         raise ValueError(f"Invalid case style: {case_style}")
 
 
-def _load_certificate_data(cert_path: str, password: Optional[str]) -> Tuple[str, str]:
+def _load_certificate_data(cert_path: str, password: Optional[str]) -> Union[Tuple[str, str], Tuple[bytes, bytes]]:
     path = Path(cert_path)
     cert_data = Path(path).read_bytes()
 
@@ -93,16 +93,22 @@ def _load_certificate_data(cert_path: str, password: Optional[str]) -> Tuple[str
             format=serialization.PrivateFormat.TraditionalOpenSSL,
             encryption_algorithm=serialization.NoEncryption(),
         )
-        return (base64.b16encode(cert.fingerprint(hashes.SHA1())), private_key_str)
+        return base64.b16encode(cert.fingerprint(hashes.SHA1())), private_key_str
     elif path.suffix == ".pfx":
-        (private_key, cert, _) = pkcs12.load_key_and_certificates(
+        (private_key_pfx, cert_pfx, _) = pkcs12.load_key_and_certificates(
             cert_data, password=password.encode() if password else None
         )
-        private_key_str = private_key.private_bytes(
+
+        if private_key_pfx is None:
+            raise InvalidConfigError(f"Can't load private key from {cert_path}")
+        if cert_pfx is None:
+            raise InvalidConfigError(f"Can't load certificate from {cert_path}")
+
+        private_key_str = private_key_pfx.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.TraditionalOpenSSL,
             encryption_algorithm=serialization.NoEncryption(),
         )
-        return (base64.b16encode(cert.fingerprint(hashes.SHA1())), private_key_str)
+        return base64.b16encode(cert_pfx.fingerprint(hashes.SHA1())), private_key_str
     else:
         raise InvalidConfigError(f"Unknown certificate format '{path.suffix}'. Allowed formats are 'pem' and 'pfx'")

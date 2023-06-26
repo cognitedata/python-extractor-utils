@@ -23,7 +23,7 @@ import threading
 from functools import partial, wraps
 from threading import Event, Thread
 from time import time
-from typing import Any, Generator, Iterable, Optional, Tuple, Type, Union
+from typing import Any, Callable, Generator, Iterable, Optional, Tuple, Type, TypeVar, Union
 
 from decorator import decorator
 
@@ -81,7 +81,7 @@ def set_event_on_interrupt(stop_event: Event) -> None:
         stop_event: Event to set
     """
 
-    def sigint_handler(sig, frame):
+    def sigint_handler(sig_num: int, frame: Any) -> None:
         logger = logging.getLogger(__name__)
         logger.warning("Interrupt signal received, stopping extractor gracefully")
         stop_event.set()
@@ -107,7 +107,7 @@ class EitherId:
         TypeError: If none of both of id types are set.
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Union[int, str, None]):
         internal_id = kwargs.get("id")
         external_id = kwargs.get("externalId") or kwargs.get("external_id")
 
@@ -117,8 +117,14 @@ class EitherId:
         if internal_id is not None and external_id is not None:
             raise TypeError("Only one of id and external_id can be set")
 
-        self.internal_id = internal_id
-        self.external_id = external_id
+        if internal_id is not None and not isinstance(internal_id, int):
+            raise TypeError("Internal IDs must be integers")
+
+        if external_id is not None and not isinstance(external_id, str):
+            raise TypeError("Internal IDs must be integers")
+
+        self.internal_id: Optional[int] = internal_id
+        self.external_id: Optional[str] = external_id
 
     def type(self) -> str:
         """
@@ -136,7 +142,7 @@ class EitherId:
         Returns:
             The ID
         """
-        return self.internal_id or self.external_id
+        return self.internal_id or self.external_id  # type: ignore  # checked to be not None in init
 
     def __eq__(self, other: Any) -> bool:
         """
@@ -181,12 +187,15 @@ class EitherId:
         return self.__str__()
 
 
+_T1 = TypeVar("_T1")
+
+
 def add_extraction_pipeline(
     extraction_pipeline_ext_id: str,
     cognite_client: CogniteClient,
     heartbeat_waiting_time: int = 600,
     added_message: str = "",
-):
+) -> Callable[[Callable[..., _T1]], Callable[..., _T1]]:
     """
     This is to be used as a decorator for extractor functions to add extraction pipeline information
 
@@ -215,9 +224,9 @@ def add_extraction_pipeline(
 
     _logger = logging.getLogger(__name__)
 
-    def decorator_ext_pip(input_function):
+    def decorator_ext_pip(input_function: Callable[..., _T1]) -> Callable[..., _T1]:
         @wraps(input_function)
-        def wrapper_ext_pip(*args, **kwargs):
+        def wrapper_ext_pip(*args: Any, **kwargs: Any) -> _T1:
             ##############################
             # Setup Extraction Pipelines #
             ##############################
@@ -257,6 +266,7 @@ def add_extraction_pipeline(
             ##############################
             _logger.info(f"Starting to run function: {input_function.__name__}")
 
+            heartbeat_thread: Optional[Thread] = None
             try:
                 heartbeat_thread = Thread(target=heartbeat_loop, name="HeartbeatLoop", daemon=True)
                 heartbeat_thread.start()
@@ -270,7 +280,8 @@ def add_extraction_pipeline(
                 _logger.info("Extraction ran successfully")
             finally:
                 cancellation_token.set()
-                heartbeat_thread.join()
+                if heartbeat_thread:
+                    heartbeat_thread.join()
 
             return output
 
@@ -313,25 +324,28 @@ def throttled_loop(target_time: int, cancellation_token: Event) -> Generator[Non
             cancellation_token.wait(target_time - iteration_time)
 
 
+_T2 = TypeVar("_T2")
+
+
 def _retry_internal(
-    f,
+    f: Callable[..., _T2],
     cancellation_token: threading.Event = threading.Event(),
-    exceptions: Iterable[Type[Exception]] = Exception,
+    exceptions: Iterable[Type[Exception]] = [Exception],
     tries: int = -1,
     delay: float = 0,
     max_delay: Optional[float] = None,
     backoff: float = 1,
     jitter: Union[float, Tuple[float, float]] = 0,
-):
+) -> _T2:
     logger = logging.getLogger(__name__)
 
     while tries and not cancellation_token.is_set():
         try:
             return f()
-        except exceptions as e:
+        except exceptions as e:  # type: ignore  # Exception is an exception type, smh mypy
             tries -= 1
             if not tries:
-                raise
+                raise e
 
             if logger is not None:
                 logger.warning("%s, retrying in %s seconds...", e, delay)
@@ -347,16 +361,18 @@ def _retry_internal(
             if max_delay is not None:
                 delay = min(delay, max_delay)
 
+    return None  # type: ignore  # unreachable, we will have raised an exception before this
+
 
 def retry(
     cancellation_token: threading.Event = threading.Event(),
-    exceptions: Iterable[Type[Exception]] = Exception,
+    exceptions: Iterable[Type[Exception]] = [Exception],
     tries: int = -1,
     delay: float = 0,
     max_delay: Optional[float] = None,
     backoff: float = 1,
     jitter: Union[float, Tuple[float, float]] = 0,
-):
+) -> Callable[[Callable[..., _T2]], Callable[..., _T2]]:
     """
     Returns a retry decorator.
 
@@ -376,7 +392,7 @@ def retry(
     """
 
     @decorator
-    def retry_decorator(f, *fargs, **fkwargs):
+    def retry_decorator(f: Callable[..., _T2], *fargs: Any, **fkwargs: Any) -> _T2:
         args = fargs if fargs else []
         kwargs = fkwargs if fkwargs else {}
 

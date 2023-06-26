@@ -18,7 +18,7 @@ include = '\.py$'
 
 [tool.ruff]
 select = ["E", "F", "I", "T20", "S"]
-ignore = ["S104", "S303", "S311"]
+ignore = ["S104", "S303", "S311", "E501"]
 fixable = ["A", "B", "C", "D", "E", "F", "I"]
 unfixable = []
 
@@ -52,6 +52,7 @@ follow_imports = "normal"
 namespace_packages = true
 explicit_package_bases = true
 show_error_codes = true
+exclude = "tests/*"
 
 [tool.poetry.dependencies]
 python = "^3.8.0"

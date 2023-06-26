@@ -8,6 +8,14 @@ repos:
     -   id: ruff
         args: [--fix, --exit-non-zero-on-fix]
     rev: v0.0.274
+-   repo: local
+    hooks:
+    -   id: mypy
+        name: mypy
+        types: [python]
+        language: system
+        entry: poetry run mypy --non-interactive --install-types cognite
+        pass_filenames: false
 -   repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v4.4.0
     hooks:

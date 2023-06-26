@@ -15,10 +15,10 @@
 """
 A module containing a slightly more advanced base extractor class, sorting a generic output into upload queues.
 """
-
+import threading
 from dataclasses import dataclass
 from types import TracebackType
-from typing import Callable, Iterable, List, Optional, Type, TypeVar
+from typing import Any, Callable, Iterable, List, Optional, Type, TypeVar
 
 from more_itertools import peekable
 
@@ -78,12 +78,12 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
         description: str,
         version: Optional[str] = None,
         run_handle: Optional[
-            Callable[[CogniteClient, AbstractStateStore, UploaderExtractorConfigClass, Event], None]
+            Callable[[CogniteClient, AbstractStateStore, UploaderExtractorConfigClass, threading.Event], None]
         ] = None,
         config_class: Type[UploaderExtractorConfigClass],
         metrics: Optional[BaseMetrics] = None,
         use_default_state_store: bool = True,
-        cancellation_token: Event = Event(),
+        cancellation_token: threading.Event = threading.Event(),
         config_file_path: Optional[str] = None,
         continuous_extractor: bool = False,
         heartbeat_waiting_time: int = 600,
@@ -107,10 +107,9 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
         self.middleware = middleware if isinstance(middleware, list) else []
 
     def handle_output(self, output: CdfTypes) -> None:
-        if not isinstance(output, Iterable):
-            output = [output]
+        list_output = [output] if not isinstance(output, Iterable) else output
+        peekable_output = peekable(list_output)
 
-        peekable_output = peekable(output)
         peek = peekable_output.peek(None)
 
         if peek is None:
@@ -133,7 +132,7 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
         else:
             raise ValueError(f"Unexpected type: {type(peek)}")
 
-    def _apply_middleware(self, item):
+    def _apply_middleware(self, item: Any) -> Any:
         for mw in self.middleware:
             item = mw(item)
         return item

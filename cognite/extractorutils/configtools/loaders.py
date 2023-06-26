@@ -40,10 +40,10 @@ def _load_yaml(
     source: Union[TextIO, str],
     config_type: Type[CustomConfigClass],
     case_style: str = "hyphen",
-    expand_envvars=True,
+    expand_envvars: bool = True,
     dict_manipulator: Callable[[Dict[str, Any]], Dict[str, Any]] = lambda x: x,
 ) -> CustomConfigClass:
-    def env_constructor(_: yaml.SafeLoader, node):
+    def env_constructor(_: yaml.SafeLoader, node: yaml.Node) -> bool:
         bool_values = {
             "true": True,
             "false": False,
@@ -80,7 +80,10 @@ def _load_yaml(
         raise InvalidConfigError(f"Unknown config parameter{'s' if len(unknowns) > 1 else ''} {', '.join(unknowns)}")
 
     except (dacite.WrongTypeError, dacite.MissingValueError, dacite.UnionMatchError) as e:
-        path = e.field_path.replace("_", "-") if case_style == "hyphen" else e.field_path
+        if e.field_path:
+            path = e.field_path.replace("_", "-") if case_style == "hyphen" else e.field_path
+        else:
+            path = None
 
         def name(type_: Type) -> str:
             return type_.__name__ if hasattr(type_, "__name__") else str(type_)
@@ -106,7 +109,10 @@ def _load_yaml(
 
 
 def load_yaml(
-    source: Union[TextIO, str], config_type: Type[CustomConfigClass], case_style: str = "hyphen", expand_envvars=True
+    source: Union[TextIO, str],
+    config_type: Type[CustomConfigClass],
+    case_style: str = "hyphen",
+    expand_envvars: bool = True,
 ) -> CustomConfigClass:
     """
     Read a YAML file, and create a config object based on its contents.
@@ -135,7 +141,7 @@ class ConfigResolver(Generic[CustomConfigClass]):
         self._config: Optional[CustomConfigClass] = None
         self._next_config: Optional[CustomConfigClass] = None
 
-    def _reload_file(self):
+    def _reload_file(self) -> None:
         with open(self.config_path, "r") as stream:
             self._config_text = stream.read()
 
@@ -155,14 +161,14 @@ class ConfigResolver(Generic[CustomConfigClass]):
         except Exception:
             _logger.exception("Failed to reload configuration file")
             return False
-        return self._config._file_hash != self._next_config._file_hash
+        return self._config._file_hash != self._next_config._file_hash if self._config else True  # type: ignore
 
     @property
     def config(self) -> CustomConfigClass:
         if self._config is None:
             self._resolve_config()
             self.accept_new_config()
-        return self._config
+        return self._config  # type: ignore
 
     def accept_new_config(self) -> None:
         self._config = self._next_config
@@ -196,11 +202,13 @@ class ConfigResolver(Generic[CustomConfigClass]):
         if local_part.cognite.host is not None:
             remote_part["cognite"]["host"] = local_part.cognite.host
         remote_part["cognite"]["project"] = local_part.cognite.project
+
+        # Ignoring None type, extraction pipelines is required at this point
         remote_part["cognite"]["extraction-pipeline"] = {}
-        remote_part["cognite"]["extraction-pipeline"]["id"] = local_part.cognite.extraction_pipeline.id
+        remote_part["cognite"]["extraction-pipeline"]["id"] = local_part.cognite.extraction_pipeline.id  # type: ignore
         remote_part["cognite"]["extraction-pipeline"][
             "external_id"
-        ] = local_part.cognite.extraction_pipeline.external_id
+        ] = local_part.cognite.extraction_pipeline.external_id  # type: ignore
 
         return remote_part
 
@@ -209,10 +217,10 @@ class ConfigResolver(Generic[CustomConfigClass]):
 
         if self.is_remote:
             _logger.debug("Loading remote config file")
-            tmp_config: _BaseConfig = load_yaml(self._config_text, _BaseConfig)
+            tmp_config: _BaseConfig = load_yaml(self._config_text, _BaseConfig)  # type: ignore
             client = tmp_config.cognite.get_cognite_client("config_resolver")
             response = client.extraction_pipelines.config.retrieve(
-                tmp_config.cognite.get_extraction_pipeline(client).external_id
+                tmp_config.cognite.get_extraction_pipeline(client).external_id  # type: ignore  # ignoring extpipe None
             )
 
             self._next_config = _load_yaml(

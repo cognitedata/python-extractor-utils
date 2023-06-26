@@ -20,14 +20,14 @@ from enum import Enum
 from logging.handlers import TimedRotatingFileHandler
 from threading import Event
 from time import sleep
-from typing import Dict, List, Optional, Tuple, Union
+from typing import Any, Dict, List, Optional, Tuple, Union
 from urllib.parse import urljoin
 
 import yaml
 from prometheus_client import REGISTRY, start_http_server
 
 from cognite.client import ClientConfig, CogniteClient
-from cognite.client.credentials import OAuthClientCertificate, OAuthClientCredentials
+from cognite.client.credentials import CredentialProvider, OAuthClientCertificate, OAuthClientCredentials
 from cognite.client.data_classes import Asset, DataSet, ExtractionPipeline
 from cognite.extractorutils.configtools._util import _load_certificate_data
 from cognite.extractorutils.exceptions import InvalidConfigError
@@ -90,7 +90,7 @@ class EitherIdConfig:
 
 
 class TimeIntervalConfig(yaml.YAMLObject):
-    def __init__(self, expression):
+    def __init__(self, expression: str) -> None:
         self._interval, self._expression = TimeIntervalConfig._parse_expression(expression)
 
     @classmethod
@@ -146,7 +146,7 @@ class TimeIntervalConfig(yaml.YAMLObject):
 
 
 class FileSizeConfig(yaml.YAMLObject):
-    def __init__(self, expression):
+    def __init__(self, expression: str) -> None:
         self._bytes, self._expression = FileSizeConfig._parse_expression(expression)
 
     @classmethod
@@ -241,7 +241,7 @@ class CogniteConfig:
     host: str = "https://api.cognitedata.com"
 
     def get_cognite_client(
-        self, client_name: str, token_custom_args: Optional[Dict[str, str]] = None, use_experimental_sdk=False
+        self, client_name: str, token_custom_args: Optional[Dict[str, str]] = None, use_experimental_sdk: bool = False
     ) -> CogniteClient:
         from cognite.client.config import global_config
 
@@ -255,6 +255,7 @@ class CogniteConfig:
         global_config.disable_ssl = self.connection.disable_ssl
         global_config.proxies = self.connection.proxies
 
+        credential_provider: CredentialProvider
         if self.idp_authentication.certificate:
             if self.idp_authentication.certificate.authority_url:
                 authority_url = self.idp_authentication.certificate.authority_url
@@ -268,13 +269,13 @@ class CogniteConfig:
             credential_provider = OAuthClientCertificate(
                 authority_url=authority_url,
                 client_id=self.idp_authentication.client_id,
-                cert_thumbprint=thumprint,
-                certificate=key,
+                cert_thumbprint=str(thumprint),
+                certificate=str(key),
                 scopes=self.idp_authentication.scopes,
             )
 
         elif self.idp_authentication.secret:
-            kwargs = {}
+            kwargs: Dict[str, Any] = {}
             if self.idp_authentication.token_url:
                 kwargs["token_url"] = self.idp_authentication.token_url
             elif self.idp_authentication.tenant:
@@ -289,7 +290,7 @@ class CogniteConfig:
                 token_custom_args["resource"] = self.idp_authentication.resource
             if self.idp_authentication.audience:
                 token_custom_args["audience"] = self.idp_authentication.audience
-            credential_provider = OAuthClientCredentials(**kwargs, **token_custom_args)
+            credential_provider = OAuthClientCredentials(**kwargs, **token_custom_args)  # type: ignore
 
         else:
             raise InvalidConfigError("No client certificate or secret provided")
@@ -303,7 +304,7 @@ class CogniteConfig:
         )
 
         if use_experimental_sdk:
-            from cognite.experimental import CogniteClient as ExperimentalCogniteClient
+            from cognite.experimental import CogniteClient as ExperimentalCogniteClient  # type: ignore
 
             return ExperimentalCogniteClient(client_config)
 
@@ -324,7 +325,7 @@ class CogniteConfig:
             return None
 
         return cdf_client.data_sets.retrieve(
-            id=self.data_set.either_id.internal_id, external_id=self.data_set.either_id.external_id
+            id=self.data_set.either_id.internal_id, external_id=self.data_set.either_id.external_id  # type: ignore
         )
 
     def get_extraction_pipeline(self, cdf_client: CogniteClient) -> Optional[ExtractionPipeline]:
@@ -333,8 +334,8 @@ class CogniteConfig:
 
         either_id = self.extraction_pipeline.either_id
         extraction_pipeline = cdf_client.extraction_pipelines.retrieve(
-            id=either_id.internal_id,
-            external_id=either_id.external_id,
+            id=either_id.internal_id,  # type: ignore
+            external_id=either_id.external_id,  # type: ignore
         )
         if extraction_pipeline is None:
             raise ValueError(f"Extraction pipeline with {either_id.type()} {either_id.content()} not found")
@@ -366,7 +367,7 @@ class LoggingConfig:
     # Prometheus and/or Cognite
     metrics: Optional[bool] = False
 
-    def setup_logging(self, suppress_console=False) -> None:
+    def setup_logging(self, suppress_console: bool = False) -> None:
         """
         Sets up the default logger in the logging package to be configured as defined in this config object
 
@@ -455,6 +456,7 @@ class MetricsConfig:
 
         push_gateways = self.push_gateways or []
 
+        pusher: AbstractMetricsPusher
         for counter, push_gateway in enumerate(push_gateways):
             pusher = PrometheusPusher(
                 job_name=push_gateway.job_name,
@@ -474,7 +476,7 @@ class MetricsConfig:
         if self.cognite:
             asset = None
 
-            if self.cognite.asset_name is not None:
+            if self.cognite.asset_name is not None and self.cognite.asset_external_id:
                 asset = Asset(name=self.cognite.asset_name, external_id=self.cognite.asset_external_id)
 
             pusher = CognitePusher(

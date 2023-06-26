@@ -13,7 +13,8 @@
 #  limitations under the License.
 
 import threading
-from typing import Any, Callable, Dict, List, Optional
+from types import TracebackType
+from typing import Any, Callable, Dict, List, Optional, Type
 
 import arrow
 from arrow import Arrow
@@ -152,7 +153,7 @@ class RawUploadQueue(AbstractUploadQueue):
         max_delay=RETRY_MAX_DELAY,
         backoff=RETRY_BACKOFF_FACTOR,
     )
-    def _upload_batch(self, database: str, table: str, patch: List[Row]):
+    def _upload_batch(self, database: str, table: str, patch: List[Row]) -> None:
         # Upload
         self.cdf_client.raw.rows.insert(db_name=database, table_name=table, row=patch, ensure_parent=True)
 
@@ -166,7 +167,9 @@ class RawUploadQueue(AbstractUploadQueue):
         self.start()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(
+        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+    ) -> None:
         """
         Wraps around stop method, for use as context manager
 

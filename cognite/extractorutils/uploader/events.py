@@ -13,7 +13,8 @@
 #  limitations under the License.
 
 import threading
-from typing import Callable, List, Optional
+from types import TracebackType
+from typing import Callable, List, Optional, Type
 
 import arrow
 from requests import ConnectionError
@@ -131,7 +132,7 @@ class EventUploadQueue(AbstractUploadQueue):
         max_delay=RETRY_MAX_DELAY,
         backoff=RETRY_BACKOFF_FACTOR,
     )
-    def _upload_batch(self):
+    def _upload_batch(self) -> None:
         self.cdf_client.events.create([e for e in self.upload_queue])
 
     def __enter__(self) -> "EventUploadQueue":
@@ -144,7 +145,9 @@ class EventUploadQueue(AbstractUploadQueue):
         self.start()
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb) -> None:
+    def __exit__(
+        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+    ) -> None:
         """
         Wraps around stop method, for use as context manager
 
