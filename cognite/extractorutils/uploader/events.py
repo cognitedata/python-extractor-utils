@@ -14,14 +14,14 @@
 
 import threading
 from types import TracebackType
-from typing import Callable, List, Optional, Type
+from typing import Callable, List, Optional, Set, Type
 
 import arrow
 from requests import ConnectionError
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Event
-from cognite.client.exceptions import CogniteAPIError
+from cognite.client.exceptions import CogniteAPIError, CogniteDuplicatedError
 from cognite.extractorutils.uploader._base import (
     RETRIES,
     RETRY_BACKOFF_FACTOR,
@@ -133,7 +133,24 @@ class EventUploadQueue(AbstractUploadQueue):
         backoff=RETRY_BACKOFF_FACTOR,
     )
     def _upload_batch(self) -> None:
-        self.cdf_client.events.create([e for e in self.upload_queue])
+        try:
+            self.cdf_client.events.create([e for e in self.upload_queue])
+        except CogniteDuplicatedError as e:
+            duplicated_ids = set([dup["externalId"] for dup in e.duplicated if "externalId" in dup])
+            failed: List[Event] = e.failed
+            to_create = []
+            to_update = []
+            for e in failed:
+                if e.external_id is not None and e.external_id in duplicated_ids:
+                    to_update.append(e)
+                else:
+                    to_create.append(e)
+            if to_create:
+                self.cdf_client.events.create(to_create)
+            if to_update:
+                self.cdf_client.events.update(to_update)
+
+            
 
     def __enter__(self) -> "EventUploadQueue":
         """

@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## [5.2.0]
+
+### Changed
+ 
+ * The event upload queue now upserts events. If creating an event fails due
+   to the event already existing, it will be updated instead.
 
 ## [5.1.0]
 
