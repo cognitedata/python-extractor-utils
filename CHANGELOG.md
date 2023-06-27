@@ -15,7 +15,7 @@ Changes are grouped as follows
 ## [5.2.0]
 
 ### Changed
- 
+
  * The event upload queue now upserts events. If creating an event fails due
    to the event already existing, it will be updated instead.
 

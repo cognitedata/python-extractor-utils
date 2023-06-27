@@ -24,10 +24,9 @@ from parameterized import parameterized_class
 from cognite.client import CogniteClient
 from cognite.client.config import ClientConfig
 from cognite.client.credentials import OAuthClientCredentials
-from cognite.client.data_classes import Row, TimeSeries, Event
+from cognite.client.data_classes import Event, Row, TimeSeries
 from cognite.client.exceptions import CogniteAPIError, CogniteNotFoundError
 from cognite.extractorutils.uploader import RawUploadQueue, TimeSeriesUploadQueue
-
 from cognite.extractorutils.uploader.events import EventUploadQueue
 
 test_id = random.randint(0, 2**31)
@@ -90,7 +89,6 @@ class IntegrationTests(unittest.TestCase):
             pass
         self.client.time_series.delete(external_id=[self.time_series1, self.time_series2], ignore_unknown_ids=True)
         self.client.events.delete(external_id=[self.event1, self.event2, self.event3], ignore_unknown_ids=True)
-
 
     def test_raw_upload_queue(self):
         queue = RawUploadQueue(cdf_client=self.client, max_queue_size=500)
@@ -225,7 +223,7 @@ class IntegrationTests(unittest.TestCase):
         queue.add_to_upload_queue(Event(external_id=self.event2, description="desc"))
 
         queue.upload()
-        
+
         # This should result in an update and a create
         queue.add_to_upload_queue(Event(external_id=self.event2, description="new desc"))
         queue.add_to_upload_queue(Event(external_id=self.event3, description="new desc"))

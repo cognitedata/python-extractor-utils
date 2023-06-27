@@ -14,7 +14,7 @@
 
 import threading
 from types import TracebackType
-from typing import Callable, List, Optional, Set, Type
+from typing import Callable, List, Optional, Type
 
 import arrow
 from requests import ConnectionError
@@ -137,20 +137,18 @@ class EventUploadQueue(AbstractUploadQueue):
             self.cdf_client.events.create([e for e in self.upload_queue])
         except CogniteDuplicatedError as e:
             duplicated_ids = set([dup["externalId"] for dup in e.duplicated if "externalId" in dup])
-            failed: List[Event] = e.failed
+            failed: List[Event] = [e for e in e.failed]
             to_create = []
             to_update = []
-            for e in failed:
-                if e.external_id is not None and e.external_id in duplicated_ids:
-                    to_update.append(e)
+            for evt in failed:
+                if evt.external_id is not None and evt.external_id in duplicated_ids:
+                    to_update.append(evt)
                 else:
-                    to_create.append(e)
+                    to_create.append(evt)
             if to_create:
                 self.cdf_client.events.create(to_create)
             if to_update:
                 self.cdf_client.events.update(to_update)
-
-            
 
     def __enter__(self) -> "EventUploadQueue":
         """
