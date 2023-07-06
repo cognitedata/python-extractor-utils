@@ -12,6 +12,13 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## [5.2.1]
+
+### Changed
+
+ * Timestamps before 1970 are no longer filtered out, to align with changes to
+   the timeseries API.
+
 ## [5.2.0]
 
 ### Changed

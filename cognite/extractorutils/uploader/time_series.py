@@ -44,7 +44,7 @@ from cognite.extractorutils.uploader._metrics import (
 )
 from cognite.extractorutils.util import EitherId, retry
 
-MIN_DATAPOINT_TIMESTAMP = 31536000000
+MIN_DATAPOINT_TIMESTAMP = -2208988800000
 MAX_DATAPOINT_STRING_LENGTH = 255
 MAX_DATAPOINT_VALUE = 1e100
 MIN_DATAPOINT_VALUE = -1e100
