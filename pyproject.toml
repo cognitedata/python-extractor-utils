@@ -72,7 +72,7 @@ jq = [{version = "^1.3.0", platform = "macos"}, {version = "^1.3.0", platform = 
 experimental = ["cognite-sdk-experimental"]
 
 [tool.poetry.group.dev.dependencies]
-black = "23.3.0"
+black = "23.7.0"
 mypy = "1.4.1"
 ruff = "^0.0.277"
 pytest = "^7.0.0"
