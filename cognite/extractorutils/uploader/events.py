@@ -17,7 +17,6 @@ from types import TracebackType
 from typing import Callable, List, Optional, Type
 
 import arrow
-from requests import ConnectionError
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Event

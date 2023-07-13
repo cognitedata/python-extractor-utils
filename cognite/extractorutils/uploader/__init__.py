@@ -66,6 +66,7 @@ instead. If both are used, the condition being met first will trigger the upload
 
 from .events import EventUploadQueue
 from .files import BytesUploadQueue, FileUploadQueue
+from .assets import AssetUploadQueue
 from .raw import RawUploadQueue
 from .time_series import (
     DataPoint,
