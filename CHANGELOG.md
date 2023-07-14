@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## [5.3.0]
+
+### Added
+
+ * Added support for queuing assets upload
+
 ## [5.2.1]
 
 ### Changed
