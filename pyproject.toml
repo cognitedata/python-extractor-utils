@@ -66,7 +66,7 @@ decorator = "^5.1.1"
 more-itertools = "^9.0.0"
 typing-extensions = ">=3.7.4, <5"
 python-dotenv = "^1.0.0"
-jq = [{version = "^1.3.0", platform = "macos"}, {version = "^1.3.0", platform = "linux"}]
+jq = [{version = "^1.3.0", platform = "darwin"}, {version = "^1.3.0", platform = "linux"}]
 
 [tool.poetry.extras]
 experimental = ["cognite-sdk-experimental"]

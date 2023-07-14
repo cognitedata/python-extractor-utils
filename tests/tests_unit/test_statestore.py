@@ -288,7 +288,7 @@ class TestLocalStateStore(unittest.TestCase):
 
         time.sleep(3)
 
-        state_store.stop()
+        state_store.stop(ensure_synchronize=True)
 
         new_state_store = LocalStateStore(filename, 10)
         new_state_store.start()
