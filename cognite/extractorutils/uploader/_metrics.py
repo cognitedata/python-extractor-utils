@@ -79,4 +79,6 @@ BYTES_UPLOADER_LATENCY = Histogram(
 ASSETS_UPLOADER_QUEUED = Counter("cognite_assets_uploader_queued", "Total number of assets queued")
 ASSETS_UPLOADER_WRITTEN = Counter("cognite_assets_uploader_written", "Total number of assets written")
 ASSETS_UPLOADER_QUEUE_SIZE = Gauge("cognite_assets_uploadeer_queue_size", "Internal queue size")
-ASSETS_UPLOADER_LATENCY = Histogram("cognite_assets_uploader_latency", "Distribution of times in minues records spend in queue")
+ASSETS_UPLOADER_LATENCY = Histogram(
+    "cognite_assets_uploader_latency", "Distribution of times in minues records spend in queue"
+)

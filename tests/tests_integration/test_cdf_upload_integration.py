@@ -18,7 +18,6 @@ import string
 import time
 import unittest
 from datetime import datetime, timezone
-from cognite.client.data_classes.assets import Asset
 
 from parameterized import parameterized_class
 
@@ -26,11 +25,11 @@ from cognite.client import CogniteClient
 from cognite.client.config import ClientConfig
 from cognite.client.credentials import OAuthClientCredentials
 from cognite.client.data_classes import Event, Row, TimeSeries
+from cognite.client.data_classes.assets import Asset
 from cognite.client.exceptions import CogniteAPIError, CogniteNotFoundError
 from cognite.extractorutils.uploader import RawUploadQueue, TimeSeriesUploadQueue
-from cognite.extractorutils.uploader.events import EventUploadQueue
-
 from cognite.extractorutils.uploader.assets import AssetUploadQueue
+from cognite.extractorutils.uploader.events import EventUploadQueue
 
 test_id = random.randint(0, 2**31)
 
@@ -241,7 +240,7 @@ class IntegrationTests(unittest.TestCase):
         assert retrieved[0].description == "desc"
         assert retrieved[1].description == "new desc"
         assert retrieved[2].description == "new desc"
- 
+
     def test_assets_upload_queue_upsert(self):
         queue = AssetUploadQueue(cdf_client=self.client)
 
@@ -260,4 +259,4 @@ class IntegrationTests(unittest.TestCase):
         retrieved = self.client.assets.retrieve_multiple(external_ids=[self.asset1, self.asset2, self.asset3])
         assert retrieved[0].description == "desc"
         assert retrieved[1].description == "new desc"
-        assert retrieved[2].description == "new desc"       
+        assert retrieved[2].description == "new desc"
