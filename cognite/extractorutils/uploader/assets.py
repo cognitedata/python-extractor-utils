@@ -38,6 +38,21 @@ from cognite.extractorutils.util import retry
 
 
 class AssetUploadQueue(AbstractUploadQueue):
+    """
+    Upload queue for assets
+
+    Args:
+        cdf_client: Cognite Data Fusion client to use
+        post_upload_function: A function that will be called after each upload. The function will be given one argument:
+            A list of the events that were uploaded.
+        max_queue_size: Maximum size of upload queue. Defaults to no max size.
+        max_upload_interval: Automatically trigger an upload each m seconds when run as a thread (use start/stop
+            methods).
+        trigger_log_level: Log level to log upload triggers to.
+        thread_name: Thread name of uploader thread.
+        cancellation_token: Cancellation token
+    """
+
     def __init__(
         self,
         cdf_client: CogniteClient,
@@ -65,6 +80,13 @@ class AssetUploadQueue(AbstractUploadQueue):
         self.latency_zero_point: Arrow = arrow.utcnow()
 
     def add_to_upload_queue(self, asset: Asset) -> None:
+        """
+        Add asset to upload queue. The queue will be uploaded if the queue size is larger than the threshold
+        specified in the __init__.
+
+        Args:
+            asset: Asse to add
+        """
         if self.upload_queue_size == 0:
             self.latency_zero_point = arrow.utcnow()
 
@@ -76,6 +98,9 @@ class AssetUploadQueue(AbstractUploadQueue):
             self._check_triggers()
 
     def upload(self) -> None:
+        """
+        Trigger an upload of the queue, clears queue afterwards
+        """
         if len(self.upload_queue) > 0:
             with self.lock:
                 self._upload_batch()
@@ -119,8 +144,22 @@ class AssetUploadQueue(AbstractUploadQueue):
                 self.cdf_client.assets.update(to_update)
 
     def __enter__(self) -> "AssetUploadQueue":
+        """
+        Wraps around start method, for use as context manager
+
+        Returns:
+            self
+        """
         self.start()
         return self
 
     def __exit__(self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException]) -> None:
+        """
+        Wraps around stop method, for use as context manager
+
+        Args:
+            exc_type: Exception type
+            exc_val: Exception value
+            exc_tb: Traceback
+        """
         self.stop()

@@ -171,12 +171,3 @@ class EventUploadQueue(AbstractUploadQueue):
             exc_tb: Traceback
         """
         self.stop()
-
-    def __len__(self) -> int:
-        """
-        The size of the upload queue
-
-        Returns:
-            Number of events in queue
-        """
-        return self.upload_queue_size
