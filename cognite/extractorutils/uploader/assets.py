@@ -44,7 +44,7 @@ class AssetUploadQueue(AbstractUploadQueue):
     Args:
         cdf_client: Cognite Data Fusion client to use
         post_upload_function: A function that will be called after each upload. The function will be given one argument:
-            A list of the events that were uploaded.
+            A list of the assets that were uploaded.
         max_queue_size: Maximum size of upload queue. Defaults to no max size.
         max_upload_interval: Automatically trigger an upload each m seconds when run as a thread (use start/stop
             methods).
@@ -85,7 +85,7 @@ class AssetUploadQueue(AbstractUploadQueue):
         specified in the __init__.
 
         Args:
-            asset: Asse to add
+            asset: Asset to add
         """
         if self.upload_queue_size == 0:
             self.latency_zero_point = arrow.utcnow()
