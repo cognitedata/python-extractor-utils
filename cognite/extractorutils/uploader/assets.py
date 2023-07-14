@@ -12,14 +12,14 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-import threading
-from types import TracebackType
-from typing import Callable, List, Optional, Type
+from threading import Event
+from typing import Any, Callable, List, Optional, Type
 
 import arrow
+from arrow.arrow import Arrow
 
 from cognite.client import CogniteClient
-from cognite.client.data_classes import Event
+from cognite.client.data_classes.assets import Asset
 from cognite.client.exceptions import CogniteAPIError, CogniteDuplicatedError
 from cognite.extractorutils.uploader._base import (
     RETRIES,
@@ -29,40 +29,40 @@ from cognite.extractorutils.uploader._base import (
     AbstractUploadQueue,
 )
 from cognite.extractorutils.uploader._metrics import (
-    EVENTS_UPLOADER_LATENCY,
-    EVENTS_UPLOADER_QUEUE_SIZE,
-    EVENTS_UPLOADER_QUEUED,
-    EVENTS_UPLOADER_WRITTEN,
+    ASSETS_UPLOADER_LATENCY,
+    ASSETS_UPLOADER_QUEUE_SIZE,
+    ASSETS_UPLOADER_QUEUED,
+    ASSETS_UPLOADER_WRITTEN,
 )
 from cognite.extractorutils.util import retry
 
 
-class EventUploadQueue(AbstractUploadQueue):
+class AssetUploadQueue(AbstractUploadQueue):
     """
-    Upload queue for events
+    Upload queue for assets
 
     Args:
         cdf_client: Cognite Data Fusion client to use
         post_upload_function: A function that will be called after each upload. The function will be given one argument:
-            A list of the events that were uploaded.
+            A list of the assets that were uploaded.
         max_queue_size: Maximum size of upload queue. Defaults to no max size.
         max_upload_interval: Automatically trigger an upload each m seconds when run as a thread (use start/stop
             methods).
         trigger_log_level: Log level to log upload triggers to.
         thread_name: Thread name of uploader thread.
+        cancellation_token: Cancellation token
     """
 
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[List[Event]], None]] = None,
+        post_upload_function: Optional[Callable[[List[Any]], None]] = None,
         max_queue_size: Optional[int] = None,
         max_upload_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
-        cancellation_token: threading.Event = threading.Event(),
+        cancellation_token: Event = Event(),
     ):
-        # Super sets post_upload and threshold
         super().__init__(
             cdf_client,
             post_upload_function,
@@ -72,57 +72,51 @@ class EventUploadQueue(AbstractUploadQueue):
             thread_name,
             cancellation_token,
         )
+        self.upload_queue: List[Asset] = []
+        self.assets_queued = ASSETS_UPLOADER_QUEUED
+        self.assets_written = ASSETS_UPLOADER_WRITTEN
+        self.queue_size = ASSETS_UPLOADER_QUEUE_SIZE
+        self.latency = ASSETS_UPLOADER_LATENCY
+        self.latency_zero_point: Arrow = arrow.utcnow()
 
-        self.upload_queue: List[Event] = []
-
-        self.events_queued = EVENTS_UPLOADER_QUEUED
-        self.events_written = EVENTS_UPLOADER_WRITTEN
-        self.queue_size = EVENTS_UPLOADER_QUEUE_SIZE
-        self.latency = EVENTS_UPLOADER_LATENCY
-        self.latency_zero_point = arrow.utcnow()
-
-    def add_to_upload_queue(self, event: Event) -> None:
+    def add_to_upload_queue(self, asset: Asset) -> None:
         """
-        Add event to upload queue. The queue will be uploaded if the queue size is larger than the threshold
+        Add asset to upload queue. The queue will be uploaded if the queue size is larger than the threshold
         specified in the __init__.
 
         Args:
-            event: Event to add
+            asset: Asset to add
         """
-        with self.lock:
-            if self.upload_queue_size == 0:
-                self.latency_zero_point = arrow.utcnow()
+        if self.upload_queue_size == 0:
+            self.latency_zero_point = arrow.utcnow()
 
-            self.upload_queue.append(event)
-            self.events_queued.inc()
+        with self.lock:
+            self.upload_queue.append(asset)
+            self.assets_queued.inc()
             self.upload_queue_size += 1
             self.queue_size.set(self.upload_queue_size)
-
             self._check_triggers()
 
     def upload(self) -> None:
         """
         Trigger an upload of the queue, clears queue afterwards
         """
-        if len(self.upload_queue) == 0:
-            return
+        if len(self.upload_queue) > 0:
+            with self.lock:
+                self._upload_batch()
 
-        with self.lock:
-            self._upload_batch()
+                self.latency.observe((arrow.utcnow() - self.latency_zero_point).total_seconds() / 60)
 
-            self.latency.observe(
-                (arrow.utcnow() - self.latency_zero_point).total_seconds() / 60
-            )  # show data in minutes
-            self.events_written.inc(self.upload_queue_size)
+                try:
+                    self._post_upload(self.upload_queue)
+                except Exception as e:
+                    self.logger.error("Error in upload callback: %s", str(e))
 
-            try:
-                self._post_upload(self.upload_queue)
-            except Exception as e:
-                self.logger.error("Error in upload callback: %s", str(e))
-            self.upload_queue.clear()
-            self.logger.info(f"Uploaded {self.upload_queue_size} events")
-            self.upload_queue_size = 0
-            self.queue_size.set(self.upload_queue_size)
+                self.assets_written.inc(self.upload_queue_size)
+                self.logger.info(f"Uploaded {self.upload_queue_size} assets")
+                self.upload_queue_size = 0
+                self.upload_queue.clear()
+                self.queue_size.set(self.upload_queue_size)
 
     @retry(
         exceptions=(CogniteAPIError, ConnectionError),
@@ -133,23 +127,23 @@ class EventUploadQueue(AbstractUploadQueue):
     )
     def _upload_batch(self) -> None:
         try:
-            self.cdf_client.events.create([e for e in self.upload_queue])
+            self.cdf_client.assets.create(self.upload_queue)
         except CogniteDuplicatedError as e:
             duplicated_ids = set([dup["externalId"] for dup in e.duplicated if "externalId" in dup])
-            failed: List[Event] = [e for e in e.failed]
+            failed: List[Asset] = [e for e in e.failed]
             to_create = []
             to_update = []
-            for evt in failed:
-                if evt.external_id is not None and evt.external_id in duplicated_ids:
-                    to_update.append(evt)
+            for asset in failed:
+                if asset.external_id is not None and asset.external_id in duplicated_ids:
+                    to_update.append(asset)
                 else:
-                    to_create.append(evt)
+                    to_create.append(asset)
             if to_create:
-                self.cdf_client.events.create(to_create)
+                self.cdf_client.assets.create(to_create)
             if to_update:
-                self.cdf_client.events.update(to_update)
+                self.cdf_client.assets.update(to_update)
 
-    def __enter__(self) -> "EventUploadQueue":
+    def __enter__(self) -> "AssetUploadQueue":
         """
         Wraps around start method, for use as context manager
 
@@ -159,9 +153,7 @@ class EventUploadQueue(AbstractUploadQueue):
         self.start()
         return self
 
-    def __exit__(
-        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
-    ) -> None:
+    def __exit__(self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException]) -> None:
         """
         Wraps around stop method, for use as context manager
 

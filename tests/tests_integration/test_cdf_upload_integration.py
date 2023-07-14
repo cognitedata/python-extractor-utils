@@ -25,8 +25,10 @@ from cognite.client import CogniteClient
 from cognite.client.config import ClientConfig
 from cognite.client.credentials import OAuthClientCredentials
 from cognite.client.data_classes import Event, Row, TimeSeries
+from cognite.client.data_classes.assets import Asset
 from cognite.client.exceptions import CogniteAPIError, CogniteNotFoundError
 from cognite.extractorutils.uploader import RawUploadQueue, TimeSeriesUploadQueue
+from cognite.extractorutils.uploader.assets import AssetUploadQueue
 from cognite.extractorutils.uploader.events import EventUploadQueue
 
 test_id = random.randint(0, 2**31)
@@ -49,6 +51,10 @@ class IntegrationTests(unittest.TestCase):
     event1: str = f"util_integration_event_test_1-{test_id}"
     event2: str = f"util_integration_event_test_2-{test_id}"
     event3: str = f"util_integration_event_test_3-{test_id}"
+
+    asset1: str = f"util_integration_asset_test_1-{test_id}"
+    asset2: str = f"util_integration_asset_test_2-{test_id}"
+    asset3: str = f"util_integration_asset_test_3-{test_id}"
 
     def setUp(self):
         os.environ["COGNITE_FUNCTION_RUNTIME"] = self.functions_runtime
@@ -81,6 +87,10 @@ class IntegrationTests(unittest.TestCase):
             self.client.time_series.delete(external_id=self.time_series2)
         except CogniteNotFoundError:
             pass
+        try:
+            self.client.assets.delete(external_id=[self.asset1, self.asset2, self.asset3], ignore_unknown_ids=True)
+        except CogniteNotFoundError:
+            pass
 
     def tearDown(self):
         try:
@@ -89,6 +99,7 @@ class IntegrationTests(unittest.TestCase):
             pass
         self.client.time_series.delete(external_id=[self.time_series1, self.time_series2], ignore_unknown_ids=True)
         self.client.events.delete(external_id=[self.event1, self.event2, self.event3], ignore_unknown_ids=True)
+        self.client.assets.delete(external_id=[self.asset1, self.asset2, self.asset3], ignore_unknown_ids=True)
 
     def test_raw_upload_queue(self):
         queue = RawUploadQueue(cdf_client=self.client, max_queue_size=500)
@@ -234,3 +245,25 @@ class IntegrationTests(unittest.TestCase):
         assert retrieved[0].description == "desc"
         assert retrieved[1].description == "new desc"
         assert retrieved[2].description == "new desc"
+
+    def test_assets_upload_queue_upsert(self):
+        queue = AssetUploadQueue(cdf_client=self.client)
+
+        # Upload a pair of events
+        queue.add_to_upload_queue(Asset(external_id=self.asset1, description="desc", name="name"))
+        queue.add_to_upload_queue(Asset(external_id=self.asset2, description="desc", name="name"))
+
+        queue.upload()
+
+        # This should result in an update and a create
+        queue.add_to_upload_queue(Asset(external_id=self.asset2, description="new desc", name="new name"))
+        queue.add_to_upload_queue(Asset(external_id=self.asset3, description="new desc", name="new name"))
+
+        queue.upload()
+
+        retrieved = self.client.assets.retrieve_multiple(external_ids=[self.asset1, self.asset2, self.asset3])
+        assert retrieved[0].description == "desc"
+        assert retrieved[1].description == "new desc"
+        assert retrieved[2].description == "new desc"
+        assert retrieved[1].name == "new name"
+        assert retrieved[2].name == "new name"

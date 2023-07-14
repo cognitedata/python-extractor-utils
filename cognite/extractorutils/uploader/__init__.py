@@ -64,6 +64,7 @@ You can also trigger uploads after a given amount of data is added, by using the
 instead. If both are used, the condition being met first will trigger the upload.
 """
 
+from .assets import AssetUploadQueue
 from .events import EventUploadQueue
 from .files import BytesUploadQueue, FileUploadQueue
 from .raw import RawUploadQueue

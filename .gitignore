@@ -149,5 +149,6 @@ dmypy.json
 # unit tests output
 /test_dump_config.yml
 /testfile-invalid.json
+/testfile-startstop.json
 /bar
 /foo

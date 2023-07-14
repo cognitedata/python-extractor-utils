@@ -132,6 +132,15 @@ class AbstractUploadQueue(ABC):
         if ensure_upload:
             self.upload()
 
+    def __len__(self) -> int:
+        """
+        The size of the upload queue
+
+        Returns:
+            Number of events in queue
+        """
+        return self.upload_queue_size
+
 
 @dataclass(frozen=True)
 class TimestampedObject:
