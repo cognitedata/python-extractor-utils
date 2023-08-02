@@ -483,7 +483,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
                 self.upload_queue[either_id] = seq
             else:
                 self.upload_queue[either_id] = rows
-            self.upload_queue_size = len(self.upload_queue)
+            self.upload_queue_size = sum([len(rows) for rows in self.upload_queue.values()])
             self.queue_size.set(self.upload_queue_size)
             self.points_queued.inc()
 
@@ -509,9 +509,9 @@ class SequenceUploadQueue(AbstractUploadQueue):
             except Exception as e:
                 self.logger.error("Error in upload callback: %s", str(e))
 
+            self.logger.info(f"Uploaded {self.upload_queue_size} sequence rows")
             self.upload_queue.clear()
             self.upload_queue_size = 0
-            self.logger.info(f"Uploaded {self.upload_queue_size} sequence rows")
             self.queue_size.set(self.upload_queue_size)
 
     @retry(

@@ -19,6 +19,10 @@ Changes are grouped as follows
  * Fixed the type hint for the `retry` decorator. The list of exception types
    must be given as a tuple, not an arbitrary iterable.
  * Fixed retries for sequence upload queue.
+ * Sequence upload queue reported number of distinct sequences it had rows
+   for, not the number of rows. That is now changed to number of rows.
+ * When the sequence upload queue uploaded, it always reported 0 rows uploaded
+   because of a bug in the logging.
 
 ### Removed
 
