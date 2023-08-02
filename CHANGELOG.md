@@ -12,13 +12,17 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
-## [5.3.1]
+## [5.4.0]
 
 ### Fixed
 
  * Fixed the type hint for the `retry` decorator. The list of exception types
    must be given as a tuple, not an arbitrary iterable.
  * Fixed retries for sequence upload queue.
+
+### Removed
+
+ * Latency metrics for upload queues.
 
 ## [5.3.0]
 
