@@ -18,7 +18,6 @@ from datetime import datetime
 from types import TracebackType
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
-import arrow
 from requests import ConnectionError
 
 from cognite.client import CogniteClient
@@ -32,11 +31,9 @@ from cognite.extractorutils.uploader._base import (
     AbstractUploadQueue,
 )
 from cognite.extractorutils.uploader._metrics import (
-    SEQUENCES_UPLOADER_LATENCY,
     SEQUENCES_UPLOADER_POINTS_QUEUED,
     SEQUENCES_UPLOADER_POINTS_WRITTEN,
     SEQUENCES_UPLOADER_QUEUE_SIZE,
-    TIMESERIES_UPLOADER_LATENCY,
     TIMESERIES_UPLOADER_POINTS_DISCARDED,
     TIMESERIES_UPLOADER_POINTS_QUEUED,
     TIMESERIES_UPLOADER_POINTS_WRITTEN,
@@ -131,8 +128,6 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         self.points_queued = TIMESERIES_UPLOADER_POINTS_QUEUED
         self.points_written = TIMESERIES_UPLOADER_POINTS_WRITTEN
         self.queue_size = TIMESERIES_UPLOADER_QUEUE_SIZE
-        self.latency = TIMESERIES_UPLOADER_LATENCY
-        self.latency_zero_point = arrow.utcnow()
         self.data_set_id = data_set_id
 
     def _verify_datapoint_time(self, time: Union[int, float, datetime, str]) -> bool:
@@ -194,14 +189,8 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
             if either_id not in self.upload_queue:
                 self.upload_queue[either_id] = []
 
-            if self.upload_queue_size == 0:
-                self.latency_zero_point = arrow.utcnow()
-
             self.upload_queue[either_id].extend(datapoints)
             self.points_queued.inc(len(datapoints))
-            self.latency.observe(
-                (arrow.utcnow() - self.latency_zero_point).total_seconds() / 60
-            )  # show data in minutes
             self.upload_queue_size += len(datapoints)
             self.queue_size.set(self.upload_queue_size)
 
@@ -384,8 +373,6 @@ class SequenceUploadQueue(AbstractUploadQueue):
         self.points_queued = SEQUENCES_UPLOADER_POINTS_QUEUED
         self.points_written = SEQUENCES_UPLOADER_POINTS_WRITTEN
         self.queue_size = SEQUENCES_UPLOADER_QUEUE_SIZE
-        self.latency = SEQUENCES_UPLOADER_LATENCY
-        self.latency_zero_point = arrow.utcnow()
 
     def set_sequence_metadata(
         self,
@@ -515,9 +502,6 @@ class SequenceUploadQueue(AbstractUploadQueue):
             for either_id, upload_this in self.upload_queue.items():
                 _labels = str(either_id.content())
                 self._upload_single(either_id, upload_this)
-                self.latency.observe(
-                    (arrow.utcnow() - self.latency_zero_point).total_seconds() / 60
-                )  # show data in minutes
                 self.points_written.inc()
 
             try:
@@ -615,6 +599,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
                     for asset in self.cdf_client.assets.retrieve_multiple(
                         external_ids=list(assets), ignore_unknown_ids=True
                     )
+                    if asset.id is not None and asset.external_id is not None
                 }
             except Exception as e:
                 self.logger.error("Error in resolving asset id: %s", str(e))
@@ -634,6 +619,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
                     for dataset in self.cdf_client.data_sets.retrieve_multiple(
                         external_ids=list(datasets), ignore_unknown_ids=True
                     )
+                    if dataset.id is not None and dataset.external_id is not None
                 }
             except Exception as e:
                 self.logger.error("Error in resolving dataset id: %s", str(e))

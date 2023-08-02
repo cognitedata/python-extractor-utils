@@ -15,9 +15,6 @@
 from threading import Event
 from typing import Any, Callable, List, Optional, Type
 
-import arrow
-from arrow.arrow import Arrow
-
 from cognite.client import CogniteClient
 from cognite.client.data_classes.assets import Asset
 from cognite.client.exceptions import CogniteAPIError, CogniteDuplicatedError
@@ -29,7 +26,6 @@ from cognite.extractorutils.uploader._base import (
     AbstractUploadQueue,
 )
 from cognite.extractorutils.uploader._metrics import (
-    ASSETS_UPLOADER_LATENCY,
     ASSETS_UPLOADER_QUEUE_SIZE,
     ASSETS_UPLOADER_QUEUED,
     ASSETS_UPLOADER_WRITTEN,
@@ -76,8 +72,6 @@ class AssetUploadQueue(AbstractUploadQueue):
         self.assets_queued = ASSETS_UPLOADER_QUEUED
         self.assets_written = ASSETS_UPLOADER_WRITTEN
         self.queue_size = ASSETS_UPLOADER_QUEUE_SIZE
-        self.latency = ASSETS_UPLOADER_LATENCY
-        self.latency_zero_point: Arrow = arrow.utcnow()
 
     def add_to_upload_queue(self, asset: Asset) -> None:
         """
@@ -87,9 +81,6 @@ class AssetUploadQueue(AbstractUploadQueue):
         Args:
             asset: Asset to add
         """
-        if self.upload_queue_size == 0:
-            self.latency_zero_point = arrow.utcnow()
-
         with self.lock:
             self.upload_queue.append(asset)
             self.assets_queued.inc()
@@ -104,8 +95,6 @@ class AssetUploadQueue(AbstractUploadQueue):
         if len(self.upload_queue) > 0:
             with self.lock:
                 self._upload_batch()
-
-                self.latency.observe((arrow.utcnow() - self.latency_zero_point).total_seconds() / 60)
 
                 try:
                     self._post_upload(self.upload_queue)

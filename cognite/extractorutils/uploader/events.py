@@ -16,8 +16,6 @@ import threading
 from types import TracebackType
 from typing import Callable, List, Optional, Type
 
-import arrow
-
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Event
 from cognite.client.exceptions import CogniteAPIError, CogniteDuplicatedError
@@ -29,7 +27,6 @@ from cognite.extractorutils.uploader._base import (
     AbstractUploadQueue,
 )
 from cognite.extractorutils.uploader._metrics import (
-    EVENTS_UPLOADER_LATENCY,
     EVENTS_UPLOADER_QUEUE_SIZE,
     EVENTS_UPLOADER_QUEUED,
     EVENTS_UPLOADER_WRITTEN,
@@ -78,8 +75,6 @@ class EventUploadQueue(AbstractUploadQueue):
         self.events_queued = EVENTS_UPLOADER_QUEUED
         self.events_written = EVENTS_UPLOADER_WRITTEN
         self.queue_size = EVENTS_UPLOADER_QUEUE_SIZE
-        self.latency = EVENTS_UPLOADER_LATENCY
-        self.latency_zero_point = arrow.utcnow()
 
     def add_to_upload_queue(self, event: Event) -> None:
         """
@@ -90,9 +85,6 @@ class EventUploadQueue(AbstractUploadQueue):
             event: Event to add
         """
         with self.lock:
-            if self.upload_queue_size == 0:
-                self.latency_zero_point = arrow.utcnow()
-
             self.upload_queue.append(event)
             self.events_queued.inc()
             self.upload_queue_size += 1
@@ -110,9 +102,6 @@ class EventUploadQueue(AbstractUploadQueue):
         with self.lock:
             self._upload_batch()
 
-            self.latency.observe(
-                (arrow.utcnow() - self.latency_zero_point).total_seconds() / 60
-            )  # show data in minutes
             self.events_written.inc(self.upload_queue_size)
 
             try:
