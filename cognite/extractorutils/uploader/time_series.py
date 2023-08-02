@@ -531,7 +531,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
             self.queue_size.set(self.upload_queue_size)
 
     @retry(
-        exceptions=[CogniteAPIError],
+        exceptions=(CogniteAPIError, ConnectionError),
         tries=RETRIES,
         delay=RETRY_DELAY,
         max_delay=RETRY_MAX_DELAY,
