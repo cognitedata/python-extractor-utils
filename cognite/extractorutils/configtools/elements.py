@@ -313,7 +313,7 @@ class CogniteConfig:
     def get_data_set(self, cdf_client: CogniteClient) -> Optional[DataSet]:
         if self.data_set_external_id:
             logging.getLogger(__name__).warning(
-                "Using data-set-external-id is deprecated, please use data-set-id/external-id instead"
+                "Using data-set-external-id is deprecated, please use data-set/external-id instead"
             )
             return cdf_client.data_sets.retrieve(external_id=self.data_set_external_id)
 
