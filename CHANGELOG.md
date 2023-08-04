@@ -12,6 +12,22 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## [5.4.0]
+
+### Fixed
+
+ * Fixed the type hint for the `retry` decorator. The list of exception types
+   must be given as a tuple, not an arbitrary iterable.
+ * Fixed retries for sequence upload queue.
+ * Sequence upload queue reported number of distinct sequences it had rows
+   for, not the number of rows. That is now changed to number of rows.
+ * When the sequence upload queue uploaded, it always reported 0 rows uploaded
+   because of a bug in the logging.
+
+### Removed
+
+ * Latency metrics for upload queues.
+
 ## [5.3.0]
 
 ### Added

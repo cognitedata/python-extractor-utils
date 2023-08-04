@@ -18,7 +18,6 @@ from os import PathLike
 from types import TracebackType
 from typing import Any, Callable, List, Optional, Tuple, Type, Union
 
-import arrow
 from requests import ConnectionError
 
 from cognite.client import CogniteClient
@@ -32,11 +31,9 @@ from cognite.extractorutils.uploader._base import (
     AbstractUploadQueue,
 )
 from cognite.extractorutils.uploader._metrics import (
-    BYTES_UPLOADER_LATENCY,
     BYTES_UPLOADER_QUEUE_SIZE,
     BYTES_UPLOADER_QUEUED,
     BYTES_UPLOADER_WRITTEN,
-    FILES_UPLOADER_LATENCY,
     FILES_UPLOADER_QUEUE_SIZE,
     FILES_UPLOADER_QUEUED,
     FILES_UPLOADER_WRITTEN,
@@ -87,8 +84,6 @@ class FileUploadQueue(AbstractUploadQueue):
         self.files_queued = FILES_UPLOADER_QUEUED
         self.files_written = FILES_UPLOADER_WRITTEN
         self.queue_size = FILES_UPLOADER_QUEUE_SIZE
-        self.latency = FILES_UPLOADER_LATENCY
-        self.latency_zero_point = arrow.utcnow()
 
     def add_to_upload_queue(self, file_meta: FileMetadata, file_name: Union[str, PathLike]) -> None:
         """
@@ -101,9 +96,6 @@ class FileUploadQueue(AbstractUploadQueue):
                 If none, the file object will still be created, but no data is uploaded
         """
         with self.lock:
-            if self.upload_queue_size == 0:
-                self.latency_zero_point = arrow.utcnow()
-
             self.upload_queue.append((file_meta, file_name))
             self.upload_queue_size += 1
             self.files_queued.inc()
@@ -121,9 +113,6 @@ class FileUploadQueue(AbstractUploadQueue):
         with self.lock:
             self._upload_batch()
 
-            self.latency.observe(
-                (arrow.utcnow() - self.latency_zero_point).total_seconds() / 60
-            )  # show data in minutes
             self.files_written.inc(self.upload_queue_size)
 
             try:
@@ -228,11 +217,9 @@ class BytesUploadQueue(AbstractUploadQueue):
         self.upload_queue: List[Tuple[bytes, FileMetadata]] = []
         self.overwrite_existing = overwrite_existing
         self.upload_queue_size = 0
-        self.latency_zero_point = arrow.utcnow()
 
         self.bytes_queued = BYTES_UPLOADER_QUEUED
         self.queue_size = BYTES_UPLOADER_QUEUE_SIZE
-        self.latency = BYTES_UPLOADER_LATENCY
         self.bytes_written = BYTES_UPLOADER_WRITTEN
 
     def add_to_upload_queue(self, content: bytes, metadata: FileMetadata) -> None:
@@ -244,9 +231,6 @@ class BytesUploadQueue(AbstractUploadQueue):
             metadata: metadata for the given bytes object
         """
         with self.lock:
-            if self.upload_queue_size == 0:
-                self.latency_zero_point = arrow.utcnow()
-
             self.upload_queue.append((content, metadata))
             self.upload_queue_size += 1
             self.bytes_queued.inc()
@@ -264,9 +248,6 @@ class BytesUploadQueue(AbstractUploadQueue):
             self._upload_batch()
 
             # Log stats
-            self.latency.observe(
-                (arrow.utcnow() - self.latency_zero_point).total_seconds() / 60
-            )  # show data in minutes
             self.bytes_written.inc(self.upload_queue_size)
 
             try:
