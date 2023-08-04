@@ -385,6 +385,10 @@ class RawStateStore(AbstractStateStore):
         with self.lock:
             self._local_state.clear()
             for row in rows:
+                if row.key is None or row.columns is None:
+                    self.logger.warning(f"None encountered in row: {str(row)}")
+                    # should never happen, but type from sdk is optional
+                    continue
                 self._local_state[row.key] = row.columns
 
         self._initialized = True

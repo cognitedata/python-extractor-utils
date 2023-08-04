@@ -223,6 +223,10 @@ class ConfigResolver(Generic[CustomConfigClass]):
                 tmp_config.cognite.get_extraction_pipeline(client).external_id  # type: ignore  # ignoring extpipe None
             )
 
+            if response.config is None:
+                _logger.error("No config included in response from extraction pipelines")
+                return
+
             self._next_config = _load_yaml(
                 source=response.config,
                 config_type=self.config_type,

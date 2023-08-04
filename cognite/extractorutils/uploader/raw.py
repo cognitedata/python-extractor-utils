@@ -32,7 +32,6 @@ from cognite.extractorutils.uploader._base import (
     TimestampedObject,
 )
 from cognite.extractorutils.uploader._metrics import (
-    RAW_UPLOADER_LATENCY,
     RAW_UPLOADER_QUEUE_SIZE,
     RAW_UPLOADER_ROWS_DUPLICATES,
     RAW_UPLOADER_ROWS_QUEUED,
@@ -83,7 +82,6 @@ class RawUploadQueue(AbstractUploadQueue):
         self.rows_written = RAW_UPLOADER_ROWS_WRITTEN
         self.rows_duplicates = RAW_UPLOADER_ROWS_DUPLICATES
         self.queue_size = RAW_UPLOADER_QUEUE_SIZE
-        self.latency = RAW_UPLOADER_LATENCY
 
     def add_to_upload_queue(self, database: str, table: str, raw_row: Row) -> None:
         """
@@ -130,10 +128,6 @@ class RawUploadQueue(AbstractUploadQueue):
                     self._upload_batch(database=database, table=table, patch=list(patch.values()))
                     self.rows_written.labels(_labels).inc(len(patch))
                     _written: Arrow = arrow.utcnow()
-                    for r in rows:
-                        self.latency.labels(_labels).observe(
-                            (_written - r.created).total_seconds() / 60
-                        )  # show data in minutes
 
                     # Perform post-upload logic if applicable
                     try:
