@@ -330,7 +330,7 @@ _T2 = TypeVar("_T2")
 def _retry_internal(
     f: Callable[..., _T2],
     cancellation_token: threading.Event = threading.Event(),
-    exceptions: Iterable[Type[Exception]] = [Exception],
+    exceptions: Tuple[Type[Exception], ...] = (Exception,),
     tries: int = -1,
     delay: float = 0,
     max_delay: Optional[float] = None,
@@ -342,7 +342,7 @@ def _retry_internal(
     while tries and not cancellation_token.is_set():
         try:
             return f()
-        except exceptions as e:  # type: ignore  # Exception is an exception type, smh mypy
+        except exceptions as e:
             tries -= 1
             if not tries:
                 raise e
@@ -366,7 +366,7 @@ def _retry_internal(
 
 def retry(
     cancellation_token: threading.Event = threading.Event(),
-    exceptions: Iterable[Type[Exception]] = [Exception],
+    exceptions: Tuple[Type[Exception], ...] = (Exception,),
     tries: int = -1,
     delay: float = 0,
     max_delay: Optional[float] = None,
