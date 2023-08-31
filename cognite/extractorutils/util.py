@@ -348,7 +348,7 @@ def _retry_internal(
                 raise e
 
             if logger is not None:
-                logger.warning("%s, retrying in %s seconds...", e, delay)
+                logger.warning("%s, retrying in %s seconds...", str(e), delay)
 
             cancellation_token.wait(delay)
             delay *= backoff
