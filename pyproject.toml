@@ -74,7 +74,7 @@ experimental = ["cognite-sdk-experimental"]
 [tool.poetry.group.dev.dependencies]
 black = "23.9.1"
 mypy = "1.5.1"
-ruff = "^0.0.286"
+ruff = "^0.0.289"
 pytest = "^7.0.0"
 pytest-cov = "^4.0.0"
 sphinx = "^7.0.0"
