@@ -1,5 +1,4 @@
-from datetime import datetime
-from typing import Iterable, List, Optional, Tuple, Union
+from typing import Iterable, List, Optional, Union
 
 from cognite.client.data_classes import Event as _Event
 from cognite.client.data_classes import Row as _Row
@@ -11,17 +10,11 @@ except ImportError:
     from typing_extensions import TypeAlias
 
 
-TimeStamp = Union[int, datetime]
+from cognite.extractorutils.uploader.time_series import DataPoint
 
 
 class InsertDatapoints:
-    def __init__(
-        self,
-        *,
-        id: Optional[int] = None,
-        external_id: Optional[str] = None,
-        datapoints: Union[List[Tuple[TimeStamp, float]], List[Tuple[TimeStamp, str]]],
-    ):
+    def __init__(self, *, id: Optional[int] = None, external_id: Optional[str] = None, datapoints: List[DataPoint]):
         self.id = id
         self.external_id = external_id
         self.datapoints = datapoints

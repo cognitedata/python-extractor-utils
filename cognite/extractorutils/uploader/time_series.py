@@ -46,7 +46,9 @@ MAX_DATAPOINT_STRING_LENGTH = 255
 MAX_DATAPOINT_VALUE = 1e100
 MIN_DATAPOINT_VALUE = -1e100
 
-DataPoint = Tuple[Union[int, float, datetime], Union[int, float, str]]
+TimeStamp = Union[int, datetime]
+
+DataPoint = Union[Tuple[TimeStamp, float], Tuple[TimeStamp, str]]
 DataPointList = List[DataPoint]
 
 
