@@ -45,6 +45,11 @@ class CastingClass:
     yet_another_string_field: str
 
 
+@dataclass
+class SimpleStringConfig:
+    string_field: str
+
+
 class TestConfigtoolsMethods(unittest.TestCase):
     def test_ensure_snake_case(self):
         snake_dict = {
@@ -379,3 +384,21 @@ class TestConfigtoolsMethods(unittest.TestCase):
             yaml.dump(dataclasses.asdict(config), config_file)
         with open("test_dump_config.yml", "r") as config_file:
             load_yaml(config_file, BaseConfig)
+
+    def test_env_substitution(self):
+        os.environ["STRING_VALUE"] = "heyo"
+
+        config_file1 = "string-field: ${STRING_VALUE}"
+        config1: SimpleStringConfig = load_yaml(config_file1, SimpleStringConfig)
+
+        self.assertEqual(config1.string_field, "heyo")
+
+        config_file2 = "string-field: ${STRING_VALUE} in context"
+        config2 = load_yaml(config_file2, SimpleStringConfig)
+
+        self.assertEqual(config2.string_field, "heyo in context")
+
+        config_file3 = 'string-field: !env "${STRING_VALUE} in context"'
+        config3 = load_yaml(config_file3, SimpleStringConfig)
+
+        self.assertEqual(config3.string_field, "heyo in context")
