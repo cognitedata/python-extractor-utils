@@ -402,3 +402,15 @@ class TestConfigtoolsMethods(unittest.TestCase):
         config3 = load_yaml(config_file3, SimpleStringConfig)
 
         self.assertEqual(config3.string_field, "heyo in context")
+
+        config_file4 = "string-field: ${STRING_VALUE}without space"
+        config4 = load_yaml(config_file4, SimpleStringConfig)
+
+        self.assertEqual(config4.string_field, "heyowithout space")
+
+        config_file5 = "string-field: !env very${STRING_VALUE}crowded"
+        config5 = load_yaml(config_file5, SimpleStringConfig)
+
+        self.assertEqual(config5.string_field, "veryheyocrowded")
+
+        self.fail()
