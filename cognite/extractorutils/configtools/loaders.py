@@ -24,6 +24,10 @@ from typing import Any, Callable, Dict, Generic, Iterable, Optional, TextIO, Typ
 
 import dacite
 import yaml
+from azure.core.credentials import TokenCredential
+from azure.core.exceptions import HttpResponseError, ResourceNotFoundError, ServiceRequestError
+from azure.identity import DefaultAzureCredential
+from azure.keyvault.secrets import SecretClient
 from yaml.scanner import ScannerError
 
 from cognite.extractorutils.configtools._util import _to_snake_case
@@ -36,6 +40,38 @@ _logger = logging.getLogger(__name__)
 CustomConfigClass = TypeVar("CustomConfigClass", bound=BaseConfig)
 
 
+class KeyVaultLoader:
+    def __init__(self, config: Optional[dict]):
+        self.config = config
+
+        self.credentials: Optional[TokenCredential] = None
+        self.client: Optional[SecretClient] = None
+
+    def _init_client(self) -> None:
+        if not self.config:
+            raise InvalidConfigError(
+                "Attempted to load values from Azure key vault with no key vault configured. "
+                "Include an `azure-keyvault` section in your config to use the !keyvault tag."
+            )
+
+        if self.credentials is None:
+            self.credentials = DefaultAzureCredential()
+
+        if self.client is None:
+            vault_url = self.config.get("vault-url")
+            if not vault_url:
+                raise InvalidConfigError("No vault-url configured for Azure key vault")
+
+            self.client = SecretClient(vault_url=vault_url, credential=self.credentials)
+
+    def __call__(self, _: yaml.SafeLoader, node: yaml.Node) -> str:
+        self._init_client()
+        try:
+            return self.client.get_secret(node.value).value  # type: ignore  # _init_client guarantees not None
+        except (ResourceNotFoundError, ServiceRequestError, HttpResponseError) as e:
+            raise InvalidConfigError(str(e))
+
+
 def _load_yaml(
     source: Union[TextIO, str],
     config_type: Type[CustomConfigClass],
@@ -43,6 +79,19 @@ def _load_yaml(
     expand_envvars: bool = True,
     dict_manipulator: Callable[[Dict[str, Any]], Dict[str, Any]] = lambda x: x,
 ) -> CustomConfigClass:
+    class SafeLoaderIgnoreUnknown(yaml.SafeLoader):
+        def ignore_unknown(self, node: yaml.Node) -> None:
+            return None
+
+    # Ignoring types since the key can be None.
+    SafeLoaderIgnoreUnknown.add_constructor(None, SafeLoaderIgnoreUnknown.ignore_unknown)  # type: ignore
+
+    # Safe to use load since custom loader is based on SafeLoader
+    initial_load = yaml.load(source, Loader=SafeLoaderIgnoreUnknown)  # noqa: S506
+    if not isinstance(source, str):
+        source.seek(0)
+    keyvault_config = initial_load.get("azure-keyvault")
+
     def env_constructor(_: yaml.SafeLoader, node: yaml.Node) -> bool:
         bool_values = {
             "true": True,
@@ -56,6 +105,8 @@ def _load_yaml(
 
     EnvLoader.add_implicit_resolver("!env", re.compile(r"\$\{([^}^{]+)\}"), None)
     EnvLoader.add_constructor("!env", env_constructor)
+    EnvLoader.add_constructor("!keyvault", KeyVaultLoader(keyvault_config))
+    # EnvLoader.add_constructor("!keyvault", key)
 
     loader = EnvLoader if expand_envvars else yaml.SafeLoader
 
@@ -67,6 +118,9 @@ def _load_yaml(
         formatted_location = f" at line {location.line+1}, column {location.column+1}" if location is not None else ""
         cause = e.problem or e.context
         raise InvalidConfigError(f"Invalid YAML{formatted_location}: {cause or ''}") from e
+
+    if "azure-keyvault" in config_dict:
+        config_dict.pop("azure-keyvault")
 
     config_dict = dict_manipulator(config_dict)
     config_dict = _to_snake_case(config_dict, case_style)
