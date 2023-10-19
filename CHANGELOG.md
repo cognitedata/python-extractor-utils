@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## [5.4.2]
+
+### Fixed
+
+ * Fix on find_dotenv call
+
 ## [5.4.1]
 
 ### Changed
