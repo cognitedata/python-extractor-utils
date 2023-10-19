@@ -412,5 +412,3 @@ class TestConfigtoolsMethods(unittest.TestCase):
         config5 = load_yaml(config_file5, SimpleStringConfig)
 
         self.assertEqual(config5.string_field, "veryheyocrowded")
-
-        self.fail()
