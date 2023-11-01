@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## [5.4.3]
+
+### Added
+
+ * Added len method on the state store to return the length of the local state dict
+
 ## [5.4.2]
 
 ### Fixed

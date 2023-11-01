@@ -306,6 +306,9 @@ class AbstractStateStore(ABC):
     def __contains__(self, external_id: str) -> bool:
         return external_id in self._local_state
 
+    def __len__(self) -> int:
+        return len(self._local_state)
+
 
 class RawStateStore(AbstractStateStore):
     """
