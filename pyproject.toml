@@ -11,14 +11,9 @@ packages = [
     { include="cognite", from="." },
 ]
 
-[tool.black]
-line-length = 120
-target_version = ['py38']
-include = '\.py$'
-
 [tool.ruff]
 select = ["E", "F", "I", "T20", "S"]
-ignore = ["S104", "S303", "S311", "E501"]
+ignore = ["S104", "S303", "S311"]
 fixable = ["A", "B", "C", "D", "E", "F", "I"]
 unfixable = []
 
@@ -72,7 +67,6 @@ jq = [{version = "^1.3.0", platform = "darwin"}, {version = "^1.3.0", platform =
 experimental = ["cognite-sdk-experimental"]
 
 [tool.poetry.group.dev.dependencies]
-black = "23.10.1"
 mypy = "1.6.1"
 ruff = "^0.1.0"
 pytest = "^7.0.0"

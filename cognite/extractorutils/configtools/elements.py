@@ -325,7 +325,8 @@ class CogniteConfig:
             return None
 
         return cdf_client.data_sets.retrieve(
-            id=self.data_set.either_id.internal_id, external_id=self.data_set.either_id.external_id  # type: ignore
+            id=self.data_set.either_id.internal_id,
+            external_id=self.data_set.either_id.external_id,  # type: ignore
         )
 
     def get_extraction_pipeline(self, cdf_client: CogniteClient) -> Optional[ExtractionPipeline]:
