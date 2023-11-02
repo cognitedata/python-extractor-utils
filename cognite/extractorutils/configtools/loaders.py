@@ -36,30 +36,31 @@ _logger = logging.getLogger(__name__)
 CustomConfigClass = TypeVar("CustomConfigClass", bound=BaseConfig)
 
 
-def _load_yaml(
+class _EnvLoader(yaml.SafeLoader):
+    pass
+
+
+def _env_constructor(_: yaml.SafeLoader, node: yaml.Node) -> bool:
+    bool_values = {
+        "true": True,
+        "false": False,
+    }
+    expanded_value = os.path.expandvars(node.value)
+    return bool_values.get(expanded_value.lower(), expanded_value)
+
+
+_EnvLoader.add_implicit_resolver("!env", re.compile(r"\$\{([^}^{]+)\}"), None)
+_EnvLoader.add_constructor("!env", _env_constructor)
+
+
+def _load_yaml_dict(
     source: Union[TextIO, str],
-    config_type: Type[CustomConfigClass],
     case_style: str = "hyphen",
     expand_envvars: bool = True,
     dict_manipulator: Callable[[Dict[str, Any]], Dict[str, Any]] = lambda x: x,
-) -> CustomConfigClass:
-    def env_constructor(_: yaml.SafeLoader, node: yaml.Node) -> bool:
-        bool_values = {
-            "true": True,
-            "false": False,
-        }
-        expanded_value = os.path.expandvars(node.value)
-        return bool_values.get(expanded_value.lower(), expanded_value)
+) -> Dict[str, Any]:
+    loader = _EnvLoader if expand_envvars else yaml.SafeLoader
 
-    class EnvLoader(yaml.SafeLoader):
-        pass
-
-    EnvLoader.add_implicit_resolver("!env", re.compile(r"\$\{([^}^{]+)\}"), None)
-    EnvLoader.add_constructor("!env", env_constructor)
-
-    loader = EnvLoader if expand_envvars else yaml.SafeLoader
-
-    # Safe to use load instead of safe_load since both loader classes are based on SafeLoader
     try:
         config_dict = yaml.load(source, Loader=loader)  # noqa: S506
     except ScannerError as e:
@@ -70,6 +71,20 @@ def _load_yaml(
 
     config_dict = dict_manipulator(config_dict)
     config_dict = _to_snake_case(config_dict, case_style)
+
+    return config_dict
+
+
+def _load_yaml(
+    source: Union[TextIO, str],
+    config_type: Type[CustomConfigClass],
+    case_style: str = "hyphen",
+    expand_envvars: bool = True,
+    dict_manipulator: Callable[[Dict[str, Any]], Dict[str, Any]] = lambda x: x,
+) -> CustomConfigClass:
+    config_dict = _load_yaml_dict(
+        source, case_style=case_style, expand_envvars=expand_envvars, dict_manipulator=dict_manipulator
+    )
 
     try:
         config = dacite.from_dict(
@@ -133,6 +148,29 @@ def load_yaml(
     return _load_yaml(source=source, config_type=config_type, case_style=case_style, expand_envvars=expand_envvars)
 
 
+def load_yaml_dict(
+    source: Union[TextIO, str],
+    case_style: str = "hyphen",
+    expand_envvars: bool = True,
+) -> Dict[str, Any]:
+    """
+    Read a YAML file and return a dictionary from its contents
+
+    Args:
+        source: Input stream (as returned by open(...)) or string containing YAML.
+        case_style: Casing convention of config file. Valid options are 'snake', 'hyphen' or 'camel'. Should be
+            'hyphen'.
+        expand_envvars: Substitute values with the pattern ${VAR} with the content of the environment variable VAR
+
+    Returns:
+        A raw dict with the contents of the config file.
+
+    Raises:
+        InvalidConfigError: If any config field is given as an invalid type, is missing or is unknown
+    """
+    return _load_yaml_dict(source=source, case_style=case_style, expand_envvars=expand_envvars)
+
+
 class ConfigResolver(Generic[CustomConfigClass]):
     def __init__(self, config_path: str, config_type: Type[CustomConfigClass]):
         self.config_path = config_path
@@ -147,7 +185,7 @@ class ConfigResolver(Generic[CustomConfigClass]):
 
     @property
     def is_remote(self) -> bool:
-        raw_config_type = yaml.safe_load(self._config_text).get("type")
+        raw_config_type = load_yaml_dict(self._config_text).get("type")
         if raw_config_type is None:
             _logger.warning("No config type specified, default to local")
             raw_config_type = "local"

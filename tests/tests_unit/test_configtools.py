@@ -32,6 +32,7 @@ from cognite.extractorutils.configtools import (
 )
 from cognite.extractorutils.configtools._util import _to_snake_case
 from cognite.extractorutils.configtools.elements import AuthenticatorConfig
+from cognite.extractorutils.configtools.loaders import ConfigResolver
 from cognite.extractorutils.exceptions import InvalidConfigError
 
 
@@ -412,3 +413,22 @@ class TestConfigtoolsMethods(unittest.TestCase):
         config5 = load_yaml(config_file5, SimpleStringConfig)
 
         self.assertEqual(config5.string_field, "veryheyocrowded")
+
+    def test_env_substitution_remote_check(self):
+        os.environ["STRING_VALUE"] = "test"
+
+        resolver = ConfigResolver("some-path.yml", BaseConfig)
+
+        resolver._config_text = """
+            type: local
+            some_field: !env "wow${STRING_VALUE}wow"
+        """
+        assert not resolver.is_remote
+
+        resolver._config_text = """
+            type: ${STRING_VALUE}
+            some_field: !env "wow${STRING_VALUE}wow"
+        """
+
+        os.environ["STRING_VALUE"] = "remote"
+        assert resolver.is_remote

@@ -12,6 +12,16 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## [5.5.0]
+
+### Added
+
+ * Added `load_yaml_dict` to `configtools.loaders`.
+
+### Fixed
+
+ * Fixed getting the config `type` when `!env` was used in the config file.
+
 ## [5.4.3]
 
 ### Added
