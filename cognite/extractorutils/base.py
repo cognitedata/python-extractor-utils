@@ -287,7 +287,8 @@ class Extractor(Generic[CustomConfigClass]):
                     try:
                         self.cognite_client.extraction_pipelines.runs.create(
                             ExtractionPipelineRun(
-                                extpipe_external_id=self.extraction_pipeline.external_id, status="seen"  # type: ignore
+                                extpipe_external_id=self.extraction_pipeline.external_id,  # type: ignore
+                                status="seen",
                             )
                         )
                     except Exception:
