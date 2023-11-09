@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## [5.5.1]
+
+### Added
+
+ * Added iter method on the state store to return the keys of the local state dict
+
 ## [5.5.0]
 
 ### Added

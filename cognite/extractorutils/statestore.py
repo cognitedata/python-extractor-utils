@@ -308,6 +308,10 @@ class AbstractStateStore(ABC):
 
     def __len__(self) -> int:
         return len(self._local_state)
+    
+    def __iter__(self):
+        for key in self._local_state:
+            yield key
 
 
 class RawStateStore(AbstractStateStore):
