@@ -116,6 +116,19 @@ class TestBaseStateStore(unittest.TestCase):
 
         self.assertListEqual(state_store.get_state(["extId1", "extId3", "extId5"]), [(1, 5), (0, None), (None, None)])
 
+    def test_local_state_interaction(self):
+        state_store = NoStateStore()
+        state_store._local_state = {
+            "extId1": {"low": 1, "high": 5},
+            "extId2": {"low": None, "high": 4},
+            "extId3": {"low": 0},
+            "extId4": {"low": 3, "high": None},
+        }
+
+        assert len(state_store) == len(state_store._local_state)
+        for id in state_store:
+            assert id in state_store._local_state.keys()
+
     @patch("cognite.client.CogniteClient")
     def test_upload_queue_integration(self, MockCogniteClient):
         state_store = NoStateStore()
