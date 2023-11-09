@@ -125,9 +125,9 @@ class TestBaseStateStore(unittest.TestCase):
             "extId4": {"low": 3, "high": None},
         }
 
-        assert len(state_store) == len(state_store._local_state)
+        self.assertTrue(len(state_store) == len(state_store._local_state))
         for id in state_store:
-            assert id in state_store._local_state.keys()
+            self.assertTrue(id in state_store._local_state.keys())
 
     @patch("cognite.client.CogniteClient")
     def test_upload_queue_integration(self, MockCogniteClient):
