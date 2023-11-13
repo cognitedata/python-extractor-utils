@@ -51,7 +51,7 @@ exclude = "tests/*"
 
 [tool.poetry.dependencies]
 python = "^3.8.0"
-cognite-sdk = ">=6.0, <7"
+cognite-sdk = "7.0.0a3"
 prometheus-client = ">0.7.0, <=1.0.0"
 arrow = "^1.0.0"
 pyyaml = ">=5.3.0, <7"
