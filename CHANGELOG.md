@@ -15,6 +15,7 @@ Changes are grouped as follows
 ## [6.0.0]
 
 ### Changed
+
 * `cognite-sdk` to `v7`
 
 ## [5.5.1]
