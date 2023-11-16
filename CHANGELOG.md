@@ -12,6 +12,11 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## [6.0.0]
+
+### Changed
+* `cognite-sdk` to `v7`
+
 ## [5.5.1]
 
 ### Added
