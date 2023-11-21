@@ -112,6 +112,12 @@ class IntegrationTests(unittest.TestCase):
         self.client.time_series.delete(external_id=[self.time_series1, self.time_series2], ignore_unknown_ids=True)
         self.client.events.delete(external_id=[self.event1, self.event2, self.event3], ignore_unknown_ids=True)
         self.client.assets.delete(external_id=[self.asset1, self.asset2, self.asset3], ignore_unknown_ids=True)
+        # No ignore_unknown_ids in files, so we need to delete them one at a time
+        for file in [self.file1, self.file2]:
+            try:
+                self.client.files.delete(external_id=file)
+            except CogniteNotFoundError:
+                pass
 
     def test_raw_upload_queue(self):
         queue = RawUploadQueue(cdf_client=self.client, max_queue_size=500)
