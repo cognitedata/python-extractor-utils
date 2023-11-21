@@ -96,12 +96,13 @@ class IntegrationTests(unittest.TestCase):
             self.client.assets.delete(external_id=[self.asset1, self.asset2, self.asset3], ignore_unknown_ids=True)
         except CogniteNotFoundError:
             pass
-        try:
-            # No ignore_unknown_ids in files, so we need to delete them one at a time
-            for file in [self.file1, self.file2]:
+
+        # No ignore_unknown_ids in files, so we need to delete them one at a time
+        for file in [self.file1, self.file2]:
+            try:
                 self.client.files.delete(external_id=file)
-        except CogniteNotFoundError:
-            pass
+            except CogniteNotFoundError:
+                pass
 
     def tearDown(self):
         try:
