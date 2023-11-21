@@ -90,7 +90,7 @@ import logging
 import threading
 from abc import ABC, abstractmethod
 from types import TracebackType
-from typing import Any, Callable, Dict, Iterable, List, Optional, Tuple, Type, Union
+from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Type, Union
 
 from requests.exceptions import ConnectionError
 
@@ -309,7 +309,7 @@ class AbstractStateStore(ABC):
     def __len__(self) -> int:
         return len(self._local_state)
 
-    def __iter__(self) -> Iterable[str]:
+    def __iter__(self) -> Iterator[str]:
         for key in self._local_state:
             yield key
 

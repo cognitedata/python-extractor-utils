@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## [5.5.2]
+
+### Fixed
+
+ * Fixed iter method on the state store to return an iterator
+
 ## [5.5.1]
 
 ### Added
