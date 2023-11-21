@@ -221,11 +221,15 @@ class TestUploadQueue(unittest.TestCase):
         queue.start()
 
         queue.add_to_upload_queue(
-            rows=[{"rowNumber": 1, "values": {"field": "Hello"}}], column_external_ids=[], external_id="seq-1"
+            rows=[{"rowNumber": 1, "values": ["Hello"]}],
+            column_external_ids=[{"externalId": "field", "valueType": "String"}],
+            external_id="seq-1",
         )
 
         queue.add_to_upload_queue(
-            rows=[{"rowNumber": 2, "values": {"field": "World"}}], column_external_ids=[], external_id="seq-1"
+            rows=[{"rowNumber": 2, "values": ["World"]}],
+            column_external_ids=[{"externalId": "field", "valueType": "String"}],
+            external_id="seq-1",
         )
 
         time.sleep(2.1)
@@ -249,11 +253,15 @@ class TestUploadQueue(unittest.TestCase):
         queue.start()
 
         queue.add_to_upload_queue(
-            rows=[{"rowNumber": 1, "values": {"field": "Hello"}}], column_external_ids=[], external_id="seq-1"
+            rows=[{"rowNumber": 1, "values": ["Hello"]}],
+            column_external_ids=[{"externalId": "field", "valueType": "String"}],
+            external_id="seq-1",
         )
 
         queue.add_to_upload_queue(
-            rows=[{"rowNumber": 2, "values": {"field": "World"}}], column_external_ids=[], external_id="seq-2"
+            rows=[{"rowNumber": 2, "values": ["World"]}],
+            column_external_ids=[{"externalId": "field", "valueType": "String"}],
+            external_id="seq-2",
         )
 
         time.sleep(2.1)
