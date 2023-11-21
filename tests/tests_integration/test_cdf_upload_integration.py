@@ -299,8 +299,8 @@ class IntegrationTests(unittest.TestCase):
         file1 = self.client.files.download_bytes(external_id=self.file1)
         file2 = self.client.files.download_bytes(external_id=self.file2)
 
-        assert file1 == b"test content"
-        assert file2 == b"other test content"
+        assert file1 == b"test content\n"
+        assert file2 == b"other test content\n"
 
     def test_bytes_upload_queue(self):
         queue = BytesUploadQueue(cdf_client=self.client, overwrite_existing=True)
