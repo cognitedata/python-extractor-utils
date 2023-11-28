@@ -240,7 +240,7 @@ class Extractor(Generic[CustomConfigClass]):
 
         if str(os.getenv("COGNITE_FUNCTION_RUNTIME", False)).lower() != "true":
             # Environment Variables
-            env_file_path = find_dotenv()
+            env_file_path = find_dotenv(usecwd=True)
             if env_file_path:
                 load_dotenv(dotenv_path=env_file_path, override=True)
                 dotenv_message = f"Successfully ingested environment variables from {env_file_path}"
@@ -287,7 +287,8 @@ class Extractor(Generic[CustomConfigClass]):
                     try:
                         self.cognite_client.extraction_pipelines.runs.create(
                             ExtractionPipelineRun(
-                                extpipe_external_id=self.extraction_pipeline.external_id, status="seen"  # type: ignore
+                                extpipe_external_id=self.extraction_pipeline.external_id,  # type: ignore
+                                status="seen",
                             )
                         )
                     except Exception:

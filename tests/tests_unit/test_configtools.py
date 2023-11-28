@@ -32,6 +32,7 @@ from cognite.extractorutils.configtools import (
 )
 from cognite.extractorutils.configtools._util import _to_snake_case
 from cognite.extractorutils.configtools.elements import AuthenticatorConfig
+from cognite.extractorutils.configtools.loaders import ConfigResolver
 from cognite.extractorutils.exceptions import InvalidConfigError
 
 
@@ -43,6 +44,11 @@ class CastingClass:
     string_field: str
     another_string_field: str
     yet_another_string_field: str
+
+
+@dataclass
+class SimpleStringConfig:
+    string_field: str
 
 
 class TestConfigtoolsMethods(unittest.TestCase):
@@ -379,3 +385,50 @@ class TestConfigtoolsMethods(unittest.TestCase):
             yaml.dump(dataclasses.asdict(config), config_file)
         with open("test_dump_config.yml", "r") as config_file:
             load_yaml(config_file, BaseConfig)
+
+    def test_env_substitution(self):
+        os.environ["STRING_VALUE"] = "heyo"
+
+        config_file1 = "string-field: ${STRING_VALUE}"
+        config1: SimpleStringConfig = load_yaml(config_file1, SimpleStringConfig)
+
+        self.assertEqual(config1.string_field, "heyo")
+
+        config_file2 = "string-field: ${STRING_VALUE} in context"
+        config2 = load_yaml(config_file2, SimpleStringConfig)
+
+        self.assertEqual(config2.string_field, "heyo in context")
+
+        config_file3 = 'string-field: !env "${STRING_VALUE} in context"'
+        config3 = load_yaml(config_file3, SimpleStringConfig)
+
+        self.assertEqual(config3.string_field, "heyo in context")
+
+        config_file4 = "string-field: ${STRING_VALUE}without space"
+        config4 = load_yaml(config_file4, SimpleStringConfig)
+
+        self.assertEqual(config4.string_field, "heyowithout space")
+
+        config_file5 = "string-field: !env very${STRING_VALUE}crowded"
+        config5 = load_yaml(config_file5, SimpleStringConfig)
+
+        self.assertEqual(config5.string_field, "veryheyocrowded")
+
+    def test_env_substitution_remote_check(self):
+        os.environ["STRING_VALUE"] = "test"
+
+        resolver = ConfigResolver("some-path.yml", BaseConfig)
+
+        resolver._config_text = """
+            type: local
+            some_field: !env "wow${STRING_VALUE}wow"
+        """
+        assert not resolver.is_remote
+
+        resolver._config_text = """
+            type: ${STRING_VALUE}
+            some_field: !env "wow${STRING_VALUE}wow"
+        """
+
+        os.environ["STRING_VALUE"] = "remote"
+        assert resolver.is_remote

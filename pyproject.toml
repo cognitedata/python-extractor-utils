@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "cognite-extractor-utils"
-version = "5.4.0"
+version = "6.0.1"
 description = "Utilities for easier development of extractors for CDF"
 authors = ["Mathias Lohne <mathias.lohne@cognite.com>"]
 license = "Apache-2.0"
@@ -11,14 +11,9 @@ packages = [
     { include="cognite", from="." },
 ]
 
-[tool.black]
-line-length = 120
-target_version = ['py38']
-include = '\.py$'
-
 [tool.ruff]
 select = ["E", "F", "I", "T20", "S"]
-ignore = ["S104", "S303", "S311", "E501"]
+ignore = ["S104", "S303", "S311"]
 fixable = ["A", "B", "C", "D", "E", "F", "I"]
 unfixable = []
 
@@ -56,7 +51,7 @@ exclude = "tests/*"
 
 [tool.poetry.dependencies]
 python = "^3.8.0"
-cognite-sdk = ">=6.0, <7"
+cognite-sdk = "^7"
 prometheus-client = ">0.7.0, <=1.0.0"
 arrow = "^1.0.0"
 pyyaml = ">=5.3.0, <7"
@@ -74,9 +69,8 @@ azure-keyvault-secrets = "^4.7.0"
 experimental = ["cognite-sdk-experimental"]
 
 [tool.poetry.group.dev.dependencies]
-black = "23.7.0"
-mypy = "1.4.1"
-ruff = "^0.0.282"
+mypy = "1.7.0"
+ruff = "^0.1.0"
 pytest = "^7.0.0"
 pytest-cov = "^4.0.0"
 sphinx = "^7.0.0"

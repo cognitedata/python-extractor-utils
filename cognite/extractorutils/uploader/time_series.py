@@ -21,7 +21,12 @@ from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 from requests import ConnectionError
 
 from cognite.client import CogniteClient
-from cognite.client.data_classes import Sequence, SequenceData, TimeSeries
+from cognite.client.data_classes import (
+    Sequence,
+    SequenceData,
+    SequenceRows,
+    TimeSeries,
+)
 from cognite.client.exceptions import CogniteAPIError, CogniteDuplicatedError, CogniteNotFoundError
 from cognite.extractorutils.uploader._base import (
     RETRIES,
@@ -46,7 +51,9 @@ MAX_DATAPOINT_STRING_LENGTH = 255
 MAX_DATAPOINT_VALUE = 1e100
 MIN_DATAPOINT_VALUE = -1e100
 
-DataPoint = Tuple[Union[int, float, datetime], Union[int, float, str]]
+TimeStamp = Union[int, datetime]
+
+DataPoint = Union[Tuple[TimeStamp, float], Tuple[TimeStamp, str]]
 DataPointList = List[DataPoint]
 
 
@@ -359,7 +366,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
             thread_name,
             cancellation_token,
         )
-        self.upload_queue: Dict[EitherId, SequenceData] = {}
+        self.upload_queue: Dict[EitherId, SequenceRows] = {}
         self.sequence_metadata: Dict[EitherId, Dict[str, Union[str, int, float]]] = {}
         self.sequence_asset_external_ids: Dict[EitherId, str] = {}
         self.sequence_dataset_external_ids: Dict[EitherId, str] = {}
@@ -433,6 +440,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
             List[Tuple[int, Union[int, float, str]]],
             List[Dict[str, Any]],
             SequenceData,
+            SequenceRows,
         ],
         column_external_ids: Optional[List[dict]] = None,
         id: Optional[int] = None,
@@ -457,19 +465,25 @@ class SequenceUploadQueue(AbstractUploadQueue):
 
         either_id = EitherId(id=id, external_id=external_id)
 
-        if isinstance(rows, SequenceData):
-            # Already in desired format
+        if isinstance(rows, SequenceRows):
+            # Already in the desired format
             pass
-        elif isinstance(rows, dict):
-            rows = [{"rowNumber": row_number, "values": values} for row_number, values in rows.items()]
-
-            rows = SequenceData(id=id, external_id=id, rows=rows, columns=column_external_ids)  # type: ignore
-
-        elif isinstance(rows, list):
-            if isinstance(rows[0], tuple) or isinstance(rows[0], list):
-                rows = [{"rowNumber": row_number, "values": values} for row_number, values in rows]
-
-            rows = SequenceData(id=id, external_id=id, rows=rows, columns=column_external_ids)  # type: ignore
+        elif isinstance(rows, (dict, list)):
+            rows_raw: List[Dict[str, Any]]
+            if isinstance(rows, dict):
+                rows_raw = [{"rowNumber": row_number, "values": values} for row_number, values in rows.items()]
+            elif isinstance(rows, list) and rows and isinstance(rows[0], (tuple, list)):
+                rows_raw = [{"rowNumber": row_number, "values": values} for row_number, values in rows]
+            else:
+                rows_raw = rows  # type: ignore[assignment]
+            rows = SequenceRows.load(
+                {
+                    "rows": rows_raw,
+                    "columns": column_external_ids,
+                    "id": id,
+                    "externalId": external_id,
+                }
+            )
         else:
             raise TypeError("Unsupported type for sequence rows: {}".format(type(rows)))
 
@@ -477,8 +491,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
             seq = self.upload_queue.get(either_id)
             if seq is not None:
                 # Update sequence
-                seq.values.extend(rows.values)  # type: ignore  # type is list, mypy is wrong
-                seq.row_numbers.extend(rows.row_numbers)  # type: ignore
+                seq.rows.extend(rows.rows)  # type: ignore[attr-defined]
 
                 self.upload_queue[either_id] = seq
             else:
@@ -583,7 +596,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
 
         # Update definition of cached sequence
         cseq = self.upload_queue[either_id]
-        cseq.columns = seq.columns
+        cseq.columns = seq.columns  # type: ignore[assignment]
 
     def _resolve_asset_ids(self) -> None:
         """

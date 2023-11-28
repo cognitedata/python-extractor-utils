@@ -12,6 +12,52 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## [6.0.1]
+
+### Fixed
+
+ * Fixed iter method on the state store to return an iterator
+
+## [6.0.0]
+
+### Changed
+
+* `cognite-sdk` to `v7`
+
+## [5.5.1]
+
+### Added
+
+ * Added iter method on the state store to return the keys of the local state dict
+
+## [5.5.0]
+
+### Added
+
+ * Added `load_yaml_dict` to `configtools.loaders`.
+
+### Fixed
+
+ * Fixed getting the config `type` when `!env` was used in the config file.
+
+## [5.4.3]
+
+### Added
+
+ * Added len method on the state store to return the length of the local state dict
+
+## [5.4.2]
+
+### Fixed
+
+ * Fix on find_dotenv call
+
+## [5.4.1]
+
+### Changed
+
+ * Update cognite-sdk version to 6.24.0
+
 ## [5.4.0]
 
 ### Fixed

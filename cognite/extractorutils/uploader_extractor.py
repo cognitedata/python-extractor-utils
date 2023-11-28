@@ -118,17 +118,23 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
         if isinstance(peek, Event):
             for event in peekable_output:
                 event = self._apply_middleware(event)
-                self.event_queue.add_to_upload_queue(event)
+                if isinstance(event, Event):
+                    self.event_queue.add_to_upload_queue(event)
+
         elif isinstance(peek, RawRow):
             for raw_row in peekable_output:
-                for row in raw_row.rows:
-                    row = self._apply_middleware(row)
-                    self.raw_queue.add_to_upload_queue(database=raw_row.db_name, table=raw_row.table_name, raw_row=row)
+                if isinstance(raw_row, RawRow):
+                    for row in raw_row.rows:
+                        row = self._apply_middleware(row)
+                        self.raw_queue.add_to_upload_queue(
+                            database=raw_row.db_name, table=raw_row.table_name, raw_row=row
+                        )
         elif isinstance(peek, InsertDatapoints):
-            for datapoints in peekable_output:
-                self.time_series_queue.add_to_upload_queue(
-                    id=datapoints.id, external_id=datapoints.external_id, datapoints=datapoints.datapoints
-                )
+            for dp in peekable_output:
+                if isinstance(dp, InsertDatapoints):
+                    self.time_series_queue.add_to_upload_queue(
+                        id=dp.id, external_id=dp.external_id, datapoints=dp.datapoints
+                    )
         else:
             raise ValueError(f"Unexpected type: {type(peek)}")
 
