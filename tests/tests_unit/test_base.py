@@ -49,6 +49,14 @@ class TestExtractorClass(unittest.TestCase):
         e1._initial_load_config("tests/tests_unit/dummyconfig.yaml")
         self.assertIsInstance(e1.config, ConfigWithStates)
 
+    def test_load_config_keyvault(self):
+        e7 = Extractor(name="my_extractor7", description="description", config_class=ConfigWithoutStates)
+        e7._initial_load_config("tests/tests_unit/dummyconfig_keyvault.yaml")
+
+        # dummy Azure KeyVault secrets
+        self.assertEqual(e7.config.cognite.idp_authentication.client_id, "12345")
+        self.assertEqual(e7.config.cognite.idp_authentication.secret, "abcde")
+
     @patch("cognite.client.CogniteClient")
     def test_load_state_store(self, get_client_mock):
         e2 = Extractor(name="my_extractor2", description="description", config_class=ConfigWithStates)

@@ -1,0 +1,24 @@
+version: "1"
+
+logger:
+  console:
+    level: INFO
+
+azure-keyvault:
+    client_id: ${KEYVAULT_CLIENT_ID}
+    tenant_id: ${KEYVAULT_TENANT_ID}
+    client_secret: ${KEYVAULT_CLIENT_SECRET}
+    keyvault_name: extractor-credentials
+
+cognite:
+  project: mathiaslohne-develop
+
+  idp-authentication:
+    client-id: !keyvault test-id
+    secret: !keyvault test-secret
+    token-url: https://get-a-token.com/token
+    scopes:
+      - https://api.cognitedata.com/.default
+
+source:
+  frequency: 0.1

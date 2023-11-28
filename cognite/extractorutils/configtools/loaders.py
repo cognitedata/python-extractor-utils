@@ -48,6 +48,8 @@ class KeyVaultLoader:
         self.client: Optional[SecretClient] = None
 
     def _init_client(self) -> None:
+        from dotenv import find_dotenv, load_dotenv
+
         if not self.config:
             raise InvalidConfigError(
                 "Attempted to load values from Azure key vault with no key vault configured. "
@@ -62,7 +64,8 @@ class KeyVaultLoader:
         idp_params = ("client_id", "tenant_id", "client_secret")
 
         if all(param in self.config for param in idp_params):
-            _logger.info("App Registration parameters are set for Azure KeyVault. Retrieving credentials")
+            dotenv_path = find_dotenv(usecwd=True)
+            load_dotenv(dotenv_path=dotenv_path, override=True)
 
             tenant_id = os.path.expandvars(self.config.get("tenant_id", None))
             client_id = os.path.expandvars(self.config.get("client_id", None))
@@ -97,6 +100,11 @@ class _EnvLoader(yaml.SafeLoader):
     pass
 
 
+class SafeLoaderIgnoreUnknown(yaml.SafeLoader):
+    def ignore_unknown(self, node: yaml.Node) -> None:
+        return None
+
+
 def _env_constructor(_: yaml.SafeLoader, node: yaml.Node) -> bool:
     bool_values = {
         "true": True,
@@ -106,10 +114,6 @@ def _env_constructor(_: yaml.SafeLoader, node: yaml.Node) -> bool:
     return bool_values.get(expanded_value.lower(), expanded_value)
 
 
-_EnvLoader.add_implicit_resolver("!env", re.compile(r"\$\{([^}^{]+)\}"), None)
-_EnvLoader.add_constructor("!env", _env_constructor)
-
-
 def _load_yaml_dict(
     source: Union[TextIO, str],
     case_style: str = "hyphen",
@@ -117,6 +121,24 @@ def _load_yaml_dict(
     dict_manipulator: Callable[[Dict[str, Any]], Dict[str, Any]] = lambda x: x,
 ) -> Dict[str, Any]:
     loader = _EnvLoader if expand_envvars else yaml.SafeLoader
+
+    class SafeLoaderIgnoreUnknown(yaml.SafeLoader):
+        def ignore_unknown(self, node: yaml.Node) -> None:
+            return None
+
+        # Ignoring types since the key can be None.
+
+    SafeLoaderIgnoreUnknown.add_constructor(None, SafeLoaderIgnoreUnknown.ignore_unknown)  # type: ignore
+    initial_load = yaml.load(source, Loader=SafeLoaderIgnoreUnknown)  # noqa: S506
+
+    if not isinstance(source, str):
+        source.seek(0)
+
+    keyvault_config = initial_load.get("azure-keyvault")
+
+    _EnvLoader.add_implicit_resolver("!env", re.compile(r"\$\{([^}^{]+)\}"), None)
+    _EnvLoader.add_constructor("!env", _env_constructor)
+    _EnvLoader.add_constructor("!keyvault", KeyVaultLoader(keyvault_config))
 
     try:
         config_dict = yaml.load(source, Loader=loader)  # noqa: S506
