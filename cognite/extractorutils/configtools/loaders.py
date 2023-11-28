@@ -26,7 +26,7 @@ import dacite
 import yaml
 from azure.core.credentials import TokenCredential
 from azure.core.exceptions import HttpResponseError, ResourceNotFoundError, ServiceRequestError
-from azure.identity import DefaultAzureCredential
+from azure.identity import ClientSecretCredential, DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 from yaml.scanner import ScannerError
 
@@ -54,15 +54,34 @@ class KeyVaultLoader:
                 "Include an `azure-keyvault` section in your config to use the !keyvault tag."
             )
 
-        if self.credentials is None:
+        if "keyvault_name" not in self.config:
+            raise InvalidConfigError("Please add the keyvault_name")
+
+        vault_url = f"https://{self.config['keyvault_name']}.vault.azure.net"
+
+        idp_params = ("client_id", "tenant_id", "client_secret")
+
+        if all(param in self.config for param in idp_params):
+            _logger.info("App Registration parameters are set for Azure KeyVault. Retrieving credentials")
+
+            tenant_id = os.path.expandvars(self.config.get("tenant_id", None))
+            client_id = os.path.expandvars(self.config.get("client_id", None))
+            client_secret = os.path.expandvars(self.config.get("client_secret", None))
+
+            if None not in (tenant_id, client_id, client_secret):
+                self.credentials = ClientSecretCredential(
+                    tenant_id=tenant_id,
+                    client_id=client_id,
+                    client_secret=client_secret,
+                )
+            else:
+                raise InvalidConfigError(
+                    "Missing Azure KeyVault credential parameters. Make sure that client_id, tenant_id and client_secret are added"
+                )
+        else:
             self.credentials = DefaultAzureCredential()
 
-        if self.client is None:
-            vault_url = self.config.get("vault-url")
-            if not vault_url:
-                raise InvalidConfigError("No vault-url configured for Azure key vault")
-
-            self.client = SecretClient(vault_url=vault_url, credential=self.credentials)
+        self.client = SecretClient(vault_url=vault_url, credential=self.credentials)
 
     def __call__(self, _: yaml.SafeLoader, node: yaml.Node) -> str:
         self._init_client()
