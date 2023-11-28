@@ -76,12 +76,14 @@ class KeyVaultLoader:
                 )
             else:
                 raise InvalidConfigError(
-                    "Missing Azure KeyVault credential parameters. Make sure that client_id, tenant_id and client_secret are added"
+                    "Missing Azure KeyVault credential parameters"
+                    "Make sure that client_id, tenant_id and client_secret are added"
                 )
         else:
+            _logger.info("Using DefaultAzureCredentials")
             self.credentials = DefaultAzureCredential()
 
-        self.client = SecretClient(vault_url=vault_url, credential=self.credentials)
+        self.client = SecretClient(vault_url=vault_url, credential=self.credentials)  # type: ignore
 
     def __call__(self, _: yaml.SafeLoader, node: yaml.Node) -> str:
         self._init_client()
