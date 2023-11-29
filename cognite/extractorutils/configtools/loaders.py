@@ -40,6 +40,11 @@ _logger = logging.getLogger(__name__)
 CustomConfigClass = TypeVar("CustomConfigClass", bound=BaseConfig)
 
 
+class KeyVaultAuthenticationMethod(Enum):
+    DEFAULT = "default"
+    CLIENTSECRET = "client-secret"
+
+
 class KeyVaultLoader:
     def __init__(self, config: Optional[dict]):
         self.config = config
@@ -59,19 +64,31 @@ class KeyVaultLoader:
         if "keyvault_name" not in self.config:
             raise InvalidConfigError("Please add the keyvault_name")
 
+        if "authentication_method" not in self.config:
+            raise InvalidConfigError(
+                "Please enter the authentication method to access Azure KeyVault"
+                "Possible values are: default or client-secret"
+            )
+
         vault_url = f"https://{self.config['keyvault_name']}.vault.azure.net"
 
-        idp_params = ("client_id", "tenant_id", "client_secret")
+        if self.config["authentication_method"] == KeyVaultAuthenticationMethod.DEFAULT.value:
+            _logger.info("Using Azure DefaultCredentials to access KeyVault")
+            self.credentials = DefaultAzureCredential()
 
-        if all(param in self.config for param in idp_params):
+        elif self.config["authentication_method"] == KeyVaultAuthenticationMethod.CLIENTSECRET.value:
+            auth_parameters = ("client_id", "tenant_id", "client_secret")
+
+            _logger.info("Using Azure ClientSecret credentials to access KeyVault")
+
             dotenv_path = find_dotenv(usecwd=True)
             load_dotenv(dotenv_path=dotenv_path, override=True)
 
-            tenant_id = os.path.expandvars(self.config.get("tenant_id", None))
-            client_id = os.path.expandvars(self.config.get("client_id", None))
-            client_secret = os.path.expandvars(self.config.get("client_secret", None))
+            if all(param in self.config for param in auth_parameters):
+                tenant_id = os.path.expandvars(self.config.get("tenant_id", None))
+                client_id = os.path.expandvars(self.config.get("client_id", None))
+                client_secret = os.path.expandvars(self.config.get("client_secret", None))
 
-            if None not in (tenant_id, client_id, client_secret):
                 self.credentials = ClientSecretCredential(
                     tenant_id=tenant_id,
                     client_id=client_id,
@@ -79,12 +96,12 @@ class KeyVaultLoader:
                 )
             else:
                 raise InvalidConfigError(
-                    "Missing Azure KeyVault credential parameters"
-                    "Make sure that client_id, tenant_id and client_secret are added"
+                    "Missing client secret parameters. client_id, tenant_id and client_secret are mandatory"
                 )
         else:
-            _logger.info("Using DefaultAzureCredentials")
-            self.credentials = DefaultAzureCredential()
+            raise InvalidConfigError(
+                "Invalid KeyVault authentication method. Possible values : default or client-secret"
+            )
 
         self.client = SecretClient(vault_url=vault_url, credential=self.credentials)  # type: ignore
 
