@@ -61,23 +61,23 @@ class KeyVaultLoader:
                 "Include an `azure-keyvault` section in your config to use the !keyvault tag."
             )
 
-        if "keyvault_name" not in self.config:
-            raise InvalidConfigError("Please add the keyvault_name")
+        if "keyvault-name" not in self.config:
+            raise InvalidConfigError("Please add the keyvault-name")
 
-        if "authentication_method" not in self.config:
+        if "authentication-method" not in self.config:
             raise InvalidConfigError(
                 "Please enter the authentication method to access Azure KeyVault"
                 "Possible values are: default or client-secret"
             )
 
-        vault_url = f"https://{self.config['keyvault_name']}.vault.azure.net"
+        vault_url = f"https://{self.config['keyvault-name']}.vault.azure.net"
 
-        if self.config["authentication_method"] == KeyVaultAuthenticationMethod.DEFAULT.value:
+        if self.config["authentication-method"] == KeyVaultAuthenticationMethod.DEFAULT.value:
             _logger.info("Using Azure DefaultCredentials to access KeyVault")
             self.credentials = DefaultAzureCredential()
 
-        elif self.config["authentication_method"] == KeyVaultAuthenticationMethod.CLIENTSECRET.value:
-            auth_parameters = ("client_id", "tenant_id", "client_secret")
+        elif self.config["authentication-method"] == KeyVaultAuthenticationMethod.CLIENTSECRET.value:
+            auth_parameters = ("client-id", "tenant-id", "secret")
 
             _logger.info("Using Azure ClientSecret credentials to access KeyVault")
 
@@ -85,18 +85,18 @@ class KeyVaultLoader:
             load_dotenv(dotenv_path=dotenv_path, override=True)
 
             if all(param in self.config for param in auth_parameters):
-                tenant_id = os.path.expandvars(self.config.get("tenant_id", None))
-                client_id = os.path.expandvars(self.config.get("client_id", None))
-                client_secret = os.path.expandvars(self.config.get("client_secret", None))
+                tenant_id = os.path.expandvars(self.config.get("tenant-id", None))
+                client_id = os.path.expandvars(self.config.get("client-id", None))
+                secret = os.path.expandvars(self.config.get("secret", None))
 
                 self.credentials = ClientSecretCredential(
                     tenant_id=tenant_id,
                     client_id=client_id,
-                    client_secret=client_secret,
+                    client_secret=secret,
                 )
             else:
                 raise InvalidConfigError(
-                    "Missing client secret parameters. client_id, tenant_id and client_secret are mandatory"
+                    "Missing client secret parameters. client-id, tenant-id and client-secret are mandatory"
                 )
         else:
             raise InvalidConfigError(

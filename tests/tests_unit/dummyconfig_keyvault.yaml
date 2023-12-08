@@ -5,11 +5,11 @@ logger:
     level: INFO
 
 azure-keyvault:
-    authentication_method: client-secret
-    client_id: ${KEYVAULT_CLIENT_ID}
-    tenant_id: ${KEYVAULT_TENANT_ID}
-    client_secret: ${KEYVAULT_CLIENT_SECRET}
-    keyvault_name: extractor-credentials
+    authentication-method: client-secret
+    client-id: ${KEYVAULT_CLIENT_ID}
+    tenant-id: ${KEYVAULT_TENANT_ID}
+    secret: ${KEYVAULT_CLIENT_SECRET}
+    keyvault-name: extractor-credentials
 
 cognite:
   project: mathiaslohne-develop
