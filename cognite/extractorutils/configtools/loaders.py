@@ -47,6 +47,10 @@ class KeyVaultAuthenticationMethod(Enum):
 
 
 class KeyVaultLoader:
+    """
+    Class responsible for configuring keyvault for clients using Azure
+    """
+
     def __init__(self, config: Optional[dict]):
         self.config = config
 

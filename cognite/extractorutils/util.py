@@ -79,7 +79,7 @@ class EitherId:
 
     Args:
         id: Internal ID
-        externalId or external_id: external ID
+        external_id: external ID. It can be `external_id` or `externalId`
 
     Raises:
         TypeError: If none of both of id types are set.
@@ -175,24 +175,25 @@ def add_extraction_pipeline(
     added_message: str = "",
 ) -> Callable[[Callable[..., _T1]], Callable[..., _T1]]:
     """
-    This is to be used as a decorator for extractor functions to add extraction pipeline information
+    This is to be used as a decorator for extractor functions to add extraction pipeline information.
 
     Args:
-        extraction_pipeline_ext_id:
-        cognite_client:
-        heartbeat_waiting_time:
-        added_message:
+        extraction_pipeline_ext_id: External ID of the extraction pipeline
+        cognite_client: Client to use when communicating with CDF
+        heartbeat_waiting_time: Target interval between heartbeats, in seconds
 
     Usage:
         If you have a function named "extract_data(*args, **kwargs)" and want to connect it to an extraction
         pipeline, you can use this decorator function as:
-        @add_extraction_pipeline(
-            extraction_pipeline_ext_id=<INSERT EXTERNAL ID>,
-            cognite_client=<INSERT COGNITE CLIENT OBJECT>,
-            logger=<INSERT LOGGER>,
-        )
-        def extract_data(*args, **kwargs):
-            <INSERT FUNCTION BODY>
+
+        .. code-block:: python
+
+            @add_extraction_pipeline(
+                extraction_pipeline_ext_id=<INSERT EXTERNAL ID>,
+                cognite_client=<INSERT COGNITE CLIENT OBJECT>,
+            )
+            def extract_data(*args, **kwargs):
+                <INSERT FUNCTION BODY>
     """
 
     # TODO 1. Consider refactoring this decorator to share methods with the Extractor context manager in .base.py

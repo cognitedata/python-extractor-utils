@@ -85,10 +85,15 @@ Get a state store object as configured:
 However, all of these things will be automatically done for you if you are using the base Extractor class.
 """
 
+from cognite.extractorutils.exceptions import InvalidConfigError
+
 from .elements import (
+    AuthenticatorConfig,
     BaseConfig,
+    CertificateConfig,
     CogniteConfig,
     ConfigType,
+    ConnectionConfig,
     EitherIdConfig,
     FileSizeConfig,
     LocalStateStoreConfig,
@@ -99,4 +104,4 @@ from .elements import (
     StateStoreConfig,
     TimeIntervalConfig,
 )
-from .loaders import ConfigResolver, load_yaml
+from .loaders import ConfigResolver, KeyVaultAuthenticationMethod, KeyVaultLoader, load_yaml, load_yaml_dict
