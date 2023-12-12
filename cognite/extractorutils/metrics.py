@@ -55,7 +55,7 @@ from prometheus_client.exposition import basic_auth_handler, delete_from_gateway
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset, Datapoints, DatapointsArray, TimeSeries
 from cognite.client.exceptions import CogniteDuplicatedError
-from cognite.extractorutils.configtools.elements import EitherIdConfig
+from cognite.extractorutils.util import EitherId
 
 from .util import ensure_time_series
 
@@ -342,7 +342,7 @@ class CognitePusher(AbstractMetricsPusher):
         external_id_prefix: str,
         push_interval: int,
         asset: Optional[Asset] = None,
-        data_set: Optional[EitherIdConfig] = None,
+        data_set: Optional[EitherId] = None,
         thread_name: Optional[str] = None,
         cancellation_token: Event = Event(),
     ):
@@ -378,7 +378,9 @@ class CognitePusher(AbstractMetricsPusher):
 
         data_set_id = None
         if self.data_set:
-            dataset = self.cdf_client.data_sets.retrieve(id=self.data_set.id, external_id=self.data_set.external_id)
+            dataset = self.cdf_client.data_sets.retrieve(
+                id=self.data_set.internal_id, external_id=self.data_set.external_id
+            )
             if dataset:
                 data_set_id = dataset.id
 

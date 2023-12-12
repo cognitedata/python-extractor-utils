@@ -436,7 +436,7 @@ class _CogniteMetricsConfig:
     external_id_prefix: str
     asset_name: Optional[str]
     asset_external_id: Optional[str]
-    data_set: Optional[EitherIdConfig]
+    data_set: Optional[EitherId]
 
     push_interval: TimeIntervalConfig = TimeIntervalConfig("30s")
 

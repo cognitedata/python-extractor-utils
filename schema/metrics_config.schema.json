@@ -69,8 +69,8 @@
                     "default": 30
                 },
                 "data-set": {
-                    "description": "Data set the metrics timeseries created under",
-                    "$ref": "either_id.schema.json"
+                    "type": "string",
+                    "description": "Data set the metrics timeseries created under"
                 }
             }
         },
