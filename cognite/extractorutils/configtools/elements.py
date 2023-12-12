@@ -436,7 +436,7 @@ class _CogniteMetricsConfig:
     external_id_prefix: str
     asset_name: Optional[str]
     asset_external_id: Optional[str]
-    data_set: Optional[EitherId]
+    data_set: Optional[EitherIdConfig] = None
 
     push_interval: TimeIntervalConfig = TimeIntervalConfig("30s")
 
@@ -486,7 +486,7 @@ class MetricsConfig:
                 external_id_prefix=self.cognite.external_id_prefix,
                 push_interval=self.cognite.push_interval.seconds,
                 asset=asset,
-                data_set=self.cognite.data_set,
+                data_set=self.cognite.data_set.either_id if self.cognite.data_set else None,
                 thread_name="CogniteMetricsPusher",  # There is only one Cognite project as a target
                 cancellation_token=cancellation_token,
             )
