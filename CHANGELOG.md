@@ -12,6 +12,13 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+
+## [6.1.0]
+
+### Added
+
+ * Added ability to specify dataset under which metrics timeseries are created
+
 ## [6.0.2]
 
 ### Fixed

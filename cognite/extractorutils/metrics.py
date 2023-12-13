@@ -55,6 +55,7 @@ from prometheus_client.exposition import basic_auth_handler, delete_from_gateway
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset, Datapoints, DatapointsArray, TimeSeries
 from cognite.client.exceptions import CogniteDuplicatedError
+from cognite.extractorutils.util import EitherId
 
 from .util import ensure_time_series
 
@@ -330,6 +331,7 @@ class CognitePusher(AbstractMetricsPusher):
         external_id_prefix: Unique external ID prefix for this pusher.
         push_interval: Seconds between each upload call
         asset: Optional contextualization.
+        data_set: Data set the metrics timeseries created under.
         thread_name: Name of thread to start. If omitted, a standard name such as Thread-4 will be generated.
         cancellation_token: Event object to be used as a thread cancelation event
     """
@@ -340,6 +342,7 @@ class CognitePusher(AbstractMetricsPusher):
         external_id_prefix: str,
         push_interval: int,
         asset: Optional[Asset] = None,
+        data_set: Optional[EitherId] = None,
         thread_name: Optional[str] = None,
         cancellation_token: Event = Event(),
     ):
@@ -348,6 +351,7 @@ class CognitePusher(AbstractMetricsPusher):
         self.cdf_client = cdf_client
         self.asset = asset
         self.external_id_prefix = external_id_prefix
+        self.data_set = data_set
 
         self._init_cdf()
 
@@ -372,6 +376,14 @@ class CognitePusher(AbstractMetricsPusher):
         else:
             asset_id = None
 
+        data_set_id = None
+        if self.data_set:
+            dataset = self.cdf_client.data_sets.retrieve(
+                id=self.data_set.internal_id, external_id=self.data_set.external_id
+            )
+            if dataset:
+                data_set_id = dataset.id
+
         for metric in REGISTRY.collect():
             if type(metric) == Metric and metric.type in ["gauge", "counter"]:
                 external_id = self.external_id_prefix + metric.name
@@ -383,6 +395,7 @@ class CognitePusher(AbstractMetricsPusher):
                         legacy_name=external_id,
                         description=metric.documentation,
                         asset_id=asset_id,  # type: ignore  # this is optional. Type hint in SDK is wrong
+                        data_set_id=data_set_id,  # type: ignore  # this is optional. Type hint in SDK is wrong
                     )
                 )
 

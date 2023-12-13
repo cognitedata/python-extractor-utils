@@ -29,7 +29,10 @@
                         "description": "PushGateway password"
                     },
                     "clear-after": {
-                        "type": ["null", "integer"],
+                        "type": [
+                            "null",
+                            "integer"
+                        ],
                         "description": "Clear metrics after this many seconds when the extractor stops. Default is disabled"
                     },
                     "push-interval": {
@@ -44,7 +47,9 @@
             "type": "object",
             "description": "Push metrics to CDF timeseries. Requires CDF credentials to be configured",
             "unevaluatedProperties": false,
-            "required": ["external-id-prefix"],
+            "required": [
+                "external-id-prefix"
+            ],
             "properties": {
                 "external-id-prefix": {
                     "type": "string",
@@ -62,6 +67,10 @@
                     "type": "integer",
                     "description": "Interval in seconds between each push to CDF",
                     "default": 30
+                },
+                "data-set": {
+                    "type": "string",
+                    "description": "Data set the metrics timeseries created under"
                 }
             }
         },
