@@ -121,7 +121,7 @@ class EitherId:
             raise TypeError("Internal IDs must be integers")
 
         if external_id is not None and not isinstance(external_id, str):
-            raise TypeError("Internal IDs must be integers")
+            raise TypeError("External IDs must be strings")
 
         self.internal_id: Optional[int] = internal_id
         self.external_id: Optional[str] = external_id
