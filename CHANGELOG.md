@@ -13,6 +13,12 @@ Changes are grouped as follows
 - `Security` in case of vulnerabilities.
 
 
+## [6.1.1]
+
+### Fixed
+
+ * Correctly handle equality comparison of `TimeIntervalConfig` objects.
+
 ## [6.1.0]
 
 ### Added

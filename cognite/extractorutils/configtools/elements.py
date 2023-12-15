@@ -27,12 +27,25 @@ import yaml
 from prometheus_client import REGISTRY, start_http_server
 
 from cognite.client import ClientConfig, CogniteClient
-from cognite.client.credentials import CredentialProvider, OAuthClientCertificate, OAuthClientCredentials
+from cognite.client.credentials import (
+    CredentialProvider,
+    OAuthClientCertificate,
+    OAuthClientCredentials,
+)
 from cognite.client.data_classes import Asset, DataSet, ExtractionPipeline
 from cognite.extractorutils.configtools._util import _load_certificate_data
 from cognite.extractorutils.exceptions import InvalidConfigError
-from cognite.extractorutils.metrics import AbstractMetricsPusher, CognitePusher, PrometheusPusher
-from cognite.extractorutils.statestore import AbstractStateStore, LocalStateStore, NoStateStore, RawStateStore
+from cognite.extractorutils.metrics import (
+    AbstractMetricsPusher,
+    CognitePusher,
+    PrometheusPusher,
+)
+from cognite.extractorutils.statestore import (
+    AbstractStateStore,
+    LocalStateStore,
+    NoStateStore,
+    RawStateStore,
+)
 from cognite.extractorutils.util import EitherId
 
 _logger = logging.getLogger(__name__)
@@ -92,6 +105,14 @@ class EitherIdConfig:
 class TimeIntervalConfig(yaml.YAMLObject):
     def __init__(self, expression: str) -> None:
         self._interval, self._expression = TimeIntervalConfig._parse_expression(expression)
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, TimeIntervalConfig):
+            return NotImplemented
+        return self._interval == other._interval
+
+    def __hash__(self) -> int:
+        return hash(self._interval)
 
     @classmethod
     def _parse_expression(cls, expression: str) -> Tuple[int, str]:
@@ -170,7 +191,10 @@ class FileSizeConfig(yaml.YAMLObject):
         expression_lower = expression.lower()
         for size in sizes:
             if expression_lower.endswith(size):
-                return int(float(expression_lower.replace(size, "")) * sizes[size]), expression
+                return (
+                    int(float(expression_lower.replace(size, "")) * sizes[size]),
+                    expression,
+                )
         else:
             raise InvalidConfigError(f"Invalid unit for file size: {expression}. Valid units: {sizes.keys()}")
 
@@ -241,7 +265,10 @@ class CogniteConfig:
     host: str = "https://api.cognitedata.com"
 
     def get_cognite_client(
-        self, client_name: str, token_custom_args: Optional[Dict[str, str]] = None, use_experimental_sdk: bool = False
+        self,
+        client_name: str,
+        token_custom_args: Optional[Dict[str, str]] = None,
+        use_experimental_sdk: bool = False,
     ) -> CogniteClient:
         from cognite.client.config import global_config
 
@@ -264,7 +291,8 @@ class CogniteConfig:
             else:
                 raise InvalidConfigError("Either authority-url or tenant is required for certificate authentication")
             (thumprint, key) = _load_certificate_data(
-                self.idp_authentication.certificate.path, self.idp_authentication.certificate.password
+                self.idp_authentication.certificate.path,
+                self.idp_authentication.certificate.password,
             )
             credential_provider = OAuthClientCertificate(
                 authority_url=authority_url,
@@ -479,7 +507,10 @@ class MetricsConfig:
             asset = None
 
             if self.cognite.asset_name is not None and self.cognite.asset_external_id:
-                asset = Asset(name=self.cognite.asset_name, external_id=self.cognite.asset_external_id)
+                asset = Asset(
+                    name=self.cognite.asset_name,
+                    external_id=self.cognite.asset_external_id,
+                )
 
             pusher = CognitePusher(
                 cdf_client=cdf_client,
@@ -586,7 +617,10 @@ class StateStoreConfig:
             )
 
         if self.local:
-            return LocalStateStore(file_path=self.local.path, save_interval=self.local.save_interval.seconds)
+            return LocalStateStore(
+                file_path=self.local.path,
+                save_interval=self.local.save_interval.seconds,
+            )
 
         if default_to_local:
             return LocalStateStore(file_path="states.json")
