@@ -399,7 +399,8 @@ class RawStateStore(AbstractStateStore):
         self._initialized = True
 
     def synchronize(self) -> None:
-        self._synchronize_implementation()
+        with self.lock:
+            self._synchronize_implementation()
 
     @retry(
         exceptions=(CogniteException,),
@@ -493,10 +494,9 @@ class LocalStateStore(AbstractStateStore):
         """
         Save states to specified JSON file
         """
-        with open(self._file_path, "w") as f:
-            json.dump(self._local_state, f, cls=_DecimalEncoder)
-
         with self.lock:
+            with open(self._file_path, "w") as f:
+                json.dump(self._local_state, f, cls=_DecimalEncoder)
             self._deleted.clear()
 
     def __enter__(self) -> "LocalStateStore":
