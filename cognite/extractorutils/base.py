@@ -88,6 +88,7 @@ class Extractor(Generic[CustomConfigClass]):
         handle_interrupts: bool = True,
         reload_config_interval: Optional[int] = 300,
         reload_config_action: ReloadConfigAction = ReloadConfigAction.DO_NOTHING,
+        success_message: str = "Successful shutdown"
     ):
         self.name = name
         self.description = description
@@ -102,6 +103,7 @@ class Extractor(Generic[CustomConfigClass]):
         self.handle_interrupts = handle_interrupts
         self.reload_config_interval = reload_config_interval
         self.reload_config_action = reload_config_action
+        self.success_message = success_message
 
         self.started = False
         self.configured_logger = False
@@ -208,7 +210,7 @@ class Extractor(Generic[CustomConfigClass]):
                 ExtractionPipelineRun(
                     extpipe_external_id=self.extraction_pipeline.external_id,
                     status="success",
-                    message="Successful shutdown",
+                    message=self.success_message,
                 )
             )
 
