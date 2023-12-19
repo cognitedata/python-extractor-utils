@@ -88,7 +88,7 @@ class Extractor(Generic[CustomConfigClass]):
         handle_interrupts: bool = True,
         reload_config_interval: Optional[int] = 300,
         reload_config_action: ReloadConfigAction = ReloadConfigAction.DO_NOTHING,
-        success_message: str = "Successful shutdown"
+        success_message: str = "Successful shutdown",
     ):
         self.name = name
         self.description = description
