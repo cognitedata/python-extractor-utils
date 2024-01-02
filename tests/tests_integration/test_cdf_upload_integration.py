@@ -13,6 +13,7 @@
 #  limitations under the License.
 
 import os
+import pathlib
 import random
 import string
 import time
@@ -24,12 +25,13 @@ from parameterized import parameterized_class
 from cognite.client import CogniteClient
 from cognite.client.config import ClientConfig
 from cognite.client.credentials import OAuthClientCredentials
-from cognite.client.data_classes import Event, Row, TimeSeries
+from cognite.client.data_classes import Event, FileMetadata, Row, TimeSeries
 from cognite.client.data_classes.assets import Asset
 from cognite.client.exceptions import CogniteAPIError, CogniteNotFoundError
 from cognite.extractorutils.uploader import RawUploadQueue, TimeSeriesUploadQueue
 from cognite.extractorutils.uploader.assets import AssetUploadQueue
 from cognite.extractorutils.uploader.events import EventUploadQueue
+from cognite.extractorutils.uploader.files import BytesUploadQueue, FileUploadQueue
 
 test_id = random.randint(0, 2**31)
 
@@ -55,6 +57,9 @@ class IntegrationTests(unittest.TestCase):
     asset1: str = f"util_integration_asset_test_1-{test_id}"
     asset2: str = f"util_integration_asset_test_2-{test_id}"
     asset3: str = f"util_integration_asset_test_3-{test_id}"
+
+    file1: str = f"util_integration_file_test_1-{test_id}"
+    file2: str = f"util_integration_file_test_2-{test_id}"
 
     def setUp(self):
         os.environ["COGNITE_FUNCTION_RUNTIME"] = self.functions_runtime
@@ -92,6 +97,13 @@ class IntegrationTests(unittest.TestCase):
         except CogniteNotFoundError:
             pass
 
+        # No ignore_unknown_ids in files, so we need to delete them one at a time
+        for file in [self.file1, self.file2]:
+            try:
+                self.client.files.delete(external_id=file)
+            except CogniteNotFoundError:
+                pass
+
     def tearDown(self):
         try:
             self.client.raw.tables.delete(self.database_name, self.table_name)
@@ -100,6 +112,12 @@ class IntegrationTests(unittest.TestCase):
         self.client.time_series.delete(external_id=[self.time_series1, self.time_series2], ignore_unknown_ids=True)
         self.client.events.delete(external_id=[self.event1, self.event2, self.event3], ignore_unknown_ids=True)
         self.client.assets.delete(external_id=[self.asset1, self.asset2, self.asset3], ignore_unknown_ids=True)
+        # No ignore_unknown_ids in files, so we need to delete them one at a time
+        for file in [self.file1, self.file2]:
+            try:
+                self.client.files.delete(external_id=file)
+            except CogniteNotFoundError:
+                pass
 
     def test_raw_upload_queue(self):
         queue = RawUploadQueue(cdf_client=self.client, max_queue_size=500)
@@ -267,3 +285,46 @@ class IntegrationTests(unittest.TestCase):
         assert retrieved[2].description == "new desc"
         assert retrieved[1].name == "new name"
         assert retrieved[2].name == "new name"
+
+    def test_file_upload_queue(self):
+        queue = FileUploadQueue(cdf_client=self.client, overwrite_existing=True)
+
+        current_dir = pathlib.Path(__file__).parent.resolve()
+
+        # Upload a pair of actual files
+        queue.add_to_upload_queue(
+            file_meta=FileMetadata(external_id=self.file1, name=self.file1),
+            file_name=current_dir.joinpath("test_file_1.txt"),
+        )
+        queue.add_to_upload_queue(
+            file_meta=FileMetadata(external_id=self.file2, name=self.file2),
+            file_name=current_dir.joinpath("test_file_2.txt"),
+        )
+
+        queue.upload()
+
+        file1 = self.client.files.download_bytes(external_id=self.file1)
+        file2 = self.client.files.download_bytes(external_id=self.file2)
+
+        assert file1 == b"test content\n"
+        assert file2 == b"other test content\n"
+
+    def test_bytes_upload_queue(self):
+        queue = BytesUploadQueue(cdf_client=self.client, overwrite_existing=True)
+
+        queue.add_to_upload_queue(
+            content=b"bytes content",
+            metadata=FileMetadata(external_id=self.file1, name=self.file1),
+        )
+        queue.add_to_upload_queue(
+            content=b"other bytes content",
+            metadata=FileMetadata(external_id=self.file2, name=self.file2),
+        )
+
+        queue.upload()
+
+        file1 = self.client.files.download_bytes(external_id=self.file1)
+        file2 = self.client.files.download_bytes(external_id=self.file2)
+
+        assert file1 == b"bytes content"
+        assert file2 == b"other bytes content"
