@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## [6.2.0]
+
+### Added
+
+ * Added `IOFileUploadQueue` as a base class of both `FileUploadQueue` and `BytesUploadQueue`.
+   This is an upload queue for functions that produce `BinaryIO` to CDF Files.
 
 ## [6.1.1]
 
