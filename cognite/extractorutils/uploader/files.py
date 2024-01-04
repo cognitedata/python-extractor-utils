@@ -17,12 +17,12 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from io import BytesIO
 from os import PathLike
 from types import TracebackType
-from typing import Any, BinaryIO, Callable, List, Optional, Tuple, Type, Union
+from typing import BinaryIO, Callable, List, Optional, Tuple, Type, Union
 
 from requests import ConnectionError
 
 from cognite.client import CogniteClient
-from cognite.client.data_classes import Event, FileMetadata
+from cognite.client.data_classes import FileMetadata
 from cognite.client.exceptions import CogniteAPIError
 from cognite.extractorutils.uploader._base import (
     RETRIES,
@@ -64,7 +64,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[List[Event]], None]] = None,
+        post_upload_function: Optional[Callable[[List[FileMetadata]], None]] = None,
         max_queue_size: Optional[int] = None,
         max_upload_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
@@ -128,7 +128,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
             self.files_written.inc(self.upload_queue_size)
 
             try:
-                self._post_upload(self.upload_queue)
+                self._post_upload([el[0] for el in self.upload_queue])
             except Exception as e:
                 self.logger.error("Error in upload callback: %s", str(e))
             self.upload_queue.clear()
@@ -228,7 +228,7 @@ class FileUploadQueue(IOFileUploadQueue):
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[List[Event]], None]] = None,
+        post_upload_function: Optional[Callable[[List[FileMetadata]], None]] = None,
         max_queue_size: Optional[int] = None,
         max_upload_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
@@ -284,7 +284,7 @@ class BytesUploadQueue(IOFileUploadQueue):
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[List[Any]], None]] = None,
+        post_upload_function: Optional[Callable[[List[FileMetadata]], None]] = None,
         max_queue_size: Optional[int] = None,
         max_upload_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
