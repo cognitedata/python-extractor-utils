@@ -92,10 +92,8 @@ from abc import ABC, abstractmethod
 from types import TracebackType
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Type, Union
 
-from requests.exceptions import ConnectionError
-
 from cognite.client import CogniteClient
-from cognite.client.exceptions import CogniteAPIError
+from cognite.client.exceptions import CogniteAPIError, CogniteException
 from cognite.extractorutils.uploader import DataPointList
 
 from ._inner_util import _DecimalDecoder, _DecimalEncoder, _resolve_log_level
@@ -348,7 +346,7 @@ class RawStateStore(AbstractStateStore):
         self._ensure_table()
 
     @retry(
-        exceptions=(CogniteAPIError, ConnectionError),
+        exceptions=(CogniteException,),
         tries=RETRIES,
         delay=RETRY_DELAY,
         max_delay=RETRY_MAX_DELAY,
@@ -370,7 +368,7 @@ class RawStateStore(AbstractStateStore):
         self._initialize_implementation(force)
 
     @retry(
-        exceptions=(CogniteAPIError, ConnectionError),
+        exceptions=(CogniteException,),
         tries=RETRIES,
         delay=RETRY_DELAY,
         max_delay=RETRY_MAX_DELAY,
@@ -404,7 +402,7 @@ class RawStateStore(AbstractStateStore):
         self._synchronize_implementation()
 
     @retry(
-        exceptions=(CogniteAPIError, ConnectionError),
+        exceptions=(CogniteException,),
         tries=RETRIES,
         delay=RETRY_DELAY,
         max_delay=RETRY_MAX_DELAY,

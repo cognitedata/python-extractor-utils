@@ -14,6 +14,7 @@
 
 import datetime
 import math
+import pathlib
 import time
 import unittest
 from unittest.mock import patch
@@ -284,7 +285,11 @@ class TestUploadQueue(unittest.TestCase):
         queue = FileUploadQueue(client, max_upload_interval=2, post_upload_function=post)
         queue.start()
 
-        queue.add_to_upload_queue(FileMetadata(name="hello.txt"), None)
+        current_dir = pathlib.Path(__file__).parent.parent.resolve()
+
+        queue.add_to_upload_queue(
+            FileMetadata(name="hello.txt"), current_dir.joinpath("tests_integration/test_file_1.txt")
+        )
 
         time.sleep(2.1)
 

@@ -1,6 +1,10 @@
 [tool.poetry]
 name = "cognite-extractor-utils"
+<<<<<<< HEAD
 version = "6.0.2"
+=======
+version = "6.2.1"
+>>>>>>> master
 description = "Utilities for easier development of extractors for CDF"
 authors = ["Mathias Lohne <mathias.lohne@cognite.com>"]
 license = "Apache-2.0"
@@ -69,7 +73,7 @@ azure-keyvault-secrets = "^4.7.0"
 experimental = ["cognite-sdk-experimental"]
 
 [tool.poetry.group.dev.dependencies]
-mypy = "1.7.1"
+mypy = "1.8.0"
 ruff = "^0.1.0"
 pytest = "^7.0.0"
 pytest-cov = "^4.0.0"
