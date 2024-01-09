@@ -12,6 +12,19 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## [6.2.2]
+
+### Added
+
+ * Added an optional `security-categories` attribute to the `cognite` config
+   section.
+
+## [6.2.1]
+
+### Fixed
+
+ * Fixed a type hint in the `post_upload_function` for upload queues.
+
 ## [6.2.0]
 
 ### Added
