@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## [6.3.0]
+
+### Added
+
+ * Added support to retrieve secrets from Azure Keyvault.
+
 ## [6.2.2]
 
 ### Added

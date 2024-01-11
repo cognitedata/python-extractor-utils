@@ -24,6 +24,10 @@ from typing import Any, Callable, Dict, Generic, Iterable, Optional, TextIO, Typ
 
 import dacite
 import yaml
+from azure.core.credentials import TokenCredential
+from azure.core.exceptions import HttpResponseError, ResourceNotFoundError, ServiceRequestError
+from azure.identity import ClientSecretCredential, DefaultAzureCredential
+from azure.keyvault.secrets import SecretClient
 from yaml.scanner import ScannerError
 
 from cognite.extractorutils.configtools._util import _to_snake_case
@@ -36,8 +40,86 @@ _logger = logging.getLogger(__name__)
 CustomConfigClass = TypeVar("CustomConfigClass", bound=BaseConfig)
 
 
+class KeyVaultAuthenticationMethod(Enum):
+    DEFAULT = "default"
+    CLIENTSECRET = "client-secret"
+
+
+class KeyVaultLoader:
+    def __init__(self, config: Optional[dict]):
+        self.config = config
+
+        self.credentials: Optional[TokenCredential] = None
+        self.client: Optional[SecretClient] = None
+
+    def _init_client(self) -> None:
+        from dotenv import find_dotenv, load_dotenv
+
+        if not self.config:
+            raise InvalidConfigError(
+                "Attempted to load values from Azure key vault with no key vault configured. "
+                "Include an `azure-keyvault` section in your config to use the !keyvault tag."
+            )
+
+        if "keyvault-name" not in self.config:
+            raise InvalidConfigError("Please add the keyvault-name")
+
+        if "authentication-method" not in self.config:
+            raise InvalidConfigError(
+                "Please enter the authentication method to access Azure KeyVault"
+                "Possible values are: default or client-secret"
+            )
+
+        vault_url = f"https://{self.config['keyvault-name']}.vault.azure.net"
+
+        if self.config["authentication-method"] == KeyVaultAuthenticationMethod.DEFAULT.value:
+            _logger.info("Using Azure DefaultCredentials to access KeyVault")
+            self.credentials = DefaultAzureCredential()
+
+        elif self.config["authentication-method"] == KeyVaultAuthenticationMethod.CLIENTSECRET.value:
+            auth_parameters = ("client-id", "tenant-id", "secret")
+
+            _logger.info("Using Azure ClientSecret credentials to access KeyVault")
+
+            dotenv_path = find_dotenv(usecwd=True)
+            load_dotenv(dotenv_path=dotenv_path, override=True)
+
+            if all(param in self.config for param in auth_parameters):
+                tenant_id = os.path.expandvars(self.config.get("tenant-id", None))
+                client_id = os.path.expandvars(self.config.get("client-id", None))
+                secret = os.path.expandvars(self.config.get("secret", None))
+
+                self.credentials = ClientSecretCredential(
+                    tenant_id=tenant_id,
+                    client_id=client_id,
+                    client_secret=secret,
+                )
+            else:
+                raise InvalidConfigError(
+                    "Missing client secret parameters. client-id, tenant-id and client-secret are mandatory"
+                )
+        else:
+            raise InvalidConfigError(
+                "Invalid KeyVault authentication method. Possible values : default or client-secret"
+            )
+
+        self.client = SecretClient(vault_url=vault_url, credential=self.credentials)  # type: ignore
+
+    def __call__(self, _: yaml.SafeLoader, node: yaml.Node) -> str:
+        self._init_client()
+        try:
+            return self.client.get_secret(node.value).value  # type: ignore  # _init_client guarantees not None
+        except (ResourceNotFoundError, ServiceRequestError, HttpResponseError) as e:
+            raise InvalidConfigError(str(e))
+
+
 class _EnvLoader(yaml.SafeLoader):
     pass
+
+
+class SafeLoaderIgnoreUnknown(yaml.SafeLoader):
+    def ignore_unknown(self, node: yaml.Node) -> None:
+        return None
 
 
 def _env_constructor(_: yaml.SafeLoader, node: yaml.Node) -> bool:
@@ -49,10 +131,6 @@ def _env_constructor(_: yaml.SafeLoader, node: yaml.Node) -> bool:
     return bool_values.get(expanded_value.lower(), expanded_value)
 
 
-_EnvLoader.add_implicit_resolver("!env", re.compile(r"\$\{([^}^{]+)\}"), None)
-_EnvLoader.add_constructor("!env", _env_constructor)
-
-
 def _load_yaml_dict(
     source: Union[TextIO, str],
     case_style: str = "hyphen",
@@ -61,6 +139,24 @@ def _load_yaml_dict(
 ) -> Dict[str, Any]:
     loader = _EnvLoader if expand_envvars else yaml.SafeLoader
 
+    class SafeLoaderIgnoreUnknown(yaml.SafeLoader):
+        def ignore_unknown(self, node: yaml.Node) -> None:
+            return None
+
+        # Ignoring types since the key can be None.
+
+    SafeLoaderIgnoreUnknown.add_constructor(None, SafeLoaderIgnoreUnknown.ignore_unknown)  # type: ignore
+    initial_load = yaml.load(source, Loader=SafeLoaderIgnoreUnknown)  # noqa: S506
+
+    if not isinstance(source, str):
+        source.seek(0)
+
+    keyvault_config = initial_load.get("azure-keyvault")
+
+    _EnvLoader.add_implicit_resolver("!env", re.compile(r"\$\{([^}^{]+)\}"), None)
+    _EnvLoader.add_constructor("!env", _env_constructor)
+    _EnvLoader.add_constructor("!keyvault", KeyVaultLoader(keyvault_config))
+
     try:
         config_dict = yaml.load(source, Loader=loader)  # noqa: S506
     except ScannerError as e:
@@ -68,6 +164,9 @@ def _load_yaml_dict(
         formatted_location = f" at line {location.line+1}, column {location.column+1}" if location is not None else ""
         cause = e.problem or e.context
         raise InvalidConfigError(f"Invalid YAML{formatted_location}: {cause or ''}") from e
+
+    if "azure-keyvault" in config_dict:
+        config_dict.pop("azure-keyvault")
 
     config_dict = dict_manipulator(config_dict)
     config_dict = _to_snake_case(config_dict, case_style)
