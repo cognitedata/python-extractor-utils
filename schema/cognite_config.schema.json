@@ -91,6 +91,13 @@
             "description": "Extraction pipeline used for remote config and reporting status",
             "$ref": "either_id.schema.json"
         },
+        "security-categories": {
+            "description": "Security category to attach to any data written by the extractor (where relevant)",
+            "type": "array",
+            "items": {
+                "type": "integer"
+            }
+        },
         "host": {
             "type": "string",
             "default": "https://api.cognitedata.com",
