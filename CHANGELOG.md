@@ -16,8 +16,8 @@ Changes are grouped as follows
 
 ### Added
 
- * Added support to retrieve secrets from Azure Keyvault. 
- 
+ * Added support to retrieve secrets from Azure Keyvault.
+
 ## [6.2.2]
 
 ### Added
