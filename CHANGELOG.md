@@ -12,6 +12,13 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## [6.3.1]
+
+### Fixed
+
+ * Improved the state store retry behavior to handle both fundamental
+   and wrapped network connection errors.
+
 ## [6.3.0]
 
 ### Added
