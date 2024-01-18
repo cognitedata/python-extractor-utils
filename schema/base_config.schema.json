@@ -5,12 +5,18 @@
     "description": "Base configuration object",
     "properties": {
         "version": {
-            "type": ["string", "integer"],
+            "type": [
+                "string",
+                "integer"
+            ],
             "description": "Configuration file version"
         },
         "type": {
             "type": "string",
-            "enum": ["local", "remote"],
+            "enum": [
+                "local",
+                "remote"
+            ],
             "default": "local",
             "description": "Configuration file type. Either `local`, meaning the full config is loaded from this file, or `remote`, which means that only the `cognite` section is loaded from this file, and the rest is loaded from extraction pipelines."
         },
