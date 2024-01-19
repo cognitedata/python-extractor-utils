@@ -1,43 +1,43 @@
 {
     "$id": "metrics_config.schema.json",
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "description": "Configuration for publishing prometheus metrics, supports pushing to CDF timeseries instead",
+    "description": "The `metrics` section describes where to send metrics on extractor performance for remote monitoring of the extractor. We recommend sending metrics to a [Prometheus pushgateway](https://prometheus.io/), but you can also send metrics as time series in the CDF project.",
     "type": "object",
     "properties": {
         "push-gateways": {
             "type": "array",
-            "description": "List of prometheus push gateway destinations",
+            "description": "List of prometheus pushgateway configurations",
             "items": {
                 "type": "object",
-                "description": "Configuration for pushing to a prometheus PushGateway",
+                "description": "The push-gateways sections contain a list of metric destinations.",
                 "unevaluatedProperties": false,
                 "properties": {
                     "host": {
                         "type": "string",
-                        "description": "PushGateway host"
+                        "description": "Enter the address of the host to push metrics to."
                     },
                     "job-name": {
                         "type": "string",
-                        "description": "Job name, uniquely identifies this extractor in prometheus"
+                        "description": "Enter the value of the `exported_job` label to associate metrics with. This separates several deployments on a single pushgateway, and should be unique."
                     },
                     "username": {
                         "type": "string",
-                        "description": "PushGateway username"
+                        "description": "Enter the credentials for the pushgateway."
                     },
                     "password": {
                         "type": "string",
-                        "description": "PushGateway password"
+                        "description": "Enter the credentials for the pushgateway."
                     },
                     "clear-after": {
                         "type": [
                             "null",
                             "integer"
                         ],
-                        "description": "Clear metrics after this many seconds when the extractor stops. Default is disabled"
+                        "description": "Enter the number of seconds to wait before clearing the pushgateway. When this parameter is present, the extractor will stall after the run is complete before deleting all metrics from the pushgateway. The recommended value is at least twice that of the scrape interval on the pushgateway. This is to ensure that the last metrics are gathered before the deletion. Default is disabled."
                     },
                     "push-interval": {
                         "type": "integer",
-                        "description": "Interval in seconds between each push to prometheus",
+                        "description": "Enter the interval in seconds between each push.",
                         "default": 30
                     }
                 }
@@ -53,30 +53,30 @@
             "properties": {
                 "external-id-prefix": {
                     "type": "string",
-                    "description": "Prefix on external id on created metrics"
+                    "description": "Prefix on external ID used when creating CDF time series to store metrics."
                 },
                 "asset-name": {
                     "type": "string",
-                    "description": "Name of created root asset for the metrics"
+                    "description": "Enter the name for a CDF asset that will have all the metrics time series attached to it."
                 },
                 "asset-external-id": {
                     "type": "string",
-                    "description": "ExternalId of created root asset for the metrics"
+                    "description": "Enter the external ID for a CDF asset that will have all the metrics time series attached to it."
                 },
                 "push-interval": {
                     "type": "integer",
-                    "description": "Interval in seconds between each push to CDF",
+                    "description": "Enter the interval in seconds between each push to CDF",
                     "default": 30
                 },
                 "data-set": {
-                    "type": "string",
-                    "description": "Data set the metrics timeseries created under"
+                    "description": "Data set the metrics will be created under",
+                    "$ref": "either_id.schema.json"
                 }
             }
         },
         "server": {
             "type": "object",
-            "description": "Configure a port to expose prometheus metrics for scraping",
+            "description": "The extractor can also be configured to expose a HTTP server with prometheus metrics for scraping",
             "unevaluatedProperties": false,
             "properties": {
                 "host": {
