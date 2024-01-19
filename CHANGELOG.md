@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## [6.3.2]
+
+### Added
+
+ * Aliases for keyvault config to align with dotnet utils
+
 ## [6.3.1]
 
 ### Fixed

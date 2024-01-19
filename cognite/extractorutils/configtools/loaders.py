@@ -61,7 +61,8 @@ class KeyVaultLoader:
                 "Include an `azure-keyvault` section in your config to use the !keyvault tag."
             )
 
-        if "keyvault-name" not in self.config:
+        keyvault_name = self.config.get("keyvault-name", self.config.get("key-vault-name"))
+        if not keyvault_name:
             raise InvalidConfigError("Please add the keyvault-name")
 
         if "authentication-method" not in self.config:
@@ -70,7 +71,7 @@ class KeyVaultLoader:
                 "Possible values are: default or client-secret"
             )
 
-        vault_url = f"https://{self.config['keyvault-name']}.vault.azure.net"
+        vault_url = f"https://{keyvault_name}.vault.azure.net"
 
         if self.config["authentication-method"] == KeyVaultAuthenticationMethod.DEFAULT.value:
             _logger.info("Using Azure DefaultCredentials to access KeyVault")
@@ -151,7 +152,7 @@ def _load_yaml_dict(
     if not isinstance(source, str):
         source.seek(0)
 
-    keyvault_config = initial_load.get("azure-keyvault")
+    keyvault_config = initial_load.get("azure-keyvault", initial_load.get("key-vault"))
 
     _EnvLoader.add_implicit_resolver("!env", re.compile(r"\$\{([^}^{]+)\}"), None)
     _EnvLoader.add_constructor("!env", _env_constructor)
