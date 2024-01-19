@@ -61,7 +61,7 @@ class KeyVaultLoader:
                 "Include an `azure-keyvault` section in your config to use the !keyvault tag."
             )
 
-        keyvault_name = self.config.get("keyvault-name", self.config.get("key-vault-name"))
+        keyvault_name = self.config.get("keyvault-name")
         if not keyvault_name:
             raise InvalidConfigError("Please add the keyvault-name")
 
