@@ -23,7 +23,7 @@ import threading
 from functools import partial, wraps
 from threading import Event, Thread
 from time import time
-from typing import Any, Callable, Dict, Generator, Iterable, Optional, Tuple, Type, TypeVar, Union
+from typing import Any, Callable, Dict, Generator, Iterable, List, Optional, Tuple, Type, TypeVar, Union
 
 from decorator import decorator
 
@@ -425,3 +425,19 @@ def retry(
         )
 
     return retry_decorator
+
+
+def requests_exceptions(status_codes: Optional[List[int]] = None) -> Dict[Type[Exception], Callable[[Any], bool]]:
+    from requests.exceptions import HTTPError
+
+    if not status_codes:
+        status_codes = [408, 425, 429, 500, 502, 503, 504]
+
+    def handle_http_errors(exception: HTTPError) -> bool:
+        response = exception.response
+        if not response:
+            return True
+
+        return response.status_code in status_codes
+
+    return {ConnectionError: lambda e: True, HTTPError: handle_http_errors}
