@@ -31,6 +31,12 @@ Changes are grouped as follows
            raise ValueException(f"Invalid value: {value}")
    ```
 
+  * Templates for common retry scenarios. For example, if you're using the `requests` library, you can do
+
+    ``` python
+    retry(exceptions = request_exceptions())
+    ```
+
 ### Changed
 
  * Default parameters in `retry` has changed to be less agressive. Retries will apply backoff by default, and give up after 10 retries.

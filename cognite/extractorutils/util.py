@@ -427,11 +427,23 @@ def retry(
     return retry_decorator
 
 
-def requests_exceptions(status_codes: Optional[List[int]] = None) -> Dict[Type[Exception], Callable[[Any], bool]]:
-    from requests.exceptions import HTTPError
+def requests_exceptions(
+    status_codes: List[int] = [408, 425, 429, 500, 502, 503, 504],
+) -> Dict[Type[Exception], Callable[[Any], bool]]:
+    """
+    Retry exceptions from using the ``requests`` library. This will retry all ConnectionErrors and HTTPErrors matching
+    the given status codes.
 
-    if not status_codes:
-        status_codes = [408, 425, 429, 500, 502, 503, 504]
+    Example:
+
+    .. code-block:: python
+
+        @retry(exceptions = requests_exceptions())
+        def my_function() -> None:
+            ...
+
+    """
+    from requests.exceptions import HTTPError
 
     def handle_http_errors(exception: HTTPError) -> bool:
         response = exception.response
