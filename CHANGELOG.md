@@ -12,6 +12,29 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## [6.4.0]
+
+### Added
+
+ * Option to specify retry exceptions as a dictionary instead of a tuple. Values should be a callable determining whether a specific exception object should be retied or not. Example:
+   ``` python
+   @retry(
+       exceptions = {ValueError: lambda x: "Invalid" not in str(x)}
+   )
+   def func() -> None:
+       value = some_function()
+
+       if value is None:
+           raise ValueException("Could not retrieve value")
+
+       if not_valid(value):
+           raise ValueException(f"Invalid value: {value}")
+   ```
+
+### Changed
+
+ * Default parameters in `retry` has changed to be less agressive. Retries will apply backoff by default, and give up after 10 retries.
+
 ## [6.3.2]
 
 ### Added
