@@ -444,16 +444,20 @@ def requests_exceptions(
 
     """
     # types ignored, since they are not installed as we don't depend on the package
-    from requests.exceptions import HTTPError  # type: ignore
+    from requests.exceptions import HTTPError, RequestException  # type: ignore
 
-    def handle_http_errors(exception: HTTPError) -> bool:
-        response = exception.response
-        if not response:
+    def handle_http_errors(exception: RequestException) -> bool:
+        if isinstance(exception, HTTPError):
+            response = exception.response
+            if response is None:
+                return True
+
+            return response.status_code in status_codes
+
+        else:
             return True
 
-        return response.status_code in status_codes
-
-    return {ConnectionError: lambda e: True, HTTPError: handle_http_errors}
+    return {RequestException: handle_http_errors}
 
 
 def httpx_exceptions(
@@ -478,7 +482,7 @@ def httpx_exceptions(
     def handle_http_errors(exception: HTTPError) -> bool:
         if isinstance(exception, HTTPStatusError):
             response = exception.response
-            if not response:
+            if response is None:
                 return True
 
             return response.status_code in status_codes

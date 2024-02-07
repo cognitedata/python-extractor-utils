@@ -25,10 +25,10 @@ Changes are grouped as follows
        value = some_function()
 
        if value is None:
-           raise ValueException("Could not retrieve value")
+           raise ValueError("Could not retrieve value")
 
        if not_valid(value):
-           raise ValueException(f"Invalid value: {value}")
+           raise ValueError(f"Invalid value: {value}")
    ```
 
   * Templates for common retry scenarios. For example, if you're using the `requests` library, you can do
