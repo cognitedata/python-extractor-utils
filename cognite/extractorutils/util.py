@@ -431,7 +431,7 @@ def requests_exceptions(
     status_codes: List[int] = [408, 425, 429, 500, 502, 503, 504],
 ) -> Dict[Type[Exception], Callable[[Any], bool]]:
     """
-    Retry exceptions from using the ``requests`` library. This will retry all ConnectionErrors and HTTPErrors matching
+    Retry exceptions from using the ``requests`` library. This will retry all connection and HTTP errors matching
     the given status codes.
 
     Example:
@@ -443,7 +443,8 @@ def requests_exceptions(
             ...
 
     """
-    from requests.exceptions import HTTPError
+    # types ignored, since they are not installed as we don't depend on the package
+    from requests.exceptions import HTTPError  # type: ignore
 
     def handle_http_errors(exception: HTTPError) -> bool:
         response = exception.response
@@ -453,3 +454,36 @@ def requests_exceptions(
         return response.status_code in status_codes
 
     return {ConnectionError: lambda e: True, HTTPError: handle_http_errors}
+
+
+def httpx_exceptions(
+    status_codes: List[int] = [408, 425, 429, 500, 502, 503, 504],
+) -> Dict[Type[Exception], Callable[[Any], bool]]:
+    """
+    Retry exceptions from using the ``httpx`` library. This will retry all connection and HTTP errors matching
+    the given status codes.
+
+    Example:
+
+    .. code-block:: python
+
+        @retry(exceptions = httpx_exceptions())
+        def my_function() -> None:
+            ...
+
+    """
+    # types ignored, since they are not installed as we don't depend on the package
+    from httpx import HTTPError, HTTPStatusError  # type: ignore
+
+    def handle_http_errors(exception: HTTPError) -> bool:
+        if isinstance(exception, HTTPStatusError):
+            response = exception.response
+            if not response:
+                return True
+
+            return response.status_code in status_codes
+
+        else:
+            return True
+
+    return {HTTPError: handle_http_errors}
