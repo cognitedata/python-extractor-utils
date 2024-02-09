@@ -130,7 +130,7 @@
                 "disable-gzip": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Set to true to disable gzipping of json bodies."
+                    "description": "Set to `true` to disable gzipping of json bodies."
                 },
                 "status-forcelist": {
                     "type": "string",
