@@ -1,7 +1,7 @@
 {
     "$id": "state_store_config.schema.json",
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "description": "Include the state store section to save extraction states between runs. Use this if data is loaded incrementally. We support multiple state stores, but you can only configure one at a time.",
+    "description": "Include the state store section to save extraction states between runs. Use state store if data is loaded incrementally. We support multiple state stores, but you can only configure one at a time.",
     "type": "object",
     "properties": {
         "raw": {
