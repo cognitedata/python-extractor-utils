@@ -159,7 +159,7 @@
                 "disable-ssl": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Set to true to disable SSL verification."
+                    "description": "Set to `true` to disable SSL verification."
                 },
                 "proxies": {
                     "type": "object",
