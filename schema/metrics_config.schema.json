@@ -9,7 +9,7 @@
             "description": "List of Prometheus pushgateway configurations",
             "items": {
                 "type": "object",
-                "description": "The pushgateways sections contain a list of metric destinations.",
+                "description": "The `push-gateways` sections contain a list of metric destinations.",
                 "unevaluatedProperties": false,
                 "properties": {
                     "host": {
