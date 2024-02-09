@@ -57,7 +57,7 @@
                 },
                 "asset-name": {
                     "type": "string",
-                    "description": "Enter the name for a CDF asset with all the metrics time series attached to it."
+                    "description": "Enter the name for a CDF asset that will have all the metrics time series attached to it."
                 },
                 "asset-external-id": {
                     "type": "string",
