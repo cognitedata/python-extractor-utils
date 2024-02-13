@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## [6.4.1]
+
+### Changed
+
+ * File upload queues now reuse a single thread pool across runs instead of creating a new one each time `upload()` is called.
+
 ## [6.4.0]
 
 ### Added
