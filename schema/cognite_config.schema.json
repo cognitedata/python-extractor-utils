@@ -19,7 +19,7 @@
                 },
                 "client-id": {
                     "type": "string",
-                    "description": "Enter the service principal client id from the IdP."
+                    "description": "Enter the service principal client ID from the IdP."
                 },
                 "tenant": {
                     "type": "string",
@@ -43,20 +43,20 @@
                 },
                 "scopes": {
                     "type": "array",
-                    "description": "Enter a list of scopes requested for the token",
+                    "description": "Enter the list of scopes requested for the token.",
                     "items": {
                         "type": "string",
-                        "description": "A scope requested for the token"
+                        "description": "The scope requested for the token"
                     }
                 },
                 "min-ttl": {
                     "type": "integer",
                     "default": 30,
-                    "description": "Insert the minimum time in seconds a token will be valid. If the cached token expires in less than `min-ttl` seconds, it will be refreshed even if it is still valid."
+                    "description": "Insert the minimum time in seconds a token will be valid. If the cached token expires in less than `min-ttl` seconds, the system will refresh the token, even if it's still valid."
                 },
                 "certificate": {
                     "type": "object",
-                    "description": "Authenticate with a client certificate",
+                    "description": "Authenticate with a client certificate.",
                     "unevaluatedProperties": false,
                     "required": [
                         "path"
@@ -68,7 +68,7 @@
                         },
                         "path": {
                             "type": "string",
-                            "description": "Enter the path to the .pem or .pfx certificate to be used for authentication"
+                            "description": "Enter the path to the .pem or .pfx certificate to be used for authentication."
                         },
                         "password": {
                             "type": "string",
@@ -102,11 +102,11 @@
             ]
         },
         "data-set": {
-            "description": "Enter a data set the extractor should write data into",
+            "description": "Enter a data set the extractor should write data into.",
             "$ref": "either_id.schema.json"
         },
         "extraction-pipeline": {
-            "description": "Enter the extraction pipeline used for remote config and reporting statuses",
+            "description": "Enter the extraction pipeline used for remote config and reporting statuses.",
             "$ref": "either_id.schema.json"
         },
         "host": {
@@ -116,12 +116,12 @@
         },
         "timeout": {
             "type": "integer",
-            "description": "Enter the timeout on requests to CDF, in seconds.",
+            "description": "Enter the timeout on requests to CDF in seconds.",
             "default": 30
         },
         "external-id-prefix": {
             "type": "string",
-            "description": "Prefix on external ID used when creating CDF resources"
+            "description": "Prefix on external ID used when creating CDF resources."
         },
         "connection": {
             "type": "object",
@@ -130,7 +130,7 @@
                 "disable-gzip": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Whether or not to disable gzipping of json bodies."
+                    "description": "Set to `true` to disable gzipping of json bodies."
                 },
                 "status-forcelist": {
                     "type": "string",
@@ -139,34 +139,34 @@
                 "max-retries": {
                     "type": "integer",
                     "default": 10,
-                    "description": "Max number of retries on a given http request."
+                    "description": "Maximum number of retries on a given HTTP request."
                 },
                 "max-retries-connect": {
                     "type": "integer",
                     "default": 3,
-                    "description": "Max number of retries on connection errors."
+                    "description": "Maximum number of retries on connection errors."
                 },
                 "max-retry-backoff": {
                     "type": "integer",
                     "default": 30,
-                    "description": "Retry strategy employs exponential backoff. This parameter sets a max on the amount of backoff after any request failure."
+                    "description": "Retry strategy employs exponential backoff. This parameter sets a maximum amount of backoff after any request failure."
                 },
                 "max-connection-pool-size": {
                     "type": "integer",
                     "default": 50,
-                    "description": "The maximum number of connections which will be kept in the SDKs connection pool."
+                    "description": "The maximum number of connections in the SDKs connection pool."
                 },
                 "disable-ssl": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Whether or not to disable SSL verification."
+                    "description": "Set to `true` to disable SSL verification."
                 },
                 "proxies": {
                     "type": "object",
-                    "description": "Dictionary mapping from protocol to url.",
+                    "description": "Dictionary mapping from protocol to URL.",
                     "items": {
                         "type": "string",
-                        "description": "Provide protocol as key and value as the corresponding url"
+                        "description": "Provide protocol as key and value as the corresponding URL."
                     }
                 }
             }

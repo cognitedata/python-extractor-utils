@@ -11,7 +11,7 @@
             "properties": {
                 "level": {
                     "type": "string",
-                    "description": "Select the verbosity level for console logging. Valid options, in decreasing verbosity levels, are `DEBUG`, `INFO`, `WARNING`, `ERROR`, and `CRITICAL`.",
+                    "description": "Select the verbosity level for console logging. To reduce the verbosity levels, use `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`.",
                     "enum": [
                         "DEBUG",
                         "INFO",
@@ -33,7 +33,7 @@
             "properties": {
                 "level": {
                     "type": "string",
-                    "description": "Select the verbosity level for file logging. Valid options, in decreasing verbosity levels, are `DEBUG`, `INFO`, `WARNING`, `ERROR`, and `CRITICAL`.",
+                    "description": "Select the verbosity level for file logging. To reduce the verbosity levels, use `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`.",
                     "enum": [
                         "DEBUG",
                         "INFO",
@@ -49,14 +49,14 @@
                 },
                 "retention": {
                     "type": "integer",
-                    "description": "Specify the number of days to keep logs for.",
+                    "description": "Specify the number of days to keep logs.",
                     "default": 7
                 }
             }
         },
         "metrics": {
             "type": "boolean",
-            "description": "Enables metrics on the number of log messages recorded per logger and level. This requires `metrics` to be configured as well"
+            "description": "Enables metrics on the number of log messages recorded per logger and level. Configure `metrics` to retrieve the logs."
         }
     }
 }
