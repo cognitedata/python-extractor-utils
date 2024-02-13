@@ -38,6 +38,9 @@ from cognite.extractorutils.uploader._metrics import (
 )
 from cognite.extractorutils.util import retry
 
+_QUEUES: int = 0
+_QUEUES_LOCK: threading.RLock = threading.RLock()
+
 
 class IOFileUploadQueue(AbstractUploadQueue):
     """
@@ -96,6 +99,13 @@ class IOFileUploadQueue(AbstractUploadQueue):
         self.files_queued = FILES_UPLOADER_QUEUED
         self.files_written = FILES_UPLOADER_WRITTEN
         self.queue_size = FILES_UPLOADER_QUEUE_SIZE
+
+        global _QUEUES, _QUEUES_LOCK
+        with _QUEUES_LOCK:
+            self._pool = ThreadPoolExecutor(
+                max_workers=self.parallelism, thread_name_prefix=f"FileUploadQueue-{_QUEUES}"
+            )
+            _QUEUES += 1
 
     def add_io_to_upload_queue(self, file_meta: FileMetadata, read_file: Callable[[], BinaryIO]) -> None:
         """
@@ -171,11 +181,10 @@ class IOFileUploadQueue(AbstractUploadQueue):
         # Concurrently execute file-uploads
 
         futures: List[Future] = []
-        with ThreadPoolExecutor(self.parallelism) as pool:
-            for i, (file_meta, file_name) in enumerate(self.upload_queue):
-                futures.append(pool.submit(self._upload_single, i, file_name, file_meta))
+        for i, (file_meta, file_name) in enumerate(self.upload_queue):
+            futures.append(self._pool.submit(self._upload_single, i, file_name, file_meta))
         for fut in futures:
-            fut.result(0.0)
+            fut.result()
 
     def __enter__(self) -> "IOFileUploadQueue":
         """
@@ -185,6 +194,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
             self
         """
         self.start()
+        self._pool.__enter__()
         return self
 
     def __exit__(
@@ -198,6 +208,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
             exc_val: Exception value
             exc_tb: Traceback
         """
+        self._pool.__exit__(exc_type, exc_val, exc_tb)
         self.stop()
 
     def __len__(self) -> int:
