@@ -102,7 +102,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
 
         global _QUEUES, _QUEUES_LOCK
         with _QUEUES_LOCK:
-            self.pool = ThreadPoolExecutor(
+            self._pool = ThreadPoolExecutor(
                 max_workers=self.parallelism, thread_name_prefix=f"FileUploadQueue-{_QUEUES}"
             )
             _QUEUES += 1
@@ -182,7 +182,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
 
         futures: List[Future] = []
         for i, (file_meta, file_name) in enumerate(self.upload_queue):
-            futures.append(self.pool.submit(self._upload_single, i, file_name, file_meta))
+            futures.append(self._pool.submit(self._upload_single, i, file_name, file_meta))
         for fut in futures:
             fut.result()
 
@@ -194,7 +194,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
             self
         """
         self.start()
-        self.pool.__enter__()
+        self._pool.__enter__()
         return self
 
     def __exit__(
@@ -208,7 +208,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
             exc_val: Exception value
             exc_tb: Traceback
         """
-        self.pool.__exit__(exc_type, exc_val, exc_tb)
+        self._pool.__exit__(exc_type, exc_val, exc_tb)
         self.stop()
 
     def __len__(self) -> int:
