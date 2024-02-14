@@ -282,7 +282,7 @@ class TestUploadQueue(unittest.TestCase):
         def post(x):
             post_upload_test["value"] += 1
 
-        queue = FileUploadQueue(client, max_upload_interval=2, post_upload_function=post)
+        queue = FileUploadQueue(client, max_queue_size=2, post_upload_function=post)
         queue.start()
 
         current_dir = pathlib.Path(__file__).parent.parent.resolve()
@@ -305,7 +305,7 @@ class TestUploadQueue(unittest.TestCase):
         def post(x):
             post_upload_test["value"] += 1
 
-        queue = BytesUploadQueue(client, max_upload_interval=2, post_upload_function=post)
+        queue = BytesUploadQueue(client, max_queue_size=2, post_upload_function=post)
         queue.start()
 
         queue.add_to_upload_queue(b"bytes", FileMetadata(name="example.png"))
