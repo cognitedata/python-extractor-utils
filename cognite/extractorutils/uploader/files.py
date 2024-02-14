@@ -104,6 +104,8 @@ class IOFileUploadQueue(AbstractUploadQueue):
 
         self._update_queue_thread = threading.Thread(target=self._remove_done_from_queue, daemon=True)
 
+        self._full_queue = threading.Condition()
+
         global _QUEUES, _QUEUES_LOCK
         with _QUEUES_LOCK:
             self._pool = ThreadPoolExecutor(
@@ -128,8 +130,10 @@ class IOFileUploadQueue(AbstractUploadQueue):
             file_name: Path to file to be uploaded.
                 If none, the file object will still be created, but no data is uploaded
         """
-        while self.upload_queue_size >= self.threshold:
-            self.cancellation_token.wait(0.5)
+        if self.upload_queue_size >= self.threshold:
+            with self._full_queue:
+                while not self._full_queue.wait(timeout=2) and not self.cancellation_token.is_set():
+                    pass
 
         with self.lock:
             self.upload_queue.append(self._pool.submit(self._upload_single, read_file, file_meta))
@@ -193,6 +197,8 @@ class IOFileUploadQueue(AbstractUploadQueue):
                 self.files_written.inc()
                 self.upload_queue_size -= 1
                 self.queue_size.set(self.upload_queue_size)
+            with self._full_queue:
+                self._full_queue.notify()
 
     def __enter__(self) -> "IOFileUploadQueue":
         """
