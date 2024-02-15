@@ -23,6 +23,10 @@ Changes are grouped as follows
      - The queues now require to be set up with a max size. The max upload latencey is removed.
    As long as you use the queue in as a context (ie, using `with FileUploadQueue(...) as queue:`) you should not have to change anything in your code. The behaviour of the queue will change, it will most likely be much faster, but it will not require any changes from you as a user of the queue.
 
+### Added
+
+ * You can now use `Path` as a type in your config files
+
 ## [6.4.1]
 
 ### Changed

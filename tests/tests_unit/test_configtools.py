@@ -17,6 +17,7 @@ import logging
 import os
 import unittest
 from dataclasses import dataclass
+from pathlib import Path
 
 import yaml
 
@@ -44,6 +45,7 @@ class CastingClass:
     string_field: str
     another_string_field: str
     yet_another_string_field: str
+    path_field: Path
 
 
 @dataclass
@@ -233,6 +235,7 @@ class TestConfigtoolsMethods(unittest.TestCase):
         string-field: "true"
         another-string-field: "test"
         yet-another-string-field: ${STR_VAL}
+        path-field: "./file"
         """
         config: CastingClass = load_yaml(config_raw, CastingClass)
         self.assertTrue(config.boolean_field)
@@ -253,9 +256,36 @@ class TestConfigtoolsMethods(unittest.TestCase):
         string-field: "true"
         another-string-field: "test"
         yet-another-string-field: "test"
+        path-field: "./file"
         """
         with self.assertRaises(InvalidConfigError):
             load_yaml(config, CastingClass)
+
+    def test_read_relative_path(self):
+        config = """
+        boolean-field: true
+        another-boolean-field: false
+        yet-another-boolean-field: false
+        string-field: "true"
+        another-string-field: "test"
+        yet-another-string-field: "test"
+        path-field: "./folder/file.txt"
+        """
+        config: CastingClass = load_yaml(config, CastingClass)
+        self.assertEqual(config.path_field.name, "file.txt")
+
+    def test_read_absolute_path(self):
+        config = """
+        boolean-field: true
+        another-boolean-field: false
+        yet-another-boolean-field: false
+        string-field: "true"
+        another-string-field: "test"
+        yet-another-string-field: "test"
+        path-field: "c:/folder/file.txt"
+        """
+        config: CastingClass = load_yaml(config, CastingClass)
+        self.assertEqual(config.path_field.name, "file.txt")
 
     def test_parse_time_interval(self):
         self.assertEqual(TimeIntervalConfig("54").seconds, 54)
