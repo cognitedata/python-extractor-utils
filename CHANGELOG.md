@@ -27,6 +27,10 @@ Changes are grouped as follows
 
  * The deprecated `middleware` module has been removed.
 
+### Added
+
+ * You can now use `Path` as a type in your config files
+
 ## [6.4.1]
 
 ### Changed
