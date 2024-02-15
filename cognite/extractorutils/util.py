@@ -18,10 +18,8 @@ extractors.
 """
 import logging
 import random
-import signal
-import threading
 from functools import partial, wraps
-from threading import Event, Thread
+from threading import Thread
 from time import time
 from typing import Any, Callable, Generator, Iterable, Optional, Tuple, Type, TypeVar, Union
 
@@ -30,6 +28,7 @@ from decorator import decorator
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset, ExtractionPipelineRun, TimeSeries
 from cognite.client.exceptions import CogniteNotFoundError
+from cognite.extractorutils.threading import CancellationToken
 
 
 def _ensure(endpoint: Any, items: Iterable[Any]) -> None:
@@ -71,27 +70,6 @@ def ensure_assets(cdf_client: CogniteClient, assets: Iterable[Asset]) -> None:
         assets: Assets to create
     """
     _ensure(cdf_client.assets, assets)
-
-
-def set_event_on_interrupt(stop_event: Event) -> None:
-    """
-    Set given event on SIGINT (Ctrl-C) instead of throwing a KeyboardInterrupt exception.
-
-    Args:
-        stop_event: Event to set
-    """
-
-    def sigint_handler(sig_num: int, frame: Any) -> None:
-        logger = logging.getLogger(__name__)
-        logger.warning("Interrupt signal received, stopping extractor gracefully")
-        stop_event.set()
-        logger.info("Waiting for threads to complete. Send another interrupt to force quit.")
-        signal.signal(signal.SIGINT, signal.default_int_handler)
-
-    try:
-        signal.signal(signal.SIGINT, sigint_handler)
-    except ValueError as e:
-        logging.getLogger(__name__).warning(f"Could not register handler for interrupt signals: {str(e)}")
 
 
 class EitherId:
@@ -220,7 +198,7 @@ def add_extraction_pipeline(
     # TODO 1. Consider refactoring this decorator to share methods with the Extractor context manager in .base.py
     # as they serve a similar purpose
 
-    cancellation_token: Event = Event()
+    cancellation_token: CancellationToken = CancellationToken()
 
     _logger = logging.getLogger(__name__)
 
@@ -254,7 +232,7 @@ def add_extraction_pipeline(
                 )
 
             def heartbeat_loop() -> None:
-                while not cancellation_token.is_set():
+                while not cancellation_token.is_cancelled:
                     cognite_client.extraction_pipelines.runs.create(
                         ExtractionPipelineRun(extpipe_external_id=extraction_pipeline_ext_id, status="seen")
                     )
@@ -279,7 +257,7 @@ def add_extraction_pipeline(
                 _report_success()
                 _logger.info("Extraction ran successfully")
             finally:
-                cancellation_token.set()
+                cancellation_token.cancel()
                 if heartbeat_thread:
                     heartbeat_thread.join()
 
@@ -290,7 +268,7 @@ def add_extraction_pipeline(
     return decorator_ext_pip
 
 
-def throttled_loop(target_time: int, cancellation_token: Event) -> Generator[None, None, None]:
+def throttled_loop(target_time: int, cancellation_token: CancellationToken) -> Generator[None, None, None]:
     """
     A loop generator that automatically sleeps until each iteration has taken the desired amount of time. Useful for
     when you want to avoid overloading a source system with requests.
@@ -312,7 +290,7 @@ def throttled_loop(target_time: int, cancellation_token: Event) -> Generator[Non
     """
     logger = logging.getLogger(__name__)
 
-    while not cancellation_token.is_set():
+    while not cancellation_token.is_cancelled:
         start_time = time()
         yield
         iteration_time = time() - start_time
@@ -329,7 +307,7 @@ _T2 = TypeVar("_T2")
 
 def _retry_internal(
     f: Callable[..., _T2],
-    cancellation_token: threading.Event = threading.Event(),
+    cancellation_token: CancellationToken,
     exceptions: Tuple[Type[Exception], ...] = (Exception,),
     tries: int = -1,
     delay: float = 0,
@@ -339,7 +317,7 @@ def _retry_internal(
 ) -> _T2:
     logger = logging.getLogger(__name__)
 
-    while tries and not cancellation_token.is_set():
+    while tries and not cancellation_token.is_cancelled:
         try:
             return f()
         except exceptions as e:
@@ -365,7 +343,7 @@ def _retry_internal(
 
 
 def retry(
-    cancellation_token: threading.Event = threading.Event(),
+    cancellation_token: Optional[CancellationToken] = None,
     exceptions: Tuple[Type[Exception], ...] = (Exception,),
     tries: int = -1,
     delay: float = 0,
@@ -398,7 +376,7 @@ def retry(
 
         return _retry_internal(
             partial(f, *args, **kwargs),
-            cancellation_token,
+            cancellation_token or CancellationToken(),
             exceptions,
             tries,
             delay,

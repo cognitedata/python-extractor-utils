@@ -18,7 +18,6 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import Enum
 from logging.handlers import TimedRotatingFileHandler
-from threading import Event
 from time import sleep
 from typing import Any, Dict, List, Optional, Tuple, Union
 from urllib.parse import urljoin
@@ -46,6 +45,7 @@ from cognite.extractorutils.statestore import (
     NoStateStore,
     RawStateStore,
 )
+from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.util import EitherId
 
 _logger = logging.getLogger(__name__)
@@ -481,7 +481,7 @@ class MetricsConfig:
     cognite: Optional[_CogniteMetricsConfig]
     server: Optional[_PromServerConfig]
 
-    def start_pushers(self, cdf_client: CogniteClient, cancellation_token: Event = Event()) -> None:
+    def start_pushers(self, cdf_client: CogniteClient, cancellation_token: Optional[CancellationToken] = None) -> None:
         self._pushers: List[AbstractMetricsPusher] = []
         self._clear_on_stop: Dict[PrometheusPusher, int] = {}
 

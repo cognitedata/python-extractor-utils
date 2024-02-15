@@ -15,7 +15,6 @@
 """
 A module containing a slightly more advanced base extractor class, sorting a generic output into upload queues.
 """
-import threading
 from dataclasses import dataclass
 from types import TracebackType
 from typing import Any, Callable, Iterable, List, Optional, Type, TypeVar
@@ -27,6 +26,7 @@ from cognite.extractorutils.base import Extractor
 from cognite.extractorutils.configtools import BaseConfig, TimeIntervalConfig
 from cognite.extractorutils.metrics import BaseMetrics
 from cognite.extractorutils.statestore import AbstractStateStore
+from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.uploader import EventUploadQueue, RawUploadQueue, TimeSeriesUploadQueue
 from cognite.extractorutils.uploader_types import CdfTypes, Event, InsertDatapoints, RawRow
 
@@ -78,17 +78,17 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
         description: str,
         version: Optional[str] = None,
         run_handle: Optional[
-            Callable[[CogniteClient, AbstractStateStore, UploaderExtractorConfigClass, threading.Event], None]
+            Callable[[CogniteClient, AbstractStateStore, UploaderExtractorConfigClass, CancellationToken], None]
         ] = None,
         config_class: Type[UploaderExtractorConfigClass],
         metrics: Optional[BaseMetrics] = None,
         use_default_state_store: bool = True,
-        cancellation_token: threading.Event = threading.Event(),
+        cancellation_token: Optional[CancellationToken] = None,
         config_file_path: Optional[str] = None,
         continuous_extractor: bool = False,
         heartbeat_waiting_time: int = 600,
         handle_interrupts: bool = True,
-        middleware: List[Callable[[dict], dict]] = [],
+        middleware: Optional[List[Callable[[dict], dict]]] = None,
     ):
         super(UploaderExtractor, self).__init__(
             name=name,

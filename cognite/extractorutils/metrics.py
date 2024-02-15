@@ -41,7 +41,6 @@ import logging
 import os
 import threading
 from abc import ABC, abstractmethod
-from threading import Event
 from time import sleep
 from types import TracebackType
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type, TypeVar, Union
@@ -55,6 +54,7 @@ from prometheus_client.exposition import basic_auth_handler, delete_from_gateway
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset, Datapoints, DatapointsArray, TimeSeries
 from cognite.client.exceptions import CogniteDuplicatedError
+from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.util import EitherId
 
 from .util import ensure_time_series
@@ -179,14 +179,14 @@ class AbstractMetricsPusher(ABC):
         self,
         push_interval: Optional[int] = None,
         thread_name: Optional[str] = None,
-        cancellation_token: Event = Event(),
+        cancellation_token: Optional[CancellationToken] = None,
     ):
         self.push_interval = push_interval
         self.thread_name = thread_name
 
         self.thread: Optional[threading.Thread] = None
         self.thread_name = thread_name
-        self.cancellation_token = cancellation_token
+        self.cancellation_token = cancellation_token.create_child_token() if cancellation_token else CancellationToken()
 
         self.logger = logging.getLogger(__name__)
 
@@ -201,7 +201,7 @@ class AbstractMetricsPusher(ABC):
         """
         Run push loop.
         """
-        while not self.cancellation_token.is_set():
+        while not self.cancellation_token.is_cancelled:
             self._push_to_server()
             self.cancellation_token.wait(self.push_interval)
 
@@ -210,7 +210,6 @@ class AbstractMetricsPusher(ABC):
         Starts a thread that pushes the default registry to the configured gateway at certain intervals.
 
         """
-        self.cancellation_token.clear()
         self.thread = threading.Thread(target=self._run, daemon=True, name=self.thread_name)
         self.thread.start()
 
@@ -220,7 +219,7 @@ class AbstractMetricsPusher(ABC):
         """
         # Make sure everything is pushed
         self._push_to_server()
-        self.cancellation_token.set()
+        self.cancellation_token.cancel()
 
     def __enter__(self) -> "AbstractMetricsPusher":
         """
@@ -268,7 +267,7 @@ class PrometheusPusher(AbstractMetricsPusher):
         username: Optional[str] = None,
         password: Optional[str] = None,
         thread_name: Optional[str] = None,
-        cancellation_token: Event = Event(),
+        cancellation_token: Optional[CancellationToken] = None,
     ):
         super(PrometheusPusher, self).__init__(push_interval, thread_name, cancellation_token)
 
@@ -344,7 +343,7 @@ class CognitePusher(AbstractMetricsPusher):
         asset: Optional[Asset] = None,
         data_set: Optional[EitherId] = None,
         thread_name: Optional[str] = None,
-        cancellation_token: Event = Event(),
+        cancellation_token: Optional[CancellationToken] = None,
     ):
         super(CognitePusher, self).__init__(push_interval, thread_name, cancellation_token)
 

@@ -12,7 +12,6 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-import threading
 from concurrent.futures import Future, ThreadPoolExecutor
 from io import BytesIO
 from os import PathLike
@@ -24,6 +23,7 @@ from requests import ConnectionError
 from cognite.client import CogniteClient
 from cognite.client.data_classes import FileMetadata
 from cognite.client.exceptions import CogniteAPIError
+from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.uploader._base import (
     RETRIES,
     RETRY_BACKOFF_FACTOR,
@@ -70,7 +70,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
         overwrite_existing: bool = False,
-        cancellation_token: threading.Event = threading.Event(),
+        cancellation_token: Optional[CancellationToken] = None,
         max_parallelism: int = 0,
     ):
         # Super sets post_upload and threshold
@@ -234,7 +234,7 @@ class FileUploadQueue(IOFileUploadQueue):
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
         overwrite_existing: bool = False,
-        cancellation_token: threading.Event = threading.Event(),
+        cancellation_token: Optional[CancellationToken] = None,
     ):
         # Super sets post_upload and threshold
         super().__init__(
@@ -290,7 +290,7 @@ class BytesUploadQueue(IOFileUploadQueue):
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
         overwrite_existing: bool = False,
-        cancellation_token: threading.Event = threading.Event(),
+        cancellation_token: Optional[CancellationToken] = None,
     ) -> None:
         super().__init__(
             cdf_client,

@@ -111,7 +111,7 @@ class KeyVaultLoader:
         try:
             return self.client.get_secret(node.value).value  # type: ignore  # _init_client guarantees not None
         except (ResourceNotFoundError, ServiceRequestError, HttpResponseError) as e:
-            raise InvalidConfigError(str(e))
+            raise InvalidConfigError(str(e)) from e
 
 
 class _EnvLoader(yaml.SafeLoader):
@@ -192,7 +192,9 @@ def _load_yaml(
         )
     except dacite.UnexpectedDataError as e:
         unknowns = [f'"{k.replace("_", "-") if case_style == "hyphen" else k}"' for k in e.keys]
-        raise InvalidConfigError(f"Unknown config parameter{'s' if len(unknowns) > 1 else ''} {', '.join(unknowns)}")
+        raise InvalidConfigError(
+            f"Unknown config parameter{'s' if len(unknowns) > 1 else ''} {', '.join(unknowns)}"
+        ) from e
 
     except (dacite.WrongTypeError, dacite.MissingValueError, dacite.UnionMatchError) as e:
         if e.field_path:
@@ -212,11 +214,11 @@ def _load_yaml(
 
             raise InvalidConfigError(
                 f'Wrong type for field "{path}" - got "{e.value}" of type {got_type} instead of {need_type}'
-            )
-        raise InvalidConfigError(f'Missing mandatory field "{path}"')
+            ) from e
+        raise InvalidConfigError(f'Missing mandatory field "{path}"') from e
 
     except dacite.ForwardReferenceError as e:
-        raise ValueError(f"Invalid config class: {str(e)}")
+        raise ValueError(f"Invalid config class: {str(e)}") from e
 
     config._file_hash = sha256(json.dumps(config_dict).encode("utf-8")).hexdigest()
 
