@@ -200,6 +200,10 @@ class IOFileUploadQueue(AbstractUploadQueue):
             with self._full_queue:
                 self._full_queue.notify()
 
+    def stop(self, ensure_upload: bool = True) -> None:
+        if ensure_upload:
+            self.upload()
+
     def __enter__(self) -> "IOFileUploadQueue":
         """
         Wraps around start method, for use as context manager
