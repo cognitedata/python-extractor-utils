@@ -61,7 +61,6 @@ decorator = "^5.1.1"
 more-itertools = "^10.0.0"
 typing-extensions = ">=3.7.4, <5"
 python-dotenv = "^1.0.0"
-jq = [{version = "^1.3.0", platform = "darwin"}, {version = "^1.3.0", platform = "linux"}]
 azure-identity = "^1.14.0"
 azure-keyvault-secrets = "^4.7.0"
 
