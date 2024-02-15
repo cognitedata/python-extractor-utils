@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "cognite-extractor-utils"
-version = "6.1.1"
+version = "6.4.1"
 description = "Utilities for easier development of extractors for CDF"
 authors = ["Mathias Lohne <mathias.lohne@cognite.com>"]
 license = "Apache-2.0"
@@ -61,24 +61,28 @@ decorator = "^5.1.1"
 more-itertools = "^10.0.0"
 typing-extensions = ">=3.7.4, <5"
 python-dotenv = "^1.0.0"
-jq = [{version = "^1.3.0", platform = "darwin"}, {version = "^1.3.0", platform = "linux"}]
+azure-identity = "^1.14.0"
+azure-keyvault-secrets = "^4.7.0"
 
 [tool.poetry.extras]
 experimental = ["cognite-sdk-experimental"]
 
 [tool.poetry.group.dev.dependencies]
-mypy = "1.7.1"
-ruff = "^0.1.0"
-pytest = "^7.0.0"
+mypy = "1.8.0"
+ruff = "^0.2.0"
+pytest = "^8.0.0"
 pytest-cov = "^4.0.0"
 sphinx = "^7.0.0"
 sphinx-rtd-theme = "^2.0.0"
 pre-commit = "^3.3.0"
 SecretStorage = "^3.1.2"
-twine = "^4.0.0"
+twine = "^5.0.0"
 pytest-order = "^1.0.1"
 parameterized = "*"
+requests = "^2.31.0"
+types-requests = "^2.31.0.20240125"
+httpx = "^0.26.0"
 
 [build-system]
-requires = ["poetry>=0.12"]
-build-backend = "poetry.masonry.api"
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"

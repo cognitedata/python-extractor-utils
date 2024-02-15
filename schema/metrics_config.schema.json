@@ -1,43 +1,43 @@
 {
     "$id": "metrics_config.schema.json",
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "description": "Configuration for publishing prometheus metrics, supports pushing to CDF timeseries instead",
+    "description": "The `metrics` section describes where to send metrics on extractor performance for remote monitoring of the extractor. We recommend sending metrics to a [Prometheus pushgateway](https://prometheus.io/). You can also send metrics as time series in the CDF project.",
     "type": "object",
     "properties": {
         "push-gateways": {
             "type": "array",
-            "description": "List of prometheus push gateway destinations",
+            "description": "List of Prometheus pushgateway configurations",
             "items": {
                 "type": "object",
-                "description": "Configuration for pushing to a prometheus PushGateway",
+                "description": "The `push-gateways` sections contain a list of metric destinations.",
                 "unevaluatedProperties": false,
                 "properties": {
                     "host": {
                         "type": "string",
-                        "description": "PushGateway host"
+                        "description": "Enter the host's address to push metrics."
                     },
                     "job-name": {
                         "type": "string",
-                        "description": "Job name, uniquely identifies this extractor in prometheus"
+                        "description": "Enter the value of the `exported_job` label to associate metrics. This separates several deployments on a single pushgateway and should be unique."
                     },
                     "username": {
                         "type": "string",
-                        "description": "PushGateway username"
+                        "description": "Enter the username for the pushgateway."
                     },
                     "password": {
                         "type": "string",
-                        "description": "PushGateway password"
+                        "description": "Enter the password for the pushgateway."
                     },
                     "clear-after": {
                         "type": [
                             "null",
                             "integer"
                         ],
-                        "description": "Clear metrics after this many seconds when the extractor stops. Default is disabled"
+                        "description": "Set a wait time in seconds before clearing the pushgateway. When this parameter is present, the extractor will stall after the run is complete before deleting all metrics from the pushgateway. The recommended value is at least twice that of the scrape interval on the pushgateway to ensure that the last metrics are gathered before the deletion. By default, this feature is disabled."
                     },
                     "push-interval": {
                         "type": "integer",
-                        "description": "Interval in seconds between each push to prometheus",
+                        "description": "Enter the interval in seconds between each push.",
                         "default": 30
                     }
                 }
@@ -45,7 +45,7 @@
         },
         "cognite": {
             "type": "object",
-            "description": "Push metrics to CDF timeseries. Requires CDF credentials to be configured",
+            "description": "Push metrics to CDF time series. Configure CDF credentials.",
             "unevaluatedProperties": false,
             "required": [
                 "external-id-prefix"
@@ -53,40 +53,40 @@
             "properties": {
                 "external-id-prefix": {
                     "type": "string",
-                    "description": "Prefix on external id on created metrics"
+                    "description": "Prefix on external ID used when creating CDF time series to store metrics."
                 },
                 "asset-name": {
                     "type": "string",
-                    "description": "Name of created root asset for the metrics"
+                    "description": "Enter the name for a CDF asset that will have all the metrics time series attached to it."
                 },
                 "asset-external-id": {
                     "type": "string",
-                    "description": "ExternalId of created root asset for the metrics"
+                    "description": "Enter the external ID for a CDF asset with all the metrics time series attached to it."
                 },
                 "push-interval": {
                     "type": "integer",
-                    "description": "Interval in seconds between each push to CDF",
+                    "description": "Enter the interval in seconds between each push to CDF.",
                     "default": 30
                 },
                 "data-set": {
-                    "type": "string",
-                    "description": "Data set the metrics timeseries created under"
+                    "description": "The data set where the metrics will be created.",
+                    "$ref": "either_id.schema.json"
                 }
             }
         },
         "server": {
             "type": "object",
-            "description": "Configure a port to expose prometheus metrics for scraping",
+            "description": "Configure the extractor to expose an HTTP server with Prometheus metrics for scraping.",
             "unevaluatedProperties": false,
             "properties": {
                 "host": {
                     "type": "string",
-                    "description": "Host to run the prometheus server on",
+                    "description": "Host to run the Prometheus server.",
                     "default": "0.0.0.0"
                 },
                 "port": {
                     "type": "integer",
-                    "description": "Local port to expose the prometheus server on",
+                    "description": "Local port to expose the Prometheus server.",
                     "default": 9000
                 }
             }

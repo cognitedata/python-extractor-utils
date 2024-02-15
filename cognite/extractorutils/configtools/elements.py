@@ -261,6 +261,7 @@ class CogniteConfig:
     extraction_pipeline: Optional[EitherIdConfig]
     timeout: TimeIntervalConfig = TimeIntervalConfig("30s")
     connection: ConnectionConfig = field(default_factory=ConnectionConfig)
+    security_categories: Optional[List[int]] = None
     external_id_prefix: str = ""
     host: str = "https://api.cognitedata.com"
 
