@@ -92,18 +92,16 @@ from abc import ABC, abstractmethod
 from types import TracebackType
 from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Type, Union
 
-from requests.exceptions import ConnectionError
-
 from cognite.client import CogniteClient
-from cognite.client.exceptions import CogniteAPIError, CogniteException
+from cognite.client.exceptions import CogniteAPIError
 from cognite.extractorutils.uploader import DataPointList
 
 from ._inner_util import _DecimalDecoder, _DecimalEncoder, _resolve_log_level
-from .util import retry
+from .util import cognite_exceptions, retry
 
 RETRY_BACKOFF_FACTOR = 1.5
-RETRY_MAX_DELAY = 15
-RETRY_DELAY = 5
+RETRY_MAX_DELAY = 60
+RETRY_DELAY = 1
 RETRIES = 10
 
 
@@ -347,79 +345,87 @@ class RawStateStore(AbstractStateStore):
 
         self._ensure_table()
 
-    @retry(
-        exceptions=(CogniteException, ConnectionError),
-        tries=RETRIES,
-        delay=RETRY_DELAY,
-        max_delay=RETRY_MAX_DELAY,
-        backoff=RETRY_BACKOFF_FACTOR,
-    )
     def _ensure_table(self) -> None:
-        try:
-            self._cdf_client.raw.databases.create(self.database)
-        except CogniteAPIError as e:
-            if not e.code == 400:
-                raise e
-        try:
-            self._cdf_client.raw.tables.create(self.database, self.table)
-        except CogniteAPIError as e:
-            if not e.code == 400:
-                raise e
+        @retry(
+            exceptions=cognite_exceptions(),
+            cancellation_token=self.cancellation_token,
+            tries=RETRIES,
+            delay=RETRY_DELAY,
+            max_delay=RETRY_MAX_DELAY,
+            backoff=RETRY_BACKOFF_FACTOR,
+        )
+        def impl() -> None:
+            try:
+                self._cdf_client.raw.databases.create(self.database)
+            except CogniteAPIError as e:
+                if not e.code == 400:
+                    raise e
+            try:
+                self._cdf_client.raw.tables.create(self.database, self.table)
+            except CogniteAPIError as e:
+                if not e.code == 400:
+                    raise e
+
+        impl()
 
     def initialize(self, force: bool = False) -> None:
-        self._initialize_implementation(force)
+        @retry(
+            exceptions=cognite_exceptions(),
+            cancellation_token=self.cancellation_token,
+            tries=RETRIES,
+            delay=RETRY_DELAY,
+            max_delay=RETRY_MAX_DELAY,
+            backoff=RETRY_BACKOFF_FACTOR,
+        )
+        def impl() -> None:
+            """
+            Get all known states.
 
-    @retry(
-        exceptions=(CogniteException, ConnectionError),
-        tries=RETRIES,
-        delay=RETRY_DELAY,
-        max_delay=RETRY_MAX_DELAY,
-        backoff=RETRY_BACKOFF_FACTOR,
-    )
-    def _initialize_implementation(self, force: bool = False) -> None:
-        """
-        Get all known states.
+            Args:
+                force: Enable re-initialization, ie overwrite when called multiple times
+            """
+            if self._initialized and not force:
+                return
 
-        Args:
-            force: Enable re-initialization, ie overwrite when called multiple times
-        """
-        if self._initialized and not force:
-            return
+            # ignore type since list _is_ optional, sdk types are wrong
+            rows = self._cdf_client.raw.rows.list(db_name=self.database, table_name=self.table, limit=None)  # type: ignore
 
-        # ignore type since list _is_ optional, sdk types are wrong
-        rows = self._cdf_client.raw.rows.list(db_name=self.database, table_name=self.table, limit=None)  # type: ignore
+            with self.lock:
+                self._local_state.clear()
+                for row in rows:
+                    if row.key is None or row.columns is None:
+                        self.logger.warning(f"None encountered in row: {str(row)}")
+                        # should never happen, but type from sdk is optional
+                        continue
+                    self._local_state[row.key] = row.columns
 
-        with self.lock:
-            self._local_state.clear()
-            for row in rows:
-                if row.key is None or row.columns is None:
-                    self.logger.warning(f"None encountered in row: {str(row)}")
-                    # should never happen, but type from sdk is optional
-                    continue
-                self._local_state[row.key] = row.columns
+            self._initialized = True
 
-        self._initialized = True
+        impl()
 
     def synchronize(self) -> None:
-        self._synchronize_implementation()
+        @retry(
+            exceptions=cognite_exceptions(),
+            cancellation_token=self.cancellation_token,
+            tries=RETRIES,
+            delay=RETRY_DELAY,
+            max_delay=RETRY_MAX_DELAY,
+            backoff=RETRY_BACKOFF_FACTOR,
+        )
+        def impl() -> None:
+            """
+            Upload local state store to CDF
+            """
+            self._cdf_client.raw.rows.insert(db_name=self.database, table_name=self.table, row=self._local_state)
+            # Create a copy of deleted to facilitate testing (mock library stores list, and as it changes, the
+            # assertions fail)
+            self._cdf_client.raw.rows.delete(
+                db_name=self.database, table_name=self.table, key=[k for k in self._deleted]
+            )
+            with self.lock:
+                self._deleted.clear()
 
-    @retry(
-        exceptions=(CogniteException, ConnectionError),
-        tries=RETRIES,
-        delay=RETRY_DELAY,
-        max_delay=RETRY_MAX_DELAY,
-        backoff=RETRY_BACKOFF_FACTOR,
-    )
-    def _synchronize_implementation(self) -> None:
-        """
-        Upload local state store to CDF
-        """
-        self._cdf_client.raw.rows.insert(db_name=self.database, table_name=self.table, row=self._local_state)
-        # Create a copy of deleted to facilitate testing (mock library stores list, and as it changes, the assertions
-        # fail)
-        self._cdf_client.raw.rows.delete(db_name=self.database, table_name=self.table, key=[k for k in self._deleted])
-        with self.lock:
-            self._deleted.clear()
+        impl()
 
     def __enter__(self) -> "RawStateStore":
         """

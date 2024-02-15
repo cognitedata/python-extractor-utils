@@ -18,8 +18,6 @@ from datetime import datetime
 from types import TracebackType
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
 
-from requests import ConnectionError
-
 from cognite.client import CogniteClient
 from cognite.client.data_classes import (
     Sequence,
@@ -27,7 +25,7 @@ from cognite.client.data_classes import (
     SequenceRows,
     TimeSeries,
 )
-from cognite.client.exceptions import CogniteAPIError, CogniteDuplicatedError, CogniteNotFoundError
+from cognite.client.exceptions import CogniteDuplicatedError, CogniteNotFoundError
 from cognite.extractorutils.uploader._base import (
     RETRIES,
     RETRY_BACKOFF_FACTOR,
@@ -44,7 +42,7 @@ from cognite.extractorutils.uploader._metrics import (
     TIMESERIES_UPLOADER_POINTS_WRITTEN,
     TIMESERIES_UPLOADER_QUEUE_SIZE,
 )
-from cognite.extractorutils.util import EitherId, retry
+from cognite.extractorutils.util import EitherId, cognite_exceptions, retry
 
 MIN_DATAPOINT_TIMESTAMP = -2208988800000
 MAX_DATAPOINT_STRING_LENGTH = 255
@@ -207,11 +205,82 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         """
         Trigger an upload of the queue, clears queue afterwards
         """
+
+        @retry(
+            exceptions=cognite_exceptions(),
+            cancellation_token=self.cancellation_token,
+            tries=RETRIES,
+            delay=RETRY_DELAY,
+            max_delay=RETRY_MAX_DELAY,
+            backoff=RETRY_BACKOFF_FACTOR,
+        )
+        def _upload_batch(upload_this: List[Dict], retries: int = 5) -> List[Dict]:
+            if len(upload_this) == 0:
+                return upload_this
+
+            try:
+                self.cdf_client.time_series.data.insert_multiple(upload_this)
+
+            except CogniteNotFoundError as ex:
+                if not retries:
+                    raise ex
+
+                if not self.create_missing:
+                    self.logger.error("Could not upload data points to %s: %s", str(ex.not_found), str(ex))
+
+                # Get IDs of time series that exists, but failed because of the non-existing time series
+                retry_these = [EitherId(**id_dict) for id_dict in ex.failed if id_dict not in ex.not_found]
+
+                if self.create_missing:
+                    # Get the time series that can be created
+                    create_these_ids = set(
+                        [id_dict["externalId"] for id_dict in ex.not_found if "externalId" in id_dict]
+                    )
+                    datapoints_lists: Dict[str, DataPointList] = {
+                        ts_dict["externalId"]: ts_dict["datapoints"]
+                        for ts_dict in upload_this
+                        if ts_dict["externalId"] in create_these_ids
+                    }
+
+                    self.logger.info(f"Creating {len(create_these_ids)} time series")
+                    to_create: List[TimeSeries] = [
+                        self.missing_factory(external_id, datapoints_lists[external_id])
+                        for external_id in create_these_ids
+                    ]
+                    if self.data_set_id is not None:
+                        for ts in to_create:
+                            if ts.data_set_id is None:
+                                ts.data_set_id = self.data_set_id
+                    self.cdf_client.time_series.create(to_create)
+
+                    retry_these.extend([EitherId(external_id=i) for i in create_these_ids])
+
+                    if len(ex.not_found) != len(create_these_ids):
+                        missing = [id_dict for id_dict in ex.not_found if id_dict.get("externalId") not in retry_these]
+                        missing_num = len(ex.not_found) - len(create_these_ids)
+                        self.logger.error(
+                            f"{missing_num} time series not found, and could not be created automatically:\n"
+                            + str(missing)
+                            + "\nData will be dropped"
+                        )
+
+                # Remove entries with non-existing time series from upload queue
+                upload_this = [
+                    entry
+                    for entry in upload_this
+                    if EitherId(id=entry.get("id"), external_id=entry.get("externalId")) in retry_these
+                ]
+
+                # Upload remaining
+                _upload_batch(upload_this, retries - 1)
+
+            return upload_this
+
         if len(self.upload_queue) == 0:
             return
 
         with self.lock:
-            upload_this = self._upload_batch(
+            upload_this = _upload_batch(
                 [
                     {either_id.type(): either_id.content(), "datapoints": datapoints}
                     for either_id, datapoints in self.upload_queue.items()
@@ -231,72 +300,6 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
             self.logger.info(f"Uploaded {self.upload_queue_size} datapoints")
             self.upload_queue_size = 0
             self.queue_size.set(self.upload_queue_size)
-
-    @retry(
-        exceptions=(CogniteAPIError, ConnectionError),
-        tries=RETRIES,
-        delay=RETRY_DELAY,
-        max_delay=RETRY_MAX_DELAY,
-        backoff=RETRY_BACKOFF_FACTOR,
-    )
-    def _upload_batch(self, upload_this: List[Dict], retries: int = 5) -> List[Dict]:
-        if len(upload_this) == 0:
-            return upload_this
-
-        try:
-            self.cdf_client.time_series.data.insert_multiple(upload_this)
-
-        except CogniteNotFoundError as ex:
-            if not retries:
-                raise ex
-
-            if not self.create_missing:
-                self.logger.error("Could not upload data points to %s: %s", str(ex.not_found), str(ex))
-
-            # Get IDs of time series that exists, but failed because of the non-existing time series
-            retry_these = [EitherId(**id_dict) for id_dict in ex.failed if id_dict not in ex.not_found]
-
-            if self.create_missing:
-                # Get the time series that can be created
-                create_these_ids = set([id_dict["externalId"] for id_dict in ex.not_found if "externalId" in id_dict])
-                datapoints_lists: Dict[str, DataPointList] = {
-                    ts_dict["externalId"]: ts_dict["datapoints"]
-                    for ts_dict in upload_this
-                    if ts_dict["externalId"] in create_these_ids
-                }
-
-                self.logger.info(f"Creating {len(create_these_ids)} time series")
-                to_create: List[TimeSeries] = [
-                    self.missing_factory(external_id, datapoints_lists[external_id]) for external_id in create_these_ids
-                ]
-                if self.data_set_id is not None:
-                    for ts in to_create:
-                        if ts.data_set_id is None:
-                            ts.data_set_id = self.data_set_id
-                self.cdf_client.time_series.create(to_create)
-
-                retry_these.extend([EitherId(external_id=i) for i in create_these_ids])
-
-                if len(ex.not_found) != len(create_these_ids):
-                    missing = [id_dict for id_dict in ex.not_found if id_dict.get("externalId") not in retry_these]
-                    missing_num = len(ex.not_found) - len(create_these_ids)
-                    self.logger.error(
-                        f"{missing_num} time series not found, and could not be created automatically:\n"
-                        + str(missing)
-                        + "\nData will be dropped"
-                    )
-
-            # Remove entries with non-existing time series from upload queue
-            upload_this = [
-                entry
-                for entry in upload_this
-                if EitherId(id=entry.get("id"), external_id=entry.get("externalId")) in retry_these
-            ]
-
-            # Upload remaining
-            self._upload_batch(upload_this, retries - 1)
-
-        return upload_this
 
     def __enter__(self) -> "TimeSeriesUploadQueue":
         """
@@ -504,6 +507,42 @@ class SequenceUploadQueue(AbstractUploadQueue):
         """
         Trigger an upload of the queue, clears queue afterwards
         """
+
+        @retry(
+            exceptions=cognite_exceptions(),
+            cancellation_token=self.cancellation_token,
+            tries=RETRIES,
+            delay=RETRY_DELAY,
+            max_delay=RETRY_MAX_DELAY,
+            backoff=RETRY_BACKOFF_FACTOR,
+        )
+        def _upload_single(either_id: EitherId, upload_this: SequenceData) -> SequenceData:
+            self.logger.debug("Writing {} rows to sequence {}".format(len(upload_this.values), either_id))
+
+            try:
+                self.cdf_client.sequences.data.insert(
+                    id=either_id.internal_id,  # type: ignore
+                    external_id=either_id.external_id,  # type: ignore
+                    rows=upload_this,
+                    column_external_ids=None,
+                )
+            except CogniteNotFoundError as ex:
+                if self.create_missing:
+                    # Create missing sequence
+                    self._create_or_update(either_id)
+
+                    # Retry
+                    self.cdf_client.sequences.data.insert(
+                        id=either_id.internal_id,  # type: ignore
+                        external_id=either_id.external_id,  # type: ignore
+                        rows=upload_this,
+                        column_external_ids=None,
+                    )
+                else:
+                    raise ex
+
+            return upload_this
+
         if len(self.upload_queue) == 0:
             return
 
@@ -514,7 +553,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
 
             for either_id, upload_this in self.upload_queue.items():
                 _labels = str(either_id.content())
-                self._upload_single(either_id, upload_this)
+                _upload_single(either_id, upload_this)
                 self.points_written.inc()
 
             try:
@@ -526,40 +565,6 @@ class SequenceUploadQueue(AbstractUploadQueue):
             self.upload_queue.clear()
             self.upload_queue_size = 0
             self.queue_size.set(self.upload_queue_size)
-
-    @retry(
-        exceptions=(CogniteAPIError, ConnectionError),
-        tries=RETRIES,
-        delay=RETRY_DELAY,
-        max_delay=RETRY_MAX_DELAY,
-        backoff=RETRY_BACKOFF_FACTOR,
-    )
-    def _upload_single(self, either_id: EitherId, upload_this: SequenceData) -> SequenceData:
-        self.logger.debug("Writing {} rows to sequence {}".format(len(upload_this.values), either_id))
-
-        try:
-            self.cdf_client.sequences.data.insert(
-                id=either_id.internal_id,  # type: ignore
-                external_id=either_id.external_id,  # type: ignore
-                rows=upload_this,
-                column_external_ids=None,
-            )
-        except CogniteNotFoundError as ex:
-            if self.create_missing:
-                # Create missing sequence
-                self._create_or_update(either_id)
-
-                # Retry
-                self.cdf_client.sequences.data.insert(
-                    id=either_id.internal_id,  # type: ignore
-                    external_id=either_id.external_id,  # type: ignore
-                    rows=upload_this,
-                    column_external_ids=None,
-                )
-            else:
-                raise ex
-
-        return upload_this
 
     def _create_or_update(self, either_id: EitherId) -> None:
         """

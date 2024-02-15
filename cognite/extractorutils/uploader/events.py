@@ -18,7 +18,7 @@ from typing import Callable, List, Optional, Type
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Event
-from cognite.client.exceptions import CogniteAPIError, CogniteDuplicatedError
+from cognite.client.exceptions import CogniteDuplicatedError
 from cognite.extractorutils.uploader._base import (
     RETRIES,
     RETRY_BACKOFF_FACTOR,
@@ -31,7 +31,7 @@ from cognite.extractorutils.uploader._metrics import (
     EVENTS_UPLOADER_QUEUED,
     EVENTS_UPLOADER_WRITTEN,
 )
-from cognite.extractorutils.util import retry
+from cognite.extractorutils.util import cognite_exceptions, retry
 
 
 class EventUploadQueue(AbstractUploadQueue):
@@ -96,11 +96,38 @@ class EventUploadQueue(AbstractUploadQueue):
         """
         Trigger an upload of the queue, clears queue afterwards
         """
+
+        @retry(
+            exceptions=cognite_exceptions(),
+            cancellation_token=self.cancellation_token,
+            tries=RETRIES,
+            delay=RETRY_DELAY,
+            max_delay=RETRY_MAX_DELAY,
+            backoff=RETRY_BACKOFF_FACTOR,
+        )
+        def _upload_batch() -> None:
+            try:
+                self.cdf_client.events.create([e for e in self.upload_queue])
+            except CogniteDuplicatedError as e:
+                duplicated_ids = set([dup["externalId"] for dup in e.duplicated if "externalId" in dup])
+                failed: List[Event] = [e for e in e.failed]
+                to_create = []
+                to_update = []
+                for evt in failed:
+                    if evt.external_id is not None and evt.external_id in duplicated_ids:
+                        to_update.append(evt)
+                    else:
+                        to_create.append(evt)
+                if to_create:
+                    self.cdf_client.events.create(to_create)
+                if to_update:
+                    self.cdf_client.events.update(to_update)
+
         if len(self.upload_queue) == 0:
             return
 
         with self.lock:
-            self._upload_batch()
+            _upload_batch()
 
             self.events_written.inc(self.upload_queue_size)
 
@@ -112,31 +139,6 @@ class EventUploadQueue(AbstractUploadQueue):
             self.logger.info(f"Uploaded {self.upload_queue_size} events")
             self.upload_queue_size = 0
             self.queue_size.set(self.upload_queue_size)
-
-    @retry(
-        exceptions=(CogniteAPIError, ConnectionError),
-        tries=RETRIES,
-        delay=RETRY_DELAY,
-        max_delay=RETRY_MAX_DELAY,
-        backoff=RETRY_BACKOFF_FACTOR,
-    )
-    def _upload_batch(self) -> None:
-        try:
-            self.cdf_client.events.create([e for e in self.upload_queue])
-        except CogniteDuplicatedError as e:
-            duplicated_ids = set([dup["externalId"] for dup in e.duplicated if "externalId" in dup])
-            failed: List[Event] = [e for e in e.failed]
-            to_create = []
-            to_update = []
-            for evt in failed:
-                if evt.external_id is not None and evt.external_id in duplicated_ids:
-                    to_update.append(evt)
-                else:
-                    to_create.append(evt)
-            if to_create:
-                self.cdf_client.events.create(to_create)
-            if to_update:
-                self.cdf_client.events.update(to_update)
 
     def __enter__(self) -> "EventUploadQueue":
         """
