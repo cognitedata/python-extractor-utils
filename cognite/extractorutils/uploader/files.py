@@ -12,11 +12,12 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import threading
 from concurrent.futures import Future, ThreadPoolExecutor
 from io import BytesIO
 from os import PathLike
 from types import TracebackType
-from typing import BinaryIO, Callable, List, Optional, Tuple, Type, Union
+from typing import BinaryIO, Callable, List, Optional, Type, Union
 
 from requests import ConnectionError
 
@@ -38,6 +39,9 @@ from cognite.extractorutils.uploader._metrics import (
 )
 from cognite.extractorutils.util import retry
 
+_QUEUES: int = 0
+_QUEUES_LOCK: threading.RLock = threading.RLock()
+
 
 class IOFileUploadQueue(AbstractUploadQueue):
     """
@@ -50,9 +54,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
         cdf_client: Cognite Data Fusion client to use
         post_upload_function: A function that will be called after each upload. The function will be given one argument:
             A list of the events that were uploaded.
-        max_queue_size: Maximum size of upload queue. Defaults to no max size.
-        max_upload_interval: Automatically trigger an upload each m seconds when run as a thread (use start/stop
-            methods).
+        max_queue_size: Maximum size of upload queue.
         trigger_log_level: Log level to log upload triggers to.
         thread_name: Thread name of uploader thread.
         max_parallelism: Maximum number of parallel uploads. If this is greater than 0,
@@ -66,7 +68,6 @@ class IOFileUploadQueue(AbstractUploadQueue):
         cdf_client: CogniteClient,
         post_upload_function: Optional[Callable[[List[FileMetadata]], None]] = None,
         max_queue_size: Optional[int] = None,
-        max_upload_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
         overwrite_existing: bool = False,
@@ -78,13 +79,18 @@ class IOFileUploadQueue(AbstractUploadQueue):
             cdf_client,
             post_upload_function,
             max_queue_size,
-            max_upload_interval,
+            None,
             trigger_log_level,
             thread_name,
             cancellation_token,
         )
 
-        self.upload_queue: List[Tuple[FileMetadata, Union[str, Callable[[], BinaryIO]]]] = []
+        if self.threshold <= 0:
+            raise ValueError("Max queue size must be positive for file upload queues")
+
+        self.upload_queue: List[Future] = []
+        self.errors: List[Exception] = []
+
         self.overwrite_existing = overwrite_existing
 
         self.parallelism = self.cdf_client.config.max_workers
@@ -97,44 +103,56 @@ class IOFileUploadQueue(AbstractUploadQueue):
         self.files_written = FILES_UPLOADER_WRITTEN
         self.queue_size = FILES_UPLOADER_QUEUE_SIZE
 
+        self._update_queue_thread = threading.Thread(target=self._remove_done_from_queue, daemon=True)
+
+        self._full_queue = threading.Condition()
+
+        global _QUEUES, _QUEUES_LOCK
+        with _QUEUES_LOCK:
+            self._pool = ThreadPoolExecutor(
+                max_workers=self.parallelism, thread_name_prefix=f"FileUploadQueue-{_QUEUES}"
+            )
+            _QUEUES += 1
+
+    def _remove_done_from_queue(self) -> None:
+        while not self.cancellation_token.is_cancelled:
+            with self.lock:
+                self.upload_queue = list(filter(lambda f: f.running(), self.upload_queue))
+
+            self.cancellation_token.wait(5)
+
     def add_io_to_upload_queue(self, file_meta: FileMetadata, read_file: Callable[[], BinaryIO]) -> None:
         """
-        Add file to upload queue. The queue will be uploaded if the queue size is larger than the threshold
-        specified in the __init__.
+        Add file to upload queue. The file will start uploading immedeately. If the size of the queue is larger than
+        the specified max size, this call will block until it's
 
         Args:
             file_meta: File metadata-object
             file_name: Path to file to be uploaded.
                 If none, the file object will still be created, but no data is uploaded
         """
+        if self.upload_queue_size >= self.threshold:
+            with self._full_queue:
+                while not self._full_queue.wait(timeout=2) and not self.cancellation_token.is_cancelled:
+                    pass
+
         with self.lock:
-            self.upload_queue.append((file_meta, read_file))
+            self.upload_queue.append(self._pool.submit(self._upload_single, read_file, file_meta))
             self.upload_queue_size += 1
             self.files_queued.inc()
             self.queue_size.set(self.upload_queue_size)
 
-            self._check_triggers()
-
-    def upload(self) -> None:
+    def upload(self, fail_on_errors: bool = True, timeout: Optional[float] = None) -> None:
         """
-        Trigger an upload of the queue, clears queue afterwards
+        Wait for all uploads to finish
         """
-        if len(self.upload_queue) == 0:
-            return
-
+        for future in self.upload_queue:
+            future.result(timeout=timeout)
         with self.lock:
-            self._upload_batch()
-
-            self.files_written.inc(self.upload_queue_size)
-
-            try:
-                self._post_upload([el[0] for el in self.upload_queue])
-            except Exception as e:
-                self.logger.error("Error in upload callback: %s", str(e))
-            self.upload_queue.clear()
-            self.logger.info(f"Uploaded {self.upload_queue_size} files")
-            self.upload_queue_size = 0
             self.queue_size.set(self.upload_queue_size)
+        if fail_on_errors and self.errors:
+            # There might be more errors, but we can only have one as the cause, so pick the first
+            raise RuntimeError(f"{len(self.errors)} upload(s) finished with errors") from self.errors[0]
 
     @retry(
         exceptions=(CogniteAPIError, ConnectionError),
@@ -143,39 +161,45 @@ class IOFileUploadQueue(AbstractUploadQueue):
         max_delay=RETRY_MAX_DELAY,
         backoff=RETRY_BACKOFF_FACTOR,
     )
-    def _upload_single(self, index: int, read_file: Callable[[], BinaryIO], file_meta: FileMetadata) -> None:
-        # Upload file
-        with read_file() as file:
-            file_meta = self.cdf_client.files.upload_bytes(
-                file,
-                file_meta.name if file_meta.name is not None else "",
-                overwrite=self.overwrite_existing,
-                external_id=file_meta.external_id,
-                source=file_meta.source,
-                mime_type=file_meta.mime_type,
-                metadata=file_meta.metadata,
-                directory=file_meta.directory,
-                asset_ids=file_meta.asset_ids,
-                data_set_id=file_meta.data_set_id,
-                labels=file_meta.labels,
-                geo_location=file_meta.geo_location,
-                source_created_time=file_meta.source_created_time,
-                source_modified_time=file_meta.source_modified_time,
-                security_categories=file_meta.security_categories,
-            )
+    def _upload_single(self, read_file: Callable[[], BinaryIO], file_meta: FileMetadata) -> None:
+        try:
+            # Upload file
+            with read_file() as file:
+                file_meta = self.cdf_client.files.upload_bytes(
+                    file,
+                    file_meta.name if file_meta.name is not None else "",
+                    overwrite=self.overwrite_existing,
+                    external_id=file_meta.external_id,
+                    source=file_meta.source,
+                    mime_type=file_meta.mime_type,
+                    metadata=file_meta.metadata,
+                    directory=file_meta.directory,
+                    asset_ids=file_meta.asset_ids,
+                    data_set_id=file_meta.data_set_id,
+                    labels=file_meta.labels,
+                    geo_location=file_meta.geo_location,
+                    source_created_time=file_meta.source_created_time,
+                    source_modified_time=file_meta.source_modified_time,
+                    security_categories=file_meta.security_categories,
+                )
 
-        # Update meta-object in queue
-        self.upload_queue[index] = (file_meta, read_file)
+            if self.post_upload_function:
+                try:
+                    self.post_upload_function([file_meta])
+                except Exception as e:
+                    self.logger.error("Error in upload callback: %s", str(e))
 
-    def _upload_batch(self) -> None:
-        # Concurrently execute file-uploads
+        except Exception as e:
+            self.logger.exception("Unexpected error while uploading file")
+            self.errors.append(e)
 
-        futures: List[Future] = []
-        with ThreadPoolExecutor(self.parallelism) as pool:
-            for i, (file_meta, file_name) in enumerate(self.upload_queue):
-                futures.append(pool.submit(self._upload_single, i, file_name, file_meta))
-        for fut in futures:
-            fut.result(0.0)
+        finally:
+            with self.lock:
+                self.files_written.inc()
+                self.upload_queue_size -= 1
+                self.queue_size.set(self.upload_queue_size)
+            with self._full_queue:
+                self._full_queue.notify()
 
     def __enter__(self) -> "IOFileUploadQueue":
         """
@@ -185,6 +209,8 @@ class IOFileUploadQueue(AbstractUploadQueue):
             self
         """
         self.start()
+        self._pool.__enter__()
+        self._update_queue_thread.start()
         return self
 
     def __exit__(
@@ -198,6 +224,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
             exc_val: Exception value
             exc_tb: Traceback
         """
+        self._pool.__exit__(exc_type, exc_val, exc_tb)
         self.stop()
 
     def __len__(self) -> int:
@@ -218,9 +245,7 @@ class FileUploadQueue(IOFileUploadQueue):
         cdf_client: Cognite Data Fusion client to use
         post_upload_function: A function that will be called after each upload. The function will be given one argument:
             A list of the events that were uploaded.
-        max_queue_size: Maximum size of upload queue. Defaults to no max size.
-        max_upload_interval: Automatically trigger an upload each m seconds when run as a thread (use start/stop
-            methods).
+        max_queue_size: Maximum size of upload queue.
         trigger_log_level: Log level to log upload triggers to.
         thread_name: Thread name of uploader thread.
     """
@@ -241,7 +266,6 @@ class FileUploadQueue(IOFileUploadQueue):
             cdf_client,
             post_upload_function,
             max_queue_size,
-            max_upload_interval,
             trigger_log_level,
             thread_name,
             overwrite_existing,
@@ -273,9 +297,7 @@ class BytesUploadQueue(IOFileUploadQueue):
         cdf_client: Cognite Data Fusion client to use
         post_upload_function: A function that will be called after each upload. The function will be given one argument:
             A list of the events that were uploaded.
-        max_queue_size: Maximum size of upload queue. Defaults to no max size.
-        max_upload_interval: Automatically trigger an upload each m seconds when run as a thread (use start/stop
-            methods).
+        max_queue_size: Maximum size of upload queue.
         trigger_log_level: Log level to log upload triggers to.
         thread_name: Thread name of uploader thread.
         overwrite_existing: If 'overwrite' is set to true, fields for the files found for externalIds can be overwritten
@@ -286,7 +308,6 @@ class BytesUploadQueue(IOFileUploadQueue):
         cdf_client: CogniteClient,
         post_upload_function: Optional[Callable[[List[FileMetadata]], None]] = None,
         max_queue_size: Optional[int] = None,
-        max_upload_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
         overwrite_existing: bool = False,
@@ -296,7 +317,6 @@ class BytesUploadQueue(IOFileUploadQueue):
             cdf_client,
             post_upload_function,
             max_queue_size,
-            max_upload_interval,
             trigger_log_level,
             thread_name,
             overwrite_existing,

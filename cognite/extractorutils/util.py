@@ -21,7 +21,7 @@ import random
 from functools import partial, wraps
 from threading import Thread
 from time import time
-from typing import Any, Callable, Generator, Iterable, Optional, Tuple, Type, TypeVar, Union
+from typing import Any, Callable, Dict, Generator, Iterable, List, Optional, Tuple, Type, TypeVar, Union
 
 from decorator import decorator
 
@@ -308,25 +308,40 @@ _T2 = TypeVar("_T2")
 def _retry_internal(
     f: Callable[..., _T2],
     cancellation_token: CancellationToken,
-    exceptions: Tuple[Type[Exception], ...] = (Exception,),
-    tries: int = -1,
-    delay: float = 0,
-    max_delay: Optional[float] = None,
-    backoff: float = 1,
-    jitter: Union[float, Tuple[float, float]] = 0,
+    exceptions: Union[Tuple[Type[Exception], ...], Dict[Type[Exception], Callable[[Exception], bool]]],
+    tries: int,
+    delay: float,
+    max_delay: Optional[float],
+    backoff: float,
+    jitter: Union[float, Tuple[float, float]],
 ) -> _T2:
     logger = logging.getLogger(__name__)
 
     while tries and not cancellation_token.is_cancelled:
         try:
             return f()
-        except exceptions as e:
+
+        except Exception as e:
+            if isinstance(exceptions, tuple):
+                for ex_type in exceptions:
+                    if isinstance(e, ex_type):
+                        break
+                else:
+                    raise e
+
+            else:
+                for ex_type in exceptions:
+                    if isinstance(e, ex_type) and exceptions[ex_type](e):
+                        break
+                else:
+                    raise e
+
             tries -= 1
             if not tries:
                 raise e
 
             if logger is not None:
-                logger.warning("%s, retrying in %s seconds...", str(e), delay)
+                logger.warning("%s, retrying in %.1f seconds...", str(e), delay)
 
             cancellation_token.wait(delay)
             delay *= backoff
@@ -344,12 +359,12 @@ def _retry_internal(
 
 def retry(
     cancellation_token: Optional[CancellationToken] = None,
-    exceptions: Tuple[Type[Exception], ...] = (Exception,),
-    tries: int = -1,
-    delay: float = 0,
-    max_delay: Optional[float] = None,
-    backoff: float = 1,
-    jitter: Union[float, Tuple[float, float]] = 0,
+    exceptions: Union[Tuple[Type[Exception], ...], Dict[Type[Exception], Callable[[Any], bool]]] = (Exception,),
+    tries: int = 10,
+    delay: float = 1,
+    max_delay: Optional[float] = 60,
+    backoff: float = 2,
+    jitter: Union[float, Tuple[float, float]] = (0, 2),
 ) -> Callable[[Callable[..., _T2]], Callable[..., _T2]]:
     """
     Returns a retry decorator.
@@ -358,7 +373,9 @@ def retry(
 
     Args:
         cancellation_token: a threading token that is waited on.
-        exceptions: an exception or a tuple of exceptions to catch. default: Exception.
+        exceptions: a tuple of exceptions to catch, or a dictionary from exception types to a callback determining
+            whether to retry the exception or not. The callback will be given the exception object as argument.
+            default: retry all exceptions.
         tries: the maximum number of attempts. default: -1 (infinite).
         delay: initial delay between attempts. default: 0.
         max_delay: the maximum value of delay. default: None (no limit).
@@ -386,3 +403,71 @@ def retry(
         )
 
     return retry_decorator
+
+
+def requests_exceptions(
+    status_codes: Optional[List[int]] = None,
+) -> Dict[Type[Exception], Callable[[Any], bool]]:
+    """
+    Retry exceptions from using the ``requests`` library. This will retry all connection and HTTP errors matching
+    the given status codes.
+
+    Example:
+
+    .. code-block:: python
+
+        @retry(exceptions = requests_exceptions())
+        def my_function() -> None:
+            ...
+
+    """
+    status_codes = status_codes or [408, 425, 429, 500, 502, 503, 504]
+    # types ignored, since they are not installed as we don't depend on the package
+    from requests.exceptions import HTTPError, RequestException  # type: ignore
+
+    def handle_http_errors(exception: RequestException) -> bool:
+        if isinstance(exception, HTTPError):
+            response = exception.response
+            if response is None:
+                return True
+
+            return response.status_code in status_codes
+
+        else:
+            return True
+
+    return {RequestException: handle_http_errors}
+
+
+def httpx_exceptions(
+    status_codes: Optional[List[int]] = None,
+) -> Dict[Type[Exception], Callable[[Any], bool]]:
+    """
+    Retry exceptions from using the ``httpx`` library. This will retry all connection and HTTP errors matching
+    the given status codes.
+
+    Example:
+
+    .. code-block:: python
+
+        @retry(exceptions = httpx_exceptions())
+        def my_function() -> None:
+            ...
+
+    """
+    status_codes = status_codes or [408, 425, 429, 500, 502, 503, 504]
+    # types ignored, since they are not installed as we don't depend on the package
+    from httpx import HTTPError, HTTPStatusError  # type: ignore
+
+    def handle_http_errors(exception: HTTPError) -> bool:
+        if isinstance(exception, HTTPStatusError):
+            response = exception.response
+            if response is None:
+                return True
+
+            return response.status_code in status_codes
+
+        else:
+            return True
+
+    return {HTTPError: handle_http_errors}

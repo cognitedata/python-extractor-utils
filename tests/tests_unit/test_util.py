@@ -16,11 +16,21 @@ import threading
 import unittest
 from unittest.mock import Mock, patch
 
+import httpx
+import requests
+
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset, TimeSeries
 from cognite.client.exceptions import CogniteNotFoundError
 from cognite.extractorutils.threading import CancellationToken
-from cognite.extractorutils.util import EitherId, ensure_assets, ensure_time_series
+from cognite.extractorutils.util import (
+    EitherId,
+    ensure_assets,
+    ensure_time_series,
+    httpx_exceptions,
+    requests_exceptions,
+    retry,
+)
 
 
 class TestEnsureTimeSeries(unittest.TestCase):
@@ -197,3 +207,148 @@ class TestCancellationToken(unittest.TestCase):
         token.cancel()
         t1.join(1)
         self.assertFalse(t1.is_alive())
+
+
+class TestRetries(unittest.TestCase):
+    def test_simple_retry(self) -> None:
+        mock = Mock()
+
+        @retry(tries=3, delay=0, jitter=0)
+        def call_mock() -> None:
+            mock()
+            raise ValueError()
+
+        with self.assertRaises(ValueError):
+            call_mock()
+
+        self.assertEqual(len(mock.call_args_list), 3)
+
+    def test_simple_retry_specified(self) -> None:
+        mock = Mock()
+
+        @retry(tries=3, delay=0, jitter=0, exceptions=(ValueError,))
+        def call_mock() -> None:
+            mock()
+            raise ValueError()
+
+        with self.assertRaises(ValueError):
+            call_mock()
+
+        self.assertEqual(len(mock.call_args_list), 3)
+
+    def test_not_retry_unspecified(self) -> None:
+        mock = Mock()
+
+        @retry(tries=3, delay=0, jitter=0, exceptions=(TypeError,))
+        def call_mock() -> None:
+            mock()
+            raise ValueError()
+
+        with self.assertRaises(ValueError):
+            call_mock()
+
+        self.assertEqual(len(mock.call_args_list), 1)
+
+    def test_retry_conditional(self) -> None:
+        mock = Mock()
+
+        @retry(tries=3, delay=0, jitter=0, exceptions={ValueError: lambda x: "Invalid" not in str(x)})
+        def call_mock(is_none: bool) -> None:
+            mock()
+
+            if is_none:
+                raise ValueError("Could not retrieve value")
+            else:
+                raise ValueError("Invalid value: 1234")
+
+        with self.assertRaises(ValueError):
+            call_mock(True)
+
+        self.assertEqual(len(mock.call_args_list), 3)
+
+        mock.reset_mock()
+
+        with self.assertRaises(ValueError):
+            call_mock(False)
+
+        self.assertEqual(len(mock.call_args_list), 1)
+
+    def test_retry_requests(self) -> None:
+        mock = Mock()
+
+        @retry(tries=3, delay=0, jitter=0, exceptions=requests_exceptions())
+        def call_mock() -> None:
+            mock()
+            requests.get("http://localhost:1234/nope")
+
+        with self.assertRaises(requests.ConnectionError):
+            call_mock()
+
+        self.assertEqual(len(mock.call_args_list), 3)
+        mock.reset_mock()
+
+        # 404 should not be retried
+        @retry(tries=3, delay=0, jitter=0, exceptions=requests_exceptions())
+        def call_mock2() -> None:
+            mock()
+            res = requests.Response()
+            res.status_code = 404
+            res.raise_for_status()
+
+        with self.assertRaises(requests.HTTPError):
+            call_mock2()
+
+        self.assertEqual(len(mock.call_args_list), 1)
+        mock.reset_mock()
+
+        # 429 should be retried
+        @retry(tries=3, delay=0, jitter=0, exceptions=requests_exceptions())
+        def call_mock3() -> None:
+            mock()
+            res = requests.Response()
+            res.status_code = 429
+            res.raise_for_status()
+
+        with self.assertRaises(requests.HTTPError):
+            call_mock3()
+
+        self.assertEqual(len(mock.call_args_list), 3)
+
+    def test_httpx_requests(self) -> None:
+        mock = Mock()
+
+        @retry(tries=3, delay=0, jitter=0, exceptions=httpx_exceptions())
+        def call_mock() -> None:
+            mock()
+            httpx.get("http://localhost:1234/nope")
+
+        with self.assertRaises(httpx.ConnectError):
+            call_mock()
+
+        self.assertEqual(len(mock.call_args_list), 3)
+        mock.reset_mock()
+
+        # 404 should not be retried
+        @retry(tries=3, delay=0, jitter=0, exceptions=httpx_exceptions())
+        def call_mock2() -> None:
+            mock()
+            res = httpx.Response(404, request=httpx.Request("GET", "http://localhost/"))
+            res.raise_for_status()
+
+        with self.assertRaises(httpx.HTTPError):
+            call_mock2()
+
+        self.assertEqual(len(mock.call_args_list), 1)
+        mock.reset_mock()
+
+        # 429 should be retried
+        @retry(tries=3, delay=0, jitter=0, exceptions=httpx_exceptions())
+        def call_mock3() -> None:
+            mock()
+            res = httpx.Response(429, request=httpx.Request("GET", "http://localhost/"))
+            res.raise_for_status()
+
+        with self.assertRaises(httpx.HTTPError):
+            call_mock3()
+
+        self.assertEqual(len(mock.call_args_list), 3)

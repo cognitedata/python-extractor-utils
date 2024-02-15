@@ -287,7 +287,7 @@ class IntegrationTests(unittest.TestCase):
         assert retrieved[2].name == "new name"
 
     def test_file_upload_queue(self):
-        queue = FileUploadQueue(cdf_client=self.client, overwrite_existing=True)
+        queue = FileUploadQueue(cdf_client=self.client, overwrite_existing=True, max_queue_size=2)
 
         current_dir = pathlib.Path(__file__).parent.resolve()
 
@@ -310,7 +310,7 @@ class IntegrationTests(unittest.TestCase):
         assert file2 == b"other test content\n"
 
     def test_bytes_upload_queue(self):
-        queue = BytesUploadQueue(cdf_client=self.client, overwrite_existing=True)
+        queue = BytesUploadQueue(cdf_client=self.client, overwrite_existing=True, max_queue_size=1)
 
         queue.add_to_upload_queue(
             content=b"bytes content",

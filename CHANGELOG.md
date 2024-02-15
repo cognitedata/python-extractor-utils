@@ -12,6 +12,52 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## Next
+
+### Changed
+
+ * The file upload queues have changed behaviour.
+     - Instead of waiting to upload until a set of conditions, it starts uploading immedeately.
+     - The `upload()` method now acts more like a `join`, wating on all the uploads in the queue to complete before returning.
+     - A call to `add_to_upload_queue` when the queue is full will hang until the queue is no longer full before returning, instead of triggering and upload and hanging until everything is uploaded.
+     - The queues now require to be set up with a max size. The max upload latencey is removed.
+   As long as you use the queue in as a context (ie, using `with FileUploadQueue(...) as queue:`) you should not have to change anything in your code. The behaviour of the queue will change, it will most likely be much faster, but it will not require any changes from you as a user of the queue.
+
+## [6.4.1]
+
+### Changed
+
+ * File upload queues now reuse a single thread pool across runs instead of creating a new one each time `upload()` is called.
+
+## [6.4.0]
+
+### Added
+
+ * Option to specify retry exceptions as a dictionary instead of a tuple. Values should be a callable determining whether a specific exception object should be retied or not. Example:
+   ``` python
+   @retry(
+       exceptions = {ValueError: lambda x: "Invalid" not in str(x)}
+   )
+   def func() -> None:
+       value = some_function()
+
+       if value is None:
+           raise ValueError("Could not retrieve value")
+
+       if not_valid(value):
+           raise ValueError(f"Invalid value: {value}")
+   ```
+
+  * Templates for common retry scenarios. For example, if you're using the `requests` library, you can do
+
+    ``` python
+    retry(exceptions = request_exceptions())
+    ```
+
+### Changed
+
+ * Default parameters in `retry` has changed to be less agressive. Retries will apply backoff by default, and give up after 10 retries.
+
 ## [6.3.2]
 
 ### Added
