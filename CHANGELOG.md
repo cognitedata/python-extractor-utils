@@ -27,11 +27,20 @@ Changes are grouped as follows
    though `CancellationToken` does not have a `clear` method. The compatibility layer is deprecated.
      - Replace calls to `is_set` with the property `is_cancelled`.
      - Replace calls to `set` with the property `cancel`.
-     - `set_event_on_interrupt` is removed entirely, use `CancellationToken.cancel_on_interrupt` instead.
      - All methods which took `threading.Event` now take `CancellationToken`.
    You can use `create_child_token` to create a token that can be canceled without affecting its parent token,
    this is useful for creating stoppable sub-modules that are stopped if a parent module is stopped.
    Notably, calling `stop` on an upload queue no longer stops the parent extractor, this was never intended behavior.
+
+### Removed
+
+ * The deprecated `middleware` module has been removed.
+ * `set_event_on_interrupt` has been replaced with `CancellationToken.cancel_on_interrupt`.
+
+### Added
+
+ * You can now use `Path` as a type in your config files.
+ * `CancellationToken` as a better abstraction for cancellation than `threading.Event`.
 
 ## [6.4.1]
 
