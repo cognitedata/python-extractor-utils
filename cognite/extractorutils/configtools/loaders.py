@@ -20,6 +20,7 @@ import re
 import sys
 from enum import Enum
 from hashlib import sha256
+from pathlib import Path
 from typing import Any, Callable, Dict, Generic, Iterable, Optional, TextIO, Type, TypeVar, Union
 
 import dacite
@@ -188,7 +189,9 @@ def _load_yaml(
 
     try:
         config = dacite.from_dict(
-            data=config_dict, data_class=config_type, config=dacite.Config(strict=True, cast=[Enum, TimeIntervalConfig])
+            data=config_dict,
+            data_class=config_type,
+            config=dacite.Config(strict=True, cast=[Enum, TimeIntervalConfig, Path]),
         )
     except dacite.UnexpectedDataError as e:
         unknowns = [f'"{k.replace("_", "-") if case_style == "hyphen" else k}"' for k in e.keys]
