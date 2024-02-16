@@ -9,18 +9,14 @@ class CancellationToken:
     Abstraction for a hierarchical cancellation token.
 
     Using this you can create hierarchies of cancellation tokens, to cancel a part of the extractor
-    without cancelling the whole process. Use `create_child_token` to create a token that will be
+    without cancelling the whole process. Use ``create_child_token`` to create a token that will be
     cancelled if the parent is cancelled, but can be canceled alone without affecting the parent token.
     """
 
-    _parent: Optional["CancellationToken"]
-    _cv: Condition
-    _is_cancelled_int: bool
-
     def __init__(self, condition: Optional[Condition] = None) -> None:
-        self._cv = condition or Condition()
-        self._is_cancelled_int = False
-        self._parent = None
+        self._cv: Condition = condition or Condition()
+        self._is_cancelled_int: bool = False
+        self._parent: Optional["CancellationToken"] = None
 
     def __repr__(self) -> str:
         cls = self.__class__
@@ -30,15 +26,15 @@ class CancellationToken:
     @property
     def is_cancelled(self) -> bool:
         """
-        `True` if the token has been cancelled, or if some parent token has been cancelled.
+        ``True`` if the token has been cancelled, or if some parent token has been cancelled.
         """
         return self._is_cancelled_int or self._parent is not None and self._parent.is_cancelled
 
     def is_set(self) -> bool:
         """
-        Deprecated, use `is_cancelled` instead.
+        Deprecated, use ``is_cancelled`` instead.
 
-        `True` if the token has been cancelled, or if some parent token has been cancelled.
+        ``True`` if the token has been cancelled, or if some parent token has been cancelled.
         """
         return self.is_cancelled
 
@@ -56,7 +52,7 @@ class CancellationToken:
 
     def set(self) -> None:
         """
-        Deprecated, use `cancel` instead. This will be removed in the next major release.
+        Deprecated, use ``cancel`` instead. This will be removed in the next major release.
 
         Cancel the token, notifying any waiting threads.
         """
