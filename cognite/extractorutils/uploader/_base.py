@@ -22,6 +22,7 @@ from arrow import Arrow
 
 from cognite.client import CogniteClient
 from cognite.extractorutils._inner_util import _resolve_log_level
+from cognite.extractorutils.threading import CancellationToken
 
 
 class AbstractUploadQueue(ABC):
@@ -47,7 +48,7 @@ class AbstractUploadQueue(ABC):
         max_upload_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
-        cancellation_token: threading.Event = threading.Event(),
+        cancellation_token: Optional[CancellationToken] = None,
     ):
         self.cdf_client = cdf_client
 
@@ -59,7 +60,9 @@ class AbstractUploadQueue(ABC):
 
         self.thread = threading.Thread(target=self._run, daemon=True, name=thread_name)
         self.lock = threading.RLock()
-        self.cancellation_token: threading.Event = cancellation_token
+        self.cancellation_token: CancellationToken = (
+            cancellation_token.create_child_token() if cancellation_token else CancellationToken()
+        )
 
         self.max_upload_interval = max_upload_interval
 
@@ -117,7 +120,6 @@ class AbstractUploadQueue(ABC):
         seconds.
         """
         if self.max_upload_interval is not None:
-            self.cancellation_token.clear()
             self.thread.start()
 
     def stop(self, ensure_upload: bool = True) -> None:
@@ -128,7 +130,7 @@ class AbstractUploadQueue(ABC):
             ensure_upload (bool): (Optional). Call upload one last time after shutting down thread to ensure empty
                 upload queue.
         """
-        self.cancellation_token.set()
+        self.cancellation_token.cancel()
         if ensure_upload:
             self.upload()
 

@@ -34,7 +34,7 @@ class _DecimalEncoder(json.JSONEncoder):
 
 class _DecimalDecoder(json.JSONDecoder):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
-        json.JSONDecoder.__init__(self, object_hook=self.object_hook, *args, **kwargs)
+        json.JSONDecoder.__init__(self, *args, object_hook=self.object_hook, **kwargs)
 
     def object_hook(self, obj_dict: Dict[str, str]) -> Union[Dict[str, str], Decimal]:
         if obj_dict.get("type") == "decimal_encoded":

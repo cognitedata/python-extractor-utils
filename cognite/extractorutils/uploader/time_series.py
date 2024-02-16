@@ -13,7 +13,6 @@
 #  limitations under the License.
 
 import math
-import threading
 from datetime import datetime
 from types import TracebackType
 from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
@@ -26,6 +25,7 @@ from cognite.client.data_classes import (
     TimeSeries,
 )
 from cognite.client.exceptions import CogniteDuplicatedError, CogniteNotFoundError
+from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.uploader._base import (
     RETRIES,
     RETRY_BACKOFF_FACTOR,
@@ -106,7 +106,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         thread_name: Optional[str] = None,
         create_missing: Union[Callable[[str, DataPointList], TimeSeries], bool] = False,
         data_set_id: Optional[int] = None,
-        cancellation_token: threading.Event = threading.Event(),
+        cancellation_token: Optional[CancellationToken] = None,
     ):
         # Super sets post_upload and threshold
         super().__init__(
@@ -167,7 +167,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
             return True
 
     def add_to_upload_queue(
-        self, *, id: Optional[int] = None, external_id: Optional[str] = None, datapoints: DataPointList = []
+        self, *, id: Optional[int] = None, external_id: Optional[str] = None, datapoints: Optional[DataPointList] = None
     ) -> None:
         """
         Add data points to upload queue. The queue will be uploaded if the queue size is larger than the threshold
@@ -178,6 +178,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
             external_id: External ID of time series. Either this or external_id must be set.
             datapoints: List of data points to add
         """
+        datapoints = datapoints or []
         old_len = len(datapoints)
         datapoints = list(filter(self._is_datapoint_valid, datapoints))
 
@@ -288,7 +289,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
                 ]
             )
 
-            for either_id, datapoints in self.upload_queue.items():
+            for _either_id, datapoints in self.upload_queue.items():
                 self.points_written.inc(len(datapoints))
 
             try:
@@ -344,7 +345,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
         create_missing: bool = False,
-        cancellation_token: threading.Event = threading.Event(),
+        cancellation_token: Optional[CancellationToken] = None,
     ):
         """
         Args:

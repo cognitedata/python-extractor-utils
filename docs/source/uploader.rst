@@ -51,8 +51,8 @@ function. This function is called from the ``__main__.py`` file, and is provided
    of extraction state between runs to avoid duplicate work
 *  ``config`` is the config file the user have provided, which has been loaded and stored as an instance of the Config
    class we made in the :ref:`Read CSV files` chapter.
-*  ``stop_event`` is an instance of the `Event class <https://docs.python.org/3/library/threading.html#threading.Event>`_
-   from the Python standard library. It will be set whenever the extractor is asked to stop (for example by a user
+*  ``stop_event`` is an instance of the `CancellationToken class`_
+   It will be set whenever the extractor is asked to stop (for example by a user
    sending an interrupt signal), or you can set it yourself when a stopping condition is met. In our case, we will check
    the status of this stop event in our main loop before submitting a file for extraction. This way, when a user e.g.
    hits CTRL+C to stop the extractor, it will finish what it was doing, upload the final data to CDF, and then stop

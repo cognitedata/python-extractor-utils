@@ -17,10 +17,11 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from io import BytesIO
 from os import PathLike
 from types import TracebackType
-from typing import BinaryIO, Callable, List, Optional, Type, Union
+from typing import Any, BinaryIO, Callable, Dict, List, Optional, Tuple, Type, Union
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import FileMetadata
+from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.uploader._base import (
     RETRIES,
     RETRY_BACKOFF_FACTOR,
@@ -67,7 +68,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
         overwrite_existing: bool = False,
-        cancellation_token: threading.Event = threading.Event(),
+        cancellation_token: Optional[CancellationToken] = None,
         max_parallelism: int = 0,
     ):
         # Super sets post_upload and threshold
@@ -111,7 +112,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
             _QUEUES += 1
 
     def _remove_done_from_queue(self) -> None:
-        while not self.cancellation_token.is_set():
+        while not self.cancellation_token.is_cancelled:
             with self.lock:
                 self.upload_queue = list(filter(lambda f: f.running(), self.upload_queue))
 
@@ -121,7 +122,9 @@ class IOFileUploadQueue(AbstractUploadQueue):
         self,
         file_meta: FileMetadata,
         read_file: Callable[[], BinaryIO],
-        extra_retries: Optional[List[Type[Exception]]] = None,
+        extra_retries: Optional[
+            Union[Tuple[Type[Exception], ...], Dict[Type[Exception], Callable[[Any], bool]]]
+        ] = None,
     ) -> None:
         """
         Add file to upload queue. The file will start uploading immedeately. If the size of the queue is larger than
@@ -134,7 +137,10 @@ class IOFileUploadQueue(AbstractUploadQueue):
             extra_retries: Exception types that might be raised by ``read_file`` that should be retried
         """
         retries = cognite_exceptions()
-        retries.update({exc: lambda _e: True for exc in extra_retries or []})
+        if isinstance(extra_retries, tuple):
+            retries.update({exc: lambda _e: True for exc in extra_retries or []})
+        elif isinstance(extra_retries, dict):
+            retries.update(extra_retries)
 
         @retry(
             exceptions=retries,
@@ -186,7 +192,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
 
         if self.upload_queue_size >= self.threshold:
             with self._full_queue:
-                while not self._full_queue.wait(timeout=2) and not self.cancellation_token.is_set():
+                while not self._full_queue.wait(timeout=2) and not self.cancellation_token.is_cancelled:
                     pass
 
         with self.lock:
@@ -265,7 +271,7 @@ class FileUploadQueue(IOFileUploadQueue):
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
         overwrite_existing: bool = False,
-        cancellation_token: threading.Event = threading.Event(),
+        cancellation_token: Optional[CancellationToken] = None,
     ):
         # Super sets post_upload and threshold
         super().__init__(
@@ -317,7 +323,7 @@ class BytesUploadQueue(IOFileUploadQueue):
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
         overwrite_existing: bool = False,
-        cancellation_token: threading.Event = threading.Event(),
+        cancellation_token: Optional[CancellationToken] = None,
     ) -> None:
         super().__init__(
             cdf_client,
