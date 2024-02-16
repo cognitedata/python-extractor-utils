@@ -23,13 +23,24 @@ Changes are grouped as follows
      - The queues now require to be set up with a max size. The max upload latencey is removed.
    As long as you use the queue in as a context (ie, using `with FileUploadQueue(...) as queue:`) you should not have to change anything in your code. The behaviour of the queue will change, it will most likely be much faster, but it will not require any changes from you as a user of the queue.
 
+ * `threading.Event` has been replaced globally with `CancellationToken`. The interfaces are mostly compatible,
+   though `CancellationToken` does not have a `clear` method. The compatibility layer is deprecated.
+     - Replace calls to `is_set` with the property `is_cancelled`.
+     - Replace calls to `set` with the property `cancel`.
+     - All methods which took `threading.Event` now take `CancellationToken`.
+   You can use `create_child_token` to create a token that can be canceled without affecting its parent token,
+   this is useful for creating stoppable sub-modules that are stopped if a parent module is stopped.
+   Notably, calling `stop` on an upload queue no longer stops the parent extractor, this was never intended behavior.
+
 ### Removed
 
  * The deprecated `middleware` module has been removed.
+ * `set_event_on_interrupt` has been replaced with `CancellationToken.cancel_on_interrupt`.
 
 ### Added
 
- * You can now use `Path` as a type in your config files
+ * You can now use `Path` as a type in your config files.
+ * `CancellationToken` as a better abstraction for cancellation than `threading.Event`.
 
 ## [6.4.1]
 

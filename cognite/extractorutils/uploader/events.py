@@ -12,13 +12,13 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-import threading
 from types import TracebackType
 from typing import Callable, List, Optional, Type
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Event
 from cognite.client.exceptions import CogniteAPIError, CogniteDuplicatedError
+from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.uploader._base import (
     RETRIES,
     RETRY_BACKOFF_FACTOR,
@@ -57,7 +57,7 @@ class EventUploadQueue(AbstractUploadQueue):
         max_upload_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
-        cancellation_token: threading.Event = threading.Event(),
+        cancellation_token: Optional[CancellationToken] = None,
     ):
         # Super sets post_upload and threshold
         super().__init__(

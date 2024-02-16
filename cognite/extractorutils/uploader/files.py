@@ -24,6 +24,7 @@ from requests import ConnectionError
 from cognite.client import CogniteClient
 from cognite.client.data_classes import FileMetadata
 from cognite.client.exceptions import CogniteAPIError
+from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.uploader._base import (
     RETRIES,
     RETRY_BACKOFF_FACTOR,
@@ -70,7 +71,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
         overwrite_existing: bool = False,
-        cancellation_token: threading.Event = threading.Event(),
+        cancellation_token: Optional[CancellationToken] = None,
         max_parallelism: int = 0,
     ):
         # Super sets post_upload and threshold
@@ -114,7 +115,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
             _QUEUES += 1
 
     def _remove_done_from_queue(self) -> None:
-        while not self.cancellation_token.is_set():
+        while not self.cancellation_token.is_cancelled:
             with self.lock:
                 self.upload_queue = list(filter(lambda f: f.running(), self.upload_queue))
 
@@ -132,7 +133,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
         """
         if self.upload_queue_size >= self.threshold:
             with self._full_queue:
-                while not self._full_queue.wait(timeout=2) and not self.cancellation_token.is_set():
+                while not self._full_queue.wait(timeout=2) and not self.cancellation_token.is_cancelled:
                     pass
 
         with self.lock:
@@ -258,7 +259,7 @@ class FileUploadQueue(IOFileUploadQueue):
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
         overwrite_existing: bool = False,
-        cancellation_token: threading.Event = threading.Event(),
+        cancellation_token: Optional[CancellationToken] = None,
     ):
         # Super sets post_upload and threshold
         super().__init__(
@@ -310,7 +311,7 @@ class BytesUploadQueue(IOFileUploadQueue):
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
         overwrite_existing: bool = False,
-        cancellation_token: threading.Event = threading.Event(),
+        cancellation_token: Optional[CancellationToken] = None,
     ) -> None:
         super().__init__(
             cdf_client,

@@ -12,12 +12,12 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from threading import Event
 from typing import Any, Callable, List, Optional, Type
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes.assets import Asset
 from cognite.client.exceptions import CogniteAPIError, CogniteDuplicatedError
+from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.uploader._base import (
     RETRIES,
     RETRY_BACKOFF_FACTOR,
@@ -57,7 +57,7 @@ class AssetUploadQueue(AbstractUploadQueue):
         max_upload_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
-        cancellation_token: Event = Event(),
+        cancellation_token: Optional[CancellationToken] = None,
     ):
         super().__init__(
             cdf_client,
