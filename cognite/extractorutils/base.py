@@ -17,7 +17,7 @@ import os
 import sys
 from dataclasses import is_dataclass
 from enum import Enum
-from threading import Event, Thread
+from threading import Thread
 from types import TracebackType
 from typing import Any, Callable, Dict, Generic, Optional, Type, TypeVar
 
@@ -29,7 +29,7 @@ from cognite.extractorutils.configtools import BaseConfig, ConfigResolver, State
 from cognite.extractorutils.exceptions import InvalidConfigError
 from cognite.extractorutils.metrics import BaseMetrics
 from cognite.extractorutils.statestore import AbstractStateStore, LocalStateStore, NoStateStore
-from cognite.extractorutils.util import set_event_on_interrupt
+from cognite.extractorutils.threading import CancellationToken
 
 
 class ReloadConfigAction(Enum):
@@ -77,11 +77,13 @@ class Extractor(Generic[CustomConfigClass]):
         name: str,
         description: str,
         version: Optional[str] = None,
-        run_handle: Optional[Callable[[CogniteClient, AbstractStateStore, CustomConfigClass, Event], None]] = None,
+        run_handle: Optional[
+            Callable[[CogniteClient, AbstractStateStore, CustomConfigClass, CancellationToken], None]
+        ] = None,
         config_class: Type[CustomConfigClass],
         metrics: Optional[BaseMetrics] = None,
         use_default_state_store: bool = True,
-        cancellation_token: Event = Event(),
+        cancellation_token: Optional[CancellationToken] = None,
         config_file_path: Optional[str] = None,
         continuous_extractor: bool = False,
         heartbeat_waiting_time: int = 600,
@@ -95,7 +97,7 @@ class Extractor(Generic[CustomConfigClass]):
         self.config_class = config_class
         self.use_default_state_store = use_default_state_store
         self.version = version or "unknown"
-        self.cancellation_token = cancellation_token
+        self.cancellation_token = cancellation_token.create_child_token() if cancellation_token else CancellationToken()
         self.config_file_path = config_file_path
         self.continuous_extractor = continuous_extractor
         self.heartbeat_waiting_time = heartbeat_waiting_time
@@ -136,7 +138,7 @@ class Extractor(Generic[CustomConfigClass]):
         Extractor._config_singleton = self.config  # type: ignore
 
         def config_refresher() -> None:
-            while not self.cancellation_token.is_set():
+            while not self.cancellation_token.is_cancelled:
                 self.cancellation_token.wait(self.reload_config_interval)
                 if self.config_resolver.has_changed:
                     self._reload_config()
@@ -158,7 +160,7 @@ class Extractor(Generic[CustomConfigClass]):
 
         elif self.reload_config_action == ReloadConfigAction.SHUTDOWN:
             self.logger.info("Shutting down, expecting to be restarted")
-            self.cancellation_token.set()
+            self.cancellation_token.cancel()
 
         elif self.reload_config_action == ReloadConfigAction.CALLBACK:
             self.logger.info("Loading in new config file")
@@ -265,7 +267,7 @@ class Extractor(Generic[CustomConfigClass]):
         self.logger.info(f"Loaded {'remote' if self.config_resolver.is_remote else 'local'} config file")
 
         if self.handle_interrupts:
-            set_event_on_interrupt(self.cancellation_token)
+            self.cancellation_token.cancel_on_interrupt()
 
         self.cognite_client = self.config.cognite.get_cognite_client(self.name)
         self._load_state_store()
@@ -279,10 +281,10 @@ class Extractor(Generic[CustomConfigClass]):
             pass
 
         def heartbeat_loop() -> None:
-            while not self.cancellation_token.is_set():
+            while not self.cancellation_token.is_cancelled:
                 self.cancellation_token.wait(self.heartbeat_waiting_time)
 
-                if not self.cancellation_token.is_set():
+                if not self.cancellation_token.is_cancelled:
                     self.logger.info("Reporting new heartbeat")
                     try:
                         self.cognite_client.extraction_pipelines.runs.create(
@@ -329,7 +331,7 @@ class Extractor(Generic[CustomConfigClass]):
         Returns:
             True if the extractor shut down cleanly, False if the extractor was shut down due to an unhandled error
         """
-        self.cancellation_token.set()
+        self.cancellation_token.cancel()
 
         if self.state_store:
             self.state_store.synchronize()

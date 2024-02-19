@@ -12,6 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import threading
 import unittest
 from unittest.mock import Mock, patch
 
@@ -21,6 +22,7 @@ import requests
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset, TimeSeries
 from cognite.client.exceptions import CogniteNotFoundError
+from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.util import (
     EitherId,
     ensure_assets,
@@ -144,6 +146,67 @@ class TestEitherId(unittest.TestCase):
 
     def test_repr(self):
         self.assertEqual(EitherId(externalId="extId").__repr__(), "externalId: extId")
+
+
+class TestCancellationToken(unittest.TestCase):
+    def test_cancel(self):
+        token = CancellationToken()
+        self.assertFalse(token.is_cancelled)
+        token.cancel()
+        self.assertTrue(token.is_cancelled)
+        token.cancel()  # Does nothing
+        self.assertTrue(token.is_cancelled)
+        self.assertTrue(token.wait(1))  # Returns immediately.
+
+    def test_wait(self):
+        token = CancellationToken()
+
+        def wait():
+            token.wait()
+
+        t1 = threading.Thread(target=wait)
+        t2 = threading.Thread(target=wait)
+        t1.start()
+        t2.start()
+        # Wait a bit
+        token.wait(0.5)
+        self.assertTrue(t1.is_alive())
+        self.assertTrue(t2.is_alive())
+
+        token.cancel()
+        t1.join(1)
+        t2.join(1)
+        self.assertFalse(t1.is_alive())
+        self.assertFalse(t2.is_alive())
+
+    def test_child_token(self):
+        token = CancellationToken()
+        child_a = token.create_child_token()
+        child_b = token.create_child_token()
+
+        def wait_a():
+            child_a.wait()
+
+        def wait_b():
+            child_b.wait()
+
+        t1 = threading.Thread(target=wait_a)
+        t2 = threading.Thread(target=wait_b)
+        t1.start()
+        t2.start()
+
+        token.wait(0.5)
+        self.assertTrue(t1.is_alive())
+        self.assertTrue(t2.is_alive())
+
+        child_b.cancel()
+        t2.join(1)
+        self.assertFalse(t2.is_alive())
+        self.assertTrue(t1.is_alive())
+
+        token.cancel()
+        t1.join(1)
+        self.assertFalse(t1.is_alive())
 
 
 class TestRetries(unittest.TestCase):

@@ -96,6 +96,7 @@ from requests.exceptions import ConnectionError
 
 from cognite.client import CogniteClient
 from cognite.client.exceptions import CogniteAPIError, CogniteException
+from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.uploader import DataPointList
 
 from ._inner_util import _DecimalDecoder, _DecimalEncoder, _resolve_log_level
@@ -124,7 +125,7 @@ class AbstractStateStore(ABC):
         save_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
-        cancellation_token: threading.Event = threading.Event(),
+        cancellation_token: Optional[CancellationToken] = None,
     ):
         self._initialized = False
         self._local_state: Dict[str, Dict[str, Any]] = {}
@@ -135,7 +136,7 @@ class AbstractStateStore(ABC):
 
         self.thread = threading.Thread(target=self._run, daemon=True, name=thread_name)
         self.lock = threading.RLock()
-        self.cancellation_token: threading.Event = cancellation_token
+        self.cancellation_token = cancellation_token.create_child_token() if cancellation_token else CancellationToken()
 
         self._deleted: List[str] = []
 
@@ -145,7 +146,6 @@ class AbstractStateStore(ABC):
         This calls the synchronize method every save_interval seconds.
         """
         if self.save_interval is not None:
-            self.cancellation_token.clear()
             self.thread.start()
 
     def stop(self, ensure_synchronize: bool = True) -> None:
@@ -155,7 +155,7 @@ class AbstractStateStore(ABC):
         Args:
             ensure_synchronize (bool): (Optional). Call synchronize one last time after shutting down thread.
         """
-        self.cancellation_token.set()
+        self.cancellation_token.cancel()
         if ensure_synchronize:
             self.synchronize()
 
@@ -337,7 +337,7 @@ class RawStateStore(AbstractStateStore):
         save_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
-        cancellation_token: threading.Event = threading.Event(),
+        cancellation_token: Optional[CancellationToken] = None,
     ):
         super().__init__(save_interval, trigger_log_level, thread_name, cancellation_token)
 
@@ -465,7 +465,7 @@ class LocalStateStore(AbstractStateStore):
         save_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
-        cancellation_token: threading.Event = threading.Event(),
+        cancellation_token: Optional[CancellationToken] = None,
     ):
         super().__init__(save_interval, trigger_log_level, thread_name, cancellation_token)
 
