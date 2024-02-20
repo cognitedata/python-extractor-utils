@@ -12,7 +12,7 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
-## Next
+## 7.0.0
 
 ### Changed
 
@@ -26,7 +26,7 @@ Changes are grouped as follows
  * `threading.Event` has been replaced globally with `CancellationToken`. The interfaces are mostly compatible,
    though `CancellationToken` does not have a `clear` method. The compatibility layer is deprecated.
      - Replace calls to `is_set` with the property `is_cancelled`.
-     - Replace calls to `set` with the property `cancel`.
+     - Replace calls to `set` with the method `cancel`.
      - All methods which took `threading.Event` now take `CancellationToken`.
    You can use `create_child_token` to create a token that can be canceled without affecting its parent token,
    this is useful for creating stoppable sub-modules that are stopped if a parent module is stopped.
@@ -41,6 +41,10 @@ Changes are grouped as follows
 
  * You can now use `Path` as a type in your config files.
  * `CancellationToken` as a better abstraction for cancellation than `threading.Event`.
+
+### Migration guide
+
+To migrate from version `6.*` to `7`, you need to update how you interract with cancellation tokens. The type has now changed from `Event` to `CancellationToken`, so make sure to update all of your type hints etc. There is a compatability layer for the `CancellationToken` class, so that it has the same methods as an `Event` (except for `clear()`) which means it should act as a drop-in replacement for now. This compatability layer is deprected, and will be removed in version `8`.
 
 ## [6.4.1]
 
