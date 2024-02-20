@@ -1,6 +1,7 @@
 import logging
 import signal
-from threading import Condition
+from threading import Condition, Event
+from time import time
 from typing import Any, Optional
 
 
@@ -59,11 +60,21 @@ class CancellationToken:
         self.cancel()
 
     def wait(self, timeout: Optional[float] = None) -> bool:
+        endtime = None
+        if timeout is not None:
+            endtime = time() + timeout
+
         while not self.is_cancelled:
             with self._cv:
-                did_not_time_out = self._cv.wait(timeout)
-                if not did_not_time_out:
-                    return False
+                if endtime is not None:
+                    remaining_time = endtime - time()
+                    if remaining_time <= 0.0:
+                        return True
+                    timed_out = not self._cv.wait(remaining_time)
+                    if timed_out:
+                        return False
+                else:
+                    self._cv.wait()
         return True
 
     def create_child_token(self) -> "CancellationToken":
