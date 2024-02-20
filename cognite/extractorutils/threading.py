@@ -1,6 +1,6 @@
 import logging
 import signal
-from threading import Condition, Event
+from threading import Condition
 from time import time
 from typing import Any, Optional
 

@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.0.1
+
+### Fixed
+
+ * Ensure that `CancellationToken.wait(timeout)` only waits for at most `timeout`, even if it is notified in that time.
+
 ## 7.0.0
 
 ### Changed
