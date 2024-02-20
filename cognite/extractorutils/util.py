@@ -27,7 +27,7 @@ from decorator import decorator
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset, ExtractionPipelineRun, TimeSeries
-from cognite.client.exceptions import CogniteNotFoundError
+from cognite.client.exceptions import CogniteAPIError, CogniteException, CogniteNotFoundError
 from cognite.extractorutils.threading import CancellationToken
 
 
@@ -471,3 +471,28 @@ def httpx_exceptions(
             return True
 
     return {HTTPError: handle_http_errors}
+
+
+def cognite_exceptions(
+    status_codes: Optional[List[int]] = None,
+) -> Dict[Type[Exception], Callable[[Any], bool]]:
+    """
+    Retry exceptions from using the Cognite SDK. This will retry all connection and HTTP errors matching
+    the given status codes.
+
+    Example:
+
+    .. code-block:: python
+
+        @retry(exceptions = cognite_exceptions())
+        def my_function() -> None:
+            ...
+    """
+    status_codes = status_codes or [408, 425, 429, 500, 502, 503, 504]
+
+    def handle_cognite_errors(exception: CogniteException) -> bool:
+        if isinstance(exception, CogniteAPIError):
+            return exception.code in status_codes
+        return True
+
+    return {CogniteException: handle_cognite_errors}
