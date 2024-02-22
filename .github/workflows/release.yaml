@@ -7,6 +7,7 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    environment: CD
 
     steps:
     - uses: actions/checkout@v4
