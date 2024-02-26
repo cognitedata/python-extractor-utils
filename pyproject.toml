@@ -81,7 +81,7 @@ pytest-order = "^1.0.1"
 parameterized = "*"
 requests = "^2.31.0"
 types-requests = "^2.31.0.20240125"
-httpx = "^0.26.0"
+httpx = "^0.27.0"
 
 [build-system]
 requires = ["poetry-core>=1.0.0"]
