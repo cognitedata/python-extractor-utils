@@ -60,6 +60,7 @@ class IntegrationTests(unittest.TestCase):
 
     file1: str = f"util_integration_file_test_1-{test_id}"
     file2: str = f"util_integration_file_test_2-{test_id}"
+    empty_file: str = f"util_integration_file_test_3-{test_id}"
 
     def setUp(self):
         os.environ["COGNITE_FUNCTION_RUNTIME"] = self.functions_runtime
@@ -300,14 +301,21 @@ class IntegrationTests(unittest.TestCase):
             file_meta=FileMetadata(external_id=self.file2, name=self.file2),
             file_name=current_dir.joinpath("test_file_2.txt"),
         )
+        # Upload the Filemetadata of an empty file without trying to upload the "content"
+        queue.add_to_upload_queue(
+            file_meta=FileMetadata(external_id=self.empty_file, name=self.empty_file),
+            file_name=current_dir.joinpath("empty_file.txt"),
+        )
 
         queue.upload()
 
         file1 = self.client.files.download_bytes(external_id=self.file1)
         file2 = self.client.files.download_bytes(external_id=self.file2)
+        file3 = self.client.files.retrieve(external_id=self.empty_file)
 
         assert file1 == b"test content\n"
         assert file2 == b"other test content\n"
+        assert file3.name == self.empty_file
 
     def test_bytes_upload_queue(self):
         queue = BytesUploadQueue(cdf_client=self.client, overwrite_existing=True, max_queue_size=1)
