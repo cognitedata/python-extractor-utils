@@ -7,11 +7,11 @@ The final step is to ship our extractor. Some times we can depend on a Python in
 our extractor in, in other cases out extractor needs to be fully self-contained. How we ship our extractor will differ
 slightly between those scenarios.
 
-When developing the extractor, running it is fairly easy:
+When developing the extractor, running it is fairly easy: [#]_
 
 .. code-block:: bash
 
-    poetry run <extractor_name>
+    poetry run <extractor_name> <config-file>
 
 Sometimes we could just send our project to the production environment like this, for example by cloning the git repo
 (which would also make updating to future versions very easy). However, when shipping the extractor to a production
@@ -68,6 +68,8 @@ executable you have to run ``cogex build`` from Windows, likewise for Linux or M
 
 The resulting executable will contain your extractor, all dependencies [#]_ and the Python runtime.
 
+.. [#] Replace ``<extractor_name>`` with the name of your specific extractor, and ``<config-file>`` with the (absolute or
+   relative) path to a config file.
 
 .. [#] Note that this could be in violation of some licenses, particularly GPL or it's derivatives. Make sure that the
    licenses of your dependencies allows this type of linking.

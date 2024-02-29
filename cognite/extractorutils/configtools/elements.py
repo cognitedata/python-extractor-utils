@@ -53,6 +53,10 @@ _logger = logging.getLogger(__name__)
 
 @dataclass
 class CertificateConfig:
+    """
+    Configuration parameters for certificates
+    """
+
     path: str
     password: Optional[str]
     authority_url: Optional[str] = None
@@ -94,6 +98,11 @@ class ConnectionConfig:
 
 @dataclass
 class EitherIdConfig:
+    """
+    Configuration parameter representing an ID in CDF, which can either be an external or internal ID.
+    An EitherId can only hold one ID type, not both.
+    """
+
     id: Optional[int]
     external_id: Optional[str]
 
@@ -103,6 +112,10 @@ class EitherIdConfig:
 
 
 class TimeIntervalConfig(yaml.YAMLObject):
+    """
+    Configuration parameter for setting a time interval
+    """
+
     def __init__(self, expression: str) -> None:
         self._interval, self._expression = TimeIntervalConfig._parse_expression(expression)
 
@@ -167,6 +180,10 @@ class TimeIntervalConfig(yaml.YAMLObject):
 
 
 class FileSizeConfig(yaml.YAMLObject):
+    """
+    Configuration parameter for setting a file size
+    """
+
     def __init__(self, expression: str) -> None:
         self._bytes, self._expression = FileSizeConfig._parse_expression(expression)
 
@@ -569,23 +586,39 @@ class BaseConfig(_BaseConfig):
 
 @dataclass
 class RawDestinationConfig:
+    """
+    Configuration parameters for using Raw
+    """
+
     database: str
     table: str
 
 
 @dataclass
 class RawStateStoreConfig(RawDestinationConfig):
+    """
+    Configuration of a state store based on CDF RAW
+    """
+
     upload_interval: TimeIntervalConfig = TimeIntervalConfig("30s")
 
 
 @dataclass
 class LocalStateStoreConfig:
+    """
+    Configuration of a state store using a local JSON file
+    """
+
     path: str
     save_interval: TimeIntervalConfig = TimeIntervalConfig("30s")
 
 
 @dataclass
 class StateStoreConfig:
+    """
+    Configuration of the State Store, containing ``LocalStateStoreConfig`` or ``RawStateStoreConfig``
+    """
+
     raw: Optional[RawStateStoreConfig] = None
     local: Optional[LocalStateStoreConfig] = None
 

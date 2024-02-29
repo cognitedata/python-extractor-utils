@@ -40,7 +40,7 @@ If we wanted to make our extractor even more generic, we could have made the ``d
 
 We now have a ``reader`` object. This is an iterator that will return each row in the CSV file as a dictionary where
 column names are keys and the row are values. We can now iterate over this reader and add all the rows to the upload
-queue using the :meth:`add_to_upload_queue <cognite.extractorutils.uploader.RawUploadQueue.add_to_upload_queue>` method.
+queue using the :meth:`add_to_upload_queue <cognite.extractorutils.uploader.raw.RawUploadQueue.add_to_upload_queue>` method.
 
 .. code-block:: python
 
