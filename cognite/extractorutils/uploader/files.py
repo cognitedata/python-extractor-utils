@@ -19,6 +19,8 @@ from os import PathLike
 from types import TracebackType
 from typing import Any, BinaryIO, Callable, Dict, List, Optional, Tuple, Type, Union
 
+from requests.utils import super_len
+
 from cognite.client import CogniteClient
 from cognite.client.data_classes import FileMetadata
 from cognite.extractorutils.threading import CancellationToken
@@ -154,23 +156,34 @@ class IOFileUploadQueue(AbstractUploadQueue):
             try:
                 # Upload file
                 with read_file() as file:
-                    file_meta = self.cdf_client.files.upload_bytes(
-                        file,
-                        file_meta.name if file_meta.name is not None else "",
-                        overwrite=self.overwrite_existing,
-                        external_id=file_meta.external_id,
-                        source=file_meta.source,
-                        mime_type=file_meta.mime_type,
-                        metadata=file_meta.metadata,
-                        directory=file_meta.directory,
-                        asset_ids=file_meta.asset_ids,
-                        data_set_id=file_meta.data_set_id,
-                        labels=file_meta.labels,
-                        geo_location=file_meta.geo_location,
-                        source_created_time=file_meta.source_created_time,
-                        source_modified_time=file_meta.source_modified_time,
-                        security_categories=file_meta.security_categories,
-                    )
+                    size = super_len(file)
+                    if size == 0:
+                        # upload just the file metadata witout data
+                        file_meta, _url = self.cdf_client.files.create(
+                            file_metadata=file_meta, overwrite=self.overwrite_existing
+                        )
+                    elif size > pow(5, 9):
+                        # File bigger than 5Gb
+                        self.logger.warning(f"File {file_meta.source} has more than 5Gb")
+                        file_meta = FileMetadata()
+                    else:
+                        file_meta = self.cdf_client.files.upload_bytes(
+                            file,
+                            file_meta.name if file_meta.name is not None else "",
+                            overwrite=self.overwrite_existing,
+                            external_id=file_meta.external_id,
+                            source=file_meta.source,
+                            mime_type=file_meta.mime_type,
+                            metadata=file_meta.metadata,
+                            directory=file_meta.directory,
+                            asset_ids=file_meta.asset_ids,
+                            data_set_id=file_meta.data_set_id,
+                            labels=file_meta.labels,
+                            geo_location=file_meta.geo_location,
+                            source_created_time=file_meta.source_created_time,
+                            source_modified_time=file_meta.source_modified_time,
+                            security_categories=file_meta.security_categories,
+                        )
 
                 if self.post_upload_function:
                     try:
