@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.0.2
+
+## Added
+
+  * Support for files without content.
+
 ## 7.0.1
 
 ### Fixed
