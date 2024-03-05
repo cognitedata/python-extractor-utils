@@ -12,9 +12,15 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.0.3
+
+### Fixed
+
+  * Fix file size upper limit.
+
 ## 7.0.2
 
-## Added
+### Added
 
   * Support for files without content.
 
