@@ -162,9 +162,9 @@ class IOFileUploadQueue(AbstractUploadQueue):
                         file_meta, _url = self.cdf_client.files.create(
                             file_metadata=file_meta, overwrite=self.overwrite_existing
                         )
-                    elif size > pow(5, 9):
+                    elif size > 5 * 1024 * 1024 * 1024:
                         # File bigger than 5Gb
-                        self.logger.warning(f"File {file_meta.source} has more than 5Gb")
+                        self.logger.warning(f"File {file_meta.source} is larger than 5GiB, file will not be uploaded")
                         file_meta = FileMetadata()
                     else:
                         file_meta = self.cdf_client.files.upload_bytes(
