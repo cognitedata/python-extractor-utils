@@ -13,8 +13,12 @@ Using an upload queue
 ---------------------
 
 We begin by looking at the upload queue. Since this extractor will write to CDF RAW, we will use the
-:meth:`RawUploadQueue <cognite.extractorutils.uploader.RawUploadQueue>`. Similar queues exists for time series data
-points, events, sequence rows and files.
+:meth:`RawUploadQueue <cognite.extractorutils.uploader.raw.RawUploadQueue>`. Similar queues exists for
+:meth:`time series data points <cognite.extractorutils.uploader.time_series.TimeSeriesUploadQueue>`,
+:meth:`events <cognite.extractorutils.uploader.events.EventUploadQueue>`,
+:meth:`assets <cognite.extractorutils.uploader.assets.AssetUploadQueue>`,
+:meth:`sequence rows <cognite.extractorutils.uploader.assets.SequenceUploadQueue>`
+and :meth:`files <cognite.extractorutils.uploader.files.FileUploadQueue>`.
 
 The reason for using an upload queue is to batch together data into larger requests to CDF. This will increase
 performance, some times quite dramatically since network latencies can often be a bottleneck for extractors. We can add
@@ -27,7 +31,7 @@ manager (with a ``with`` statement). The advantage is that we can then set one o
 happen (such as every *x* seconds or when the queue has *y* elements in it), and don't think about it again. If the
 queue is not empty when we exit the context, a final upload will be made to make sure no data is left behind.
 
-To create a :meth:`RawUploadQueue <cognite.extractorutils.uploader.RawUploadQueue>`, we write therefore start with
+To create a :meth:`RawUploadQueue <cognite.extractorutils.uploader.raw.RawUploadQueue>`, we write therefore start with
 
 .. code-block:: python
 
@@ -47,7 +51,7 @@ function. This function is called from the ``__main__.py`` file, and is provided
 
 *  ``cognite`` is an initiated ``CogniteClient`` that is set up to to use the CDF project that the user configured in
    their config file.
-*  ``states`` is a state store object, we will not cover these in this tutorial, but in short it allows us to keep track
+*  ``states`` is a :meth:`State Store <cognite.extractorutils.statestore>` object, we will not cover these in this tutorial, but in short it allows us to keep track
    of extraction state between runs to avoid duplicate work
 *  ``config`` is the config file the user have provided, which has been loaded and stored as an instance of the Config
    class we made in the :ref:`Read CSV files` chapter.
@@ -71,6 +75,9 @@ this:
                     break
 
                 extract_file(file, queue)
+
+This will call the ``start()`` and ``stop()`` methods from :meth:`AbstractUploadQueue <cognite.extractorutils.uploader._base.AbstractUploadQueue>`
+class automatically once all files are processed or the limit of the queue, defined by the ``max_queue_size`` keyword argument, is reached.
 
 
 Extraction pipeline runs
@@ -104,8 +111,16 @@ section of the config file, containing either an ``external-id`` or (internal) `
 .. code-block:: yaml
 
     cognite:
-      project: publicdata
-      api-key: ${COGNITE_API_KEY}
+        # Read these from environment variables
+        host: ${COGNITE_BASE_URL}
+        project: ${COGNITE_PROJECT}
 
-      extraction-pipeline:
-        external-id: abc123
+        idp-authentication:
+            token-url: ${COGNITE_TOKEN_URL}
+            client-id: ${COGNITE_CLIENT_ID}
+            secret: ${COGNITE_CLIENT_SECRET}
+            scopes:
+                - ${COGNITE_BASE_URL}/.default
+
+        extraction-pipeline:
+            external-id: abc123

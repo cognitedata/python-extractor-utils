@@ -12,47 +12,96 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
-## Next
+## 7.0.3
+
+### Fixed
+
+  * Fix file size upper limit.
+
+## 7.0.2
+
+### Added
+
+  * Support for files without content.
+
+## 7.0.1
+
+### Fixed
+
+ * Ensure that `CancellationToken.wait(timeout)` only waits for at most `timeout`, even if it is notified in that time.
+
+## 7.0.0
 
 ### Changed
 
  * The file upload queues have changed behaviour.
-     - Instead of waiting to upload until a set of conditions, it starts uploading immedeately.
-     - The `upload()` method now acts more like a `join`, wating on all the uploads in the queue to complete before returning.
-     - A call to `add_to_upload_queue` when the queue is full will hang until the queue is no longer full before returning, instead of triggering and upload and hanging until everything is uploaded.
-     - The queues now require to be set up with a max size. The max upload latencey is removed.
-   As long as you use the queue in as a context (ie, using `with FileUploadQueue(...) as queue:`) you should not have to change anything in your code. The behaviour of the queue will change, it will most likely be much faster, but it will not require any changes from you as a user of the queue.
+     - Instead of waiting to upload until a set of conditions, it starts
+       uploading immedeately.
+     - The `upload()` method now acts more like a `join`, wating on all the
+       uploads in the queue to complete before returning.
+     - A call to `add_to_upload_queue` when the queue is full will hang until
+       the queue is no longer full before returning, instead of triggering and
+       upload and hanging until everything is uploaded.
+     - The queues now require to be set up with a max size. The max upload
+       latencey is removed. As long as you use the queue in as a context (ie,
+       using `with FileUploadQueue(...) as queue:`) you should not have to
+       change anything in your code. The behaviour of the queue will change, it
+       will most likely be much faster, but it will not require any changes from
+       you as a user of the queue.
 
- * `threading.Event` has been replaced globally with `CancellationToken`. The interfaces are mostly compatible,
-   though `CancellationToken` does not have a `clear` method. The compatibility layer is deprecated.
+ * `threading.Event` has been replaced globally with `CancellationToken`. The
+   interfaces are mostly compatible, though `CancellationToken` does not have a
+   `clear` method. The compatibility layer is deprecated.
      - Replace calls to `is_set` with the property `is_cancelled`.
-     - Replace calls to `set` with the property `cancel`.
+     - Replace calls to `set` with the method `cancel`.
      - All methods which took `threading.Event` now take `CancellationToken`.
-   You can use `create_child_token` to create a token that can be canceled without affecting its parent token,
-   this is useful for creating stoppable sub-modules that are stopped if a parent module is stopped.
-   Notably, calling `stop` on an upload queue no longer stops the parent extractor, this was never intended behavior.
+       You can use `create_child_token` to create a token that can be canceled
+       without affecting its parent token, this is useful for creating stoppable
+       sub-modules that are stopped if a parent module is stopped. Notably,
+       calling `stop` on an upload queue no longer stops the parent extractor,
+       this was never intended behavior.
 
 ### Removed
 
  * The deprecated `middleware` module has been removed.
- * `set_event_on_interrupt` has been replaced with `CancellationToken.cancel_on_interrupt`.
+ * `set_event_on_interrupt` has been replaced with
+   `CancellationToken.cancel_on_interrupt`.
 
 ### Added
 
  * You can now use `Path` as a type in your config files.
- * `CancellationToken` as a better abstraction for cancellation than `threading.Event`.
+ * `CancellationToken` as a better abstraction for cancellation than
+   `threading.Event`.
+
+### Migration guide
+
+To migrate from version `6.*` to `7`, you need to update how you interract with
+cancellation tokens. The type has now changed from `Event` to
+`CancellationToken`, so make sure to update all of your type hints etc. There is
+a compatability layer for the `CancellationToken` class, so that it has the same
+methods as an `Event` (except for `clear()`) which means it should act as a
+drop-in replacement for now. This compatability layer is deprected, and will be
+removed in version `8`.
+
+If you are using file upload queues, read the entry in the _Changed_ section.
+You will most likely not need to change your code, but how the queue behaves has
+changed for this version.
 
 ## [6.4.1]
 
 ### Changed
 
- * File upload queues now reuse a single thread pool across runs instead of creating a new one each time `upload()` is called.
+ * File upload queues now reuse a single thread pool across runs instead of
+   creating a new one each time `upload()` is called.
 
 ## [6.4.0]
 
 ### Added
 
- * Option to specify retry exceptions as a dictionary instead of a tuple. Values should be a callable determining whether a specific exception object should be retied or not. Example:
+ * Option to specify retry exceptions as a dictionary instead of a tuple. Values
+   should be a callable determining whether a specific exception object should
+   be retied or not. Example:
+
    ``` python
    @retry(
        exceptions = {ValueError: lambda x: "Invalid" not in str(x)}
@@ -67,7 +116,8 @@ Changes are grouped as follows
            raise ValueError(f"Invalid value: {value}")
    ```
 
-  * Templates for common retry scenarios. For example, if you're using the `requests` library, you can do
+  * Templates for common retry scenarios. For example, if you're using the
+    `requests` library, you can do
 
     ``` python
     retry(exceptions = request_exceptions())
@@ -75,7 +125,8 @@ Changes are grouped as follows
 
 ### Changed
 
- * Default parameters in `retry` has changed to be less agressive. Retries will apply backoff by default, and give up after 10 retries.
+ * Default parameters in `retry` has changed to be less agressive. Retries will
+   apply backoff by default, and give up after 10 retries.
 
 ## [6.3.2]
 

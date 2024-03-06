@@ -18,6 +18,7 @@ import os
 import time
 import unittest
 from decimal import Decimal
+from typing import Type
 from unittest.mock import Mock, patch
 
 from cognite.client import CogniteClient
@@ -130,7 +131,7 @@ class TestBaseStateStore(unittest.TestCase):
             self.assertTrue(id in state_store._local_state.keys())
 
     @patch("cognite.client.CogniteClient")
-    def test_upload_queue_integration(self, MockCogniteClient):
+    def test_upload_queue_integration(self, MockCogniteClient: Type[CogniteClient]) -> None:
         state_store = NoStateStore()
 
         upload_queue = TimeSeriesUploadQueue(
@@ -306,7 +307,7 @@ class TestLocalStateStore(unittest.TestCase):
         new_state_store = LocalStateStore(filename, 10)
         new_state_store.start()
 
-        time.sleep(0.5)
+        time.sleep(1)
 
         self.assertTupleEqual(new_state_store.get_state("ext1"), (1, 6))
         self.assertTupleEqual(new_state_store.get_state("ext2"), (None, 10))

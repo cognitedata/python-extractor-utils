@@ -17,13 +17,12 @@ from concurrent.futures import Future, ThreadPoolExecutor
 from io import BytesIO
 from os import PathLike
 from types import TracebackType
-from typing import BinaryIO, Callable, List, Optional, Type, Union
+from typing import Any, BinaryIO, Callable, Dict, List, Optional, Tuple, Type, Union
 
-from requests import ConnectionError
+from requests.utils import super_len
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import FileMetadata
-from cognite.client.exceptions import CogniteAPIError
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.uploader._base import (
     RETRIES,
@@ -37,7 +36,7 @@ from cognite.extractorutils.uploader._metrics import (
     FILES_UPLOADER_QUEUED,
     FILES_UPLOADER_WRITTEN,
 )
-from cognite.extractorutils.util import retry
+from cognite.extractorutils.util import cognite_exceptions, retry
 
 _QUEUES: int = 0
 _QUEUES_LOCK: threading.RLock = threading.RLock()
@@ -121,7 +120,14 @@ class IOFileUploadQueue(AbstractUploadQueue):
 
             self.cancellation_token.wait(5)
 
-    def add_io_to_upload_queue(self, file_meta: FileMetadata, read_file: Callable[[], BinaryIO]) -> None:
+    def add_io_to_upload_queue(
+        self,
+        file_meta: FileMetadata,
+        read_file: Callable[[], BinaryIO],
+        extra_retries: Optional[
+            Union[Tuple[Type[Exception], ...], Dict[Type[Exception], Callable[[Any], bool]]]
+        ] = None,
+    ) -> None:
         """
         Add file to upload queue. The file will start uploading immedeately. If the size of the queue is larger than
         the specified max size, this call will block until it's
@@ -130,14 +136,80 @@ class IOFileUploadQueue(AbstractUploadQueue):
             file_meta: File metadata-object
             file_name: Path to file to be uploaded.
                 If none, the file object will still be created, but no data is uploaded
+            extra_retries: Exception types that might be raised by ``read_file`` that should be retried
         """
+        retries = cognite_exceptions()
+        if isinstance(extra_retries, tuple):
+            retries.update({exc: lambda _e: True for exc in extra_retries or []})
+        elif isinstance(extra_retries, dict):
+            retries.update(extra_retries)
+
+        @retry(
+            exceptions=retries,
+            cancellation_token=self.cancellation_token,
+            tries=RETRIES,
+            delay=RETRY_DELAY,
+            max_delay=RETRY_MAX_DELAY,
+            backoff=RETRY_BACKOFF_FACTOR,
+        )
+        def _upload_single(read_file: Callable[[], BinaryIO], file_meta: FileMetadata) -> None:
+            try:
+                # Upload file
+                with read_file() as file:
+                    size = super_len(file)
+                    if size == 0:
+                        # upload just the file metadata witout data
+                        file_meta, _url = self.cdf_client.files.create(
+                            file_metadata=file_meta, overwrite=self.overwrite_existing
+                        )
+                    elif size > 5 * 1024 * 1024 * 1024:
+                        # File bigger than 5Gb
+                        self.logger.warning(f"File {file_meta.source} is larger than 5GiB, file will not be uploaded")
+                        file_meta = FileMetadata()
+                    else:
+                        file_meta = self.cdf_client.files.upload_bytes(
+                            file,
+                            file_meta.name if file_meta.name is not None else "",
+                            overwrite=self.overwrite_existing,
+                            external_id=file_meta.external_id,
+                            source=file_meta.source,
+                            mime_type=file_meta.mime_type,
+                            metadata=file_meta.metadata,
+                            directory=file_meta.directory,
+                            asset_ids=file_meta.asset_ids,
+                            data_set_id=file_meta.data_set_id,
+                            labels=file_meta.labels,
+                            geo_location=file_meta.geo_location,
+                            source_created_time=file_meta.source_created_time,
+                            source_modified_time=file_meta.source_modified_time,
+                            security_categories=file_meta.security_categories,
+                        )
+
+                if self.post_upload_function:
+                    try:
+                        self.post_upload_function([file_meta])
+                    except Exception as e:
+                        self.logger.error("Error in upload callback: %s", str(e))
+
+            except Exception as e:
+                self.logger.exception("Unexpected error while uploading file")
+                self.errors.append(e)
+
+            finally:
+                with self.lock:
+                    self.files_written.inc()
+                    self.upload_queue_size -= 1
+                    self.queue_size.set(self.upload_queue_size)
+                with self._full_queue:
+                    self._full_queue.notify()
+
         if self.upload_queue_size >= self.threshold:
             with self._full_queue:
                 while not self._full_queue.wait(timeout=2) and not self.cancellation_token.is_cancelled:
                     pass
 
         with self.lock:
-            self.upload_queue.append(self._pool.submit(self._upload_single, read_file, file_meta))
+            self.upload_queue.append(self._pool.submit(_upload_single, read_file, file_meta))
             self.upload_queue_size += 1
             self.files_queued.inc()
             self.queue_size.set(self.upload_queue_size)
@@ -153,53 +225,6 @@ class IOFileUploadQueue(AbstractUploadQueue):
         if fail_on_errors and self.errors:
             # There might be more errors, but we can only have one as the cause, so pick the first
             raise RuntimeError(f"{len(self.errors)} upload(s) finished with errors") from self.errors[0]
-
-    @retry(
-        exceptions=(CogniteAPIError, ConnectionError),
-        tries=RETRIES,
-        delay=RETRY_DELAY,
-        max_delay=RETRY_MAX_DELAY,
-        backoff=RETRY_BACKOFF_FACTOR,
-    )
-    def _upload_single(self, read_file: Callable[[], BinaryIO], file_meta: FileMetadata) -> None:
-        try:
-            # Upload file
-            with read_file() as file:
-                file_meta = self.cdf_client.files.upload_bytes(
-                    file,
-                    file_meta.name if file_meta.name is not None else "",
-                    overwrite=self.overwrite_existing,
-                    external_id=file_meta.external_id,
-                    source=file_meta.source,
-                    mime_type=file_meta.mime_type,
-                    metadata=file_meta.metadata,
-                    directory=file_meta.directory,
-                    asset_ids=file_meta.asset_ids,
-                    data_set_id=file_meta.data_set_id,
-                    labels=file_meta.labels,
-                    geo_location=file_meta.geo_location,
-                    source_created_time=file_meta.source_created_time,
-                    source_modified_time=file_meta.source_modified_time,
-                    security_categories=file_meta.security_categories,
-                )
-
-            if self.post_upload_function:
-                try:
-                    self.post_upload_function([file_meta])
-                except Exception as e:
-                    self.logger.error("Error in upload callback: %s", str(e))
-
-        except Exception as e:
-            self.logger.exception("Unexpected error while uploading file")
-            self.errors.append(e)
-
-        finally:
-            with self.lock:
-                self.files_written.inc()
-                self.upload_queue_size -= 1
-                self.queue_size.set(self.upload_queue_size)
-            with self._full_queue:
-                self._full_queue.notify()
 
     def __enter__(self) -> "IOFileUploadQueue":
         """

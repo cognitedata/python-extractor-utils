@@ -17,11 +17,9 @@ from typing import Any, Callable, Dict, List, Optional, Type
 
 import arrow
 from arrow import Arrow
-from requests import ConnectionError
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Row
-from cognite.client.exceptions import CogniteAPIError, CogniteReadTimeout
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.uploader._base import (
     RETRIES,
@@ -37,7 +35,7 @@ from cognite.extractorutils.uploader._metrics import (
     RAW_UPLOADER_ROWS_QUEUED,
     RAW_UPLOADER_ROWS_WRITTEN,
 )
-from cognite.extractorutils.util import retry
+from cognite.extractorutils.util import cognite_exceptions, retry
 
 
 class RawUploadQueue(AbstractUploadQueue):
@@ -112,6 +110,19 @@ class RawUploadQueue(AbstractUploadQueue):
         """
         Trigger an upload of the queue, clears queue afterwards
         """
+
+        @retry(
+            exceptions=cognite_exceptions(),
+            cancellation_token=self.cancellation_token,
+            tries=RETRIES,
+            delay=RETRY_DELAY,
+            max_delay=RETRY_MAX_DELAY,
+            backoff=RETRY_BACKOFF_FACTOR,
+        )
+        def _upload_batch(database: str, table: str, patch: List[Row]) -> None:
+            # Upload
+            self.cdf_client.raw.rows.insert(db_name=database, table_name=table, row=patch, ensure_parent=True)
+
         if len(self.upload_queue) == 0:
             return
 
@@ -125,7 +136,7 @@ class RawUploadQueue(AbstractUploadQueue):
                     patch: Dict[str, Row] = {r.payload.key: r.payload for r in rows}
                     self.rows_duplicates.labels(_labels).inc(len(rows) - len(patch))
 
-                    self._upload_batch(database=database, table=table, patch=list(patch.values()))
+                    _upload_batch(database=database, table=table, patch=list(patch.values()))
                     self.rows_written.labels(_labels).inc(len(patch))
                     _written: Arrow = arrow.utcnow()
 
@@ -139,17 +150,6 @@ class RawUploadQueue(AbstractUploadQueue):
             self.logger.info(f"Uploaded {self.upload_queue_size} raw rows")
             self.upload_queue_size = 0
             self.queue_size.set(self.upload_queue_size)
-
-    @retry(
-        exceptions=(CogniteAPIError, ConnectionError, CogniteReadTimeout),
-        tries=RETRIES,
-        delay=RETRY_DELAY,
-        max_delay=RETRY_MAX_DELAY,
-        backoff=RETRY_BACKOFF_FACTOR,
-    )
-    def _upload_batch(self, database: str, table: str, patch: List[Row]) -> None:
-        # Upload
-        self.cdf_client.raw.rows.insert(db_name=database, table_name=table, row=patch, ensure_parent=True)
 
     def __enter__(self) -> "RawUploadQueue":
         """
