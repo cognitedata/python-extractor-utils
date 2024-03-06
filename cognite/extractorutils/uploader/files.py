@@ -56,10 +56,8 @@ class IOFileUploadQueue(AbstractUploadQueue):
         max_queue_size: Maximum size of upload queue.
         trigger_log_level: Log level to log upload triggers to.
         thread_name: Thread name of uploader thread.
-        max_parallelism: Maximum number of parallel uploads. If this is greater than 0,
-            the largest of this and client.config.max_workers is used to limit the number
-            of parallel uploads. This may be important if the IO objects being processed
-            also load data from an external system.
+        max_parallelism: Maximum number of parallel uploads. If nothing is given, the parallelism will be capped by the
+            max_workers of the cognite client.
     """
 
     def __init__(
@@ -71,7 +69,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
         thread_name: Optional[str] = None,
         overwrite_existing: bool = False,
         cancellation_token: Optional[CancellationToken] = None,
-        max_parallelism: int = 0,
+        max_parallelism: Optional[int] = None,
     ):
         # Super sets post_upload and threshold
         super().__init__(
@@ -93,7 +91,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
         self.overwrite_existing = overwrite_existing
 
         self.parallelism = self.cdf_client.config.max_workers
-        if max_parallelism > 0 and max_parallelism < self.parallelism:
+        if max_parallelism:
             self.parallelism = max_parallelism
         if self.parallelism <= 0:
             self.parallelism = 4
@@ -164,7 +162,9 @@ class IOFileUploadQueue(AbstractUploadQueue):
                         )
                     elif size > 5 * 1024 * 1024 * 1024:
                         # File bigger than 5Gb
-                        self.logger.warning(f"File {file_meta.source} is larger than 5GiB, file will not be uploaded")
+                        self.logger.warning(
+                            f"File {file_meta.external_id} is larger than 5GiB, file will not be uploaded"
+                        )
                         file_meta = FileMetadata()
                     else:
                         file_meta = self.cdf_client.files.upload_bytes(
