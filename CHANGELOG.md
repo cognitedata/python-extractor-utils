@@ -17,6 +17,7 @@ Changes are grouped as follows
 ### Fixed
 
   * Max parallelism in file upload queue properly can set larger values than the `max_workers` in the `ClientConfig` object.
+  * Storing states with the state store will lock the state store. This fixes an issue where iterating through a changing dict could cause issues.
 
 ## 7.0.3
 
