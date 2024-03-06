@@ -138,11 +138,13 @@ class AbstractStateStore(ABC):
 
         self._deleted: List[str] = []
 
-    def start(self) -> None:
+    def start(self, initialize: bool = True) -> None:
         """
         Start saving state periodically if save_interval is set.
         This calls the synchronize method every save_interval seconds.
         """
+        if initialize and not self._initialized:
+            self.initialize()
         if self.save_interval is not None:
             self.thread.start()
 
