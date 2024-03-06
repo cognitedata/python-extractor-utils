@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.0.4
+
+### Fixed
+
+  * Max parallelism in file upload queue properly can set larger values than the `max_workers` in the `ClientConfig` object.
+
 ## 7.0.3
 
 ### Fixed
