@@ -88,7 +88,7 @@ class ChunkedStream(RawIOBase, BinaryIO):
         return super().__enter__()
 
     def __exit__(
-        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
+        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
     ) -> None:
         return super().__exit__(exc_type, exc_val, exc_tb)
 
