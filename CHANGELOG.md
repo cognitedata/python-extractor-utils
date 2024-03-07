@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.1.0
+
+### Added
+
+  * The file upload queue is now able to stream files larger than 5GiB.
+
 ## 7.0.4
 
 ### Fixed
