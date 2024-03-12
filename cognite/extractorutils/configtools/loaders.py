@@ -31,6 +31,7 @@ from azure.identity import ClientSecretCredential, DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
 from yaml.scanner import ScannerError
 
+from cognite.client import CogniteClient
 from cognite.extractorutils.configtools._util import _to_snake_case
 from cognite.extractorutils.configtools.elements import BaseConfig, ConfigType, TimeIntervalConfig, _BaseConfig
 from cognite.extractorutils.exceptions import InvalidConfigError
@@ -288,9 +289,23 @@ class ConfigResolver(Generic[CustomConfigClass]):
         self._config: Optional[CustomConfigClass] = None
         self._next_config: Optional[CustomConfigClass] = None
 
+        self._cognite_client: Optional[CogniteClient] = None
+
     def _reload_file(self) -> None:
         with open(self.config_path, "r") as stream:
             self._config_text = stream.read()
+
+    @property
+    def cognite_client(self) -> Optional[CogniteClient]:
+        if self._cognite_client is None and self._config is not None:
+            self._cognite_client = self._config.cognite.get_cognite_client("config_resolver")
+        return self._cognite_client
+
+    @cognite_client.setter
+    def cognite_client(self, client: CogniteClient) -> None:
+        if not isinstance(client, CogniteClient):
+            raise AttributeError("cognite_client must be set to a CogniteClient instance")
+        self._cognite_client = client
 
     @property
     def is_remote(self) -> bool:
@@ -365,7 +380,15 @@ class ConfigResolver(Generic[CustomConfigClass]):
         if self.is_remote:
             _logger.debug("Loading remote config file")
             tmp_config: _BaseConfig = load_yaml(self._config_text, _BaseConfig)  # type: ignore
-            client = tmp_config.cognite.get_cognite_client("config_resolver")
+            if self.cognite_client is None or self._config is None or tmp_config.cognite != self._config.cognite:
+                # Credentials towards CDF may have changed, instantiate (and store) a new client:
+                client = tmp_config.cognite.get_cognite_client("config_resolver")
+                self.cognite_client = client
+            else:
+                # Use existing client to avoid invoking a token refresh, if possible. Reason: this is run every 5 min
+                # by default ('ConfigReloader' thread) which for certain OAuth providers like Auth0, incurs a cost:
+                client = self.cognite_client
+
             response = client.extraction_pipelines.config.retrieve(
                 tmp_config.cognite.get_extraction_pipeline(client).external_id  # type: ignore  # ignoring extpipe None
             )

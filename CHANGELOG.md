@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.0.5
+
+### Fixed
+
+  * The background thread `ConfigReloader` now caches the `CogniteClient` to avoid repeatedly fetching a new token.
+
 ## 7.0.4
 
 ### Fixed
