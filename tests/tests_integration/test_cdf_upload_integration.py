@@ -60,6 +60,7 @@ class IntegrationTests(unittest.TestCase):
 
     file1: str = f"util_integration_file_test_1-{test_id}"
     file2: str = f"util_integration_file_test_2-{test_id}"
+    bigfile: str = f"util_integration_file-big-{test_id}"
     empty_file: str = f"util_integration_file_test_3-{test_id}"
 
     def setUp(self):
@@ -114,7 +115,7 @@ class IntegrationTests(unittest.TestCase):
         self.client.events.delete(external_id=[self.event1, self.event2, self.event3], ignore_unknown_ids=True)
         self.client.assets.delete(external_id=[self.asset1, self.asset2, self.asset3], ignore_unknown_ids=True)
         # No ignore_unknown_ids in files, so we need to delete them one at a time
-        for file in [self.file1, self.file2]:
+        for file in [self.file1, self.file2, self.bigfile, self.empty_file]:
             try:
                 self.client.files.delete(external_id=file)
             except CogniteNotFoundError:
@@ -336,3 +337,24 @@ class IntegrationTests(unittest.TestCase):
 
         assert file1 == b"bytes content"
         assert file2 == b"other bytes content"
+
+    def test_big_file_upload_queue(self):
+        queue = BytesUploadQueue(cdf_client=self.client, overwrite_existing=True, max_queue_size=1)
+        queue.max_file_chunk_size = 6_000_000
+        queue.max_single_chunk_file_size = 6_000_000
+
+        content = b"large" * 2_000_000
+
+        queue.add_to_upload_queue(content=content, metadata=FileMetadata(external_id=self.bigfile, name=self.bigfile))
+
+        queue.upload()
+
+        for _ in range(10):
+            file = self.client.files.retrieve(external_id=self.bigfile)
+            if file.uploaded:
+                break
+            time.sleep(1)
+
+        bigfile = self.client.files.download_bytes(external_id=self.bigfile)
+
+        assert len(bigfile) == 10_000_000

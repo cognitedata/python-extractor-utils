@@ -14,7 +14,8 @@
 
 import threading
 from concurrent.futures import Future, ThreadPoolExecutor
-from io import BytesIO
+from io import BytesIO, RawIOBase
+from math import ceil
 from os import PathLike
 from types import TracebackType
 from typing import Any, BinaryIO, Callable, Dict, List, Optional, Tuple, Type, Union
@@ -40,6 +41,103 @@ from cognite.extractorutils.util import cognite_exceptions, retry
 
 _QUEUES: int = 0
 _QUEUES_LOCK: threading.RLock = threading.RLock()
+
+# 5 GiB
+_MAX_SINGLE_CHUNK_FILE_SIZE = 5 * 1024 * 1024 * 1024
+# 4000 MiB
+_MAX_FILE_CHUNK_SIZE = 4 * 1024 * 1024 * 1000
+
+
+class ChunkedStream(RawIOBase, BinaryIO):
+    """
+    Wrapper around a read-only stream to allow treating it as a sequence of smaller streams.
+
+    `next_chunk` will return `true` if there is one more chunk, it must be called
+    before this is treated as a stream the first time, typically in a `while` loop.
+
+    Args:
+        inner: Stream to wrap.
+        max_chunk_size: Maximum size per stream chunk.
+        stream_length: Total (remaining) length of the inner stream. This must be accurate.
+    """
+
+    def __init__(self, inner: BinaryIO, max_chunk_size: int, stream_length: int) -> None:
+        self._inner = inner
+        self._pos = -1
+        self._max_chunk_size = max_chunk_size
+        self._stream_length = stream_length
+        self._chunk_index = -1
+        self._current_chunk_size = -1
+
+    def tell(self) -> int:
+        return self._pos
+
+    # RawIOBase is (stupidly) incompatible with BinaryIO
+    # Implementing a correct type that inherits from both is impossible,
+    # but python does so anyway, (ab)using the property that if bytes() and if None
+    # resolve the same way. These four useless methods with liberal use of Any are
+    # required to satisfy mypy.
+    # This may be solvable by changing the typing in the python SDK to use typing.Protocol.
+    def writelines(self, __lines: Any) -> None:
+        raise NotImplementedError()
+
+    def write(self, __b: Any) -> int:
+        raise NotImplementedError()
+
+    def __enter__(self) -> "ChunkedStream":
+        return super().__enter__()
+
+    def __exit__(
+        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+    ) -> None:
+        return super().__exit__(exc_type, exc_val, exc_tb)
+
+    @property
+    def chunk_count(self) -> int:
+        return ceil(self._stream_length / self._max_chunk_size)
+
+    @property
+    def len(self) -> int:
+        return len(self)
+
+    @property
+    def current_chunk(self) -> int:
+        """
+        Current chunk number.
+        """
+        return self._chunk_index
+
+    def __len__(self) -> int:
+        return self._current_chunk_size
+
+    def readable(self) -> bool:
+        return True
+
+    def read(self, size: int = -1) -> bytes:
+        if size < 0:
+            size = self._current_chunk_size - self._pos
+
+        size = min(size, self._current_chunk_size - self._pos)
+        if size > 0:
+            self._pos += size
+            return self._inner.read(size)
+        return bytes()
+
+    def next_chunk(self) -> bool:
+        """
+        Step into the next chunk, letting this be read as a stream again.
+
+        Returns `False` if the stream is exhausted.
+        """
+        if self._chunk_index >= self.chunk_count - 1:
+            return False
+
+        self._chunk_index += 1
+        inner_pos = self._inner.tell()
+        self._current_chunk_size = min(self._max_chunk_size, self._stream_length - inner_pos)
+        self._pos = 0
+
+        return True
 
 
 class IOFileUploadQueue(AbstractUploadQueue):
@@ -99,6 +197,9 @@ class IOFileUploadQueue(AbstractUploadQueue):
         self.files_queued = FILES_UPLOADER_QUEUED
         self.files_written = FILES_UPLOADER_WRITTEN
         self.queue_size = FILES_UPLOADER_QUEUE_SIZE
+
+        self.max_single_chunk_file_size = _MAX_SINGLE_CHUNK_FILE_SIZE
+        self.max_file_chunk_size = _MAX_FILE_CHUNK_SIZE
 
         self._update_queue_thread = threading.Thread(target=self._remove_done_from_queue, daemon=True)
 
@@ -160,12 +261,33 @@ class IOFileUploadQueue(AbstractUploadQueue):
                         file_meta, _url = self.cdf_client.files.create(
                             file_metadata=file_meta, overwrite=self.overwrite_existing
                         )
-                    elif size > 5 * 1024 * 1024 * 1024:
-                        # File bigger than 5Gb
-                        self.logger.warning(
-                            f"File {file_meta.external_id} is larger than 5GiB, file will not be uploaded"
+                    elif size >= self.max_single_chunk_file_size:
+                        # The minimum chunk size is 4000MiB.
+                        chunks = ChunkedStream(file, self.max_file_chunk_size, size)
+                        self.logger.debug(
+                            f"File {file_meta.external_id} is larger than 5GiB ({size})"
+                            f", uploading in {chunks.chunk_count} chunks"
                         )
-                        file_meta = FileMetadata()
+                        with self.cdf_client.files.multipart_upload_session(
+                            file_meta.name if file_meta.name is not None else "",
+                            parts=chunks.chunk_count,
+                            overwrite=self.overwrite_existing,
+                            external_id=file_meta.external_id,
+                            source=file_meta.source,
+                            mime_type=file_meta.mime_type,
+                            metadata=file_meta.metadata,
+                            directory=file_meta.directory,
+                            asset_ids=file_meta.asset_ids,
+                            data_set_id=file_meta.data_set_id,
+                            labels=file_meta.labels,
+                            geo_location=file_meta.geo_location,
+                            source_created_time=file_meta.source_created_time,
+                            source_modified_time=file_meta.source_modified_time,
+                            security_categories=file_meta.security_categories,
+                        ) as session:
+                            while chunks.next_chunk():
+                                session.upload_part(chunks.current_chunk, chunks)
+                            file_meta = session.file_metadata
                     else:
                         file_meta = self.cdf_client.files.upload_bytes(
                             file,
