@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.1.1
+
+### Fixed
+
+  * Enhancement of `7.0.5`: also avoid repeatedly fetching a new token before first config is stored/'accepted'.
+
 ## 7.1.0
 
 ### Added

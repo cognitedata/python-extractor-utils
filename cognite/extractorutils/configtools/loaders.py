@@ -380,10 +380,9 @@ class ConfigResolver(Generic[CustomConfigClass]):
         if self.is_remote:
             _logger.debug("Loading remote config file")
             tmp_config: _BaseConfig = load_yaml(self._config_text, _BaseConfig)  # type: ignore
-            if self.cognite_client is None or self._config is None or tmp_config.cognite != self._config.cognite:
+            if self.cognite_client is None or self._config is not None and tmp_config.cognite != self._config.cognite:
                 # Credentials towards CDF may have changed, instantiate (and store) a new client:
-                client = tmp_config.cognite.get_cognite_client("config_resolver")
-                self.cognite_client = client
+                client = self.cognite_client = tmp_config.cognite.get_cognite_client("config_resolver")
             else:
                 # Use existing client to avoid invoking a token refresh, if possible. Reason: this is run every 5 min
                 # by default ('ConfigReloader' thread) which for certain OAuth providers like Auth0, incurs a cost:
