@@ -309,6 +309,7 @@ class IntegrationTests(unittest.TestCase):
         )
 
         queue.upload()
+        time.sleep(5)  # Reduce risk of CogniteAPIError, 400, Files not uploaded
 
         file1 = self.client.files.download_bytes(external_id=self.file1)
         file2 = self.client.files.download_bytes(external_id=self.file2)
