@@ -13,6 +13,7 @@
 #  limitations under the License.
 
 import argparse
+import dataclasses
 import json
 import logging
 import os
@@ -349,30 +350,27 @@ class ConfigResolver(Generic[CustomConfigClass]):
         return cls(args.config[0], config_type)
 
     def _inject_cognite(self, local_part: _BaseConfig, remote_part: Dict[str, Any]) -> Dict[str, Any]:
-        if "cognite" not in remote_part:
-            remote_part["cognite"] = {}
+        # We can not dump 'local_part.cognite' directly because e.g. 'data_set' may be set remote only...
+        remote_part.setdefault("cognite", {})
+        remote_part["cognite"]["idp_authentication"] = dataclasses.asdict(local_part.cognite.idp_authentication)
+        remote_part["cognite"]["extraction-pipeline"] = dataclasses.asdict(local_part.cognite.extraction_pipeline)
 
-        remote_part["cognite"]["idp-authentication"] = {
-            "client_id": local_part.cognite.idp_authentication.client_id,
-            "scopes": local_part.cognite.idp_authentication.scopes,
-            "secret": local_part.cognite.idp_authentication.secret,
-            "tenant": local_part.cognite.idp_authentication.tenant,
-            "token_url": local_part.cognite.idp_authentication.token_url,
-            "resource": local_part.cognite.idp_authentication.resource,
-            "authority": local_part.cognite.idp_authentication.authority,
-        }
         if local_part.cognite.host is not None:
             remote_part["cognite"]["host"] = local_part.cognite.host
         remote_part["cognite"]["project"] = local_part.cognite.project
 
-        # Ignoring None type, extraction pipelines is required at this point
-        remote_part["cognite"]["extraction-pipeline"] = {}
-        remote_part["cognite"]["extraction-pipeline"]["id"] = local_part.cognite.extraction_pipeline.id  # type: ignore
-        remote_part["cognite"]["extraction-pipeline"][
-            "external_id"
-        ] = local_part.cognite.extraction_pipeline.external_id  # type: ignore
-
         return remote_part
+
+    def _use_cached_cognite_client(self, tmp_config: _BaseConfig) -> bool:
+        # Ideally we'd check tmp_config == self._config, but due to 'is_remote & _inject_...', this is not
+        # reliable to avoid new unneeded instantiations of CogniteClient:
+        return (
+            self.cognite_client is not None
+            and self._config is not None
+            and tmp_config.project == self._config.project
+            and tmp_config.host == self._config.host
+            and tmp_config.idp_authentication == self._config.idp_authentication
+        )
 
     def _resolve_config(self) -> None:
         self._reload_file()
@@ -380,13 +378,13 @@ class ConfigResolver(Generic[CustomConfigClass]):
         if self.is_remote:
             _logger.debug("Loading remote config file")
             tmp_config: _BaseConfig = load_yaml(self._config_text, _BaseConfig)  # type: ignore
-            if self.cognite_client is None or self._config is not None and tmp_config.cognite != self._config.cognite:
-                # Credentials towards CDF may have changed, instantiate (and store) a new client:
-                client = self.cognite_client = tmp_config.cognite.get_cognite_client("config_resolver")
-            else:
+            if self._use_cached_cognite_client(tmp_config):
                 # Use existing client to avoid invoking a token refresh, if possible. Reason: this is run every 5 min
                 # by default ('ConfigReloader' thread) which for certain OAuth providers like Auth0, incurs a cost:
                 client = self.cognite_client
+            else:
+                # Credentials towards CDF may have changed, instantiate (and store) a new client:
+                client = self.cognite_client = tmp_config.cognite.get_cognite_client("config_resolver")
 
             response = client.extraction_pipelines.config.retrieve(
                 tmp_config.cognite.get_extraction_pipeline(client).external_id  # type: ignore  # ignoring extpipe None
