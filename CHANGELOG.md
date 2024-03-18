@@ -16,7 +16,7 @@ Changes are grouped as follows
 
 ### Fixed
 
-  * Enhancement of `7.0.5`: also avoid repeatedly fetching a new token before first config is stored/'accepted'.
+  * Enhancement of `7.0.5`: more use cases covered (to avoid repeatedly fetching a new token).
 
 ## 7.1.0
 
