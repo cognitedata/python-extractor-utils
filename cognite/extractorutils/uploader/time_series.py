@@ -522,8 +522,8 @@ class SequenceUploadQueue(AbstractUploadQueue):
 
             try:
                 self.cdf_client.sequences.data.insert(
-                    id=either_id.internal_id,  # type: ignore
-                    external_id=either_id.external_id,  # type: ignore
+                    id=either_id.internal_id,
+                    external_id=either_id.external_id,
                     rows=upload_this,
                     column_external_ids=None,
                 )
@@ -534,8 +534,8 @@ class SequenceUploadQueue(AbstractUploadQueue):
 
                     # Retry
                     self.cdf_client.sequences.data.insert(
-                        id=either_id.internal_id,  # type: ignore
-                        external_id=either_id.external_id,  # type: ignore
+                        id=either_id.internal_id,
+                        external_id=either_id.external_id,
                         rows=upload_this,
                         column_external_ids=None,
                     )
@@ -553,7 +553,6 @@ class SequenceUploadQueue(AbstractUploadQueue):
                 self._resolve_dataset_ids()
 
             for either_id, upload_this in self.upload_queue.items():
-                _labels = str(either_id.content())
                 _upload_single(either_id, upload_this)
                 self.points_written.inc()
 
@@ -582,11 +581,11 @@ class SequenceUploadQueue(AbstractUploadQueue):
         try:
             seq = self.cdf_client.sequences.create(
                 Sequence(
-                    id=either_id.internal_id,  # type: ignore  # these are optional, the SDK types are wrong
-                    external_id=either_id.external_id,  # type: ignore
-                    name=self.sequence_names.get(either_id, None),  # type: ignore
-                    description=self.sequence_descriptions.get(either_id, None),  # type: ignore
-                    metadata=self.sequence_metadata.get(either_id, None),  # type: ignore
+                    id=either_id.internal_id,
+                    external_id=either_id.external_id,
+                    name=self.sequence_names.get(either_id, None),
+                    description=self.sequence_descriptions.get(either_id, None),
+                    metadata=self.sequence_metadata.get(either_id, None),
                     asset_id=self.asset_ids.get(self.sequence_asset_external_ids.get(either_id, None), None),  # type: ignore
                     data_set_id=self.dataset_ids.get(self.sequence_dataset_external_ids.get(either_id, None), None),  # type: ignore
                     columns=column_def,  # type: ignore  # We already  checked for None, mypy is wrong
@@ -595,9 +594,9 @@ class SequenceUploadQueue(AbstractUploadQueue):
 
         except CogniteDuplicatedError:
             self.logger.info("Sequnce already exist: {}".format(either_id))
-            seq = self.cdf_client.sequences.retrieve(
-                id=either_id.internal_id,  # type: ignore  # these are optional, the SDK types are wrong
-                external_id=either_id.external_id,  # type: ignore
+            seq = self.cdf_client.sequences.retrieve(  # type: ignore [assignment]
+                id=either_id.internal_id,
+                external_id=either_id.external_id,
             )
 
         # Update definition of cached sequence

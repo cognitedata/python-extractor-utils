@@ -389,8 +389,7 @@ class RawStateStore(AbstractStateStore):
             if self._initialized and not force:
                 return
 
-            # ignore type since list _is_ optional, sdk types are wrong
-            rows = self._cdf_client.raw.rows.list(db_name=self.database, table_name=self.table, limit=None)  # type: ignore
+            rows = self._cdf_client.raw.rows.list(db_name=self.database, table_name=self.table, limit=None)
 
             with self.lock:
                 self._local_state.clear()

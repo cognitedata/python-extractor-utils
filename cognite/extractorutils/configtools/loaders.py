@@ -22,7 +22,7 @@ import sys
 from enum import Enum
 from hashlib import sha256
 from pathlib import Path
-from typing import Any, Callable, Dict, Generic, Iterable, Optional, TextIO, Type, TypeVar, Union
+from typing import Any, Callable, Dict, Generic, Iterable, Optional, TextIO, Type, TypeVar, Union, cast
 
 import dacite
 import yaml
@@ -353,7 +353,9 @@ class ConfigResolver(Generic[CustomConfigClass]):
         # We can not dump 'local_part.cognite' directly because e.g. 'data_set' may be set remote only...
         remote_part.setdefault("cognite", {})
         remote_part["cognite"]["idp_authentication"] = dataclasses.asdict(local_part.cognite.idp_authentication)
-        remote_part["cognite"]["extraction-pipeline"] = dataclasses.asdict(local_part.cognite.extraction_pipeline)
+        remote_part["cognite"]["extraction-pipeline"] = dataclasses.asdict(
+            local_part.cognite.extraction_pipeline  # type: ignore [arg-type]
+        )
 
         if local_part.cognite.host is not None:
             remote_part["cognite"]["host"] = local_part.cognite.host
@@ -367,9 +369,9 @@ class ConfigResolver(Generic[CustomConfigClass]):
         return (
             self.cognite_client is not None
             and self._config is not None
-            and tmp_config.project == self._config.project
-            and tmp_config.host == self._config.host
-            and tmp_config.idp_authentication == self._config.idp_authentication
+            and tmp_config.cognite.host == self._config.cognite.host
+            and tmp_config.cognite.project == self._config.cognite.project
+            and tmp_config.cognite.idp_authentication == self._config.cognite.idp_authentication
         )
 
     def _resolve_config(self) -> None:
@@ -381,7 +383,7 @@ class ConfigResolver(Generic[CustomConfigClass]):
             if self._use_cached_cognite_client(tmp_config):
                 # Use existing client to avoid invoking a token refresh, if possible. Reason: this is run every 5 min
                 # by default ('ConfigReloader' thread) which for certain OAuth providers like Auth0, incurs a cost:
-                client = self.cognite_client
+                client = cast(CogniteClient, self.cognite_client)
             else:
                 # Credentials towards CDF may have changed, instantiate (and store) a new client:
                 client = self.cognite_client = tmp_config.cognite.get_cognite_client("config_resolver")
