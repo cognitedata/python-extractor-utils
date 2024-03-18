@@ -1,13 +1,13 @@
+import sys
 from typing import Iterable, List, Optional, Union
 
 from cognite.client.data_classes import Event as _Event
 from cognite.client.data_classes import Row as _Row
 
-try:
+if sys.version_info >= (3, 10):
     from typing import TypeAlias
-except ImportError:
-    # Backport for python < 3.10
-    from typing_extensions import TypeAlias
+else:
+    from typing_extensions import TypeAlias  # Backport for python < 3.10
 
 
 from cognite.extractorutils.uploader.time_series import DataPoint
