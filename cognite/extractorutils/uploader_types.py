@@ -7,7 +7,7 @@ from cognite.client.data_classes import Row as _Row
 if sys.version_info >= (3, 10):
     from typing import TypeAlias
 else:
-    from typing_extensions import TypeAlias  # Backport for python < 3.10
+    from typing_extensions import TypeAlias
 
 
 from cognite.extractorutils.uploader.time_series import DataPoint
