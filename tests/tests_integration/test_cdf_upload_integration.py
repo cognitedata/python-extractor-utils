@@ -121,6 +121,12 @@ class IntegrationTests(unittest.TestCase):
             except CogniteNotFoundError:
                 pass
 
+    def await_is_uploaded_status(self, external_id):
+        for _ in range(10):
+            if self.client.files.retrieve(external_id=external_id).uploaded:
+                return
+            time.sleep(1)
+
     def test_raw_upload_queue(self):
         queue = RawUploadQueue(cdf_client=self.client, max_queue_size=500)
 
@@ -145,7 +151,6 @@ class IntegrationTests(unittest.TestCase):
             [{k: r.__dict__[k] for k in ["key", "columns"]} for r in uploaded],
             [{k: r.__dict__[k] for k in ["key", "columns"]} for r in rows_in_cdf],
         )
-        pass
 
     def test_time_series_upload_queue1(self):
         created = self.client.time_series.create(
@@ -309,8 +314,9 @@ class IntegrationTests(unittest.TestCase):
         )
 
         queue.upload()
-        time.sleep(5)  # Reduce risk of CogniteAPIError, 400, Files not uploaded
 
+        self.await_is_uploaded_status(self.file1)
+        self.await_is_uploaded_status(self.file2)
         file1 = self.client.files.download_bytes(external_id=self.file1)
         file2 = self.client.files.download_bytes(external_id=self.file2)
         file3 = self.client.files.retrieve(external_id=self.empty_file)
@@ -332,7 +338,8 @@ class IntegrationTests(unittest.TestCase):
         )
 
         queue.upload()
-
+        self.await_is_uploaded_status(self.file1)
+        self.await_is_uploaded_status(self.file2)
         file1 = self.client.files.download_bytes(external_id=self.file1)
         file2 = self.client.files.download_bytes(external_id=self.file2)
 
@@ -350,12 +357,7 @@ class IntegrationTests(unittest.TestCase):
 
         queue.upload()
 
-        for _ in range(10):
-            file = self.client.files.retrieve(external_id=self.bigfile)
-            if file.uploaded:
-                break
-            time.sleep(1)
-
+        self.await_is_uploaded_status(self.bigfile)
         bigfile = self.client.files.download_bytes(external_id=self.bigfile)
 
         assert len(bigfile) == 10_000_000
