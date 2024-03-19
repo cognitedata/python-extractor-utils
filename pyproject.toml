@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "cognite-extractor-utils"
-version = "7.1.0"
+version = "7.1.1"
 description = "Utilities for easier development of extractors for CDF"
 authors = ["Mathias Lohne <mathias.lohne@cognite.com>"]
 license = "Apache-2.0"
@@ -47,6 +47,8 @@ follow_imports = "normal"
 namespace_packages = true
 explicit_package_bases = true
 show_error_codes = true
+warn_redundant_casts = true
+warn_unused_ignores = true
 exclude = "tests/*"
 
 [tool.poetry.dependencies]

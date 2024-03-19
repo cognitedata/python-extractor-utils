@@ -424,7 +424,7 @@ def requests_exceptions(
     """
     status_codes = status_codes or [408, 425, 429, 500, 502, 503, 504]
     # types ignored, since they are not installed as we don't depend on the package
-    from requests.exceptions import HTTPError, RequestException  # type: ignore
+    from requests.exceptions import HTTPError, RequestException
 
     def handle_http_errors(exception: RequestException) -> bool:
         if isinstance(exception, HTTPError):
@@ -458,7 +458,7 @@ def httpx_exceptions(
     """
     status_codes = status_codes or [408, 425, 429, 500, 502, 503, 504]
     # types ignored, since they are not installed as we don't depend on the package
-    from httpx import HTTPError, HTTPStatusError  # type: ignore
+    from httpx import HTTPError, HTTPStatusError
 
     def handle_http_errors(exception: HTTPError) -> bool:
         if isinstance(exception, HTTPStatusError):

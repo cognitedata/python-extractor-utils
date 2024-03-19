@@ -12,6 +12,13 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.1.1
+
+### Fixed
+
+  * Enhancement of `7.0.5`: more use cases covered (to avoid repeatedly fetching a new token).
+  * When using remote config, the full local `idp-authentication` is now injected (some fields were missing).
+
 ## 7.1.0
 
 ### Added

@@ -1,12 +1,12 @@
+import sys
 from typing import Iterable, List, Optional, Union
 
 from cognite.client.data_classes import Event as _Event
 from cognite.client.data_classes import Row as _Row
 
-try:
-    from typing import TypeAlias  # type: ignore
-except ImportError:
-    # Backport for python < 3.10
+if sys.version_info >= (3, 10):
+    from typing import TypeAlias
+else:
     from typing_extensions import TypeAlias
 
 

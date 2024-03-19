@@ -384,7 +384,7 @@ class CognitePusher(AbstractMetricsPusher):
                 data_set_id = dataset.id
 
         for metric in REGISTRY.collect():
-            if type(metric) == Metric and metric.type in ["gauge", "counter"]:
+            if type(metric) is Metric and metric.type in ["gauge", "counter"]:
                 external_id = self.external_id_prefix + metric.name
 
                 time_series.append(
@@ -393,8 +393,8 @@ class CognitePusher(AbstractMetricsPusher):
                         name=metric.name,
                         legacy_name=external_id,
                         description=metric.documentation,
-                        asset_id=asset_id,  # type: ignore  # this is optional. Type hint in SDK is wrong
-                        data_set_id=data_set_id,  # type: ignore  # this is optional. Type hint in SDK is wrong
+                        asset_id=asset_id,
+                        data_set_id=data_set_id,
                     )
                 )
 

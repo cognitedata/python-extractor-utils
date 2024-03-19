@@ -152,17 +152,17 @@ class Extractor(Generic[CustomConfigClass]):
     def _reload_config(self) -> None:
         self.logger.info("Config file has changed")
 
-        if self.reload_config_action == ReloadConfigAction.REPLACE_ATTRIBUTE:
+        if self.reload_config_action is ReloadConfigAction.REPLACE_ATTRIBUTE:
             self.logger.info("Loading in new config file")
             self.config_resolver.accept_new_config()
             self.config = self.config_resolver.config
             Extractor._config_singleton = self.config  # type: ignore
 
-        elif self.reload_config_action == ReloadConfigAction.SHUTDOWN:
+        elif self.reload_config_action is ReloadConfigAction.SHUTDOWN:
             self.logger.info("Shutting down, expecting to be restarted")
             self.cancellation_token.cancel()
 
-        elif self.reload_config_action == ReloadConfigAction.CALLBACK:
+        elif self.reload_config_action is ReloadConfigAction.CALLBACK:
             self.logger.info("Loading in new config file")
             self.config_resolver.accept_new_config()
             self.config = self.config_resolver.config
