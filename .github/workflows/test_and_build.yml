@@ -43,7 +43,7 @@ jobs:
           COGNITE_PROJECT: extractor-tests
           COGNITE_BASE_URL: https://greenfield.cognitedata.com
       run: |
-        coverage run --source cognite.extractorutils -m pytest -v tests
+        coverage run --source cognite.extractorutils -m pytest -v tests -n logical --dist loadfile
         coverage xml
 
     - uses: codecov/codecov-action@v4
