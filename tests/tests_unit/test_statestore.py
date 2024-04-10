@@ -16,10 +16,11 @@ import datetime
 import math
 import os
 import time
-import unittest
 from decimal import Decimal
 from typing import Type
 from unittest.mock import Mock, patch
+
+import pytest
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Row
@@ -28,319 +29,336 @@ from cognite.extractorutils.statestore import LocalStateStore, NoStateStore, Raw
 from cognite.extractorutils.uploader import TimeSeriesUploadQueue
 
 
-class TestBaseStateStore(unittest.TestCase):
-    def test_set_state(self):
-        state_store = NoStateStore()
+def test_set_state():
+    state_store = NoStateStore()
 
-        self.assertFalse("extId" in state_store._local_state)
+    assert "extId" not in state_store._local_state
 
-        state_store.set_state("extId", low=0, high=4)
-        self.assertDictEqual(state_store._local_state["extId"], {"low": 0, "high": 4})
+    state_store.set_state("extId", low=0, high=4)
+    assert state_store._local_state["extId"] == {"low": 0, "high": 4}
 
-        state_store.set_state("extId", low=1)
-        self.assertDictEqual(state_store._local_state["extId"], {"low": 1, "high": 4})
+    state_store.set_state("extId", low=1)
+    assert state_store._local_state["extId"] == {"low": 1, "high": 4}
 
-        state_store.set_state("extId", high=5)
-        self.assertDictEqual(state_store._local_state["extId"], {"low": 1, "high": 5})
+    state_store.set_state("extId", high=5)
+    assert state_store._local_state["extId"] == {"low": 1, "high": 5}
 
-        state_store.set_state("newExtId", high=7)
-        self.assertDictEqual(state_store._local_state["newExtId"], {"low": None, "high": 7})
+    state_store.set_state("newExtId", high=7)
+    assert state_store._local_state["newExtId"] == {"low": None, "high": 7}
 
-    def test_expand_state(self):
-        state_store = NoStateStore()
 
-        self.assertFalse("extId" in state_store._local_state)
+def test_expand_state():
+    state_store = NoStateStore()
 
-        state_store.expand_state("extId", low=0, high=4)
-        self.assertDictEqual(state_store._local_state["extId"], {"low": 0, "high": 4})
+    assert "extId" not in state_store._local_state
 
-        # 1 !< 0, should not overwrite
-        state_store.expand_state("extId", low=1)
-        self.assertDictEqual(state_store._local_state["extId"], {"low": 0, "high": 4})
+    state_store.expand_state("extId", low=0, high=4)
+    assert state_store._local_state["extId"] == {"low": 0, "high": 4}
 
-        state_store.expand_state("extId", high=5)
-        self.assertDictEqual(state_store._local_state["extId"], {"low": 0, "high": 5})
+    # 1 !< 0, should not overwrite
+    state_store.expand_state("extId", low=1)
+    assert state_store._local_state["extId"] == {"low": 0, "high": 4}
 
-        state_store.expand_state("newExtId", high=7)
-        self.assertDictEqual(state_store._local_state["newExtId"], {"low": None, "high": 7})
+    state_store.expand_state("extId", high=5)
+    assert state_store._local_state["extId"] == {"low": 0, "high": 5}
 
-        # 5 !> 7, should not overwrite
-        state_store.expand_state("newExtId", high=5)
-        self.assertDictEqual(state_store._local_state["newExtId"], {"low": None, "high": 7})
+    state_store.expand_state("newExtId", high=7)
+    assert state_store._local_state["newExtId"] == {"low": None, "high": 7}
 
-    def test_outside_state(self):
-        state_store = NoStateStore()
+    # 5 !> 7, should not overwrite
+    state_store.expand_state("newExtId", high=5)
+    assert state_store._local_state["newExtId"] == {"low": None, "high": 7}
 
-        state_store.set_state("extId", low=3, high=10)
-        self.assertTrue(state_store.outside_state("extId", 1))
-        self.assertTrue(state_store.outside_state("extId", 14))
-        self.assertTrue(state_store.outside_state("newExtId", 5))
-        self.assertFalse(state_store.outside_state("extId", 5))
 
-        state_store.set_state("onlyHigh", high=7)
-        self.assertFalse(state_store.outside_state("onlyHigh", 6))
-        self.assertFalse(state_store.outside_state("onlyHigh", 7))
-        self.assertTrue(state_store.outside_state("onlyHigh", 8))
+def test_outside_state():
+    state_store = NoStateStore()
 
-        state_store.set_state("onlyLow", low=2)
-        self.assertFalse(state_store.outside_state("onlyLow", 3))
-        self.assertFalse(state_store.outside_state("onlyLow", 2))
-        self.assertTrue(state_store.outside_state("onlyLow", 1))
+    state_store.set_state("extId", low=3, high=10)
+    assert state_store.outside_state("extId", 1)
+    assert state_store.outside_state("extId", 14)
+    assert state_store.outside_state("newExtId", 5)
+    assert not state_store.outside_state("extId", 5)
 
-    def test_delete_state(self):
-        state_store = NoStateStore()
+    state_store.set_state("onlyHigh", high=7)
+    assert not state_store.outside_state("onlyHigh", 6)
+    assert not state_store.outside_state("onlyHigh", 7)
+    assert state_store.outside_state("onlyHigh", 8)
 
-        self.assertFalse("extId" in state_store._local_state)
+    state_store.set_state("onlyLow", low=2)
+    assert not state_store.outside_state("onlyLow", 3)
+    assert not state_store.outside_state("onlyLow", 2)
+    assert state_store.outside_state("onlyLow", 1)
 
-        state_store.set_state("extId", low=5, high=6)
-        self.assertTrue("extId" in state_store._local_state)
 
-        state_store.delete_state("extId")
-        self.assertFalse("extId" in state_store._local_state)
-        self.assertListEqual(state_store._deleted, ["extId"])
+def test_delete_state():
+    state_store = NoStateStore()
 
-    def test_get_state(self):
-        state_store = NoStateStore()
+    assert "extId" not in state_store._local_state
 
-        state_store._local_state = {
-            "extId1": {"low": 1, "high": 5},
-            "extId2": {"low": None, "high": 4},
-            "extId3": {"low": 0},
-            "extId4": {"low": 3, "high": None},
-        }
+    state_store.set_state("extId", low=5, high=6)
+    assert "extId" in state_store._local_state
 
-        self.assertTupleEqual(state_store.get_state("extId1"), (1, 5))
-        self.assertTupleEqual(state_store.get_state("extId2"), (None, 4))
-        self.assertTupleEqual(state_store.get_state("extId3"), (0, None))
-        self.assertTupleEqual(state_store.get_state("extId4"), (3, None))
-        self.assertTupleEqual(state_store.get_state("extId5"), (None, None))
+    state_store.delete_state("extId")
+    assert "extId" not in state_store._local_state
+    assert state_store._deleted == ["extId"]
 
-        self.assertListEqual(state_store.get_state(["extId1", "extId3", "extId5"]), [(1, 5), (0, None), (None, None)])
 
-    def test_local_state_interaction(self):
-        state_store = NoStateStore()
-        state_store._local_state = {
-            "extId1": {"low": 1, "high": 5},
-            "extId2": {"low": None, "high": 4},
-            "extId3": {"low": 0},
-            "extId4": {"low": 3, "high": None},
-        }
+def test_get_state():
+    state_store = NoStateStore()
 
-        self.assertTrue(len(state_store) == len(state_store._local_state))
-        for id in state_store:
-            self.assertTrue(id in state_store._local_state.keys())
+    state_store._local_state = {
+        "extId1": {"low": 1, "high": 5},
+        "extId2": {"low": None, "high": 4},
+        "extId3": {"low": 0},
+        "extId4": {"low": 3, "high": None},
+    }
 
-    @patch("cognite.client.CogniteClient")
-    def test_upload_queue_integration(self, MockCogniteClient: Type[CogniteClient]) -> None:
-        state_store = NoStateStore()
+    assert state_store.get_state("extId1") == (1, 5)
+    assert state_store.get_state("extId2") == (None, 4)
+    assert state_store.get_state("extId3") == (0, None)
+    assert state_store.get_state("extId4") == (3, None)
+    assert state_store.get_state("extId5") == (None, None)
 
-        upload_queue = TimeSeriesUploadQueue(
-            cdf_client=MockCogniteClient(), post_upload_function=state_store.post_upload_handler()
-        )
+    assert state_store.get_state(["extId1", "extId3", "extId5"]) == [(1, 5), (0, None), (None, None)]
 
-        start: float = datetime.datetime.now().timestamp() * 1000.0
 
-        upload_queue.add_to_upload_queue(external_id="testId", datapoints=[(start + 1, 1), (start + 4, 4)])
-        upload_queue.upload()
+def test_local_state_interaction():
+    state_store = NoStateStore()
+    state_store._local_state = {
+        "extId1": {"low": 1, "high": 5},
+        "extId2": {"low": None, "high": 4},
+        "extId3": {"low": 0},
+        "extId4": {"low": 3, "high": None},
+    }
 
-        self.assertTupleEqual(state_store.get_state("testId"), (start + 1, start + 4))
+    assert len(state_store) == len(state_store._local_state)
+    for id in state_store:
+        assert id in state_store._local_state.keys()
 
-        upload_queue.add_to_upload_queue(external_id="testId", datapoints=[(start + 2, 2), (start + 3, 3)])
-        upload_queue.upload()
 
-        self.assertTupleEqual(state_store.get_state("testId"), (start + 1, start + 4))
+@patch("cognite.client.CogniteClient")
+def test_upload_queue_integration(MockCogniteClient: Type[CogniteClient]) -> None:
+    state_store = NoStateStore()
 
-        upload_queue.add_to_upload_queue(external_id="testId", datapoints=[(start + 5, 5)])
-        upload_queue.upload()
+    upload_queue = TimeSeriesUploadQueue(
+        cdf_client=MockCogniteClient(), post_upload_function=state_store.post_upload_handler()
+    )
 
-        self.assertTupleEqual(state_store.get_state("testId"), (start + 1, start + 5))
+    start: float = datetime.datetime.now().timestamp() * 1000.0
 
-        upload_queue.add_to_upload_queue(external_id="testId", datapoints=[(start + 0, 0)])
-        upload_queue.upload()
+    upload_queue.add_to_upload_queue(external_id="testId", datapoints=[(start + 1, 1), (start + 4, 4)])
+    upload_queue.upload()
 
-        self.assertTupleEqual(state_store.get_state("testId"), (start + 0, start + 5))
+    assert state_store.get_state("testId") == (start + 1, start + 4)
 
+    upload_queue.add_to_upload_queue(external_id="testId", datapoints=[(start + 2, 2), (start + 3, 3)])
+    upload_queue.upload()
 
-class TestRawStateStore(unittest.TestCase):
-    database = "testDb"
-    table = "testTable"
+    assert state_store.get_state("testId") == (start + 1, start + 4)
 
-    @patch("cognite.client.CogniteClient")
-    def setUp(self, MockCogniteClient) -> None:
-        self.client: CogniteClient = MockCogniteClient()
+    upload_queue.add_to_upload_queue(external_id="testId", datapoints=[(start + 5, 5)])
+    upload_queue.upload()
 
-    def test_init_no_preexisting_raw(self):
-        state_store = RawStateStore(cdf_client=self.client, database=self.database, table=self.table)
+    assert state_store.get_state("testId") == (start + 1, start + 5)
 
-        self.client.raw.databases.create.assert_called_once_with(self.database)
-        self.client.raw.tables.create.assert_called_once_with(self.database, self.table)
+    upload_queue.add_to_upload_queue(external_id="testId", datapoints=[(start + 0, 0)])
+    upload_queue.upload()
 
-    def test_init_preexisting_db(self):
-        self.client.raw.databases.create = Mock(side_effect=CogniteAPIError("", code=400))
+    assert state_store.get_state("testId") == (start + 0, start + 5)
 
-        state_store = RawStateStore(cdf_client=self.client, database=self.database, table=self.table)
-        self.client.raw.tables.create.assert_called_once_with(self.database, self.table)
 
-    def test_init_preexisting_table(self):
-        self.client.raw.databases.create = Mock(side_effect=CogniteAPIError("", code=400))
-        self.client.raw.tables.create = Mock(side_effect=CogniteAPIError("", code=400))
+DATABASE = "testDb"
+TABLE = "testTable"
 
-        state_store = RawStateStore(cdf_client=self.client, database=self.database, table=self.table)
 
-        self.client.raw.databases.create.assert_called_once_with(self.database)
-        self.client.raw.tables.create.assert_called_once_with(self.database, self.table)
+@patch("cognite.client.CogniteClient")
+def test_init_no_preexisting_raw(get_client_mock):
+    client: CogniteClient = get_client_mock()
+    state_store = RawStateStore(cdf_client=client, database=DATABASE, table=TABLE)
 
-    def test_get_raw_states_empty(self):
-        state_store = RawStateStore(cdf_client=self.client, database=self.database, table=self.table)
+    client.raw.databases.create.assert_called_once_with(DATABASE)
+    client.raw.tables.create.assert_called_once_with(DATABASE, TABLE)
 
-        # Make sure raw is not called on init
-        self.client.raw.rows.list.assert_not_called()
 
-        # Get states and test that raw is called
-        state_store.initialize()
-        self.client.raw.rows.list.assert_called_once_with(db_name=self.database, table_name=self.table, limit=None)
+@patch("cognite.client.CogniteClient")
+def test_init_preexisting_db(get_client_mock):
+    client: CogniteClient = get_client_mock()
+    client.raw.databases.create = Mock(side_effect=CogniteAPIError("", code=400))
 
-        # Get states again and make sure that raw is not called twice
-        state_store.initialize()
-        self.client.raw.rows.list.assert_called_once_with(db_name=self.database, table_name=self.table, limit=None)
+    state_store = RawStateStore(cdf_client=client, database=DATABASE, table=TABLE)
+    client.raw.tables.create.assert_called_once_with(DATABASE, TABLE)
 
-        # Override cache and make sure raw is called again
-        state_store.initialize(force=True)
-        self.assertEqual(self.client.raw.rows.list.call_count, 2)
 
-    def test_get_raw_states_content(self):
-        state_store = RawStateStore(cdf_client=self.client, database=self.database, table=self.table)
+@patch("cognite.client.CogniteClient")
+def test_init_preexisting_table(get_client_mock):
+    client: CogniteClient = get_client_mock()
+    client.raw.databases.create = Mock(side_effect=CogniteAPIError("", code=400))
+    client.raw.tables.create = Mock(side_effect=CogniteAPIError("", code=400))
 
-        # Make sure raw is not called on init
-        self.client.raw.rows.list.assert_not_called()
+    state_store = RawStateStore(cdf_client=client, database=DATABASE, table=TABLE)
 
-        expected_states = {"extId1": {"high": 3, "low": 1}, "extId2": {"high": 5, "low": 0}}
-        self.client.raw.rows.list = Mock(
-            return_value=[Row(ext_id, expected_states[ext_id]) for ext_id in expected_states]
-        )
+    client.raw.databases.create.assert_called_once_with(DATABASE)
+    client.raw.tables.create.assert_called_once_with(DATABASE, TABLE)
 
-        # Get states and test that raw is called
-        state_store.initialize()
-        self.client.raw.rows.list.assert_called_once_with(db_name=self.database, table_name=self.table, limit=None)
 
-        self.assertDictEqual(state_store._local_state, expected_states)
+@patch("cognite.client.CogniteClient")
+def test_get_raw_states_empty(get_client_mock):
+    client: CogniteClient = get_client_mock()
+    state_store = RawStateStore(cdf_client=client, database=DATABASE, table=TABLE)
 
-    def test_cdf_sync(self):
-        state_store = RawStateStore(cdf_client=self.client, database=self.database, table=self.table)
+    # Make sure raw is not called on init
+    client.raw.rows.list.assert_not_called()
 
-        state_store.initialize()
+    # Get states and test that raw is called
+    state_store.initialize()
+    client.raw.rows.list.assert_called_once_with(db_name=DATABASE, table_name=TABLE, limit=None)
 
-        states = {"extId1": {"high": 3, "low": 1}, "extId2": {"high": 5, "low": 0}}
-        for ext_id in states:
-            state_store.set_state(ext_id, **states[ext_id])
+    # Get states again and make sure that raw is not called twice
+    state_store.initialize()
+    client.raw.rows.list.assert_called_once_with(db_name=DATABASE, table_name=TABLE, limit=None)
 
-        state_store.synchronize()
-        self.client.raw.rows.insert.assert_called_once_with(db_name=self.database, table_name=self.table, row=states)
-        self.client.raw.rows.delete.assert_called_once_with(db_name=self.database, table_name=self.table, key=[])
+    # Override cache and make sure raw is called again
+    state_store.initialize(force=True)
+    assert client.raw.rows.list.call_count == 2
 
-        state_store.delete_state("extId1")
 
-        self.assertListEqual(state_store._deleted, ["extId1"])
+@patch("cognite.client.CogniteClient")
+def test_get_raw_states_content(get_client_mock):
+    client: CogniteClient = get_client_mock()
+    state_store = RawStateStore(cdf_client=client, database=DATABASE, table=TABLE)
 
-        state_store.synchronize()
+    # Make sure raw is not called on init
+    client.raw.rows.list.assert_not_called()
 
-        self.client.raw.rows.insert.assert_called_with(
-            db_name=self.database, table_name=self.table, row={"extId2": {"high": 5, "low": 0}}
-        )
-        self.client.raw.rows.delete.assert_called_with(db_name=self.database, table_name=self.table, key=["extId1"])
-        self.assertListEqual(state_store._deleted, [])
+    expected_states = {"extId1": {"high": 3, "low": 1}, "extId2": {"high": 5, "low": 0}}
+    client.raw.rows.list = Mock(return_value=[Row(ext_id, expected_states[ext_id]) for ext_id in expected_states])
 
+    # Get states and test that raw is called
+    state_store.initialize()
+    client.raw.rows.list.assert_called_once_with(db_name=DATABASE, table_name=TABLE, limit=None)
 
-class TestLocalStateStore(unittest.TestCase):
-    def test_init_no_file(self):
-        state_store = LocalStateStore("nosuchfile.json")
-        state_store.initialize()
+    assert state_store._local_state == expected_states
 
-    def test_save_and_load(self):
-        filename = "testfile-localstatestore.json"
-        try:
-            os.remove("testfile-localstatestore.json")
-        except FileNotFoundError:
-            pass
 
-        state_store = LocalStateStore(filename)
+@patch("cognite.client.CogniteClient")
+def test_cdf_sync(get_client_mock):
+    client: CogniteClient = get_client_mock()
+    state_store = RawStateStore(cdf_client=client, database=DATABASE, table=TABLE)
 
-        state_store.set_state("ext1", low=1, high=6)
-        state_store.set_state("ext2", high=10)
-        state_store.set_state("ext3", low=8)
-        state_store.set_state("ext4")
-        state_store.set_state("ext5", low=Decimal(math.sqrt(5)), high=Decimal(4))
+    state_store.initialize()
 
-        state_store.synchronize()
+    states = {"extId1": {"high": 3, "low": 1}, "extId2": {"high": 5, "low": 0}}
+    for ext_id in states:
+        state_store.set_state(ext_id, **states[ext_id])
 
-        new_state_store = LocalStateStore(filename)
-        new_state_store.initialize()
+    state_store.synchronize()
+    client.raw.rows.insert.assert_called_once_with(db_name=DATABASE, table_name=TABLE, row=states)
+    client.raw.rows.delete.assert_called_once_with(db_name=DATABASE, table_name=TABLE, key=[])
 
-        self.assertTupleEqual(new_state_store.get_state("ext1"), (1, 6))
-        self.assertTupleEqual(new_state_store.get_state("ext2"), (None, 10))
-        self.assertTupleEqual(new_state_store.get_state("ext3"), (8, None))
-        self.assertTupleEqual(new_state_store.get_state("ext4"), (None, None))
-        self.assertTupleEqual(new_state_store.get_state("ext5"), (Decimal(math.sqrt(5)), Decimal(4)))
+    state_store.delete_state("extId1")
 
+    assert state_store._deleted == ["extId1"]
+
+    state_store.synchronize()
+
+    client.raw.rows.insert.assert_called_with(db_name=DATABASE, table_name=TABLE, row={"extId2": {"high": 5, "low": 0}})
+    client.raw.rows.delete.assert_called_with(db_name=DATABASE, table_name=TABLE, key=["extId1"])
+    assert state_store._deleted == []
+
+
+def test_init_no_file():
+    state_store = LocalStateStore("nosuchfile.json")
+    state_store.initialize()
+
+
+def test_save_and_load():
+    filename = "testfile-localstatestore.json"
+    try:
+        os.remove("testfile-localstatestore.json")
+    except FileNotFoundError:
+        pass
+
+    state_store = LocalStateStore(filename)
+
+    state_store.set_state("ext1", low=1, high=6)
+    state_store.set_state("ext2", high=10)
+    state_store.set_state("ext3", low=8)
+    state_store.set_state("ext4")
+    state_store.set_state("ext5", low=Decimal(math.sqrt(5)), high=Decimal(4))
+
+    state_store.synchronize()
+
+    new_state_store = LocalStateStore(filename)
+    new_state_store.initialize()
+
+    assert new_state_store.get_state("ext1") == (1, 6)
+    assert new_state_store.get_state("ext2") == (None, 10)
+    assert new_state_store.get_state("ext3") == (8, None)
+    assert new_state_store.get_state("ext4") == (None, None)
+    assert new_state_store.get_state("ext5") == (Decimal(math.sqrt(5)), Decimal(4))
+
+    os.remove(filename)
+
+
+def test_start_stop():
+    filename = "testfile-startstop.json"
+    try:
         os.remove(filename)
+    except FileNotFoundError:
+        pass
 
-    def test_start_stop(self):
-        filename = "testfile-startstop.json"
-        try:
-            os.remove(filename)
-        except FileNotFoundError:
-            pass
+    state_store = LocalStateStore(filename, 1)
 
-        state_store = LocalStateStore(filename, 1)
+    state_store.set_state("ext1", low=1, high=6)
+    state_store.set_state("ext2", high=10)
+    state_store.set_state("ext3", low=8)
+    state_store.set_state("ext4")
 
-        state_store.set_state("ext1", low=1, high=6)
-        state_store.set_state("ext2", high=10)
-        state_store.set_state("ext3", low=8)
-        state_store.set_state("ext4")
+    state_store.start()
 
-        state_store.start()
+    time.sleep(3)
 
-        time.sleep(3)
+    state_store.stop(ensure_synchronize=True)
 
-        state_store.stop(ensure_synchronize=True)
+    time.sleep(1)
 
-        time.sleep(1)
+    new_state_store = LocalStateStore(filename, 10)
+    new_state_store.start()
 
-        new_state_store = LocalStateStore(filename, 10)
-        new_state_store.start()
+    time.sleep(1)
 
-        time.sleep(1)
+    assert new_state_store.get_state("ext1") == (1, 6)
+    assert new_state_store.get_state("ext2") == (None, 10)
+    assert new_state_store.get_state("ext3") == (8, None)
+    assert new_state_store.get_state("ext4") == (None, None)
 
-        self.assertTupleEqual(new_state_store.get_state("ext1"), (1, 6))
-        self.assertTupleEqual(new_state_store.get_state("ext2"), (None, 10))
-        self.assertTupleEqual(new_state_store.get_state("ext3"), (8, None))
-        self.assertTupleEqual(new_state_store.get_state("ext4"), (None, None))
+    new_state_store.stop()
 
-        new_state_store.stop()
+    os.remove(filename)
 
+
+def test_invalid_file():
+    filename = "testfile-invalid.json"
+    try:
         os.remove(filename)
+    except FileNotFoundError:
+        pass
 
-    def test_invalid_file(self):
-        filename = "testfile-invalid.json"
-        try:
-            os.remove(filename)
-        except FileNotFoundError:
-            pass
+    with open(filename, "w") as f:
+        f.write("Not json :(")
 
-        with open(filename, "w") as f:
-            f.write("Not json :(")
+    with pytest.raises(ValueError):
+        LocalStateStore(filename).initialize()
 
-        with self.assertRaises(ValueError):
-            LocalStateStore(filename).initialize()
 
-    def test_indexing(self):
-        state_store = NoStateStore()
+def test_indexing():
+    state_store = NoStateStore()
 
-        state_store["id1"] = (1, 7)
-        self.assertTrue("id1" in state_store)
-        self.assertFalse("id0" in state_store)
-        self.assertTupleEqual(state_store["id1"], (1, 7))
+    state_store["id1"] = (1, 7)
+    assert "id1" in state_store
+    assert "id0" not in state_store
+    assert state_store["id1"] == (1, 7)
 
-        state_store["id2"] = (None, 6)
-        self.assertIsNone(state_store["id2"][0])
-        self.assertEqual(state_store["id2"][1], 6)
+    state_store["id2"] = (None, 6)
+    assert state_store["id2"][0] is None
+    assert state_store["id2"][1] == 6

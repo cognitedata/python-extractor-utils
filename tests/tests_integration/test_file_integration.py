@@ -23,13 +23,13 @@ import pytest
 from cognite.client import CogniteClient
 from cognite.client.data_classes import FileMetadata
 from cognite.extractorutils.uploader.files import BytesUploadQueue, FileUploadQueue
-from tests.conftest import TestParameter, TestType
+from tests.conftest import ETestType, ParamTest
 
 
 @pytest.fixture
-def set_test_parameters() -> TestParameter:
+def set_test_parameters() -> ParamTest:
     test_id = random.randint(0, 2**31)
-    test_parameter = TestParameter(test_type=TestType.FILES)
+    test_parameter = ParamTest(test_type=ETestType.FILES)
     test_parameter.external_ids = [
         f"util_integration_file_test_1-{test_id}",
         f"util_integration_file_test_2-{test_id}",
@@ -47,7 +47,7 @@ def await_is_uploaded_status(client: CogniteClient, external_id: str):
 
 
 @pytest.mark.parametrize("functions_runtime", ["true", "false"])
-def test_file_upload_queue(set_upload_test: Tuple[CogniteClient, TestParameter], functions_runtime: str):
+def test_file_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest], functions_runtime: str):
     os.environ["COGNITE_FUNCTION_RUNTIME"] = functions_runtime
     client, test_parameter = set_upload_test
     queue = FileUploadQueue(cdf_client=client, overwrite_existing=True, max_queue_size=2)
@@ -83,7 +83,7 @@ def test_file_upload_queue(set_upload_test: Tuple[CogniteClient, TestParameter],
 
 
 @pytest.mark.parametrize("functions_runtime", ["true", "false"])
-def test_bytes_upload_queue(set_upload_test: Tuple[CogniteClient, TestParameter], functions_runtime: str):
+def test_bytes_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest], functions_runtime: str):
     os.environ["COGNITE_FUNCTION_RUNTIME"] = functions_runtime
     client, test_parameter = set_upload_test
     queue = BytesUploadQueue(cdf_client=client, overwrite_existing=True, max_queue_size=1)
@@ -108,7 +108,7 @@ def test_bytes_upload_queue(set_upload_test: Tuple[CogniteClient, TestParameter]
 
 
 @pytest.mark.parametrize("functions_runtime", ["true", "false"])
-def test_big_file_upload_queue(set_upload_test: Tuple[CogniteClient, TestParameter], functions_runtime: str):
+def test_big_file_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest], functions_runtime: str):
     os.environ["COGNITE_FUNCTION_RUNTIME"] = functions_runtime
     client, test_parameter = set_upload_test
     queue = BytesUploadQueue(cdf_client=client, overwrite_existing=True, max_queue_size=1)

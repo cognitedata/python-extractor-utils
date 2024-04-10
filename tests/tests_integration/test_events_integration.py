@@ -21,13 +21,13 @@ import pytest
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Event
 from cognite.extractorutils.uploader.events import EventUploadQueue
-from tests.conftest import TestParameter, TestType
+from tests.conftest import ETestType, ParamTest
 
 
 @pytest.fixture
-def set_test_parameters() -> TestParameter:
+def set_test_parameters() -> ParamTest:
     test_id = random.randint(0, 2**31)
-    test_parameter = TestParameter(test_type=TestType.EVENTS)
+    test_parameter = ParamTest(test_type=ETestType.EVENTS)
     test_parameter.external_ids = [
         f"util_integration_event_test_1-{test_id}",
         f"util_integration_event_test_2-{test_id}",
@@ -37,7 +37,7 @@ def set_test_parameters() -> TestParameter:
 
 
 @pytest.mark.parametrize("functions_runtime", ["true", "false"])
-def test_events_upload_queue_upsert(set_upload_test: Tuple[CogniteClient, TestParameter], functions_runtime: str):
+def test_events_upload_queue_upsert(set_upload_test: Tuple[CogniteClient, ParamTest], functions_runtime: str):
     os.environ["COGNITE_FUNCTION_RUNTIME"] = functions_runtime
     client, test_parameter = set_upload_test
     queue = EventUploadQueue(cdf_client=client)

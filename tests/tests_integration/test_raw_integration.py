@@ -22,20 +22,20 @@ import pytest
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Row
 from cognite.extractorutils.uploader import RawUploadQueue
-from tests.conftest import TestParameter, TestType
+from tests.conftest import ETestType, ParamTest
 
 
 @pytest.fixture
-def set_test_parameters() -> TestParameter:
+def set_test_parameters() -> ParamTest:
     test_id = random.randint(0, 2**31)
-    test_parameter = TestParameter(test_type=TestType.RAW)
+    test_parameter = ParamTest(test_type=ETestType.RAW)
     test_parameter.database_name = "integrationTests"
     test_parameter.table_name = f"extractorUtils-{test_id}"
     return test_parameter
 
 
 @pytest.mark.parametrize("functions_runtime", ["true", "false"])
-def test_raw_upload_queue(set_upload_test: Tuple[CogniteClient, TestParameter], functions_runtime: str):
+def test_raw_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest], functions_runtime: str):
     os.environ["COGNITE_FUNCTION_RUNTIME"] = functions_runtime
     client, test_parameter = set_upload_test
     queue = RawUploadQueue(cdf_client=client, max_queue_size=500)

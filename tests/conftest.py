@@ -11,7 +11,7 @@ from cognite.client.credentials import OAuthClientCredentials
 from cognite.client.exceptions import CogniteAPIError, CogniteNotFoundError
 
 
-class TestType(Enum):
+class ETestType(Enum):
     TIME_SERIES = "time_series"
     FILES = "files"
     RAW = "raw"
@@ -20,15 +20,15 @@ class TestType(Enum):
 
 
 @dataclass
-class TestParameter:
-    test_type: TestType
+class ParamTest:
+    test_type: ETestType
     external_ids: Optional[List[str]] = None
     database_name: Optional[str] = None
     table_name: Optional[str] = None
 
 
 @pytest.fixture
-def set_upload_test(set_test_parameters: TestParameter, set_client: CogniteClient):
+def set_upload_test(set_test_parameters: ParamTest, set_client: CogniteClient):
     client = set_client
     test_parameter = set_test_parameters
     clean_test(client, test_parameter)
@@ -55,19 +55,19 @@ def set_client() -> CogniteClient:
     return CogniteClient(client_config)
 
 
-def clean_test(client: CogniteClient, test_parameter: TestParameter):
-    if test_parameter.test_type == TestType.TIME_SERIES:
+def clean_test(client: CogniteClient, test_parameter: ParamTest):
+    if test_parameter.test_type == ETestType.TIME_SERIES:
         client.time_series.delete(external_id=test_parameter.external_ids, ignore_unknown_ids=True)
-    elif test_parameter.test_type == TestType.EVENTS:
+    elif test_parameter.test_type == ETestType.EVENTS:
         client.events.delete(external_id=test_parameter.external_ids, ignore_unknown_ids=True)
-    elif test_parameter.test_type == TestType.ASSETS:
+    elif test_parameter.test_type == ETestType.ASSETS:
         client.assets.delete(external_id=test_parameter.external_ids, ignore_unknown_ids=True)
-    elif test_parameter.test_type == TestType.RAW:
+    elif test_parameter.test_type == ETestType.RAW:
         try:
             client.raw.tables.delete(test_parameter.database_name, test_parameter.table_name)
         except CogniteAPIError:
             pass
-    elif test_parameter.test_type == TestType.FILES:
+    elif test_parameter.test_type == ETestType.FILES:
         for file in test_parameter.external_ids:
             try:
                 client.files.delete(external_id=file)

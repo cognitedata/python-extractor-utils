@@ -13,10 +13,10 @@
 #  limitations under the License.
 
 import threading
-import unittest
 from unittest.mock import Mock, patch
 
 import httpx
+import pytest
 import requests
 
 from cognite.client import CogniteClient
@@ -33,322 +33,336 @@ from cognite.extractorutils.util import (
 )
 
 
-class TestEnsureTimeSeries(unittest.TestCase):
-    @patch("cognite.client.CogniteClient")
-    def setUp(self, MockCogniteClient) -> None:
-        self.client: CogniteClient = MockCogniteClient()
+@patch("cognite.client.CogniteClient")
+def test_ts_nothing_in_cdf(MockCogniteClient):
+    client: CogniteClient = MockCogniteClient()
+    time_series = [TimeSeries(external_id="a"), TimeSeries(external_id="b")]
 
-    def test_nothing_in_cdf(self):
-        time_series = [TimeSeries(external_id="a"), TimeSeries(external_id="b")]
+    client.time_series.retrieve_multiple = Mock(
+        side_effect=CogniteNotFoundError([{"externalId": ts.external_id} for ts in time_series])
+    )
 
-        self.client.time_series.retrieve_multiple = Mock(
-            side_effect=CogniteNotFoundError([{"externalId": ts.external_id} for ts in time_series])
-        )
+    ensure_time_series(client, time_series)
 
-        ensure_time_series(self.client, time_series)
+    client.time_series.create.assert_called_once_with(time_series)
 
-        self.client.time_series.create.assert_called_once_with(time_series)
 
-    def test_some_in_cdf(self):
-        existing = [TimeSeries(external_id="a")]
-        new = [TimeSeries(external_id="b")]
+@patch("cognite.client.CogniteClient")
+def test_ts_some_in_cdf(MockCogniteClient):
+    client: CogniteClient = MockCogniteClient()
+    existing = [TimeSeries(external_id="a")]
+    new = [TimeSeries(external_id="b")]
 
-        self.client.time_series.retrieve_multiple = Mock(
-            side_effect=CogniteNotFoundError([{"externalId": ts.external_id} for ts in new])
-        )
+    client.time_series.retrieve_multiple = Mock(
+        side_effect=CogniteNotFoundError([{"externalId": ts.external_id} for ts in new])
+    )
 
-        ensure_time_series(self.client, existing + new)
+    ensure_time_series(client, existing + new)
 
-        self.client.time_series.create.assert_called_once_with(new)
+    client.time_series.create.assert_called_once_with(new)
 
-    def test_all_in_cdf(self):
-        time_series = [TimeSeries(external_id="a"), TimeSeries(external_id="b")]
 
-        ensure_time_series(self.client, time_series)
+@patch("cognite.client.CogniteClient")
+def test_ts_all_in_cdf(MockCogniteClient):
+    client: CogniteClient = MockCogniteClient()
+    time_series = [TimeSeries(external_id="a"), TimeSeries(external_id="b")]
 
-        self.client.time_series.create.assert_not_called()
+    ensure_time_series(client, time_series)
 
+    client.time_series.create.assert_not_called()
 
-class TestEnsureAssets(unittest.TestCase):
-    @patch("cognite.client.CogniteClient")
-    def setUp(self, MockCogniteClient) -> None:
-        self.client: CogniteClient = MockCogniteClient()
 
-    def test_nothing_in_cdf(self):
-        assets = [Asset(external_id="a"), Asset(external_id="b")]
+@patch("cognite.client.CogniteClient")
+def test_assets_nothing_in_cdf(MockCogniteClient):
+    client: CogniteClient = MockCogniteClient()
+    assets = [Asset(external_id="a"), Asset(external_id="b")]
 
-        self.client.assets.retrieve_multiple = Mock(
-            side_effect=CogniteNotFoundError([{"externalId": ts.external_id} for ts in assets])
-        )
+    client.assets.retrieve_multiple = Mock(
+        side_effect=CogniteNotFoundError([{"externalId": ts.external_id} for ts in assets])
+    )
 
-        ensure_assets(self.client, assets)
+    ensure_assets(client, assets)
 
-        self.client.assets.create.assert_called_once_with(assets)
+    client.assets.create.assert_called_once_with(assets)
 
-    def test_some_in_cdf(self):
-        existing = [Asset(external_id="a")]
-        new = [Asset(external_id="b")]
 
-        self.client.assets.retrieve_multiple = Mock(
-            side_effect=CogniteNotFoundError([{"externalId": ts.external_id} for ts in new])
-        )
+@patch("cognite.client.CogniteClient")
+def test_assets_some_in_cdf(MockCogniteClient):
+    client: CogniteClient = MockCogniteClient()
+    existing = [Asset(external_id="a")]
+    new = [Asset(external_id="b")]
 
-        ensure_assets(self.client, existing + new)
+    client.assets.retrieve_multiple = Mock(
+        side_effect=CogniteNotFoundError([{"externalId": ts.external_id} for ts in new])
+    )
 
-        self.client.assets.create.assert_called_once_with(new)
+    ensure_assets(client, existing + new)
 
-    def test_all_in_cdf(self):
-        assets = [Asset(external_id="a"), Asset(external_id="b")]
+    client.assets.create.assert_called_once_with(new)
 
-        ensure_assets(self.client, assets)
 
-        self.client.assets.create.assert_not_called()
+@patch("cognite.client.CogniteClient")
+def test_assets_all_in_cdf(MockCogniteClient):
+    client: CogniteClient = MockCogniteClient()
+    assets = [Asset(external_id="a"), Asset(external_id="b")]
 
+    ensure_assets(client, assets)
 
-class TestEitherId(unittest.TestCase):
-    def test_init(self):
-        with self.assertRaises(TypeError):
-            EitherId(id=123, external_id="extId")
-        with self.assertRaises(TypeError):
-            EitherId()
+    client.assets.create.assert_not_called()
 
-    def test_getters(self):
-        self.assertEqual(EitherId(id=123).content(), 123)
-        self.assertEqual(EitherId(id=123).type(), "id")
-        self.assertEqual(EitherId(external_id="abc").content(), "abc")
-        self.assertEqual(EitherId(external_id="abc").type(), "externalId")
-        self.assertEqual(EitherId(externalId="abc").content(), "abc")
-        self.assertEqual(EitherId(externalId="abc").type(), "externalId")
 
-    def test_eq(self):
-        id1 = EitherId(id=123)
-        id2 = EitherId(id=123)
+def test_init():
+    with pytest.raises(TypeError):
+        EitherId(id=123, external_id="extId")
+    with pytest.raises(TypeError):
+        EitherId()
 
-        self.assertFalse(id1 is id2)
-        self.assertTrue(id1 == id2)
 
-        id1 = EitherId(external_id="abc")
-        id2 = EitherId(external_id="abc")
+def test_getters():
+    assert EitherId(id=123).content() == 123
+    assert EitherId(id=123).type() == "id"
+    assert EitherId(external_id="abc").content() == "abc"
+    assert EitherId(external_id="abc").type() == "externalId"
+    assert EitherId(externalId="abc").content() == "abc"
+    assert EitherId(externalId="abc").type() == "externalId"
 
-        self.assertFalse(id1 is id2)
-        self.assertTrue(id1 == id2)
 
-    def test_hash(self):
-        id1 = EitherId(id=123)
-        id2 = EitherId(id=123)
+def test_eq():
+    id1 = EitherId(id=123)
+    id2 = EitherId(id=123)
 
-        self.assertTrue(hash(id1) == hash(id2))
+    assert id1 is not id2
+    assert id1 == id2
 
-        id1 = EitherId(external_id="abc")
-        id2 = EitherId(external_id="abc")
+    id1 = EitherId(external_id="abc")
+    id2 = EitherId(external_id="abc")
 
-        self.assertTrue(hash(id1) == hash(id2))
+    assert id1 is not id2
+    assert id1 == id2
 
-    def test_repr(self):
-        self.assertEqual(EitherId(externalId="extId").__repr__(), "externalId: extId")
 
+def test_hash():
+    id1 = EitherId(id=123)
+    id2 = EitherId(id=123)
 
-class TestCancellationToken(unittest.TestCase):
-    def test_cancel(self):
-        token = CancellationToken()
-        self.assertFalse(token.is_cancelled)
-        token.cancel()
-        self.assertTrue(token.is_cancelled)
-        token.cancel()  # Does nothing
-        self.assertTrue(token.is_cancelled)
-        self.assertTrue(token.wait(1))  # Returns immediately.
+    assert hash(id1) == hash(id2)
 
-    def test_wait(self):
-        token = CancellationToken()
+    id1 = EitherId(external_id="abc")
+    id2 = EitherId(external_id="abc")
 
-        def wait():
-            token.wait()
+    assert hash(id1) == hash(id2)
 
-        t1 = threading.Thread(target=wait)
-        t2 = threading.Thread(target=wait)
-        t1.start()
-        t2.start()
-        # Wait a bit
-        token.wait(0.5)
-        self.assertTrue(t1.is_alive())
-        self.assertTrue(t2.is_alive())
 
-        token.cancel()
-        t1.join(1)
-        t2.join(1)
-        self.assertFalse(t1.is_alive())
-        self.assertFalse(t2.is_alive())
+def test_repr():
+    assert EitherId(externalId="extId").__repr__() == "externalId: extId"
 
-    def test_child_token(self):
-        token = CancellationToken()
-        child_a = token.create_child_token()
-        child_b = token.create_child_token()
 
-        def wait_a():
-            child_a.wait()
+def test_cancel():
+    token = CancellationToken()
+    assert not token.is_cancelled
+    token.cancel()
+    assert token.is_cancelled
+    token.cancel()  # Does nothing
+    assert token.is_cancelled
+    assert token.wait(1)  # Returns immediately.
 
-        def wait_b():
-            child_b.wait()
 
-        t1 = threading.Thread(target=wait_a)
-        t2 = threading.Thread(target=wait_b)
-        t1.start()
-        t2.start()
+def test_wait():
+    token = CancellationToken()
 
-        token.wait(0.5)
-        self.assertTrue(t1.is_alive())
-        self.assertTrue(t2.is_alive())
+    def wait():
+        token.wait()
 
-        child_b.cancel()
-        t2.join(1)
-        self.assertFalse(t2.is_alive())
-        self.assertTrue(t1.is_alive())
+    t1 = threading.Thread(target=wait)
+    t2 = threading.Thread(target=wait)
+    t1.start()
+    t2.start()
+    # Wait a bit
+    token.wait(0.5)
+    assert t1.is_alive()
+    assert t2.is_alive()
 
-        token.cancel()
-        t1.join(1)
-        self.assertFalse(t1.is_alive())
+    token.cancel()
+    t1.join(1)
+    t2.join(1)
+    assert not t1.is_alive()
+    assert not t2.is_alive()
 
 
-class TestRetries(unittest.TestCase):
-    def test_simple_retry(self) -> None:
-        mock = Mock()
+def test_child_token():
+    token = CancellationToken()
+    child_a = token.create_child_token()
+    child_b = token.create_child_token()
 
-        @retry(tries=3, delay=0, jitter=0)
-        def call_mock() -> None:
-            mock()
-            raise ValueError()
+    def wait_a():
+        child_a.wait()
 
-        with self.assertRaises(ValueError):
-            call_mock()
+    def wait_b():
+        child_b.wait()
 
-        self.assertEqual(len(mock.call_args_list), 3)
+    t1 = threading.Thread(target=wait_a)
+    t2 = threading.Thread(target=wait_b)
+    t1.start()
+    t2.start()
 
-    def test_simple_retry_specified(self) -> None:
-        mock = Mock()
+    token.wait(0.5)
+    assert t1.is_alive()
+    assert t2.is_alive()
 
-        @retry(tries=3, delay=0, jitter=0, exceptions=(ValueError,))
-        def call_mock() -> None:
-            mock()
-            raise ValueError()
+    child_b.cancel()
+    t2.join(1)
+    assert not t2.is_alive()
+    assert t1.is_alive()
 
-        with self.assertRaises(ValueError):
-            call_mock()
+    token.cancel()
+    t1.join(1)
+    assert not t1.is_alive()
 
-        self.assertEqual(len(mock.call_args_list), 3)
 
-    def test_not_retry_unspecified(self) -> None:
-        mock = Mock()
+def test_simple_retry() -> None:
+    mock = Mock()
 
-        @retry(tries=3, delay=0, jitter=0, exceptions=(TypeError,))
-        def call_mock() -> None:
-            mock()
-            raise ValueError()
+    @retry(tries=3, delay=0, jitter=0)
+    def call_mock() -> None:
+        mock()
+        raise ValueError()
 
-        with self.assertRaises(ValueError):
-            call_mock()
+    with pytest.raises(ValueError):
+        call_mock()
 
-        self.assertEqual(len(mock.call_args_list), 1)
+    assert len(mock.call_args_list), 3
 
-    def test_retry_conditional(self) -> None:
-        mock = Mock()
 
-        @retry(tries=3, delay=0, jitter=0, exceptions={ValueError: lambda x: "Invalid" not in str(x)})
-        def call_mock(is_none: bool) -> None:
-            mock()
+def test_simple_retry_specified() -> None:
+    mock = Mock()
 
-            if is_none:
-                raise ValueError("Could not retrieve value")
-            else:
-                raise ValueError("Invalid value: 1234")
+    @retry(tries=3, delay=0, jitter=0, exceptions=(ValueError,))
+    def call_mock() -> None:
+        mock()
+        raise ValueError()
 
-        with self.assertRaises(ValueError):
-            call_mock(True)
+    with pytest.raises(ValueError):
+        call_mock()
 
-        self.assertEqual(len(mock.call_args_list), 3)
+    assert len(mock.call_args_list), 3
 
-        mock.reset_mock()
 
-        with self.assertRaises(ValueError):
-            call_mock(False)
+def test_not_retry_unspecified() -> None:
+    mock = Mock()
 
-        self.assertEqual(len(mock.call_args_list), 1)
+    @retry(tries=3, delay=0, jitter=0, exceptions=(TypeError,))
+    def call_mock() -> None:
+        mock()
+        raise ValueError()
 
-    def test_retry_requests(self) -> None:
-        mock = Mock()
+    with pytest.raises(ValueError):
+        call_mock()
 
-        @retry(tries=3, delay=0, jitter=0, exceptions=requests_exceptions())
-        def call_mock() -> None:
-            mock()
-            requests.get("http://localhost:1234/nope")
+    assert len(mock.call_args_list) == 1
 
-        with self.assertRaises(requests.ConnectionError):
-            call_mock()
 
-        self.assertEqual(len(mock.call_args_list), 3)
-        mock.reset_mock()
+def test_retry_conditional() -> None:
+    mock = Mock()
 
-        # 404 should not be retried
-        @retry(tries=3, delay=0, jitter=0, exceptions=requests_exceptions())
-        def call_mock2() -> None:
-            mock()
-            res = requests.Response()
-            res.status_code = 404
-            res.raise_for_status()
+    @retry(tries=3, delay=0, jitter=0, exceptions={ValueError: lambda x: "Invalid" not in str(x)})
+    def call_mock(is_none: bool) -> None:
+        mock()
 
-        with self.assertRaises(requests.HTTPError):
-            call_mock2()
+        if is_none:
+            raise ValueError("Could not retrieve value")
+        else:
+            raise ValueError("Invalid value: 1234")
 
-        self.assertEqual(len(mock.call_args_list), 1)
-        mock.reset_mock()
+    with pytest.raises(ValueError):
+        call_mock(True)
 
-        # 429 should be retried
-        @retry(tries=3, delay=0, jitter=0, exceptions=requests_exceptions())
-        def call_mock3() -> None:
-            mock()
-            res = requests.Response()
-            res.status_code = 429
-            res.raise_for_status()
+    assert len(mock.call_args_list) == 3
 
-        with self.assertRaises(requests.HTTPError):
-            call_mock3()
+    mock.reset_mock()
 
-        self.assertEqual(len(mock.call_args_list), 3)
+    with pytest.raises(ValueError):
+        call_mock(False)
 
-    def test_httpx_requests(self) -> None:
-        mock = Mock()
+    assert len(mock.call_args_list) == 1
 
-        @retry(tries=3, delay=0, jitter=0, exceptions=httpx_exceptions())
-        def call_mock() -> None:
-            mock()
-            httpx.get("http://localhost:1234/nope")
 
-        with self.assertRaises(httpx.ConnectError):
-            call_mock()
+def test_retry_requests() -> None:
+    mock = Mock()
 
-        self.assertEqual(len(mock.call_args_list), 3)
-        mock.reset_mock()
+    @retry(tries=3, delay=0, jitter=0, exceptions=requests_exceptions())
+    def call_mock() -> None:
+        mock()
+        requests.get("http://localhost:1234/nope")
 
-        # 404 should not be retried
-        @retry(tries=3, delay=0, jitter=0, exceptions=httpx_exceptions())
-        def call_mock2() -> None:
-            mock()
-            res = httpx.Response(404, request=httpx.Request("GET", "http://localhost/"))
-            res.raise_for_status()
+    with pytest.raises(requests.ConnectionError):
+        call_mock()
 
-        with self.assertRaises(httpx.HTTPError):
-            call_mock2()
+    assert len(mock.call_args_list) == 3
+    mock.reset_mock()
 
-        self.assertEqual(len(mock.call_args_list), 1)
-        mock.reset_mock()
+    # 404 should not be retried
+    @retry(tries=3, delay=0, jitter=0, exceptions=requests_exceptions())
+    def call_mock2() -> None:
+        mock()
+        res = requests.Response()
+        res.status_code = 404
+        res.raise_for_status()
 
-        # 429 should be retried
-        @retry(tries=3, delay=0, jitter=0, exceptions=httpx_exceptions())
-        def call_mock3() -> None:
-            mock()
-            res = httpx.Response(429, request=httpx.Request("GET", "http://localhost/"))
-            res.raise_for_status()
+    with pytest.raises(requests.HTTPError):
+        call_mock2()
 
-        with self.assertRaises(httpx.HTTPError):
-            call_mock3()
+    assert len(mock.call_args_list) == 1
+    mock.reset_mock()
 
-        self.assertEqual(len(mock.call_args_list), 3)
+    # 429 should be retried
+    @retry(tries=3, delay=0, jitter=0, exceptions=requests_exceptions())
+    def call_mock3() -> None:
+        mock()
+        res = requests.Response()
+        res.status_code = 429
+        res.raise_for_status()
+
+    with pytest.raises(requests.HTTPError):
+        call_mock3()
+
+    assert len(mock.call_args_list) == 3
+
+
+def test_httpx_requests() -> None:
+    mock = Mock()
+
+    @retry(tries=3, delay=0, jitter=0, exceptions=httpx_exceptions())
+    def call_mock() -> None:
+        mock()
+        httpx.get("http://localhost:1234/nope")
+
+    with pytest.raises(httpx.ConnectError):
+        call_mock()
+
+    assert len(mock.call_args_list) == 3
+    mock.reset_mock()
+
+    # 404 should not be retried
+    @retry(tries=3, delay=0, jitter=0, exceptions=httpx_exceptions())
+    def call_mock2() -> None:
+        mock()
+        res = httpx.Response(404, request=httpx.Request("GET", "http://localhost/"))
+        res.raise_for_status()
+
+    with pytest.raises(httpx.HTTPError):
+        call_mock2()
+
+    assert len(mock.call_args_list) == 1
+    mock.reset_mock()
+
+    # 429 should be retried
+    @retry(tries=3, delay=0, jitter=0, exceptions=httpx_exceptions())
+    def call_mock3() -> None:
+        mock()
+        res = httpx.Response(429, request=httpx.Request("GET", "http://localhost/"))
+        res.raise_for_status()
+
+    with pytest.raises(httpx.HTTPError):
+        call_mock3()
+
+    assert len(mock.call_args_list) == 3
