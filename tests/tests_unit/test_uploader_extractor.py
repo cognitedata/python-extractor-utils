@@ -12,7 +12,6 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 import datetime
-import unittest
 from unittest.mock import patch
 
 from cognite.client import CogniteClient
@@ -22,97 +21,92 @@ from cognite.extractorutils.uploader_extractor import UploaderExtractor, Uploade
 from cognite.extractorutils.uploader_types import Event, InsertDatapoints, RawRow
 
 
-class TestUploaderExtractorClass(unittest.TestCase):
-    @patch("cognite.client.CogniteClient")
-    def test_handle_events(self, MockCogniteClient):
-        client: CogniteClient = MockCogniteClient()
+@patch("cognite.client.CogniteClient")
+def test_handle_events(MockCogniteClient):
+    client: CogniteClient = MockCogniteClient()
 
-        ex = UploaderExtractor[UploaderExtractorConfig](
-            name="ext_extractor1", description="description", config_class=UploaderExtractorConfig
-        )
-        ex.event_queue = EventUploadQueue(client)
+    ex = UploaderExtractor[UploaderExtractorConfig](
+        name="ext_extractor1", description="description", config_class=UploaderExtractorConfig
+    )
+    ex.event_queue = EventUploadQueue(client)
 
-        # Single
-        evt = Event(external_id="some-event")
-        ex.handle_output(evt)
+    # Single
+    evt = Event(external_id="some-event")
+    ex.handle_output(evt)
 
-        ex.event_queue.upload()
-        client.events.create.assert_called_with([evt])
+    ex.event_queue.upload()
+    client.events.create.assert_called_with([evt])
 
-        # Iterable
-        evts = [Event(external_id="some-event"), Event(external_id="some-other-event")]
-        ex.handle_output(evts)
+    # Iterable
+    evts = [Event(external_id="some-event"), Event(external_id="some-other-event")]
+    ex.handle_output(evts)
 
-        ex.event_queue.upload()
-        client.events.create.assert_called_with(evts)
+    ex.event_queue.upload()
+    client.events.create.assert_called_with(evts)
 
-    @patch("cognite.client.CogniteClient")
-    def test_handle_raw_rows(self, MockCogniteClient):
-        client: CogniteClient = MockCogniteClient()
 
-        ex = UploaderExtractor[UploaderExtractorConfig](
-            name="ext_extractor2", description="description", config_class=UploaderExtractorConfig
-        )
-        ex.raw_queue = RawUploadQueue(client)
+@patch("cognite.client.CogniteClient")
+def test_handle_raw_rows(MockCogniteClient):
+    client: CogniteClient = MockCogniteClient()
 
-        # Single
-        r = Row()
-        row = RawRow(db_name="some-db", table_name="some-table", row=r)
-        ex.handle_output(row)
+    ex = UploaderExtractor[UploaderExtractorConfig](
+        name="ext_extractor2", description="description", config_class=UploaderExtractorConfig
+    )
+    ex.raw_queue = RawUploadQueue(client)
 
-        ex.raw_queue.upload()
-        client.raw.rows.insert.assert_called_with(
-            db_name="some-db", table_name="some-table", row=[r], ensure_parent=True
-        )
+    # Single
+    r = Row()
+    row = RawRow(db_name="some-db", table_name="some-table", row=r)
+    ex.handle_output(row)
 
-        # Iterable
-        r2 = Row()
-        rows = [
-            RawRow(db_name="some-db", table_name="some-table", row=r),
-            RawRow(db_name="some-db", table_name="some-table", row=r2),
+    ex.raw_queue.upload()
+    client.raw.rows.insert.assert_called_with(db_name="some-db", table_name="some-table", row=[r], ensure_parent=True)
+
+    # Iterable
+    r2 = Row()
+    rows = [
+        RawRow(db_name="some-db", table_name="some-table", row=r),
+        RawRow(db_name="some-db", table_name="some-table", row=r2),
+    ]
+    ex.handle_output(rows)
+
+    ex.raw_queue.upload()
+    client.raw.rows.insert.assert_called_with(db_name="some-db", table_name="some-table", row=[r], ensure_parent=True)
+    client.raw.rows.insert.assert_called_with(db_name="some-db", table_name="some-table", row=[r2], ensure_parent=True)
+
+
+@patch("cognite.client.CogniteClient")
+def test_handle_timeseries(MockCogniteClient):
+    client: CogniteClient = MockCogniteClient()
+
+    ex = UploaderExtractor[UploaderExtractorConfig](
+        name="ext_extractor3", description="description", config_class=UploaderExtractorConfig
+    )
+    ex.time_series_queue = TimeSeriesUploadQueue(client)
+
+    start: float = datetime.datetime.now().timestamp() * 1000.0
+
+    # Single
+    ts = InsertDatapoints(external_id="some-id", datapoints=[(start, 100)])
+    ex.handle_output(ts)
+
+    ex.time_series_queue.upload()
+    client.time_series.data.insert_multiple.assert_called_with(
+        [
+            {"externalId": "some-id", "datapoints": ts.datapoints},
         ]
-        ex.handle_output(rows)
+    )
+    # Iterable
+    tss = [
+        InsertDatapoints(external_id="some-id", datapoints=[(start, 100), (start + 1, 101)]),
+        InsertDatapoints(external_id="some-other-id", datapoints=[(start + 2, 102), (start + 3, 103)]),
+    ]
+    ex.handle_output(tss)
 
-        ex.raw_queue.upload()
-        client.raw.rows.insert.assert_called_with(
-            db_name="some-db", table_name="some-table", row=[r], ensure_parent=True
-        )
-        client.raw.rows.insert.assert_called_with(
-            db_name="some-db", table_name="some-table", row=[r2], ensure_parent=True
-        )
-
-    @patch("cognite.client.CogniteClient")
-    def test_handle_timeseries(self, MockCogniteClient):
-        client: CogniteClient = MockCogniteClient()
-
-        ex = UploaderExtractor[UploaderExtractorConfig](
-            name="ext_extractor3", description="description", config_class=UploaderExtractorConfig
-        )
-        ex.time_series_queue = TimeSeriesUploadQueue(client)
-
-        start: float = datetime.datetime.now().timestamp() * 1000.0
-
-        # Single
-        ts = InsertDatapoints(external_id="some-id", datapoints=[(start, 100)])
-        ex.handle_output(ts)
-
-        ex.time_series_queue.upload()
-        client.time_series.data.insert_multiple.assert_called_with(
-            [
-                {"externalId": "some-id", "datapoints": ts.datapoints},
-            ]
-        )
-        # Iterable
-        tss = [
-            InsertDatapoints(external_id="some-id", datapoints=[(start, 100), (start + 1, 101)]),
-            InsertDatapoints(external_id="some-other-id", datapoints=[(start + 2, 102), (start + 3, 103)]),
+    ex.time_series_queue.upload()
+    client.time_series.data.insert_multiple.assert_called_with(
+        [
+            {"externalId": "some-id", "datapoints": tss[0].datapoints},
+            {"externalId": "some-other-id", "datapoints": tss[1].datapoints},
         ]
-        ex.handle_output(tss)
-
-        ex.time_series_queue.upload()
-        client.time_series.data.insert_multiple.assert_called_with(
-            [
-                {"externalId": "some-id", "datapoints": tss[0].datapoints},
-                {"externalId": "some-other-id", "datapoints": tss[1].datapoints},
-            ]
-        )
+    )

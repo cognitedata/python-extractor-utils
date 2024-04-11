@@ -11,7 +11,6 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-import unittest
 from dataclasses import dataclass, field
 from unittest.mock import patch
 
@@ -43,76 +42,79 @@ class ConfigWithoutStates(BaseConfig):
     source: SourceConfig
 
 
-class TestExtractorClass(unittest.TestCase):
-    def test_load_config(self):
-        e1 = Extractor(name="my_extractor1", description="description", config_class=ConfigWithStates)
-        e1._initial_load_config("tests/tests_unit/dummyconfig.yaml")
-        self.assertIsInstance(e1.config, ConfigWithStates)
+def test_load_config():
+    e1 = Extractor(name="my_extractor1", description="description", config_class=ConfigWithStates)
+    e1._initial_load_config("tests/tests_unit/dummyconfig.yaml")
+    assert isinstance(e1.config, ConfigWithStates)
 
-    def test_load_config_keyvault(self):
-        e7 = Extractor(name="my_extractor7", description="description", config_class=ConfigWithoutStates)
-        e7._initial_load_config("tests/tests_unit/dummyconfig_keyvault.yaml")
 
-        # dummy Azure KeyVault secrets
-        self.assertEqual(e7.config.cognite.idp_authentication.client_id, "12345")
-        self.assertEqual(e7.config.cognite.idp_authentication.secret, "abcde")
+def test_load_config_keyvault():
+    e7 = Extractor(name="my_extractor7", description="description", config_class=ConfigWithoutStates)
+    e7._initial_load_config("tests/tests_unit/dummyconfig_keyvault.yaml")
 
-    @patch("cognite.client.CogniteClient")
-    def test_load_state_store(self, get_client_mock):
-        e2 = Extractor(name="my_extractor2", description="description", config_class=ConfigWithStates)
-        e2._initial_load_config("tests/tests_unit/dummyconfig.yaml")
-        e2.cognite_client = get_client_mock()
-        e2._load_state_store()
-        self.assertIsInstance(e2.state_store, LocalStateStore)
+    # dummy Azure KeyVault secrets
+    assert e7.config.cognite.idp_authentication.client_id == "12345"
+    assert e7.config.cognite.idp_authentication.secret == "abcde"
 
-        e3 = Extractor(
-            name="my_extractor3",
-            description="description",
-            config_class=ConfigWithoutStates,
-            use_default_state_store=True,
-        )
-        e3._initial_load_config("tests/tests_unit/dummyconfig.yaml")
-        e3.cognite_client = get_client_mock()
-        e3._load_state_store()
-        self.assertIsInstance(e3.state_store, LocalStateStore)
 
-        e6 = Extractor(
-            name="my_extractor6",
-            description="description",
-            config_class=ConfigWithoutStates,
-            use_default_state_store=False,
-        )
-        e6._initial_load_config("tests/tests_unit/dummyconfig.yaml")
-        e6.cognite_client = get_client_mock()
-        e6._load_state_store()
-        self.assertIsInstance(e6.state_store, NoStateStore)
+@patch("cognite.client.CogniteClient")
+def test_load_state_store(get_client_mock):
+    e2 = Extractor(name="my_extractor2", description="description", config_class=ConfigWithStates)
+    e2._initial_load_config("tests/tests_unit/dummyconfig.yaml")
+    e2.cognite_client = get_client_mock()
+    e2._load_state_store()
+    assert isinstance(e2.state_store, LocalStateStore)
 
-    @pytest.mark.order(1)
-    def test_config_getter(self):
-        with self.assertRaises(ValueError):
-            Extractor.get_current_config()
+    e3 = Extractor(
+        name="my_extractor3",
+        description="description",
+        config_class=ConfigWithoutStates,
+        use_default_state_store=True,
+    )
+    e3._initial_load_config("tests/tests_unit/dummyconfig.yaml")
+    e3.cognite_client = get_client_mock()
+    e3._load_state_store()
+    assert isinstance(e3.state_store, LocalStateStore)
 
-        e4 = Extractor(name="my_extractor4", description="description", config_class=ConfigWithStates)
+    e6 = Extractor(
+        name="my_extractor6",
+        description="description",
+        config_class=ConfigWithoutStates,
+        use_default_state_store=False,
+    )
+    e6._initial_load_config("tests/tests_unit/dummyconfig.yaml")
+    e6.cognite_client = get_client_mock()
+    e6._load_state_store()
+    assert isinstance(e6.state_store, NoStateStore)
 
-        with self.assertRaises(ValueError):
-            Extractor.get_current_config()
 
-        e4._initial_load_config("tests/tests_unit/dummyconfig.yaml")
+@pytest.mark.order(1)
+def test_config_getter():
+    with pytest.raises(ValueError):
+        Extractor.get_current_config()
 
-        self.assertIsInstance(Extractor.get_current_config(), ConfigWithStates)
+    e4 = Extractor(name="my_extractor4", description="description", config_class=ConfigWithStates)
 
-    @pytest.mark.order(2)
-    def test_state_store_getter(self):
-        with self.assertRaises(ValueError):
-            Extractor.get_current_statestore()
+    with pytest.raises(ValueError):
+        Extractor.get_current_config()
 
-        e5 = Extractor(name="my_extractor5", description="description", config_class=ConfigWithStates)
+    e4._initial_load_config("tests/tests_unit/dummyconfig.yaml")
 
-        with self.assertRaises(ValueError):
-            Extractor.get_current_statestore()
+    assert isinstance(Extractor.get_current_config(), ConfigWithStates)
 
-        e5._initial_load_config("tests/tests_unit/dummyconfig.yaml")
-        e5.cognite_client = e5.config.cognite.get_cognite_client(e5.name)
-        e5._load_state_store()
 
-        self.assertIsInstance(Extractor.get_current_statestore(), LocalStateStore)
+@pytest.mark.order(2)
+def test_state_store_getter():
+    with pytest.raises(ValueError):
+        Extractor.get_current_statestore()
+
+    e5 = Extractor(name="my_extractor5", description="description", config_class=ConfigWithStates)
+
+    with pytest.raises(ValueError):
+        Extractor.get_current_statestore()
+
+    e5._initial_load_config("tests/tests_unit/dummyconfig.yaml")
+    e5.cognite_client = e5.config.cognite.get_cognite_client(e5.name)
+    e5._load_state_store()
+
+    assert isinstance(Extractor.get_current_statestore(), LocalStateStore)
