@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.1.2
+
+### Fixed
+
+ * `cognite_exceptions()` did not properly retry file uploads
+
 ## 7.1.1
 
 ### Fixed

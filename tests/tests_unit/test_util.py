@@ -21,10 +21,11 @@ import requests
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset, TimeSeries
-from cognite.client.exceptions import CogniteNotFoundError
+from cognite.client.exceptions import CogniteAPIError, CogniteFileUploadError, CogniteNotFoundError
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.util import (
     EitherId,
+    cognite_exceptions,
     ensure_assets,
     ensure_time_series,
     httpx_exceptions,
@@ -363,6 +364,44 @@ def test_httpx_requests() -> None:
         res.raise_for_status()
 
     with pytest.raises(httpx.HTTPError):
+        call_mock3()
+
+    assert len(mock.call_args_list) == 3
+
+
+def test_retry_cognite() -> None:
+    mock = Mock()
+
+    @retry(tries=3, delay=0, jitter=0, exceptions=cognite_exceptions())
+    def call_mock() -> None:
+        mock()
+        raise CogniteAPIError("hey", code=503)
+
+    with pytest.raises(CogniteAPIError):
+        call_mock()
+
+    assert len(mock.call_args_list) == 3
+    mock.reset_mock()
+
+    # 403 should not be retried
+    @retry(tries=3, delay=0, jitter=0, exceptions=cognite_exceptions())
+    def call_mock2() -> None:
+        mock()
+        raise CogniteAPIError("hey", code=403)
+
+    with pytest.raises(CogniteAPIError):
+        call_mock2()
+
+    assert len(mock.call_args_list) == 1
+    mock.reset_mock()
+
+    # file errors should be retried
+    @retry(tries=3, delay=0, jitter=0, exceptions=cognite_exceptions())
+    def call_mock3() -> None:
+        mock()
+        raise CogniteFileUploadError("hey", 408)
+
+    with pytest.raises(CogniteFileUploadError):
         call_mock3()
 
     assert len(mock.call_args_list) == 3

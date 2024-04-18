@@ -16,6 +16,7 @@
 The ``util`` package contains miscellaneous functions and classes that can some times be useful while developing
 extractors.
 """
+
 import logging
 import random
 from functools import partial, wraps
@@ -27,7 +28,7 @@ from decorator import decorator
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset, ExtractionPipelineRun, TimeSeries
-from cognite.client.exceptions import CogniteAPIError, CogniteException, CogniteNotFoundError
+from cognite.client.exceptions import CogniteAPIError, CogniteException, CogniteFileUploadError, CogniteNotFoundError
 from cognite.extractorutils.threading import CancellationToken
 
 
@@ -492,7 +493,7 @@ def cognite_exceptions(
     status_codes = status_codes or [408, 425, 429, 500, 502, 503, 504]
 
     def handle_cognite_errors(exception: CogniteException) -> bool:
-        if isinstance(exception, CogniteAPIError):
+        if isinstance(exception, (CogniteAPIError, CogniteFileUploadError)):
             return exception.code in status_codes
         return True
 
