@@ -1,6 +1,6 @@
 ## Using values from Azure Key Vault
 
-The DB extractor also supports loading values from Azure Key Vault. To load a configuration value from Azure Key Vault, use the `!keyvault` tag followed by the name of the secret you want to load. For example, to load the value of the `my-secret-name` secret in Key Vault into a `password` parameter, configure your extractor like this:
+The extractor also supports loading values from Azure Key Vault. To load a configuration value from Azure Key Vault, use the `!keyvault` tag followed by the name of the secret you want to load. For example, to load the value of the `my-secret-name` secret in Key Vault into a `password` parameter, configure your extractor like this:
 
 ``` yaml
 password: !keyvault my-secret-name
