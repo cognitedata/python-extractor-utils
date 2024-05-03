@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.1.3
+
+### Fixed
+
+ * Update type hints for the time series upload queue to allow status codes
+
 ## 7.1.2
 
 ### Fixed
