@@ -12,7 +12,6 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-import os
 import random
 import string
 import time
@@ -22,7 +21,7 @@ from typing import Tuple
 import pytest
 
 from cognite.client import CogniteClient
-from cognite.client.data_classes import TimeSeries
+from cognite.client.data_classes import StatusCode, TimeSeries
 from cognite.extractorutils.uploader import TimeSeriesUploadQueue
 from tests.conftest import ETestType, ParamTest
 
@@ -39,9 +38,7 @@ def set_test_parameters() -> ParamTest:
     return test_parameter
 
 
-@pytest.mark.parametrize("functions_runtime", ["true", "false"])
-def test_time_series_upload_queue1(set_upload_test: Tuple[CogniteClient, ParamTest], functions_runtime: str):
-    os.environ["COGNITE_FUNCTION_RUNTIME"] = functions_runtime
+def test_time_series_upload_queue1(set_upload_test: Tuple[CogniteClient, ParamTest]) -> None:
     client, test_parameter = set_upload_test
     created = client.time_series.create(
         [
@@ -69,7 +66,7 @@ def test_time_series_upload_queue1(set_upload_test: Tuple[CogniteClient, ParamTe
     queue.add_to_upload_queue(external_id=test_parameter.external_ids[0], datapoints=points1_2)
     queue.add_to_upload_queue(id=created[1].id, datapoints=points2)
 
-    time.sleep(30)
+    time.sleep(15)
 
     recv_points1 = client.time_series.data.retrieve(
         external_id=test_parameter.external_ids[0], start="1w-ago", end="now", limit=None
@@ -85,9 +82,7 @@ def test_time_series_upload_queue1(set_upload_test: Tuple[CogniteClient, ParamTe
     queue.stop()
 
 
-@pytest.mark.parametrize("functions_runtime", ["true", "false"])
-def test_time_series_upload_queue2(set_upload_test: Tuple[CogniteClient, ParamTest], functions_runtime: str):
-    os.environ["COGNITE_FUNCTION_RUNTIME"] = functions_runtime
+def test_time_series_upload_queue2(set_upload_test: Tuple[CogniteClient, ParamTest]) -> None:
     client, test_parameter = set_upload_test
     client.time_series.create(TimeSeries(external_id=test_parameter.external_ids[0]))
 
@@ -103,7 +98,7 @@ def test_time_series_upload_queue2(set_upload_test: Tuple[CogniteClient, ParamTe
     queue.add_to_upload_queue(external_id=test_parameter.external_ids[0], datapoints=points1)
     queue.add_to_upload_queue(external_id="noSuchExternalId", datapoints=points2)
 
-    time.sleep(20)
+    time.sleep(15)
 
     recv_points1 = client.time_series.data.retrieve(
         external_id=test_parameter.external_ids[0], start="1w-ago", end="now", limit=None
@@ -114,11 +109,7 @@ def test_time_series_upload_queue2(set_upload_test: Tuple[CogniteClient, ParamTe
     queue.stop()
 
 
-@pytest.mark.parametrize("functions_runtime", ["true", "false"])
-def test_time_series_upload_queue_create_missing(
-    set_upload_test: Tuple[CogniteClient, ParamTest], functions_runtime: str
-):
-    os.environ["COGNITE_FUNCTION_RUNTIME"] = functions_runtime
+def test_time_series_upload_queue_create_missing(set_upload_test: Tuple[CogniteClient, ParamTest]) -> None:
     client, test_parameter = set_upload_test
 
     queue = TimeSeriesUploadQueue(cdf_client=client, create_missing=True)
@@ -151,3 +142,59 @@ def test_time_series_upload_queue_create_missing(
     assert [int(p) for p in recv_points3.value] == [p["value"] for p in points3]
 
     queue.stop()
+
+
+def test_time_seires_with_status(set_upload_test: Tuple[CogniteClient, ParamTest]) -> None:
+    client, test_parameter = set_upload_test
+
+    queue = TimeSeriesUploadQueue(cdf_client=client, create_missing=True)
+
+    start = int(datetime.now(tz=timezone.utc).timestamp() * 1000) - 5_000
+
+    # Create some data with status codes
+    statuses = [
+        StatusCode.Good,
+        StatusCode.Uncertain,
+        StatusCode.Bad,
+        3145728,  # GoodClamped
+    ]
+    points1 = [(start + i * 42, random.random(), random.choice(statuses)) for i in range(30)]
+    queue.add_to_upload_queue(external_id=test_parameter.external_ids[0], datapoints=points1)
+
+    points2 = [(start + i * 24, random.random(), random.choice(statuses)) for i in range(50)]
+    queue.add_to_upload_queue(external_id=test_parameter.external_ids[1], datapoints=points2)
+
+    queue.upload()
+    time.sleep(10)
+
+    recv_points1 = client.time_series.data.retrieve(
+        external_id=test_parameter.external_ids[0],
+        start=start - 100,
+        end="now",
+        limit=None,
+        include_status=True,
+        treat_uncertain_as_bad=False,
+        ignore_bad_datapoints=False,
+    )
+    recv_points2 = client.time_series.data.retrieve(
+        external_id=test_parameter.external_ids[1],
+        start=start - 100,
+        end="now",
+        limit=None,
+        include_status=True,
+        treat_uncertain_as_bad=False,
+        ignore_bad_datapoints=False,
+    )
+
+    assert len(recv_points1) == len(points1)
+    assert len(recv_points2) == len(points2)
+
+    for point, recv_point in zip(points1, recv_points1):  # noqa: B905
+        assert point[0] == recv_point.timestamp
+        assert point[1] == recv_point.value
+        assert point[2] == recv_point.status_code
+
+    for point, recv_point in zip(points2, recv_points2):  # noqa: B905
+        assert point[0] == recv_point.timestamp
+        assert point[1] == recv_point.value
+        assert point[2] == recv_point.status_code

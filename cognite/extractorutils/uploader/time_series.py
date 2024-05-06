@@ -22,6 +22,7 @@ from cognite.client.data_classes import (
     Sequence,
     SequenceData,
     SequenceRows,
+    StatusCode,
     TimeSeries,
 )
 from cognite.client.exceptions import CogniteDuplicatedError, CogniteNotFoundError
@@ -51,7 +52,10 @@ MIN_DATAPOINT_VALUE = -1e100
 
 TimeStamp = Union[int, datetime]
 
-DataPoint = Union[Tuple[TimeStamp, float], Tuple[TimeStamp, str]]
+DataPointWithoutStatus = Union[Tuple[TimeStamp, float], Tuple[TimeStamp, str], Tuple[TimeStamp, int]]
+FullStatusCode = Union[StatusCode, int]
+DataPointWithStatus = Union[Tuple[TimeStamp, float, FullStatusCode], Tuple[TimeStamp, str, FullStatusCode]]
+DataPoint = Union[DataPointWithoutStatus, DataPointWithStatus]
 DataPointList = List[DataPoint]
 
 
@@ -283,7 +287,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         with self.lock:
             upload_this = _upload_batch(
                 [
-                    {either_id.type(): either_id.content(), "datapoints": datapoints}
+                    {either_id.type(): either_id.content(), "datapoints": list(datapoints)}
                     for either_id, datapoints in self.upload_queue.items()
                     if len(datapoints) > 0
                 ]
