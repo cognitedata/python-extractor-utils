@@ -189,12 +189,12 @@ def test_time_seires_with_status(set_upload_test: Tuple[CogniteClient, ParamTest
     assert len(recv_points1) == len(points1)
     assert len(recv_points2) == len(points2)
 
-    for point, recv_point in zip(points1, recv_points1, strict=True):
+    for point, recv_point in zip(points1, recv_points1):  # noqa: B905
         assert point[0] == recv_point.timestamp
         assert point[1] == recv_point.value
         assert point[2] == recv_point.status_code
 
-    for point, recv_point in zip(points2, recv_points2, strict=True):
+    for point, recv_point in zip(points2, recv_points2):  # noqa: B905
         assert point[0] == recv_point.timestamp
         assert point[1] == recv_point.value
         assert point[2] == recv_point.status_code
