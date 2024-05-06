@@ -66,7 +66,7 @@ def test_time_series_upload_queue1(set_upload_test: Tuple[CogniteClient, ParamTe
     queue.add_to_upload_queue(external_id=test_parameter.external_ids[0], datapoints=points1_2)
     queue.add_to_upload_queue(id=created[1].id, datapoints=points2)
 
-    time.sleep(5)
+    time.sleep(15)
 
     recv_points1 = client.time_series.data.retrieve(
         external_id=test_parameter.external_ids[0], start="1w-ago", end="now", limit=None
@@ -98,7 +98,7 @@ def test_time_series_upload_queue2(set_upload_test: Tuple[CogniteClient, ParamTe
     queue.add_to_upload_queue(external_id=test_parameter.external_ids[0], datapoints=points1)
     queue.add_to_upload_queue(external_id="noSuchExternalId", datapoints=points2)
 
-    time.sleep(5)
+    time.sleep(15)
 
     recv_points1 = client.time_series.data.retrieve(
         external_id=test_parameter.external_ids[0], start="1w-ago", end="now", limit=None
