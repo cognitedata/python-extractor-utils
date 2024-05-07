@@ -65,6 +65,9 @@ def test_load_state_store(get_client_mock):
     e2._load_state_store()
     assert isinstance(e2.state_store, LocalStateStore)
 
+    # Make sure the state store have been given a child token
+    assert e2.state_store.cancellation_token._parent is e2.cancellation_token
+
     e3 = Extractor(
         name="my_extractor3",
         description="description",
@@ -75,6 +78,9 @@ def test_load_state_store(get_client_mock):
     e3.cognite_client = get_client_mock()
     e3._load_state_store()
     assert isinstance(e3.state_store, LocalStateStore)
+
+    # Make sure the state store have been given a child token
+    assert e3.state_store.cancellation_token._parent is e3.cancellation_token
 
     e6 = Extractor(
         name="my_extractor6",

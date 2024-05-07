@@ -623,7 +623,10 @@ class StateStoreConfig:
     local: Optional[LocalStateStoreConfig] = None
 
     def create_state_store(
-        self, cdf_client: Optional[CogniteClient] = None, default_to_local: bool = True
+        self,
+        cdf_client: Optional[CogniteClient] = None,
+        default_to_local: bool = True,
+        cancellation_token: Optional[CancellationToken] = None,
     ) -> AbstractStateStore:
         """
         Create a state store object based on the config.
@@ -648,15 +651,17 @@ class StateStoreConfig:
                 database=self.raw.database,
                 table=self.raw.table,
                 save_interval=self.raw.upload_interval.seconds,
+                cancellation_token=cancellation_token,
             )
 
         if self.local:
             return LocalStateStore(
                 file_path=self.local.path,
                 save_interval=self.local.save_interval.seconds,
+                cancellation_token=cancellation_token,
             )
 
         if default_to_local:
-            return LocalStateStore(file_path="states.json")
+            return LocalStateStore(file_path="states.json", cancellation_token=cancellation_token)
         else:
             return NoStateStore()

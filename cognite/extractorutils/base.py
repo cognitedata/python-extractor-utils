@@ -189,9 +189,17 @@ class Extractor(Generic[CustomConfigClass]):
 
         state_store_config = recursive_find_state_store(self.config.__dict__)
         if state_store_config:
-            self.state_store = state_store_config.create_state_store(self.cognite_client, self.use_default_state_store)
+            self.state_store = state_store_config.create_state_store(
+                cdf_client=self.cognite_client,
+                default_to_local=self.use_default_state_store,
+                cancellation_token=self.cancellation_token,
+            )
         else:
-            self.state_store = LocalStateStore("states.json") if self.use_default_state_store else NoStateStore()
+            self.state_store = (
+                LocalStateStore("states.json", cancellation_token=self.cancellation_token)
+                if self.use_default_state_store
+                else NoStateStore()
+            )
 
         try:
             self.state_store.initialize()
