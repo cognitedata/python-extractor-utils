@@ -58,7 +58,7 @@ class AbstractUploadQueue(ABC):
         self.trigger_log_level = _resolve_log_level(trigger_log_level)
         self.logger = logging.getLogger(__name__)
 
-        self.thread = threading.Thread(target=self._run, daemon=True, name=thread_name)
+        self.thread = threading.Thread(target=self._run, daemon=cancellation_token is None, name=thread_name)
         self.lock = threading.RLock()
         self.cancellation_token: CancellationToken = (
             cancellation_token.create_child_token() if cancellation_token else CancellationToken()
