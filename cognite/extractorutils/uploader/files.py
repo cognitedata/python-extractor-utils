@@ -251,70 +251,72 @@ class IOFileUploadQueue(AbstractUploadQueue):
             max_delay=RETRY_MAX_DELAY,
             backoff=RETRY_BACKOFF_FACTOR,
         )
-        def _upload_single(read_file: Callable[[], BinaryIO], file_meta: FileMetadata) -> None:
-            try:
-                # Upload file
-                with read_file() as file:
-                    size = super_len(file)
-                    if size == 0:
-                        # upload just the file metadata witout data
-                        file_meta, _url = self.cdf_client.files.create(
-                            file_metadata=file_meta, overwrite=self.overwrite_existing
-                        )
-                    elif size >= self.max_single_chunk_file_size:
-                        # The minimum chunk size is 4000MiB.
-                        chunks = ChunkedStream(file, self.max_file_chunk_size, size)
-                        self.logger.debug(
-                            f"File {file_meta.external_id} is larger than 5GiB ({size})"
-                            f", uploading in {chunks.chunk_count} chunks"
-                        )
-                        with self.cdf_client.files.multipart_upload_session(
-                            file_meta.name if file_meta.name is not None else "",
-                            parts=chunks.chunk_count,
-                            overwrite=self.overwrite_existing,
-                            external_id=file_meta.external_id,
-                            source=file_meta.source,
-                            mime_type=file_meta.mime_type,
-                            metadata=file_meta.metadata,
-                            directory=file_meta.directory,
-                            asset_ids=file_meta.asset_ids,
-                            data_set_id=file_meta.data_set_id,
-                            labels=file_meta.labels,
-                            geo_location=file_meta.geo_location,
-                            source_created_time=file_meta.source_created_time,
-                            source_modified_time=file_meta.source_modified_time,
-                            security_categories=file_meta.security_categories,
-                        ) as session:
-                            while chunks.next_chunk():
-                                session.upload_part(chunks.current_chunk, chunks)
-                            file_meta = session.file_metadata
-                    else:
-                        file_meta = self.cdf_client.files.upload_bytes(
-                            file,
-                            file_meta.name if file_meta.name is not None else "",
-                            overwrite=self.overwrite_existing,
-                            external_id=file_meta.external_id,
-                            source=file_meta.source,
-                            mime_type=file_meta.mime_type,
-                            metadata=file_meta.metadata,
-                            directory=file_meta.directory,
-                            asset_ids=file_meta.asset_ids,
-                            data_set_id=file_meta.data_set_id,
-                            labels=file_meta.labels,
-                            geo_location=file_meta.geo_location,
-                            source_created_time=file_meta.source_created_time,
-                            source_modified_time=file_meta.source_modified_time,
-                            security_categories=file_meta.security_categories,
-                        )
+        def upload_file(read_file: Callable[[], BinaryIO], file_meta: FileMetadata) -> None:
+            with read_file() as file:
+                size = super_len(file)
+                if size == 0:
+                    # upload just the file metadata witout data
+                    file_meta, _url = self.cdf_client.files.create(
+                        file_metadata=file_meta, overwrite=self.overwrite_existing
+                    )
+                elif size >= self.max_single_chunk_file_size:
+                    # The minimum chunk size is 4000MiB.
+                    chunks = ChunkedStream(file, self.max_file_chunk_size, size)
+                    self.logger.debug(
+                        f"File {file_meta.external_id} is larger than 5GiB ({size})"
+                        f", uploading in {chunks.chunk_count} chunks"
+                    )
+                    with self.cdf_client.files.multipart_upload_session(
+                        file_meta.name if file_meta.name is not None else "",
+                        parts=chunks.chunk_count,
+                        overwrite=self.overwrite_existing,
+                        external_id=file_meta.external_id,
+                        source=file_meta.source,
+                        mime_type=file_meta.mime_type,
+                        metadata=file_meta.metadata,
+                        directory=file_meta.directory,
+                        asset_ids=file_meta.asset_ids,
+                        data_set_id=file_meta.data_set_id,
+                        labels=file_meta.labels,
+                        geo_location=file_meta.geo_location,
+                        source_created_time=file_meta.source_created_time,
+                        source_modified_time=file_meta.source_modified_time,
+                        security_categories=file_meta.security_categories,
+                    ) as session:
+                        while chunks.next_chunk():
+                            session.upload_part(chunks.current_chunk, chunks)
+                        file_meta = session.file_metadata
+                else:
+                    file_meta = self.cdf_client.files.upload_bytes(
+                        file,
+                        file_meta.name if file_meta.name is not None else "",
+                        overwrite=self.overwrite_existing,
+                        external_id=file_meta.external_id,
+                        source=file_meta.source,
+                        mime_type=file_meta.mime_type,
+                        metadata=file_meta.metadata,
+                        directory=file_meta.directory,
+                        asset_ids=file_meta.asset_ids,
+                        data_set_id=file_meta.data_set_id,
+                        labels=file_meta.labels,
+                        geo_location=file_meta.geo_location,
+                        source_created_time=file_meta.source_created_time,
+                        source_modified_time=file_meta.source_modified_time,
+                        security_categories=file_meta.security_categories,
+                    )
 
-                if self.post_upload_function:
-                    try:
-                        self.post_upload_function([file_meta])
-                    except Exception as e:
-                        self.logger.error("Error in upload callback: %s", str(e))
+            if self.post_upload_function:
+                try:
+                    self.post_upload_function([file_meta])
+                except Exception as e:
+                    self.logger.error("Error in upload callback: %s", str(e))
+
+        def wrapped_upload(read_file: Callable[[], BinaryIO], file_meta: FileMetadata) -> None:
+            try:
+                upload_file(read_file, file_meta)
 
             except Exception as e:
-                self.logger.exception("Unexpected error while uploading file")
+                self.logger.exception(f"Unexpected error while uploading file: {file_meta.external_id}")
                 self.errors.append(e)
 
             finally:
@@ -331,7 +333,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
                     pass
 
         with self.lock:
-            self.upload_queue.append(self._pool.submit(_upload_single, read_file, file_meta))
+            self.upload_queue.append(self._pool.submit(wrapped_upload, read_file, file_meta))
             self.upload_queue_size += 1
             self.files_queued.inc()
             self.queue_size.set(self.upload_queue_size)
