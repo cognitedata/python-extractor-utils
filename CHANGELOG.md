@@ -12,6 +12,17 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+
+## 7.1.5
+
+### Fixed
+
+ * Fixed an issue preventing retries in file uploads from working properly
+
+### Added
+
+ * File external ID when logging failed file uploads
+
 ## 7.1.4
 
 ### Fixed
