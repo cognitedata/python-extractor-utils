@@ -569,10 +569,10 @@ class NoStateStore(AbstractStateStore):
 class AbstractHashStateStore(_BaseStateStore, ABC):
     def __init__(
         self,
-        save_interval: int | None = None,
+        save_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: str | None = None,
-        cancellation_token: CancellationToken | None = None,
+        thread_name: Optional[str] = None,
+        cancellation_token: Optional[CancellationToken] = None,
     ) -> None:
         super().__init__(
             save_interval=save_interval,
@@ -626,10 +626,10 @@ class RawHashStateStore(AbstractHashStateStore):
         cdf_client: CogniteClient,
         database: str,
         table: str,
-        save_interval: int | None = None,
+        save_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: str | None = None,
-        cancellation_token: CancellationToken | None = None,
+        thread_name: Optional[str] = None,
+        cancellation_token: Optional[CancellationToken] = None,
     ) -> None:
         super().__init__(
             save_interval=save_interval,
@@ -738,10 +738,10 @@ class LocalHashStateStore(AbstractHashStateStore):
     def __init__(
         self,
         file_path: str,
-        save_interval: int | None = None,
+        save_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: str | None = None,
-        cancellation_token: CancellationToken | None = None,
+        thread_name: Optional[str] = None,
+        cancellation_token: Optional[CancellationToken] = None,
     ) -> None:
         super().__init__(
             save_interval=save_interval,
