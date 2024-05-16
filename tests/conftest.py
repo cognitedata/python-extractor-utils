@@ -1,7 +1,7 @@
 import os
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 import pytest
 
@@ -10,6 +10,9 @@ from cognite.client.config import ClientConfig
 from cognite.client.credentials import OAuthClientCredentials
 from cognite.client.exceptions import CogniteAPIError, CogniteNotFoundError
 
+NUM_NODES = 5000
+NUM_EDGES = NUM_NODES // 100
+
 
 class ETestType(Enum):
     TIME_SERIES = "time_series"
@@ -17,6 +20,7 @@ class ETestType(Enum):
     RAW = "raw"
     ASSETS = "assets"
     EVENTS = "events"
+    DATA_MODELING = "data_modeling"
 
 
 @dataclass
@@ -28,7 +32,7 @@ class ParamTest:
 
 
 @pytest.fixture
-def set_upload_test(set_test_parameters: ParamTest, set_client: CogniteClient):
+def set_upload_test(set_test_parameters: ParamTest, set_client: CogniteClient) -> Tuple[CogniteClient, ParamTest]:
     client = set_client
     test_parameter = set_test_parameters
     clean_test(client, test_parameter)
@@ -55,21 +59,29 @@ def set_client() -> CogniteClient:
     return CogniteClient(client_config)
 
 
-def clean_test(client: CogniteClient, test_parameter: ParamTest):
-    if test_parameter.test_type == ETestType.TIME_SERIES:
+def clean_test(client: CogniteClient, test_parameter: ParamTest) -> None:
+    if test_parameter.test_type.value == ETestType.TIME_SERIES.value:
         client.time_series.delete(external_id=test_parameter.external_ids, ignore_unknown_ids=True)
-    elif test_parameter.test_type == ETestType.EVENTS:
+    elif test_parameter.test_type.value == ETestType.EVENTS.value:
         client.events.delete(external_id=test_parameter.external_ids, ignore_unknown_ids=True)
-    elif test_parameter.test_type == ETestType.ASSETS:
+    elif test_parameter.test_type.value == ETestType.ASSETS.value:
         client.assets.delete(external_id=test_parameter.external_ids, ignore_unknown_ids=True)
-    elif test_parameter.test_type == ETestType.RAW:
+    elif test_parameter.test_type.value == ETestType.RAW.value:
         try:
             client.raw.tables.delete(test_parameter.database_name, test_parameter.table_name)
         except CogniteAPIError:
             pass
-    elif test_parameter.test_type == ETestType.FILES:
+    elif test_parameter.test_type.value == ETestType.FILES.value:
         for file in test_parameter.external_ids:
             try:
                 client.files.delete(external_id=file)
             except CogniteNotFoundError:
                 pass
+    elif test_parameter.test_type.value == ETestType.DATA_MODELING.value:
+        client.data_modeling.instances.delete(
+            nodes=[("ExtractorUtilsTests", i) for i in test_parameter.external_ids[0:NUM_NODES]],
+            edges=[("ExtractorUtilsTests", i) for i in test_parameter.external_ids[NUM_NODES : NUM_NODES + NUM_EDGES]],
+        )
+        client.data_modeling.instances.delete(
+            nodes=[("ExtractorUtilsTests", test_parameter.external_ids[-1])],
+        )
