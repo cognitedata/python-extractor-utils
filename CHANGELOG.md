@@ -13,6 +13,12 @@ Changes are grouped as follows
 - `Security` in case of vulnerabilities.
 
 
+## 7.1.6
+
+### Changed
+
+ * Update cognite-sdk version to 7.43.3
+
 ## 7.1.5
 
 ### Fixed
