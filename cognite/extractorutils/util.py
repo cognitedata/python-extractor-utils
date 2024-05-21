@@ -319,11 +319,14 @@ def _retry_internal(
 ) -> _T2:
     logger = logging.getLogger(__name__)
 
-    while tries and not cancellation_token.is_cancelled:
+    while tries:
         try:
             return f()
 
         except Exception as e:
+            if cancellation_token.is_cancelled:
+                break
+
             if isinstance(exceptions, tuple):
                 for ex_type in exceptions:
                     if isinstance(e, ex_type):

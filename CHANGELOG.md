@@ -12,6 +12,13 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## Next
+
+### Fixed
+
+ * Fixed an issue with the `retry` decorator where functions would not be
+   called at all if the cancellation token was set. This resulted in errors
+   with for example upload queues.
 
 ## Next
 
