@@ -13,6 +13,12 @@ Changes are grouped as follows
 - `Security` in case of vulnerabilities.
 
 
+## Next
+
+### Added
+
+ * A new type of statestore that stores hashes of ingested items. This can be used to detect chaged RAW rows or data model instances.
+
 ## 7.1.6
 
 ### Changed
