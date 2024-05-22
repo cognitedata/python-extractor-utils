@@ -12,7 +12,7 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
-## Next
+## 7.2.0
 
 ### Fixed
 
@@ -20,11 +20,11 @@ Changes are grouped as follows
    called at all if the cancellation token was set. This resulted in errors
    with for example upload queues.
 
-## Next
-
 ### Added
 
- * A new type of state store that stores hashes of ingested items. This can be used to detect changed RAW rows or data model instances.
+ * An upload queue for data model instances.
+ * A new type of state store that stores hashes of ingested items. This can be
+   used to detect changed RAW rows or data model instances.
 
 ## 7.1.6
 
