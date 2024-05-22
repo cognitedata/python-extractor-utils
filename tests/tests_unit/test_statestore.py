@@ -16,6 +16,7 @@ import datetime
 import math
 import os
 import time
+from collections import OrderedDict
 from decimal import Decimal
 from typing import Type
 from unittest.mock import Mock, patch
@@ -25,7 +26,7 @@ import pytest
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Row
 from cognite.client.exceptions import CogniteAPIError
-from cognite.extractorutils.statestore import LocalStateStore, NoStateStore, RawStateStore
+from cognite.extractorutils.statestore import LocalHashStateStore, LocalStateStore, NoStateStore, RawStateStore
 from cognite.extractorutils.uploader import TimeSeriesUploadQueue
 
 
@@ -362,3 +363,35 @@ def test_indexing():
     state_store["id2"] = (None, 6)
     assert state_store["id2"][0] is None
     assert state_store["id2"][1] == 6
+
+
+def test_hash_data() -> None:
+    state_store = LocalHashStateStore("hey.json")
+
+    assert state_store._hash_row({"some": "data"}) == state_store._hash_row({"some": "data"})
+    assert state_store._hash_row({"some": "data"}) != state_store._hash_row({"some": "other data"})
+
+    # Make sure order doesn't matter
+    row1 = {"key": "val1", "key2": "val2"}
+    row2 = OrderedDict()
+    row2["key"] = "val1"
+    row2["key2"] = "val2"
+
+    row3 = OrderedDict()
+    row3["key2"] = "val2"
+    row3["key"] = "val1"
+
+    new_row = {"key": "val1", "key2": "val3"}
+
+    assert state_store._hash_row(row1) == state_store._hash_row(row2)
+    assert state_store._hash_row(row1) == state_store._hash_row(row3)
+    assert state_store._hash_row(row1) != state_store._hash_row(new_row)
+
+
+def test_hash_store() -> None:
+    state_store = LocalHashStateStore("hey.json")
+
+    state_store["hello"] = {"Some": "Data"}
+
+    assert not state_store.has_changed("hello", {"Some": "Data"})
+    assert state_store.has_changed("hello", {"Some": "New data"})
