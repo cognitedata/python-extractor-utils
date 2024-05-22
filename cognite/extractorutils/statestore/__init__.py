@@ -1,5 +1,5 @@
-from .classic import AbstractStateStore, LocalStateStore, NoStateStore, RawStateStore
 from .hashing import AbstractHashStateStore, LocalHashStateStore, RawHashStateStore
+from .watermark import AbstractStateStore, LocalStateStore, NoStateStore, RawStateStore
 
 __all__ = [
     "AbstractStateStore",
