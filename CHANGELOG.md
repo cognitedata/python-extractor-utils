@@ -22,6 +22,7 @@ Changes are grouped as follows
 
 ### Added
 
+ * An upload queue for data model instances.
  * A new type of state store that stores hashes of ingested items. This can be
    used to detect changed RAW rows or data model instances.
 
