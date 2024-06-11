@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.2.1
+
+### Fixed
+
+ * Fixed using the keyvault tag in remote config.
+
 ## 7.2.0
 
 ### Fixed
