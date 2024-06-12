@@ -139,11 +139,10 @@ def _env_constructor(_: yaml.SafeLoader, node: yaml.Node) -> bool:
     return bool_values.get(expanded_value.lower(), expanded_value)
 
 
-def _load_yaml_dict(
+def _load_yaml_dict_raw(
     source: Union[TextIO, str],
-    case_style: str = "hyphen",
     expand_envvars: bool = True,
-    dict_manipulator: Callable[[Dict[str, Any]], Dict[str, Any]] = lambda x: x,
+    keyvault_loader: Optional[KeyVaultLoader] = None,
 ) -> Dict[str, Any]:
     loader = _EnvLoader if expand_envvars else yaml.SafeLoader
 
@@ -159,11 +158,14 @@ def _load_yaml_dict(
     if not isinstance(source, str):
         source.seek(0)
 
-    keyvault_config = initial_load.get("azure-keyvault", initial_load.get("key-vault"))
+    if keyvault_loader:
+        _EnvLoader.add_constructor("!keyvault", keyvault_loader)
+    else:
+        keyvault_config = initial_load.get("azure-keyvault", initial_load.get("key-vault"))
+        _EnvLoader.add_constructor("!keyvault", KeyVaultLoader(keyvault_config))
 
     _EnvLoader.add_implicit_resolver("!env", re.compile(r"\$\{([^}^{]+)\}"), None)
     _EnvLoader.add_constructor("!env", _env_constructor)
-    _EnvLoader.add_constructor("!keyvault", KeyVaultLoader(keyvault_config))
 
     try:
         config_dict = yaml.load(source, Loader=loader)  # noqa: S506
@@ -173,11 +175,25 @@ def _load_yaml_dict(
         cause = e.problem or e.context
         raise InvalidConfigError(f"Invalid YAML{formatted_location}: {cause or ''}") from e
 
-    if "azure-keyvault" in config_dict:
-        config_dict.pop("azure-keyvault")
+    return config_dict
+
+
+def _load_yaml_dict(
+    source: Union[TextIO, str],
+    case_style: str = "hyphen",
+    expand_envvars: bool = True,
+    dict_manipulator: Callable[[Dict[str, Any]], Dict[str, Any]] = lambda x: x,
+    keyvault_loader: Optional[KeyVaultLoader] = None,
+) -> Dict[str, Any]:
+    config_dict = _load_yaml_dict_raw(source, expand_envvars, keyvault_loader)
 
     config_dict = dict_manipulator(config_dict)
     config_dict = _to_snake_case(config_dict, case_style)
+
+    if "azure_keyvault" in config_dict:
+        config_dict.pop("azure_keyvault")
+    if "key_vault" in config_dict:
+        config_dict.pop("key_vault")
 
     return config_dict
 
@@ -188,9 +204,14 @@ def _load_yaml(
     case_style: str = "hyphen",
     expand_envvars: bool = True,
     dict_manipulator: Callable[[Dict[str, Any]], Dict[str, Any]] = lambda x: x,
+    keyvault_loader: Optional[KeyVaultLoader] = None,
 ) -> CustomConfigClass:
     config_dict = _load_yaml_dict(
-        source, case_style=case_style, expand_envvars=expand_envvars, dict_manipulator=dict_manipulator
+        source,
+        case_style=case_style,
+        expand_envvars=expand_envvars,
+        dict_manipulator=dict_manipulator,
+        keyvault_loader=keyvault_loader,
     )
 
     try:
@@ -239,6 +260,7 @@ def load_yaml(
     config_type: Type[CustomConfigClass],
     case_style: str = "hyphen",
     expand_envvars: bool = True,
+    keyvault_loader: Optional[KeyVaultLoader] = None,
 ) -> CustomConfigClass:
     """
     Read a YAML file, and create a config object based on its contents.
@@ -249,6 +271,7 @@ def load_yaml(
         case_style: Casing convention of config file. Valid options are 'snake', 'hyphen' or 'camel'. Should be
             'hyphen'.
         expand_envvars: Substitute values with the pattern ${VAR} with the content of the environment variable VAR
+        keyvault_loader: Pre-built loader for keyvault tags. Will be loaded from config if not set.
 
     Returns:
         An initialized config object.
@@ -256,13 +279,20 @@ def load_yaml(
     Raises:
         InvalidConfigError: If any config field is given as an invalid type, is missing or is unknown
     """
-    return _load_yaml(source=source, config_type=config_type, case_style=case_style, expand_envvars=expand_envvars)
+    return _load_yaml(
+        source=source,
+        config_type=config_type,
+        case_style=case_style,
+        expand_envvars=expand_envvars,
+        keyvault_loader=keyvault_loader,
+    )
 
 
 def load_yaml_dict(
     source: Union[TextIO, str],
     case_style: str = "hyphen",
     expand_envvars: bool = True,
+    keyvault_loader: Optional[KeyVaultLoader] = None,
 ) -> Dict[str, Any]:
     """
     Read a YAML file and return a dictionary from its contents
@@ -272,6 +302,7 @@ def load_yaml_dict(
         case_style: Casing convention of config file. Valid options are 'snake', 'hyphen' or 'camel'. Should be
             'hyphen'.
         expand_envvars: Substitute values with the pattern ${VAR} with the content of the environment variable VAR
+        keyvault_loader: Pre-built loader for keyvault tags. Will be loaded from config if not set.
 
     Returns:
         A raw dict with the contents of the config file.
@@ -279,7 +310,9 @@ def load_yaml_dict(
     Raises:
         InvalidConfigError: If any config field is given as an invalid type, is missing or is unknown
     """
-    return _load_yaml_dict(source=source, case_style=case_style, expand_envvars=expand_envvars)
+    return _load_yaml_dict(
+        source=source, case_style=case_style, expand_envvars=expand_envvars, keyvault_loader=keyvault_loader
+    )
 
 
 class ConfigResolver(Generic[CustomConfigClass]):
@@ -374,6 +407,10 @@ class ConfigResolver(Generic[CustomConfigClass]):
             and tmp_config.cognite.idp_authentication == self._config.cognite.idp_authentication
         )
 
+    def _get_keyvault_loader(self) -> KeyVaultLoader:
+        temp_config = _load_yaml_dict_raw(self._config_text)
+        return KeyVaultLoader(temp_config.get("azure-keyvault", temp_config.get("key-vault")))
+
     def _resolve_config(self) -> None:
         self._reload_file()
 
@@ -400,6 +437,7 @@ class ConfigResolver(Generic[CustomConfigClass]):
                 source=response.config,
                 config_type=self.config_type,
                 dict_manipulator=lambda d: self._inject_cognite(tmp_config, d),
+                keyvault_loader=self._get_keyvault_loader(),
             )
 
         else:

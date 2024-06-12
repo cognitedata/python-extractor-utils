@@ -19,6 +19,10 @@ Changes are grouped as follows
 
  * Reformat log messages to not have newlines
 
+### Fixed
+
+ * Fixed using the keyvault tag in remote config.
+
 ## 7.2.0
 
 ### Fixed
