@@ -264,9 +264,9 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
                         missing = [id_dict for id_dict in ex.not_found if id_dict.get("externalId") not in retry_these]
                         missing_num = len(ex.not_found) - len(create_these_ids)
                         self.logger.error(
-                            f"{missing_num} time series not found, and could not be created automatically:\n"
+                            f"{missing_num} time series not found, and could not be created automatically: "
                             + str(missing)
-                            + "\nData will be dropped"
+                            + " Data will be dropped"
                         )
 
                 # Remove entries with non-existing time series from upload queue

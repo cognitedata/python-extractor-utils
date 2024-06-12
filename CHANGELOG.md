@@ -12,7 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
-## Next Release
+
+## 7.2.1
+
+### Changed
+
+ * Reformat log messages to not have newlines
 
 ### Fixed
 
