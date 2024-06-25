@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.2.2
+
+### Fixed
+
+ * Produce a config error when missing token-url and tenant, instead of eventually
+   producing an `OAuth 2 MUST utilize https` error when getting the token.
 
 ## 7.2.1
 
