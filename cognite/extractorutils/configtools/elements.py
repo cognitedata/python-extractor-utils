@@ -327,6 +327,8 @@ class CogniteConfig:
             elif self.idp_authentication.tenant:
                 base_url = urljoin(self.idp_authentication.authority, self.idp_authentication.tenant)
                 kwargs["token_url"] = f"{base_url}/oauth2/v2.0/token"
+            else:
+                raise InvalidConfigError("Either token-url or tenant is required for client credentials authentication")
             kwargs["client_id"] = self.idp_authentication.client_id
             kwargs["client_secret"] = self.idp_authentication.secret
             kwargs["scopes"] = self.idp_authentication.scopes
