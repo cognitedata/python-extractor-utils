@@ -478,3 +478,55 @@ def test_env_substitution_remote_check():
 
     os.environ["STRING_VALUE"] = "remote"
     assert resolver.is_remote
+
+
+def test_cognite_validation():
+    conf = CogniteConfig(project="", idp_authentication=AuthenticatorConfig(client_id="", scopes=[]))
+    with pytest.raises(InvalidConfigError) as e:
+        conf.get_cognite_client("client-name")
+    assert e.value.message == "Project is not set"
+
+    conf.project = "${OhNo}"
+    with pytest.raises(InvalidConfigError) as e:
+        conf.get_cognite_client("client-name")
+    assert e.value.message == "Project (${OhNo}) is not valid"
+
+    conf.project = "test"
+    with pytest.raises(InvalidConfigError) as e:
+        conf.get_cognite_client("client-name")
+    assert e.value.message == "No client certificate or secret provided"
+
+    conf.idp_authentication.secret = "test"
+    with pytest.raises(InvalidConfigError) as e:
+        conf.get_cognite_client("client-name")
+    assert e.value.message == "Either token-url or tenant is required for client credentials authentication"
+
+    conf.idp_authentication.token_url = "${OhNo}"
+    with pytest.raises(InvalidConfigError) as e:
+        conf.get_cognite_client("client-name")
+    assert e.value.message == "Token URL (${OhNo}) must be HTTPS"
+
+    conf.idp_authentication.token_url = None
+    conf.idp_authentication.authority = "${OhNo}"
+    conf.idp_authentication.tenant = "${OhNo}"
+    with pytest.raises(InvalidConfigError) as e:
+        conf.get_cognite_client("client-name")
+    assert e.value.message == "Authority (${OhNo}) must be HTTPS"
+
+    conf.idp_authentication.authority = "https://login.microsoftonline.com"
+    with pytest.raises(InvalidConfigError) as e:
+        conf.get_cognite_client("client-name")
+    assert e.value.message == "Tenant (${OhNo}) is not valid"
+
+    conf.idp_authentication.token_url = "${OhNo}"
+    with pytest.raises(InvalidConfigError) as e:
+        conf.get_cognite_client("client-name")
+    assert e.value.message == "Token URL (${OhNo}) must be HTTPS"
+
+    conf.idp_authentication.tenant = "foo"
+    conf.idp_authentication.token_url = None
+    conf.get_cognite_client("client-name")
+
+    conf.idp_authentication.tenant = None
+    conf.idp_authentication.token_url = "https://login.microsoftonline.com/foo/token"
+    conf.get_cognite_client("client-name")
