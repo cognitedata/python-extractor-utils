@@ -20,7 +20,7 @@ from enum import Enum
 from logging.handlers import TimedRotatingFileHandler
 from time import sleep
 from typing import Any, Dict, List, Optional, Tuple, Union
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 
 import yaml
 from prometheus_client import REGISTRY, start_http_server
@@ -70,7 +70,7 @@ class AuthenticatorConfig:
 
     client_id: str
     scopes: List[str]
-    secret: Optional[str]
+    secret: Optional[str] = None
     tenant: Optional[str] = None
     token_url: Optional[str] = None
     resource: Optional[str] = None
@@ -264,6 +264,18 @@ class FileSizeConfig(yaml.YAMLObject):
         return self._expression
 
 
+path_elem_regex = re.compile(r"^([a-zA-Z0-9.\-_~!$&'()*+,;=:@]|%[A-F0-9]{2})*$")
+
+
+def _validate_https_url(value: str, name: str) -> None:
+    try:
+        url = urlparse(value)
+    except Exception as e:
+        raise InvalidConfigError(f"{name} ({value}) is not a valid URL") from e
+    if url.scheme != "https":
+        raise InvalidConfigError(f"{name} ({value}) must be HTTPS")
+
+
 @dataclass
 class CogniteConfig:
     """
@@ -272,10 +284,10 @@ class CogniteConfig:
 
     project: str
     idp_authentication: AuthenticatorConfig
-    data_set: Optional[EitherIdConfig]
-    data_set_id: Optional[int]
-    data_set_external_id: Optional[str]
-    extraction_pipeline: Optional[EitherIdConfig]
+    data_set: Optional[EitherIdConfig] = None
+    data_set_id: Optional[int] = None
+    data_set_external_id: Optional[str] = None
+    extraction_pipeline: Optional[EitherIdConfig] = None
     timeout: TimeIntervalConfig = TimeIntervalConfig("30s")
     connection: ConnectionConfig = field(default_factory=ConnectionConfig)
     security_categories: Optional[List[int]] = None
@@ -300,11 +312,20 @@ class CogniteConfig:
         global_config.disable_ssl = self.connection.disable_ssl
         global_config.proxies = self.connection.proxies
 
+        if not self.project:
+            raise InvalidConfigError("Project is not set")
+        if not path_elem_regex.match(self.project):
+            raise InvalidConfigError(f"Project ({self.project}) is not valid")
+
         credential_provider: CredentialProvider
         if self.idp_authentication.certificate:
             if self.idp_authentication.certificate.authority_url:
                 authority_url = self.idp_authentication.certificate.authority_url
+                _validate_https_url(self.idp_authentication.certificate.authority_url, "Authority URL")
             elif self.idp_authentication.tenant:
+                _validate_https_url(self.idp_authentication.authority, "Authority")
+                if not path_elem_regex.match(self.idp_authentication.tenant):
+                    raise InvalidConfigError(f"Tenant {self.idp_authentication.tenant} is not valid")
                 authority_url = urljoin(self.idp_authentication.authority, self.idp_authentication.tenant)
             else:
                 raise InvalidConfigError("Either authority-url or tenant is required for certificate authentication")
@@ -312,6 +333,8 @@ class CogniteConfig:
                 self.idp_authentication.certificate.path,
                 self.idp_authentication.certificate.password,
             )
+            if not self.idp_authentication.scopes:
+                _logger.warn("No scopes configured. Authenticating with CDF is unlikely to work correctly")
             credential_provider = OAuthClientCertificate(
                 authority_url=authority_url,
                 client_id=self.idp_authentication.client_id,
@@ -323,14 +346,20 @@ class CogniteConfig:
         elif self.idp_authentication.secret:
             kwargs: Dict[str, Any] = {}
             if self.idp_authentication.token_url:
+                _validate_https_url(self.idp_authentication.token_url, "Token URL")
                 kwargs["token_url"] = self.idp_authentication.token_url
             elif self.idp_authentication.tenant:
+                _validate_https_url(self.idp_authentication.authority, "Authority")
+                if not path_elem_regex.match(self.idp_authentication.tenant):
+                    raise InvalidConfigError(f"Tenant ({self.idp_authentication.tenant}) is not valid")
                 base_url = urljoin(self.idp_authentication.authority, self.idp_authentication.tenant)
                 kwargs["token_url"] = f"{base_url}/oauth2/v2.0/token"
             else:
                 raise InvalidConfigError("Either token-url or tenant is required for client credentials authentication")
             kwargs["client_id"] = self.idp_authentication.client_id
             kwargs["client_secret"] = self.idp_authentication.secret
+            if not self.idp_authentication.scopes:
+                _logger.warning("No scopes configured. Authenticating with CDF is unlikely to work correctly")
             kwargs["scopes"] = self.idp_authentication.scopes
             if token_custom_args is None:
                 token_custom_args = {}

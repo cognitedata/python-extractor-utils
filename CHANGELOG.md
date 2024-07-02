@@ -12,6 +12,13 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.2.3
+
+### Added
+
+ * Add additional validation to cognite config before creating a cognite client,
+   to provide better error messages when configuration is obviously wrong.
+
 ## 7.2.2
 
 ### Fixed
