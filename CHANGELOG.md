@@ -12,6 +12,13 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.3.0
+
+### Changed
+
+ * Use httpx to upload files to CDF instead of the python SDK.
+   May improve performance on windows.
+
 ## 7.2.3
 
 ### Added
