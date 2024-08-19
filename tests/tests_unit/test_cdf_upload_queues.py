@@ -14,16 +14,13 @@
 
 import datetime
 import math
-import pathlib
 import time
 from unittest.mock import patch
 
 from cognite.client import CogniteClient
-from cognite.client.data_classes import Event, FileMetadata, Row
+from cognite.client.data_classes import Event, Row
 from cognite.extractorutils.uploader import (
-    BytesUploadQueue,
     EventUploadQueue,
-    FileUploadQueue,
     RawUploadQueue,
     SequenceUploadQueue,
     TimeSeriesUploadQueue,
