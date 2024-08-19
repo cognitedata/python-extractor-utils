@@ -12,17 +12,18 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import io
 import os
 import pathlib
 import random
 import time
-from typing import Tuple
+from typing import Callable, Optional, Tuple
 
 import pytest
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import FileMetadata
-from cognite.extractorutils.uploader.files import BytesUploadQueue, FileUploadQueue
+from cognite.extractorutils.uploader.files import BytesUploadQueue, FileUploadQueue, IOFileUploadQueue
 from tests.conftest import ETestType, ParamTest
 
 
@@ -35,6 +36,7 @@ def set_test_parameters() -> ParamTest:
         f"util_integration_file_test_2-{test_id}",
         f"util_integration_file-big-{test_id}",
         f"util_integration_file_test_3-{test_id}",
+        f"util_integration_file-big-2-{test_id}",
     ]
     return test_parameter
 
@@ -126,5 +128,44 @@ def test_big_file_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest],
 
     await_is_uploaded_status(client, test_parameter.external_ids[2])
     bigfile = client.files.download_bytes(external_id=test_parameter.external_ids[2])
+
+    assert len(bigfile) == 10_000_000
+
+
+def test_big_file_stream(set_upload_test: Tuple[CogniteClient, ParamTest]):
+    client, test_parameter = set_upload_test
+    queue = IOFileUploadQueue(cdf_client=client, overwrite_existing=True, max_queue_size=1)
+    queue.max_file_chunk_size = 6_000_000
+    queue.max_single_chunk_file_size = 6_000_000
+
+    data = b"large" * 2_000_000
+
+    class BufferedReadWithLength(io.BufferedReader):
+        def __init__(
+            self, raw: io.RawIOBase, buffer_size: int, len: int, on_close: Optional[Callable[[], None]] = None
+        ) -> None:
+            super().__init__(raw, buffer_size)
+            # Do not remove even if it appears to be unused. :P
+            #  Requests uses this to add the content-length header, which is necessary for writing to files in azure clusters
+            self.len = len
+            self.on_close = on_close
+
+        def close(self) -> None:
+            if self.on_close:
+                self.on_close()
+            return super().close()
+
+    def read_file():
+        return BufferedReadWithLength(io.BytesIO(data), io.DEFAULT_BUFFER_SIZE, len(data))
+
+    queue.add_io_to_upload_queue(
+        file_meta=FileMetadata(external_id=test_parameter.external_ids[4], name=test_parameter.external_ids[4]),
+        read_file=read_file,
+    )
+
+    queue.upload()
+
+    await_is_uploaded_status(client, test_parameter.external_ids[4])
+    bigfile = client.files.download_bytes(external_id=test_parameter.external_ids[4])
 
     assert len(bigfile) == 10_000_000
