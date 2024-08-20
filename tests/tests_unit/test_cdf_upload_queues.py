@@ -14,16 +14,13 @@
 
 import datetime
 import math
-import pathlib
 import time
 from unittest.mock import patch
 
 from cognite.client import CogniteClient
-from cognite.client.data_classes import Event, FileMetadata, Row
+from cognite.client.data_classes import Event, Row
 from cognite.extractorutils.uploader import (
-    BytesUploadQueue,
     EventUploadQueue,
-    FileUploadQueue,
     RawUploadQueue,
     SequenceUploadQueue,
     TimeSeriesUploadQueue,
@@ -273,45 +270,3 @@ def test_sequence_uploader2(MockCogniteClient):
     assert post_upload_test["rows"] == 2
 
     queue.stop()
-
-
-@patch("cognite.client.CogniteClient")
-def test_file_uploader(MockCogniteClient):
-    client: CogniteClient = MockCogniteClient()
-    client.config.max_workers = 5
-
-    post_upload_test = {"value": 0}
-
-    def post(x):
-        post_upload_test["value"] += 1
-
-    queue = FileUploadQueue(client, max_queue_size=2, post_upload_function=post)
-    queue.start()
-
-    current_dir = pathlib.Path(__file__).parent.parent.resolve()
-
-    queue.add_to_upload_queue(FileMetadata(name="hello.txt"), current_dir.joinpath("tests_integration/test_file_1.txt"))
-
-    time.sleep(2.1)
-
-    assert post_upload_test["value"] == 1
-
-
-@patch("cognite.client.CogniteClient")
-def test_bytes_uploader(MockCogniteClient):
-    client: CogniteClient = MockCogniteClient()
-    client.config.max_workers = 5
-
-    post_upload_test = {"value": 0}
-
-    def post(x):
-        post_upload_test["value"] += 1
-
-    queue = BytesUploadQueue(client, max_queue_size=2, post_upload_function=post)
-    queue.start()
-
-    queue.add_to_upload_queue(b"bytes", FileMetadata(name="example.png"))
-
-    time.sleep(2.1)
-
-    assert post_upload_test["value"] == 1

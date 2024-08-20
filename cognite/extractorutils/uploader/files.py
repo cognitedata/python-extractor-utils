@@ -18,8 +18,9 @@ from io import BytesIO, RawIOBase
 from math import ceil
 from os import PathLike
 from types import TracebackType
-from typing import Any, BinaryIO, Callable, Dict, List, Optional, Tuple, Type, Union
+from typing import Any, BinaryIO, Callable, Dict, Iterator, List, Optional, Tuple, Type, Union
 
+from httpx import URL, Client, Headers, Request, StreamConsumed, SyncByteStream
 from requests.utils import super_len
 
 from cognite.client import CogniteClient
@@ -140,6 +141,22 @@ class ChunkedStream(RawIOBase, BinaryIO):
         return True
 
 
+class IOByteStream(SyncByteStream):
+    CHUNK_SIZE = 65_536
+
+    def __init__(self, stream: BinaryIO) -> None:
+        self._stream = stream
+        self._is_stream_consumed = False
+
+    def __iter__(self) -> Iterator[bytes]:
+        if self._is_stream_consumed:
+            raise StreamConsumed()
+        chunk = self._stream.read(self.CHUNK_SIZE)
+        while chunk:
+            yield chunk
+            chunk = self._stream.read(self.CHUNK_SIZE)
+
+
 class IOFileUploadQueue(AbstractUploadQueue):
     """
     Upload queue for files using BinaryIO
@@ -205,6 +222,8 @@ class IOFileUploadQueue(AbstractUploadQueue):
 
         self._full_queue = threading.Condition()
 
+        self._httpx_client = Client(follow_redirects=True)
+
         global _QUEUES, _QUEUES_LOCK
         with _QUEUES_LOCK:
             self._pool = ThreadPoolExecutor(
@@ -266,44 +285,32 @@ class IOFileUploadQueue(AbstractUploadQueue):
                         f"File {file_meta.external_id} is larger than 5GiB ({size})"
                         f", uploading in {chunks.chunk_count} chunks"
                     )
-                    with self.cdf_client.files.multipart_upload_session(
-                        file_meta.name if file_meta.name is not None else "",
-                        parts=chunks.chunk_count,
-                        overwrite=self.overwrite_existing,
-                        external_id=file_meta.external_id,
-                        source=file_meta.source,
-                        mime_type=file_meta.mime_type,
-                        metadata=file_meta.metadata,
-                        directory=file_meta.directory,
-                        asset_ids=file_meta.asset_ids,
-                        data_set_id=file_meta.data_set_id,
-                        labels=file_meta.labels,
-                        geo_location=file_meta.geo_location,
-                        source_created_time=file_meta.source_created_time,
-                        source_modified_time=file_meta.source_modified_time,
-                        security_categories=file_meta.security_categories,
-                    ) as session:
-                        while chunks.next_chunk():
-                            session.upload_part(chunks.current_chunk, chunks)
-                        file_meta = session.file_metadata
-                else:
-                    file_meta = self.cdf_client.files.upload_bytes(
-                        file,
-                        file_meta.name if file_meta.name is not None else "",
-                        overwrite=self.overwrite_existing,
-                        external_id=file_meta.external_id,
-                        source=file_meta.source,
-                        mime_type=file_meta.mime_type,
-                        metadata=file_meta.metadata,
-                        directory=file_meta.directory,
-                        asset_ids=file_meta.asset_ids,
-                        data_set_id=file_meta.data_set_id,
-                        labels=file_meta.labels,
-                        geo_location=file_meta.geo_location,
-                        source_created_time=file_meta.source_created_time,
-                        source_modified_time=file_meta.source_modified_time,
-                        security_categories=file_meta.security_categories,
+
+                    res = self.cdf_client.files._post(
+                        url_path="/files/initmultipartupload",
+                        json=file_meta.dump(camel_case=True),
+                        params={"overwrite": self.overwrite_existing, "parts": chunks.chunk_count},
                     )
+                    returned_file_metadata = res.json()
+                    upload_urls = returned_file_metadata["uploadUrls"]
+                    upload_id = returned_file_metadata["uploadId"]
+                    file_meta = FileMetadata.load(returned_file_metadata)
+
+                    for url in upload_urls:
+                        chunks.next_chunk()
+                        resp = self._httpx_client.send(self._get_file_upload_request(url, chunks, len(chunks)))
+                        resp.raise_for_status()
+
+                    self.cdf_client.files._post(
+                        url_path="/files/completemultipartupload", json={"id": file_meta.id, "uploadId": upload_id}
+                    )
+
+                else:
+                    file_meta, url = self.cdf_client.files.create(
+                        file_metadata=file_meta, overwrite=self.overwrite_existing
+                    )
+                    resp = self._httpx_client.send(self._get_file_upload_request(url, file, size))
+                    resp.raise_for_status()
 
             if self.post_upload_function:
                 try:
@@ -337,6 +344,25 @@ class IOFileUploadQueue(AbstractUploadQueue):
             self.upload_queue_size += 1
             self.files_queued.inc()
             self.queue_size.set(self.upload_queue_size)
+
+    def _get_file_upload_request(self, url_str: str, stream: BinaryIO, size: int) -> Request:
+        url = URL(url_str)
+        headers = Headers(self._httpx_client.headers)
+        headers.update(
+            {
+                "Accept": "*/*",
+                "Content-Length": str(size),
+                "Host": url.netloc.decode("ascii"),
+                "x-cdp-app": self.cdf_client._config.client_name,
+            }
+        )
+
+        return Request(
+            method="PUT",
+            url=url,
+            stream=IOByteStream(stream),
+            headers=headers,
+        )
 
     def upload(self, fail_on_errors: bool = True, timeout: Optional[float] = None) -> None:
         """
