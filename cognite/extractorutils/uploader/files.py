@@ -25,7 +25,6 @@ from requests.utils import super_len
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import FileMetadata
-from cognite.client.data_classes.cdm.v1 import CogniteFileApply
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.uploader._base import (
     RETRIES,
@@ -241,23 +240,18 @@ class IOFileUploadQueue(AbstractUploadQueue):
             self.cancellation_token.wait(5)
 
     def _upload_0_classic(self, file_meta: FileMetadata) -> FileMetadata:
-        file_meta, _= self.cdf_client.files.create(
-            file_metadata=file_meta, overwrite=self.overwrite_existing
-        )
+        file_meta, _ = self.cdf_client.files.create(file_metadata=file_meta, overwrite=self.overwrite_existing)
         return file_meta
 
     def _upload_classic(self, size: int, file: BinaryIO, file_meta: FileMetadata) -> None:
-        file_meta, url = self.cdf_client.files.create(
-            file_metadata=file_meta, overwrite=self.overwrite_existing
-        )
+        file_meta, url = self.cdf_client.files.create(file_metadata=file_meta, overwrite=self.overwrite_existing)
         resp = self._httpx_client.send(self._get_file_upload_request(url, file, size))
         resp.raise_for_status()
 
     def _upload_multipart_classic(self, size: int, file: BinaryIO, file_meta: FileMetadata) -> None:
         chunks = ChunkedStream(file, self.max_file_chunk_size, size)
         self.logger.debug(
-            f"File {file_meta.external_id} is larger than 5GiB ({size})"
-            f", uploading in {chunks.chunk_count} chunks"
+            f"File {file_meta.external_id} is larger than 5GiB ({size})" f", uploading in {chunks.chunk_count} chunks"
         )
 
         res = self.cdf_client.files._post(
