@@ -52,7 +52,7 @@ warn_unused_ignores = true
 exclude = "tests/*"
 
 [tool.poetry.dependencies]
-python = "^3.8.0"
+python = "^3.9.0"
 cognite-sdk = "^7.54.14"
 prometheus-client = ">0.7.0, <=1.0.0"
 arrow = "^1.0.0"
