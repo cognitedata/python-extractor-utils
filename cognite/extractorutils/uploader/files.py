@@ -25,6 +25,7 @@ from requests.utils import super_len
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import FileMetadata
+from cognite.client.data_classes.cdm.v1 import CogniteFileApply
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.uploader._base import (
     RETRIES,
@@ -185,6 +186,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
         overwrite_existing: bool = False,
         cancellation_token: Optional[CancellationToken] = None,
         max_parallelism: Optional[int] = None,
+        space: Optional[str] = None,
     ):
         # Super sets post_upload and threshold
         super().__init__(
@@ -238,6 +240,45 @@ class IOFileUploadQueue(AbstractUploadQueue):
 
             self.cancellation_token.wait(5)
 
+    def _upload_0_classic(self, file_meta: FileMetadata) -> FileMetadata:
+        file_meta, _= self.cdf_client.files.create(
+            file_metadata=file_meta, overwrite=self.overwrite_existing
+        )
+        return file_meta
+
+    def _upload_classic(self, size: int, file: BinaryIO, file_meta: FileMetadata) -> None:
+        file_meta, url = self.cdf_client.files.create(
+            file_metadata=file_meta, overwrite=self.overwrite_existing
+        )
+        resp = self._httpx_client.send(self._get_file_upload_request(url, file, size))
+        resp.raise_for_status()
+
+    def _upload_multipart_classic(self, size: int, file: BinaryIO, file_meta: FileMetadata) -> None:
+        chunks = ChunkedStream(file, self.max_file_chunk_size, size)
+        self.logger.debug(
+            f"File {file_meta.external_id} is larger than 5GiB ({size})"
+            f", uploading in {chunks.chunk_count} chunks"
+        )
+
+        res = self.cdf_client.files._post(
+            url_path="/files/initmultipartupload",
+            json=file_meta.dump(camel_case=True),
+            params={"overwrite": self.overwrite_existing, "parts": chunks.chunk_count},
+        )
+        returned_file_metadata = res.json()
+        upload_urls = returned_file_metadata["uploadUrls"]
+        upload_id = returned_file_metadata["uploadId"]
+        file_meta = FileMetadata.load(returned_file_metadata)
+
+        for url in upload_urls:
+            chunks.next_chunk()
+            resp = self._httpx_client.send(self._get_file_upload_request(url, chunks, len(chunks)))
+            resp.raise_for_status()
+
+        self.cdf_client.files._post(
+            url_path="/files/completemultipartupload", json={"id": file_meta.id, "uploadId": upload_id}
+        )
+
     def add_io_to_upload_queue(
         self,
         file_meta: FileMetadata,
@@ -245,10 +286,12 @@ class IOFileUploadQueue(AbstractUploadQueue):
         extra_retries: Optional[
             Union[Tuple[Type[Exception], ...], Dict[Type[Exception], Callable[[Any], bool]]]
         ] = None,
+        space: Optional[str] = None,
+        view_id: Optional[str] = None,
     ) -> None:
         """
         Add file to upload queue. The file will start uploading immedeately. If the size of the queue is larger than
-        the specified max size, this call will block until it's
+        the specified max size, this call will block until it's completed the upload.
 
         Args:
             file_meta: File metadata-object
@@ -258,7 +301,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
         """
         retries = cognite_exceptions()
         if isinstance(extra_retries, tuple):
-            retries.update({exc: lambda _e: True for exc in extra_retries or []})
+            retries.update({exc: lambda _: True for exc in extra_retries or []})
         elif isinstance(extra_retries, dict):
             retries.update(extra_retries)
 
@@ -271,46 +314,21 @@ class IOFileUploadQueue(AbstractUploadQueue):
             backoff=RETRY_BACKOFF_FACTOR,
         )
         def upload_file(read_file: Callable[[], BinaryIO], file_meta: FileMetadata) -> None:
+            #  a = self.cdf_client.data_modeling.instances.apply(
+            #      CogniteFileApply(space=space, external_id=file_meta.external_id)
+            #  )
             with read_file() as file:
                 size = super_len(file)
                 if size == 0:
                     # upload just the file metadata witout data
-                    file_meta, _url = self.cdf_client.files.create(
-                        file_metadata=file_meta, overwrite=self.overwrite_existing
-                    )
+                    file_meta = self._upload_0_classic(file_meta)
                 elif size >= self.max_single_chunk_file_size:
                     # The minimum chunk size is 4000MiB.
-                    chunks = ChunkedStream(file, self.max_file_chunk_size, size)
-                    self.logger.debug(
-                        f"File {file_meta.external_id} is larger than 5GiB ({size})"
-                        f", uploading in {chunks.chunk_count} chunks"
-                    )
-
-                    res = self.cdf_client.files._post(
-                        url_path="/files/initmultipartupload",
-                        json=file_meta.dump(camel_case=True),
-                        params={"overwrite": self.overwrite_existing, "parts": chunks.chunk_count},
-                    )
-                    returned_file_metadata = res.json()
-                    upload_urls = returned_file_metadata["uploadUrls"]
-                    upload_id = returned_file_metadata["uploadId"]
-                    file_meta = FileMetadata.load(returned_file_metadata)
-
-                    for url in upload_urls:
-                        chunks.next_chunk()
-                        resp = self._httpx_client.send(self._get_file_upload_request(url, chunks, len(chunks)))
-                        resp.raise_for_status()
-
-                    self.cdf_client.files._post(
-                        url_path="/files/completemultipartupload", json={"id": file_meta.id, "uploadId": upload_id}
-                    )
+                    self._upload_multipart_classic(size, file, file_meta)
 
                 else:
-                    file_meta, url = self.cdf_client.files.create(
-                        file_metadata=file_meta, overwrite=self.overwrite_existing
-                    )
-                    resp = self._httpx_client.send(self._get_file_upload_request(url, file, size))
-                    resp.raise_for_status()
+                    #  self.cdf_client.files.upload_content_bytes()
+                    self._upload_classic(size, file, file_meta)
 
             if self.post_upload_function:
                 try:
