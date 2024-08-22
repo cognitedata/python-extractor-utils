@@ -159,7 +159,7 @@ def test_big_file_stream(set_upload_test: Tuple[CogniteClient, ParamTest]):
         return BufferedReadWithLength(io.BytesIO(data), io.DEFAULT_BUFFER_SIZE, len(data))
 
     queue.add_io_to_upload_queue(
-        file_meta=FileMetadata(external_id=test_parameter.external_ids[4], name=test_parameter.external_ids[4]),
+        meta_or_apply=FileMetadata(external_id=test_parameter.external_ids[4], name=test_parameter.external_ids[4]),
         read_file=read_file,
     )
 

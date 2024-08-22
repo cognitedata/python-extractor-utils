@@ -41,7 +41,7 @@ from cognite.extractorutils.uploader._metrics import (
     FILES_UPLOADER_QUEUED,
     FILES_UPLOADER_WRITTEN,
 )
-from cognite.extractorutils.util import _timestamp_to_datetime, cognite_exceptions, retry
+from cognite.extractorutils.util import cognite_exceptions, retry
 
 _QUEUES: int = 0
 _QUEUES_LOCK: threading.RLock = threading.RLock()
@@ -243,60 +243,38 @@ class IOFileUploadQueue(AbstractUploadQueue):
 
             self.cancellation_token.wait(5)
 
-    def _apply_cognite_file(self, file_meta: FileMetadata, space: str) -> NodeId:
-        external_id = file_meta.external_id or file_meta.name
-        if external_id is None:
-            raise ValueError(
-                "Either external_id or name is required in FileMetadata to upload to Core Data Model Files"
-            )
-        instance_result = self.cdf_client.data_modeling.instances.apply(
-            CogniteFileApply(
-                space=space,
-                external_id=external_id,
-                name=file_meta.name,
-                directory=file_meta.directory,
-                source_created_time=_timestamp_to_datetime(file_meta.source_created_time)
-                if file_meta.source_created_time is not None
-                else None,
-                source_updated_time=_timestamp_to_datetime(file_meta.source_modified_time)
-                if file_meta.source_modified_time is not None
-                else None,
-                mime_type=file_meta.mime_type,
-                uploaded_time=_timestamp_to_datetime(file_meta.uploaded_time)
-                if file_meta.uploaded_time is not None
-                else None,
-            )
-        )
+    def _apply_cognite_file(self, file_apply: CogniteFileApply) -> NodeId:
+        instance_result = self.cdf_client.data_modeling.instances.apply(file_apply)
         node = instance_result.nodes[0]
         return node.as_id()
 
-    def _upload_0(self, file_meta: FileMetadata, space: Optional[str] = None) -> FileMetadata:
-        if space is not None:
-            node_id = self._apply_cognite_file(file_meta, space)
-            file_meta, _ = self._create_cdm(instance_id=node_id)
+    def _upload_empty(
+        self, meta_or_apply: Union[FileMetadata, CogniteFileApply]
+    ) -> tuple[Union[FileMetadata, CogniteFileApply], str]:
+        if isinstance(meta_or_apply, CogniteFileApply):
+            node_id = self._apply_cognite_file(meta_or_apply)
+            meta_or_apply, url = self._create_cdm(instance_id=node_id)
         else:
-            file_meta, _ = self.cdf_client.files.create(file_metadata=file_meta, overwrite=self.overwrite_existing)
-        return file_meta
+            meta_or_apply, url = self.cdf_client.files.create(
+                file_metadata=meta_or_apply, overwrite=self.overwrite_existing
+            )
+        return meta_or_apply, url
 
-    def _upload_bytes(self, size: int, file: BinaryIO, file_meta: FileMetadata, space: Optional[str] = None) -> None:
-        if space is not None:
-            node_id = self._apply_cognite_file(file_meta, space)
-            file_meta, url = self._create_cdm(instance_id=node_id)
-        else:
-            file_meta, url = self.cdf_client.files.create(file_metadata=file_meta, overwrite=self.overwrite_existing)
-
+    def _upload_bytes(self, size: int, file: BinaryIO, meta_or_apply: Union[FileMetadata, CogniteFileApply]) -> None:
+        meta_or_apply, url = self._upload_empty(meta_or_apply)
         resp = self._httpx_client.send(self._get_file_upload_request(url, file, size))
         resp.raise_for_status()
 
     def _upload_multipart(
-        self, size: int, file: BinaryIO, file_meta: FileMetadata, space: Optional[str] = None
+        self, size: int, file: BinaryIO, meta_or_apply: Union[FileMetadata, CogniteFileApply]
     ) -> None:
         chunks = ChunkedStream(file, self.max_file_chunk_size, size)
         self.logger.debug(
-            f"File {file_meta.external_id} is larger than 5GiB ({size})" f", uploading in {chunks.chunk_count} chunks"
+            f"File {meta_or_apply.external_id} is larger than 5GiB ({size})"
+            f", uploading in {chunks.chunk_count} chunks"
         )
 
-        returned_file_metadata = self._create_multi_part(file_meta, chunks, space)
+        returned_file_metadata = self._create_multi_part(meta_or_apply, chunks)
         upload_urls = returned_file_metadata["uploadUrls"]
         upload_id = returned_file_metadata["uploadId"]
         file_meta = FileMetadata.load(returned_file_metadata)
@@ -306,17 +284,23 @@ class IOFileUploadQueue(AbstractUploadQueue):
             resp = self._httpx_client.send(self._get_file_upload_request(url, chunks, len(chunks)))
             resp.raise_for_status()
 
-        completed_headers = _CDF_ALPHA_VERSION_HEADER if space is not None else None
+        completed_headers = (
+            _CDF_ALPHA_VERSION_HEADER if isinstance(meta_or_apply, CogniteFileApply) is not None else None
+        )
 
-        self.cdf_client.files._post(
+        res = self.cdf_client.files._post(
             url_path="/files/completemultipartupload",
             json={"id": file_meta.id, "uploadId": upload_id},
             headers=completed_headers,
         )
+        res.raise_for_status()
 
-    def _create_multi_part(self, file_meta: FileMetadata, chunks: ChunkedStream, space: Optional[str] = None) -> dict:
-        if space is not None:
-            node_id = self._apply_cognite_file(file_meta, space)
+        if isinstance(meta_or_apply, CogniteFileApply):
+            meta_or_apply.is_uploaded = True
+
+    def _create_multi_part(self, meta_or_apply: Union[FileMetadata, CogniteFileApply], chunks: ChunkedStream) -> dict:
+        if isinstance(meta_or_apply, CogniteFileApply):
+            node_id = self._apply_cognite_file(meta_or_apply)
             identifiers = IdentifierSequence.load(instance_ids=node_id).as_singleton()
             self.cdf_client.files._warn_alpha()
             res = self.cdf_client.files._post(
@@ -330,7 +314,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
         else:
             res = self.cdf_client.files._post(
                 url_path="/files/initmultipartupload",
-                json=file_meta.dump(camel_case=True),
+                json=meta_or_apply.dump(camel_case=True),
                 params={"overwrite": self.overwrite_existing, "parts": chunks.chunk_count},
             )
             res.raise_for_status()
@@ -338,12 +322,12 @@ class IOFileUploadQueue(AbstractUploadQueue):
 
     def add_io_to_upload_queue(
         self,
-        file_meta: FileMetadata,
+        meta_or_apply: Union[FileMetadata, CogniteFileApply],
         read_file: Callable[[], BinaryIO],
         extra_retries: Optional[
             Union[Tuple[Type[Exception], ...], Dict[Type[Exception], Callable[[Any], bool]]]
         ] = None,
-        space: Optional[str] = None,
+        #  view: ViewId | None = None
     ) -> None:
         """
         Add file to upload queue. The file will start uploading immedeately. If the size of the queue is larger than
@@ -370,34 +354,34 @@ class IOFileUploadQueue(AbstractUploadQueue):
             backoff=RETRY_BACKOFF_FACTOR,
         )
         def upload_file(
-            read_file: Callable[[], BinaryIO], file_meta: FileMetadata, space: Optional[str] = None
+            read_file: Callable[[], BinaryIO], meta_or_apply: Union[FileMetadata, CogniteFileApply]
         ) -> None:
             with read_file() as file:
                 size = super_len(file)
                 if size == 0:
                     # upload just the file metadata witout data
-                    file_meta = self._upload_0(file_meta, space)
+                    meta_or_apply, _ = self._upload_empty(meta_or_apply)
                 elif size >= self.max_single_chunk_file_size:
                     # The minimum chunk size is 4000MiB.
-                    self._upload_multipart(size, file, file_meta, space)
+                    self._upload_multipart(size, file, meta_or_apply)
 
                 else:
-                    self._upload_bytes(size, file, file_meta, space)
+                    self._upload_bytes(size, file, meta_or_apply)
 
             if self.post_upload_function:
                 try:
-                    self.post_upload_function([file_meta])
+                    self.post_upload_function([meta_or_apply])
                 except Exception as e:
                     self.logger.error("Error in upload callback: %s", str(e))
 
         def wrapped_upload(
-            read_file: Callable[[], BinaryIO], file_meta: FileMetadata, space: Optional[str] = None
+            read_file: Callable[[], BinaryIO], meta_or_apply: Union[FileMetadata, CogniteFileApply]
         ) -> None:
             try:
-                upload_file(read_file, file_meta, space)
+                upload_file(read_file, meta_or_apply)
 
             except Exception as e:
-                self.logger.exception(f"Unexpected error while uploading file: {file_meta.external_id}")
+                self.logger.exception(f"Unexpected error while uploading file: {meta_or_apply.external_id}")
                 self.errors.append(e)
 
             finally:
@@ -414,7 +398,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
                     pass
 
         with self.lock:
-            self.upload_queue.append(self._pool.submit(wrapped_upload, read_file, file_meta, space))
+            self.upload_queue.append(self._pool.submit(wrapped_upload, read_file, meta_or_apply))
             self.upload_queue_size += 1
             self.files_queued.inc()
             self.queue_size.set(self.upload_queue_size)
@@ -448,7 +432,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
         )
         res.raise_for_status()
         resp_json = res.json()["items"][0]
-        return FileMetadata(*resp_json), resp_json["uploadUrl"]
+        return FileMetadata.load(resp_json), resp_json["uploadUrl"]
 
     def upload(self, fail_on_errors: bool = True, timeout: Optional[float] = None) -> None:
         """
