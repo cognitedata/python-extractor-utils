@@ -42,6 +42,9 @@ jobs:
           KEYVAULT_CLIENT_SECRET: ${{ secrets.KEYVAULT_CLIENT_SECRET }}
           COGNITE_PROJECT: extractor-tests
           COGNITE_BASE_URL: https://greenfield.cognitedata.com
+          COGNITE_DEV_PROJECT: extractor-aws-dub-dev-testing
+          COGNITE_DEV_BASE_URL: https://aws-dub-dev.cognitedata.com/
+          COGNITE_DEV_TOKEN_SCOPES: https://aws-dub-dev.cognitedata.com/.default
       run: |
         coverage run --source cognite.extractorutils -m pytest -v tests
         coverage xml
