@@ -19,6 +19,7 @@ extractors.
 
 import logging
 import random
+from datetime import datetime, timezone
 from functools import partial, wraps
 from threading import Thread
 from time import time
@@ -501,3 +502,7 @@ def cognite_exceptions(
         return True
 
     return {CogniteException: handle_cognite_errors}
+
+
+def _timestamp_to_datetime(ts: int) -> datetime:
+    return datetime.fromtimestamp(ts / 1000, tz=timezone.utc)

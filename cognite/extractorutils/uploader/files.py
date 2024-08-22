@@ -12,6 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import os
 import threading
 from concurrent.futures import Future, ThreadPoolExecutor
 from io import BytesIO, RawIOBase
@@ -24,7 +25,10 @@ from httpx import URL, Client, Headers, Request, StreamConsumed, SyncByteStream
 from requests.utils import super_len
 
 from cognite.client import CogniteClient
+from cognite.client._api.files import FilesAPI, IdentifierSequence
 from cognite.client.data_classes import FileMetadata
+from cognite.client.data_classes.cdm.v1 import CogniteFileApply
+from cognite.client.data_classes.data_modeling import NodeId
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.uploader._base import (
     RETRIES,
@@ -38,7 +42,7 @@ from cognite.extractorutils.uploader._metrics import (
     FILES_UPLOADER_QUEUED,
     FILES_UPLOADER_WRITTEN,
 )
-from cognite.extractorutils.util import cognite_exceptions, retry
+from cognite.extractorutils.util import _timestamp_to_datetime, cognite_exceptions, retry
 
 _QUEUES: int = 0
 _QUEUES_LOCK: threading.RLock = threading.RLock()
@@ -185,7 +189,6 @@ class IOFileUploadQueue(AbstractUploadQueue):
         overwrite_existing: bool = False,
         cancellation_token: Optional[CancellationToken] = None,
         max_parallelism: Optional[int] = None,
-        space: Optional[str] = None,
     ):
         # Super sets post_upload and threshold
         super().__init__(
@@ -239,16 +242,52 @@ class IOFileUploadQueue(AbstractUploadQueue):
 
             self.cancellation_token.wait(5)
 
-    def _upload_0_classic(self, file_meta: FileMetadata) -> FileMetadata:
-        file_meta, _ = self.cdf_client.files.create(file_metadata=file_meta, overwrite=self.overwrite_existing)
+    def _apply_cognite_file(self, file_meta: FileMetadata, space: str, external_id: str) -> NodeId:
+        external_id = file_meta.external_id or file_meta.name or external_id
+        instance_result = self.cdf_client.data_modeling.instances.apply(
+            CogniteFileApply(
+                space=space,
+                external_id=external_id,
+                name=file_meta.name,
+                directory=file_meta.directory,
+                source_created_time=_timestamp_to_datetime(file_meta.source_created_time)
+                if file_meta.source_created_time is not None
+                else None,
+                source_updated_time=_timestamp_to_datetime(file_meta.source_modified_time)
+                if file_meta.source_modified_time is not None
+                else None,
+                mime_type=file_meta.mime_type,
+                uploaded_time=_timestamp_to_datetime(file_meta.uploaded_time)
+                if file_meta.uploaded_time is not None
+                else None,
+            )
+        )
+        node = instance_result.nodes[0]
+        return node.as_id()
+
+    def _upload_0(self, file_meta: FileMetadata, alt_external_id: str, space: Optional[str] = None) -> FileMetadata:
+        if space is not None:
+            node_id = self._apply_cognite_file(file_meta, space, alt_external_id)
+            file_meta, _ = self._create_cdm(instance_id=node_id)
+        else:
+            file_meta, _ = self.cdf_client.files.create(file_metadata=file_meta, overwrite=self.overwrite_existing)
         return file_meta
 
-    def _upload_classic(self, size: int, file: BinaryIO, file_meta: FileMetadata) -> None:
-        file_meta, url = self.cdf_client.files.create(file_metadata=file_meta, overwrite=self.overwrite_existing)
+    def _upload_bytes(
+        self, size: int, file: BinaryIO, file_meta: FileMetadata, alt_external_id: str, space: Optional[str] = None
+    ) -> None:
+        if space is not None:
+            node_id = self._apply_cognite_file(file_meta, space, alt_external_id)
+            file_meta, url = self._create_cdm(instance_id=node_id)
+        else:
+            file_meta, url = self.cdf_client.files.create(file_metadata=file_meta, overwrite=self.overwrite_existing)
+
         resp = self._httpx_client.send(self._get_file_upload_request(url, file, size))
         resp.raise_for_status()
 
-    def _upload_multipart_classic(self, size: int, file: BinaryIO, file_meta: FileMetadata) -> None:
+    def _upload_multipart(
+        self, size: int, file: BinaryIO, file_meta: FileMetadata, alt_external_id: str, space: Optional[str] = None
+    ) -> None:
         chunks = ChunkedStream(file, self.max_file_chunk_size, size)
         self.logger.debug(
             f"File {file_meta.external_id} is larger than 5GiB ({size})" f", uploading in {chunks.chunk_count} chunks"
@@ -273,6 +312,8 @@ class IOFileUploadQueue(AbstractUploadQueue):
             url_path="/files/completemultipartupload", json={"id": file_meta.id, "uploadId": upload_id}
         )
 
+        #  self.cdf_client.files.multipart_upload_session
+
     def add_io_to_upload_queue(
         self,
         file_meta: FileMetadata,
@@ -281,7 +322,6 @@ class IOFileUploadQueue(AbstractUploadQueue):
             Union[Tuple[Type[Exception], ...], Dict[Type[Exception], Callable[[Any], bool]]]
         ] = None,
         space: Optional[str] = None,
-        view_id: Optional[str] = None,
     ) -> None:
         """
         Add file to upload queue. The file will start uploading immedeately. If the size of the queue is larger than
@@ -307,22 +347,24 @@ class IOFileUploadQueue(AbstractUploadQueue):
             max_delay=RETRY_MAX_DELAY,
             backoff=RETRY_BACKOFF_FACTOR,
         )
-        def upload_file(read_file: Callable[[], BinaryIO], file_meta: FileMetadata) -> None:
+        def upload_file(
+            read_file: Callable[[], BinaryIO], file_meta: FileMetadata, space: Optional[str] = None
+        ) -> None:
             #  a = self.cdf_client.data_modeling.instances.apply(
             #      CogniteFileApply(space=space, external_id=file_meta.external_id)
             #  )
             with read_file() as file:
                 size = super_len(file)
+                alt_external_id = os.path.basename(file.name).replace(".", "_")
                 if size == 0:
                     # upload just the file metadata witout data
-                    file_meta = self._upload_0_classic(file_meta)
+                    file_meta = self._upload_0(file_meta, alt_external_id, space)
                 elif size >= self.max_single_chunk_file_size:
                     # The minimum chunk size is 4000MiB.
-                    self._upload_multipart_classic(size, file, file_meta)
+                    self._upload_multipart(size, file, file_meta, alt_external_id, space)
 
                 else:
-                    #  self.cdf_client.files.upload_content_bytes()
-                    self._upload_classic(size, file, file_meta)
+                    self._upload_bytes(size, file, file_meta, alt_external_id, space)
 
             if self.post_upload_function:
                 try:
@@ -330,9 +372,11 @@ class IOFileUploadQueue(AbstractUploadQueue):
                 except Exception as e:
                     self.logger.error("Error in upload callback: %s", str(e))
 
-        def wrapped_upload(read_file: Callable[[], BinaryIO], file_meta: FileMetadata) -> None:
+        def wrapped_upload(
+            read_file: Callable[[], BinaryIO], file_meta: FileMetadata, space: Optional[str] = None
+        ) -> None:
             try:
-                upload_file(read_file, file_meta)
+                upload_file(read_file, file_meta, space)
 
             except Exception as e:
                 self.logger.exception(f"Unexpected error while uploading file: {file_meta.external_id}")
@@ -352,7 +396,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
                     pass
 
         with self.lock:
-            self.upload_queue.append(self._pool.submit(wrapped_upload, read_file, file_meta))
+            self.upload_queue.append(self._pool.submit(wrapped_upload, read_file, file_meta, space))
             self.upload_queue_size += 1
             self.files_queued.inc()
             self.queue_size.set(self.upload_queue_size)
@@ -375,6 +419,22 @@ class IOFileUploadQueue(AbstractUploadQueue):
             stream=IOByteStream(stream),
             headers=headers,
         )
+
+    def _create_cdm(self, instance_id: NodeId) -> tuple[FileMetadata, str]:
+        FilesAPI._warn_alpha()
+        headers = Headers(self._httpx_client.headers)
+        headers.update({"cdf-version": "alpha"})
+        identifiers = IdentifierSequence.load(instance_ids=instance_id).as_singleton()
+        req = Request(
+            method="POST",
+            url=f"{FilesAPI._RESOURCE_PATH}/uploadlink",
+            json={"items": identifiers.as_dicts()},
+            headers=headers,
+        )
+        res = self._httpx_client.send(req)
+        res.raise_for_status()
+        resp_json = res.json()["items"][0]
+        return FileMetadata(*resp_json), resp_json["uploadUrl"]
 
     def upload(self, fail_on_errors: bool = True, timeout: Optional[float] = None) -> None:
         """
