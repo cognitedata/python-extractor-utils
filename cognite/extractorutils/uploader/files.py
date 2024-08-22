@@ -25,7 +25,7 @@ from httpx import URL, Client, Headers, Request, StreamConsumed, SyncByteStream
 from requests.utils import super_len
 
 from cognite.client import CogniteClient
-from cognite.client._api.files import FilesAPI, IdentifierSequence
+from cognite.client._api.files import IdentifierSequence
 from cognite.client.data_classes import FileMetadata
 from cognite.client.data_classes.cdm.v1 import CogniteFileApply
 from cognite.client.data_classes.data_modeling import NodeId
@@ -51,6 +51,8 @@ _QUEUES_LOCK: threading.RLock = threading.RLock()
 _MAX_SINGLE_CHUNK_FILE_SIZE = 5 * 1024 * 1024 * 1024
 # 4000 MiB
 _MAX_FILE_CHUNK_SIZE = 4 * 1024 * 1024 * 1000
+
+_CDF_ALPHA_VERSION_HEADER = {"cdf-version": "alpha"}
 
 
 class ChunkedStream(RawIOBase, BinaryIO):
@@ -293,12 +295,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
             f"File {file_meta.external_id} is larger than 5GiB ({size})" f", uploading in {chunks.chunk_count} chunks"
         )
 
-        res = self.cdf_client.files._post(
-            url_path="/files/initmultipartupload",
-            json=file_meta.dump(camel_case=True),
-            params={"overwrite": self.overwrite_existing, "parts": chunks.chunk_count},
-        )
-        returned_file_metadata = res.json()
+        returned_file_metadata = self._create_multi_part(file_meta, chunks, alt_external_id, space)
         upload_urls = returned_file_metadata["uploadUrls"]
         upload_id = returned_file_metadata["uploadId"]
         file_meta = FileMetadata.load(returned_file_metadata)
@@ -308,11 +305,37 @@ class IOFileUploadQueue(AbstractUploadQueue):
             resp = self._httpx_client.send(self._get_file_upload_request(url, chunks, len(chunks)))
             resp.raise_for_status()
 
+        completed_headers = _CDF_ALPHA_VERSION_HEADER if space is not None else None
+
         self.cdf_client.files._post(
-            url_path="/files/completemultipartupload", json={"id": file_meta.id, "uploadId": upload_id}
+            url_path="/files/completemultipartupload",
+            json={"id": file_meta.id, "uploadId": upload_id},
+            headers=completed_headers,
         )
 
-        #  self.cdf_client.files.multipart_upload_session
+    def _create_multi_part(
+        self, file_meta: FileMetadata, chunks: ChunkedStream, alt_external_id: str, space: Optional[str] = None
+    ) -> dict:
+        if space is not None:
+            node_id = self._apply_cognite_file(file_meta, space, alt_external_id)
+            identifiers = IdentifierSequence.load(instance_ids=node_id).as_singleton()
+            self.cdf_client.files._warn_alpha()
+            res = self.cdf_client.files._post(
+                url_path="/files/multiuploadlink",
+                json={"items": identifiers.as_dicts()},
+                params={"parts": chunks.chunk_count},
+                headers=_CDF_ALPHA_VERSION_HEADER,
+            )
+            res.raise_for_status()
+            return res.json()[0]
+        else:
+            res = self.cdf_client.files._post(
+                url_path="/files/initmultipartupload",
+                json=file_meta.dump(camel_case=True),
+                params={"overwrite": self.overwrite_existing, "parts": chunks.chunk_count},
+            )
+            res.raise_for_status()
+            return res.json()
 
     def add_io_to_upload_queue(
         self,
@@ -350,9 +373,6 @@ class IOFileUploadQueue(AbstractUploadQueue):
         def upload_file(
             read_file: Callable[[], BinaryIO], file_meta: FileMetadata, space: Optional[str] = None
         ) -> None:
-            #  a = self.cdf_client.data_modeling.instances.apply(
-            #      CogniteFileApply(space=space, external_id=file_meta.external_id)
-            #  )
             with read_file() as file:
                 size = super_len(file)
                 alt_external_id = os.path.basename(file.name).replace(".", "_")
@@ -421,17 +441,13 @@ class IOFileUploadQueue(AbstractUploadQueue):
         )
 
     def _create_cdm(self, instance_id: NodeId) -> tuple[FileMetadata, str]:
-        FilesAPI._warn_alpha()
-        headers = Headers(self._httpx_client.headers)
-        headers.update({"cdf-version": "alpha"})
+        self.cdf_client.files._warn_alpha()
         identifiers = IdentifierSequence.load(instance_ids=instance_id).as_singleton()
-        req = Request(
-            method="POST",
-            url=f"{FilesAPI._RESOURCE_PATH}/uploadlink",
+        res = self.cdf_client.files._post(
+            url_path="/files/uploadlink",
             json={"items": identifiers.as_dicts()},
-            headers=headers,
+            headers=_CDF_ALPHA_VERSION_HEADER,
         )
-        res = self._httpx_client.send(req)
         res.raise_for_status()
         resp_json = res.json()["items"][0]
         return FileMetadata(*resp_json), resp_json["uploadUrl"]
