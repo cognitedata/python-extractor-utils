@@ -247,7 +247,9 @@ def test_big_file_stream(set_upload_test: Tuple[CogniteClient, ParamTest]) -> No
         read_file=read_file,
     )
     queue.add_io_to_upload_queue(
-        meta_or_apply=CogniteExtractorFileApply(external_id=test_parameter.external_ids[4], name=test_parameter.external_ids[4], space=test_parameter.space),
+        meta_or_apply=CogniteExtractorFileApply(
+            external_id=test_parameter.external_ids[4], name=test_parameter.external_ids[4], space=test_parameter.space
+        ),
         read_file=read_file,
     )
 

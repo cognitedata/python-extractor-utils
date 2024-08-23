@@ -33,7 +33,9 @@ class ParamTest:
 
 
 @pytest.fixture
-def set_upload_test(set_test_parameters: ParamTest, set_client: CogniteClient) -> Generator[Tuple[CogniteClient, ParamTest], None, None]:
+def set_upload_test(
+    set_test_parameters: ParamTest, set_client: CogniteClient
+) -> Generator[Tuple[CogniteClient, ParamTest], None, None]:
     client = set_client
     test_parameter = set_test_parameters
     clean_test(client, test_parameter)
