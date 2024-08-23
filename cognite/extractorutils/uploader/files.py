@@ -328,7 +328,6 @@ class IOFileUploadQueue(AbstractUploadQueue):
         extra_retries: Optional[
             Union[Tuple[Type[Exception], ...], Dict[Type[Exception], Callable[[Any], bool]]]
         ] = None,
-        #  view: ViewId | None = None
     ) -> None:
         """
         Add file to upload queue. The file will start uploading immedeately. If the size of the queue is larger than

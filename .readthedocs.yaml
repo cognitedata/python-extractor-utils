@@ -2,12 +2,12 @@ version: 2
 
 python:
   install:
-    - requirements: 'docs/requirements.txt'
+    - requirements: "docs/requirements.txt"
     - method: pip
       path: .
 
 sphinx:
-  configuration: 'docs/source/conf.py'
+  configuration: "docs/source/conf.py"
   fail_on_warning: false
 
 build:
