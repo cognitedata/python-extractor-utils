@@ -23,6 +23,8 @@ import pytest
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import FileMetadata
+from cognite.client.data_classes.data_modeling import NodeId
+from cognite.client.data_classes.data_modeling.extractor_extensions.v1 import CogniteExtractorFileApply
 from cognite.extractorutils.uploader.files import BytesUploadQueue, FileUploadQueue, IOFileUploadQueue
 from tests.conftest import ETestType, ParamTest
 
@@ -38,18 +40,27 @@ def set_test_parameters() -> ParamTest:
         f"util_integration_file_test_3-{test_id}",
         f"util_integration_file-big-2-{test_id}",
     ]
+    test_parameter.space = "core-dm-test"
     return test_parameter
 
 
-def await_is_uploaded_status(client: CogniteClient, external_id: str):
+def await_is_uploaded_status(
+    client: CogniteClient, external_id: Optional[str] = None, instance_id: Optional[NodeId] = None
+) -> None:
     for _ in range(10):
-        if client.files.retrieve(external_id=external_id).uploaded:
+        if external_id is not None:
+            retrieved = client.files.retrieve(external_id=external_id)
+        elif instance_id is not None:
+            retrieved = client.files.retrieve(instance_id=instance_id)
+        else:
+            raise ValueError("Please provide either external_id or instance_id")
+        if retrieved is not None and retrieved.uploaded:
             return
         time.sleep(1)
 
 
 @pytest.mark.parametrize("functions_runtime", ["true", "false"])
-def test_file_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest], functions_runtime: str):
+def test_file_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest], functions_runtime: str) -> None:
     os.environ["COGNITE_FUNCTION_RUNTIME"] = functions_runtime
     client, test_parameter = set_upload_test
     queue = FileUploadQueue(cdf_client=client, overwrite_existing=True, max_queue_size=2)
@@ -57,17 +68,40 @@ def test_file_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest], fun
     current_dir = pathlib.Path(__file__).parent.resolve()
 
     # Upload a pair of actual files
+    assert test_parameter.external_ids is not None
+    assert test_parameter.space is not None
     queue.add_to_upload_queue(
-        file_meta=FileMetadata(external_id=test_parameter.external_ids[0], name=test_parameter.external_ids[0]),
+        meta_or_apply=FileMetadata(external_id=test_parameter.external_ids[0], name=test_parameter.external_ids[0]),
         file_name=current_dir.joinpath("test_file_1.txt"),
     )
     queue.add_to_upload_queue(
-        file_meta=FileMetadata(external_id=test_parameter.external_ids[1], name=test_parameter.external_ids[1]),
+        meta_or_apply=FileMetadata(external_id=test_parameter.external_ids[1], name=test_parameter.external_ids[1]),
         file_name=current_dir.joinpath("test_file_2.txt"),
     )
     # Upload the Filemetadata of an empty file without trying to upload the "content"
     queue.add_to_upload_queue(
-        file_meta=FileMetadata(external_id=test_parameter.external_ids[3], name=test_parameter.external_ids[3]),
+        meta_or_apply=FileMetadata(external_id=test_parameter.external_ids[3], name=test_parameter.external_ids[3]),
+        file_name=current_dir.joinpath("empty_file.txt"),
+    )
+
+    queue.add_to_upload_queue(
+        meta_or_apply=CogniteExtractorFileApply(
+            external_id=test_parameter.external_ids[0], name=test_parameter.external_ids[0], space=test_parameter.space
+        ),
+        file_name=current_dir.joinpath("test_file_1.txt"),
+    )
+    queue.add_to_upload_queue(
+        meta_or_apply=CogniteExtractorFileApply(
+            external_id=test_parameter.external_ids[1], name=test_parameter.external_ids[1], space=test_parameter.space
+        ),
+        file_name=current_dir.joinpath("test_file_2.txt"),
+    )
+    queue.add_to_upload_queue(
+        meta_or_apply=CogniteExtractorFileApply(
+            external_id=test_parameter.external_ids[3],
+            name=test_parameter.external_ids[3],
+            space=test_parameter.space,
+        ),
         file_name=current_dir.joinpath("empty_file.txt"),
     )
 
@@ -75,42 +109,76 @@ def test_file_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest], fun
 
     await_is_uploaded_status(client, test_parameter.external_ids[0])
     await_is_uploaded_status(client, test_parameter.external_ids[1])
+    await_is_uploaded_status(client, instance_id=NodeId(test_parameter.space, test_parameter.external_ids[0]))
+    await_is_uploaded_status(client, instance_id=NodeId(test_parameter.space, test_parameter.external_ids[1]))
+
     file1 = client.files.download_bytes(external_id=test_parameter.external_ids[0])
     file2 = client.files.download_bytes(external_id=test_parameter.external_ids[1])
     file3 = client.files.retrieve(external_id=test_parameter.external_ids[3])
 
+    file4 = client.files.download_bytes(instance_id=NodeId(test_parameter.space, test_parameter.external_ids[0]))
+    file5 = client.files.download_bytes(instance_id=NodeId(test_parameter.space, test_parameter.external_ids[1]))
+    file6 = client.files.retrieve(instance_id=NodeId(test_parameter.space, test_parameter.external_ids[3]))
+
     assert file1 == b"test content\n"
     assert file2 == b"other test content\n"
-    assert file3.name == test_parameter.external_ids[3]
+    assert file3 is not None and file3.name == test_parameter.external_ids[3]
+
+    assert file4 == b"test content\n"
+    assert file5 == b"other test content\n"
+    assert file6 is not None and file6.instance_id is not None and file6.instance_id.space == test_parameter.space
 
 
 @pytest.mark.parametrize("functions_runtime", ["true", "false"])
-def test_bytes_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest], functions_runtime: str):
+def test_bytes_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest], functions_runtime: str) -> None:
     os.environ["COGNITE_FUNCTION_RUNTIME"] = functions_runtime
     client, test_parameter = set_upload_test
     queue = BytesUploadQueue(cdf_client=client, overwrite_existing=True, max_queue_size=1)
 
+    assert test_parameter.external_ids is not None
+    assert test_parameter.space is not None
+
     queue.add_to_upload_queue(
         content=b"bytes content",
-        metadata=FileMetadata(external_id=test_parameter.external_ids[0], name=test_parameter.external_ids[0]),
+        meta_or_apply=FileMetadata(external_id=test_parameter.external_ids[0], name=test_parameter.external_ids[0]),
     )
     queue.add_to_upload_queue(
         content=b"other bytes content",
-        metadata=FileMetadata(external_id=test_parameter.external_ids[1], name=test_parameter.external_ids[1]),
+        meta_or_apply=FileMetadata(external_id=test_parameter.external_ids[1], name=test_parameter.external_ids[1]),
+    )
+
+    queue.add_to_upload_queue(
+        content=b"bytes content",
+        meta_or_apply=CogniteExtractorFileApply(
+            external_id=test_parameter.external_ids[0], name=test_parameter.external_ids[0], space=test_parameter.space
+        ),
+    )
+    queue.add_to_upload_queue(
+        content=b"other bytes content",
+        meta_or_apply=CogniteExtractorFileApply(
+            external_id=test_parameter.external_ids[1], name=test_parameter.external_ids[1], space=test_parameter.space
+        ),
     )
 
     queue.upload()
     await_is_uploaded_status(client, test_parameter.external_ids[0])
     await_is_uploaded_status(client, test_parameter.external_ids[1])
+    await_is_uploaded_status(client, instance_id=NodeId(test_parameter.space, test_parameter.external_ids[0]))
+    await_is_uploaded_status(client, instance_id=NodeId(test_parameter.space, test_parameter.external_ids[1]))
+
     file1 = client.files.download_bytes(external_id=test_parameter.external_ids[0])
     file2 = client.files.download_bytes(external_id=test_parameter.external_ids[1])
+    file3 = client.files.download_bytes(instance_id=NodeId(test_parameter.space, test_parameter.external_ids[0]))
+    file4 = client.files.download_bytes(instance_id=NodeId(test_parameter.space, test_parameter.external_ids[1]))
 
     assert file1 == b"bytes content"
     assert file2 == b"other bytes content"
+    assert file3 == b"bytes content"
+    assert file4 == b"other bytes content"
 
 
 @pytest.mark.parametrize("functions_runtime", ["true", "false"])
-def test_big_file_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest], functions_runtime: str):
+def test_big_file_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest], functions_runtime: str) -> None:
     os.environ["COGNITE_FUNCTION_RUNTIME"] = functions_runtime
     client, test_parameter = set_upload_test
     queue = BytesUploadQueue(cdf_client=client, overwrite_existing=True, max_queue_size=1)
@@ -119,20 +187,33 @@ def test_big_file_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest],
 
     content = b"large" * 2_000_000
 
+    assert test_parameter.external_ids is not None
+    assert test_parameter.space is not None
+
     queue.add_to_upload_queue(
         content=content,
-        metadata=FileMetadata(external_id=test_parameter.external_ids[2], name=test_parameter.external_ids[2]),
+        meta_or_apply=FileMetadata(external_id=test_parameter.external_ids[2], name=test_parameter.external_ids[2]),
+    )
+    queue.add_to_upload_queue(
+        content=content,
+        meta_or_apply=CogniteExtractorFileApply(
+            external_id=test_parameter.external_ids[2], name=test_parameter.external_ids[2], space=test_parameter.space
+        ),
     )
 
     queue.upload()
 
     await_is_uploaded_status(client, test_parameter.external_ids[2])
+    await_is_uploaded_status(client, instance_id=NodeId(test_parameter.space, test_parameter.external_ids[2]))
+
     bigfile = client.files.download_bytes(external_id=test_parameter.external_ids[2])
+    bigfile2 = client.files.download_bytes(instance_id=NodeId(test_parameter.space, test_parameter.external_ids[2]))
 
     assert len(bigfile) == 10_000_000
+    assert len(bigfile2) == 10_000_000
 
 
-def test_big_file_stream(set_upload_test: Tuple[CogniteClient, ParamTest]):
+def test_big_file_stream(set_upload_test: Tuple[CogniteClient, ParamTest]) -> None:
     client, test_parameter = set_upload_test
     queue = IOFileUploadQueue(cdf_client=client, overwrite_existing=True, max_queue_size=1)
     queue.max_file_chunk_size = 6_000_000
@@ -155,17 +236,27 @@ def test_big_file_stream(set_upload_test: Tuple[CogniteClient, ParamTest]):
                 self.on_close()
             return super().close()
 
-    def read_file():
+    def read_file() -> BufferedReadWithLength:
         return BufferedReadWithLength(io.BytesIO(data), io.DEFAULT_BUFFER_SIZE, len(data))
+
+    assert test_parameter.external_ids is not None
+    assert test_parameter.space is not None
 
     queue.add_io_to_upload_queue(
         meta_or_apply=FileMetadata(external_id=test_parameter.external_ids[4], name=test_parameter.external_ids[4]),
+        read_file=read_file,
+    )
+    queue.add_io_to_upload_queue(
+        meta_or_apply=CogniteExtractorFileApply(external_id=test_parameter.external_ids[4], name=test_parameter.external_ids[4], space=test_parameter.space),
         read_file=read_file,
     )
 
     queue.upload()
 
     await_is_uploaded_status(client, test_parameter.external_ids[4])
+    await_is_uploaded_status(client, instance_id=NodeId(test_parameter.space, test_parameter.external_ids[4]))
     bigfile = client.files.download_bytes(external_id=test_parameter.external_ids[4])
+    bigfile2 = client.files.download_bytes(instance_id=NodeId(test_parameter.space, test_parameter.external_ids[4]))
 
     assert len(bigfile) == 10_000_000
+    assert len(bigfile2) == 10_000_000

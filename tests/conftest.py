@@ -1,7 +1,7 @@
 import os
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional, Tuple
+from typing import Generator, List, Optional, Tuple
 
 import pytest
 
@@ -29,10 +29,11 @@ class ParamTest:
     external_ids: Optional[List[str]] = None
     database_name: Optional[str] = None
     table_name: Optional[str] = None
+    space: Optional[str] = None
 
 
 @pytest.fixture
-def set_upload_test(set_test_parameters: ParamTest, set_client: CogniteClient) -> Tuple[CogniteClient, ParamTest]:
+def set_upload_test(set_test_parameters: ParamTest, set_client: CogniteClient) -> Generator[Tuple[CogniteClient, ParamTest], None, None]:
     client = set_client
     test_parameter = set_test_parameters
     clean_test(client, test_parameter)

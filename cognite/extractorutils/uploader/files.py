@@ -24,10 +24,10 @@ from httpx import URL, Client, Headers, Request, StreamConsumed, SyncByteStream
 from requests.utils import super_len
 
 from cognite.client import CogniteClient
-from cognite.client._api.files import IdentifierSequence
 from cognite.client.data_classes import FileMetadata
-from cognite.client.data_classes.cdm.v1 import CogniteFileApply
 from cognite.client.data_classes.data_modeling import NodeId
+from cognite.client.data_classes.data_modeling.extractor_extensions.v1 import CogniteExtractorFileApply
+from cognite.client.utils._identifier import IdentifierSequence
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.uploader._base import (
     RETRIES,
@@ -243,15 +243,15 @@ class IOFileUploadQueue(AbstractUploadQueue):
 
             self.cancellation_token.wait(5)
 
-    def _apply_cognite_file(self, file_apply: CogniteFileApply) -> NodeId:
+    def _apply_cognite_file(self, file_apply: CogniteExtractorFileApply) -> NodeId:
         instance_result = self.cdf_client.data_modeling.instances.apply(file_apply)
         node = instance_result.nodes[0]
         return node.as_id()
 
     def _upload_empty(
-        self, meta_or_apply: Union[FileMetadata, CogniteFileApply]
-    ) -> tuple[Union[FileMetadata, CogniteFileApply], str]:
-        if isinstance(meta_or_apply, CogniteFileApply):
+        self, meta_or_apply: Union[FileMetadata, CogniteExtractorFileApply]
+    ) -> tuple[Union[FileMetadata, CogniteExtractorFileApply], str]:
+        if isinstance(meta_or_apply, CogniteExtractorFileApply):
             node_id = self._apply_cognite_file(meta_or_apply)
             meta_or_apply, url = self._create_cdm(instance_id=node_id)
         else:
@@ -260,13 +260,15 @@ class IOFileUploadQueue(AbstractUploadQueue):
             )
         return meta_or_apply, url
 
-    def _upload_bytes(self, size: int, file: BinaryIO, meta_or_apply: Union[FileMetadata, CogniteFileApply]) -> None:
+    def _upload_bytes(
+        self, size: int, file: BinaryIO, meta_or_apply: Union[FileMetadata, CogniteExtractorFileApply]
+    ) -> None:
         meta_or_apply, url = self._upload_empty(meta_or_apply)
         resp = self._httpx_client.send(self._get_file_upload_request(url, file, size))
         resp.raise_for_status()
 
     def _upload_multipart(
-        self, size: int, file: BinaryIO, meta_or_apply: Union[FileMetadata, CogniteFileApply]
+        self, size: int, file: BinaryIO, meta_or_apply: Union[FileMetadata, CogniteExtractorFileApply]
     ) -> None:
         chunks = ChunkedStream(file, self.max_file_chunk_size, size)
         self.logger.debug(
@@ -285,7 +287,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
             resp.raise_for_status()
 
         completed_headers = (
-            _CDF_ALPHA_VERSION_HEADER if isinstance(meta_or_apply, CogniteFileApply) is not None else None
+            _CDF_ALPHA_VERSION_HEADER if isinstance(meta_or_apply, CogniteExtractorFileApply) is not None else None
         )
 
         res = self.cdf_client.files._post(
@@ -295,11 +297,10 @@ class IOFileUploadQueue(AbstractUploadQueue):
         )
         res.raise_for_status()
 
-        if isinstance(meta_or_apply, CogniteFileApply):
-            meta_or_apply.is_uploaded = True
-
-    def _create_multi_part(self, meta_or_apply: Union[FileMetadata, CogniteFileApply], chunks: ChunkedStream) -> dict:
-        if isinstance(meta_or_apply, CogniteFileApply):
+    def _create_multi_part(
+        self, meta_or_apply: Union[FileMetadata, CogniteExtractorFileApply], chunks: ChunkedStream
+    ) -> dict:
+        if isinstance(meta_or_apply, CogniteExtractorFileApply):
             node_id = self._apply_cognite_file(meta_or_apply)
             identifiers = IdentifierSequence.load(instance_ids=node_id).as_singleton()
             self.cdf_client.files._warn_alpha()
@@ -310,7 +311,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
                 headers=_CDF_ALPHA_VERSION_HEADER,
             )
             res.raise_for_status()
-            return res.json()[0]
+            return res.json()["items"][0]
         else:
             res = self.cdf_client.files._post(
                 url_path="/files/initmultipartupload",
@@ -322,7 +323,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
 
     def add_io_to_upload_queue(
         self,
-        meta_or_apply: Union[FileMetadata, CogniteFileApply],
+        meta_or_apply: Union[FileMetadata, CogniteExtractorFileApply],
         read_file: Callable[[], BinaryIO],
         extra_retries: Optional[
             Union[Tuple[Type[Exception], ...], Dict[Type[Exception], Callable[[Any], bool]]]
@@ -354,7 +355,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
             backoff=RETRY_BACKOFF_FACTOR,
         )
         def upload_file(
-            read_file: Callable[[], BinaryIO], meta_or_apply: Union[FileMetadata, CogniteFileApply]
+            read_file: Callable[[], BinaryIO], meta_or_apply: Union[FileMetadata, CogniteExtractorFileApply]
         ) -> None:
             with read_file() as file:
                 size = super_len(file)
@@ -368,6 +369,9 @@ class IOFileUploadQueue(AbstractUploadQueue):
                 else:
                     self._upload_bytes(size, file, meta_or_apply)
 
+                if isinstance(meta_or_apply, CogniteExtractorFileApply):
+                    meta_or_apply.is_uploaded = True
+
             if self.post_upload_function:
                 try:
                     self.post_upload_function([meta_or_apply])
@@ -375,7 +379,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
                     self.logger.error("Error in upload callback: %s", str(e))
 
         def wrapped_upload(
-            read_file: Callable[[], BinaryIO], meta_or_apply: Union[FileMetadata, CogniteFileApply]
+            read_file: Callable[[], BinaryIO], meta_or_apply: Union[FileMetadata, CogniteExtractorFileApply]
         ) -> None:
             try:
                 upload_file(read_file, meta_or_apply)
@@ -517,7 +521,9 @@ class FileUploadQueue(IOFileUploadQueue):
             cancellation_token,
         )
 
-    def add_to_upload_queue(self, file_meta: FileMetadata, file_name: Union[str, PathLike]) -> None:
+    def add_to_upload_queue(
+        self, meta_or_apply: Union[FileMetadata, CogniteExtractorFileApply], file_name: Union[str, PathLike]
+    ) -> None:
         """
         Add file to upload queue. The queue will be uploaded if the queue size is larger than the threshold
         specified in the __init__.
@@ -531,7 +537,7 @@ class FileUploadQueue(IOFileUploadQueue):
         def load_file_from_path() -> BinaryIO:
             return open(file_name, "rb")
 
-        self.add_io_to_upload_queue(file_meta, load_file_from_path)
+        self.add_io_to_upload_queue(meta_or_apply, load_file_from_path)
 
 
 class BytesUploadQueue(IOFileUploadQueue):
@@ -568,7 +574,9 @@ class BytesUploadQueue(IOFileUploadQueue):
             cancellation_token,
         )
 
-    def add_to_upload_queue(self, content: bytes, metadata: FileMetadata) -> None:
+    def add_to_upload_queue(
+        self, content: bytes, meta_or_apply: Union[FileMetadata, CogniteExtractorFileApply]
+    ) -> None:
         """
         Add object to upload queue. The queue will be uploaded if the queue size is larger than the threshold
         specified in the __init__.
@@ -580,4 +588,4 @@ class BytesUploadQueue(IOFileUploadQueue):
         def get_byte_io() -> BinaryIO:
             return BytesIO(content)
 
-        self.add_io_to_upload_queue(metadata, get_byte_io)
+        self.add_io_to_upload_queue(meta_or_apply, get_byte_io)

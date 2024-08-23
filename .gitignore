@@ -6,6 +6,7 @@ __pycache__/
 # Local test files
 test.py
 test.yaml
+pyrightconfig.json
 
 # Tokens, etc
 token.txt
