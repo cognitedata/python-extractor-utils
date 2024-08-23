@@ -38,6 +38,11 @@ target-version = "py310"
 [tool.ruff.isort]
 known-third-party = ["alembic"]
 
+[tool.pytest.ini_options]
+markers = [
+    "unstable: tests for the unstable package (deselect with '-m \"not unstable\"')",
+]
+
 [tool.mypy]
 pretty = true
 check_untyped_defs = true
