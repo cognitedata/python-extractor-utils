@@ -183,7 +183,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[List[FileMetadata]], None]] = None,
+        post_upload_function: Optional[Callable[[List[FileMetadata | CogniteExtractorFileApply]], None]] = None,
         max_queue_size: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
@@ -501,7 +501,7 @@ class FileUploadQueue(IOFileUploadQueue):
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[List[FileMetadata]], None]] = None,
+        post_upload_function: Optional[Callable[[List[FileMetadata | CogniteExtractorFileApply]], None]] = None,
         max_queue_size: Optional[int] = None,
         max_upload_interval: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
@@ -556,7 +556,7 @@ class BytesUploadQueue(IOFileUploadQueue):
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[List[FileMetadata]], None]] = None,
+        post_upload_function: Optional[Callable[[List[FileMetadata | CogniteExtractorFileApply]], None]] = None,
         max_queue_size: Optional[int] = None,
         trigger_log_level: str = "DEBUG",
         thread_name: Optional[str] = None,
