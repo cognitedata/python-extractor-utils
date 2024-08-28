@@ -39,6 +39,12 @@ def set_test_parameters() -> ParamTest:
         f"util_integration_file-big-{test_id}",
         f"util_integration_file_test_3-{test_id}",
         f"util_integration_file-big-2-{test_id}",
+
+        f'utils_integration_core_dm_file_test_1-{test_id}',
+        f"util_integration_core_dm_file_test_2-{test_id}",
+        f"util_integration_core_dm_file-big-{test_id}",
+        f"util_integration_core_dm_file_test_3-{test_id}",
+        f"util_integration_core_dm_file-big-2-{test_id}",
     ]
     test_parameter.space = "core-dm-test"
     return test_parameter
@@ -86,20 +92,20 @@ def test_file_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest], fun
 
     queue.add_to_upload_queue(
         meta_or_apply=CogniteExtractorFileApply(
-            external_id=test_parameter.external_ids[0], name=test_parameter.external_ids[0], space=test_parameter.space
+            external_id=test_parameter.external_ids[5], name=test_parameter.external_ids[5], space=test_parameter.space
         ),
         file_name=current_dir.joinpath("test_file_1.txt"),
     )
     queue.add_to_upload_queue(
         meta_or_apply=CogniteExtractorFileApply(
-            external_id=test_parameter.external_ids[1], name=test_parameter.external_ids[1], space=test_parameter.space
+            external_id=test_parameter.external_ids[6], name=test_parameter.external_ids[6], space=test_parameter.space
         ),
         file_name=current_dir.joinpath("test_file_2.txt"),
     )
     queue.add_to_upload_queue(
         meta_or_apply=CogniteExtractorFileApply(
-            external_id=test_parameter.external_ids[3],
-            name=test_parameter.external_ids[3],
+            external_id=test_parameter.external_ids[8],
+            name=test_parameter.external_ids[8],
             space=test_parameter.space,
         ),
         file_name=current_dir.joinpath("empty_file.txt"),
@@ -109,16 +115,17 @@ def test_file_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest], fun
 
     await_is_uploaded_status(client, test_parameter.external_ids[0])
     await_is_uploaded_status(client, test_parameter.external_ids[1])
-    await_is_uploaded_status(client, instance_id=NodeId(test_parameter.space, test_parameter.external_ids[0]))
-    await_is_uploaded_status(client, instance_id=NodeId(test_parameter.space, test_parameter.external_ids[1]))
+    await_is_uploaded_status(client, instance_id=NodeId(test_parameter.space, test_parameter.external_ids[5]))
+    await_is_uploaded_status(client, instance_id=NodeId(test_parameter.space, test_parameter.external_ids[6]))
 
     file1 = client.files.download_bytes(external_id=test_parameter.external_ids[0])
     file2 = client.files.download_bytes(external_id=test_parameter.external_ids[1])
     file3 = client.files.retrieve(external_id=test_parameter.external_ids[3])
 
-    file4 = client.files.download_bytes(instance_id=NodeId(test_parameter.space, test_parameter.external_ids[0]))
-    file5 = client.files.download_bytes(instance_id=NodeId(test_parameter.space, test_parameter.external_ids[1]))
-    file6 = client.files.retrieve(instance_id=NodeId(test_parameter.space, test_parameter.external_ids[3]))
+    file4 = client.files.download_bytes(instance_id=NodeId(test_parameter.space, test_parameter.external_ids[5]))
+    file5 = client.files.download_bytes(instance_id=NodeId(test_parameter.space, test_parameter.external_ids[6]))
+    file6 = client.files.retrieve(instance_id=NodeId(test_parameter.space, test_parameter.external_ids[8]))
+
 
     assert file1 == b"test content\n"
     assert file2 == b"other test content\n"
@@ -150,26 +157,26 @@ def test_bytes_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest], fu
     queue.add_to_upload_queue(
         content=b"bytes content",
         meta_or_apply=CogniteExtractorFileApply(
-            external_id=test_parameter.external_ids[0], name=test_parameter.external_ids[0], space=test_parameter.space
+            external_id=test_parameter.external_ids[5], name=test_parameter.external_ids[5], space=test_parameter.space
         ),
     )
     queue.add_to_upload_queue(
         content=b"other bytes content",
         meta_or_apply=CogniteExtractorFileApply(
-            external_id=test_parameter.external_ids[1], name=test_parameter.external_ids[1], space=test_parameter.space
+            external_id=test_parameter.external_ids[6], name=test_parameter.external_ids[6], space=test_parameter.space
         ),
     )
 
     queue.upload()
     await_is_uploaded_status(client, test_parameter.external_ids[0])
     await_is_uploaded_status(client, test_parameter.external_ids[1])
-    await_is_uploaded_status(client, instance_id=NodeId(test_parameter.space, test_parameter.external_ids[0]))
-    await_is_uploaded_status(client, instance_id=NodeId(test_parameter.space, test_parameter.external_ids[1]))
+    await_is_uploaded_status(client, instance_id=NodeId(test_parameter.space, test_parameter.external_ids[5]))
+    await_is_uploaded_status(client, instance_id=NodeId(test_parameter.space, test_parameter.external_ids[6]))
 
     file1 = client.files.download_bytes(external_id=test_parameter.external_ids[0])
     file2 = client.files.download_bytes(external_id=test_parameter.external_ids[1])
-    file3 = client.files.download_bytes(instance_id=NodeId(test_parameter.space, test_parameter.external_ids[0]))
-    file4 = client.files.download_bytes(instance_id=NodeId(test_parameter.space, test_parameter.external_ids[1]))
+    file3 = client.files.download_bytes(instance_id=NodeId(test_parameter.space, test_parameter.external_ids[5]))
+    file4 = client.files.download_bytes(instance_id=NodeId(test_parameter.space, test_parameter.external_ids[6]))
 
     assert file1 == b"bytes content"
     assert file2 == b"other bytes content"
@@ -197,17 +204,17 @@ def test_big_file_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest],
     queue.add_to_upload_queue(
         content=content,
         meta_or_apply=CogniteExtractorFileApply(
-            external_id=test_parameter.external_ids[2], name=test_parameter.external_ids[2], space=test_parameter.space
+            external_id=test_parameter.external_ids[7], name=test_parameter.external_ids[7], space=test_parameter.space
         ),
     )
 
     queue.upload()
 
     await_is_uploaded_status(client, test_parameter.external_ids[2])
-    await_is_uploaded_status(client, instance_id=NodeId(test_parameter.space, test_parameter.external_ids[2]))
+    await_is_uploaded_status(client, instance_id=NodeId(test_parameter.space, test_parameter.external_ids[7]))
 
     bigfile = client.files.download_bytes(external_id=test_parameter.external_ids[2])
-    bigfile2 = client.files.download_bytes(instance_id=NodeId(test_parameter.space, test_parameter.external_ids[2]))
+    bigfile2 = client.files.download_bytes(instance_id=NodeId(test_parameter.space, test_parameter.external_ids[7]))
 
     assert len(bigfile) == 10_000_000
     assert len(bigfile2) == 10_000_000
@@ -248,7 +255,7 @@ def test_big_file_stream(set_upload_test: Tuple[CogniteClient, ParamTest]) -> No
     )
     queue.add_io_to_upload_queue(
         meta_or_apply=CogniteExtractorFileApply(
-            external_id=test_parameter.external_ids[4], name=test_parameter.external_ids[4], space=test_parameter.space
+            external_id=test_parameter.external_ids[9], name=test_parameter.external_ids[9], space=test_parameter.space
         ),
         read_file=read_file,
     )
@@ -256,9 +263,9 @@ def test_big_file_stream(set_upload_test: Tuple[CogniteClient, ParamTest]) -> No
     queue.upload()
 
     await_is_uploaded_status(client, test_parameter.external_ids[4])
-    await_is_uploaded_status(client, instance_id=NodeId(test_parameter.space, test_parameter.external_ids[4]))
+    await_is_uploaded_status(client, instance_id=NodeId(test_parameter.space, test_parameter.external_ids[9]))
     bigfile = client.files.download_bytes(external_id=test_parameter.external_ids[4])
-    bigfile2 = client.files.download_bytes(instance_id=NodeId(test_parameter.space, test_parameter.external_ids[4]))
+    bigfile2 = client.files.download_bytes(instance_id=NodeId(test_parameter.space, test_parameter.external_ids[9]))
 
     assert len(bigfile) == 10_000_000
     assert len(bigfile2) == 10_000_000

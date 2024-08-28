@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Generator, List, Optional, Tuple
 
+from cognite.client.data_classes.data_modeling import NodeId
 import pytest
 
 from cognite.client import CogniteClient
@@ -77,7 +78,11 @@ def clean_test(client: CogniteClient, test_parameter: ParamTest) -> None:
     elif test_parameter.test_type.value == ETestType.FILES.value:
         for file in test_parameter.external_ids:
             try:
-                client.files.delete(external_id=file)
+                if "core_dm" in file:
+                    # This according to the core dm team should trigger the file syncer to delete any files associated to this instance
+                    client.data_modeling.instances.delete(NodeId(test_parameter.space, file))
+                else:
+                    client.files.delete(external_id=file)
             except CogniteNotFoundError:
                 pass
     elif test_parameter.test_type.value == ETestType.DATA_MODELING.value:
