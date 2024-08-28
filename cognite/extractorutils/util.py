@@ -19,7 +19,7 @@ extractors.
 
 import logging
 import random
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from functools import partial, wraps
 from threading import Thread
 from time import time
@@ -509,4 +509,4 @@ def datetime_to_timestamp(dt: datetime) -> int:
 
 
 def timestamp_to_datetime(ts: int) -> datetime:
-    return datetime.fromtimestamp(ts / 1000, tz=UTC)
+    return datetime.fromtimestamp(ts / 1000, tz=timezone.utc)

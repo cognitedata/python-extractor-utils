@@ -13,7 +13,7 @@
 #  limitations under the License.
 
 import threading
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from unittest.mock import Mock, patch
 
 import httpx
@@ -411,15 +411,14 @@ def test_retry_cognite() -> None:
 
 
 def test_datetime_to_timestamp() -> None:
-    current_time = datetime.now(tz=UTC)
+    current_time = datetime.now(tz=timezone.utc)
     ts = datetime_to_timestamp(current_time)
 
     assert ts == int(current_time.timestamp() * 1000)
 
 
 def test_timestamp_to_datetime() -> None:
-    current_time = datetime.now(tz=UTC)
+    current_time = datetime.now(tz=timezone.utc)
     dt = timestamp_to_datetime(int(current_time.timestamp() * 1000))
-    print(dt.isoformat(timespec="milliseconds"), current_time.isoformat(timespec="milliseconds"))
 
     assert dt.isoformat(timespec="milliseconds") == current_time.isoformat(timespec="milliseconds")
