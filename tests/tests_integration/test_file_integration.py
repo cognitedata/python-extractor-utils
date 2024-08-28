@@ -39,8 +39,7 @@ def set_test_parameters() -> ParamTest:
         f"util_integration_file-big-{test_id}",
         f"util_integration_file_test_3-{test_id}",
         f"util_integration_file-big-2-{test_id}",
-
-        f'utils_integration_core_dm_file_test_1-{test_id}',
+        f"utils_integration_core_dm_file_test_1-{test_id}",
         f"util_integration_core_dm_file_test_2-{test_id}",
         f"util_integration_core_dm_file-big-{test_id}",
         f"util_integration_core_dm_file_test_3-{test_id}",
@@ -125,7 +124,6 @@ def test_file_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest], fun
     file4 = client.files.download_bytes(instance_id=NodeId(test_parameter.space, test_parameter.external_ids[5]))
     file5 = client.files.download_bytes(instance_id=NodeId(test_parameter.space, test_parameter.external_ids[6]))
     file6 = client.files.retrieve(instance_id=NodeId(test_parameter.space, test_parameter.external_ids[8]))
-
 
     assert file1 == b"test content\n"
     assert file2 == b"other test content\n"

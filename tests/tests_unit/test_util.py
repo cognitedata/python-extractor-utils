@@ -13,6 +13,7 @@
 #  limitations under the License.
 
 import threading
+from datetime import UTC, datetime
 from unittest.mock import Mock, patch
 
 import httpx
@@ -26,11 +27,13 @@ from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.util import (
     EitherId,
     cognite_exceptions,
+    datetime_to_timestamp,
     ensure_assets,
     ensure_time_series,
     httpx_exceptions,
     requests_exceptions,
     retry,
+    timestamp_to_datetime,
 )
 
 
@@ -405,3 +408,18 @@ def test_retry_cognite() -> None:
         call_mock3()
 
     assert len(mock.call_args_list) == 3
+
+
+def test_datetime_to_timestamp() -> None:
+    current_time = datetime.now(tz=UTC)
+    ts = datetime_to_timestamp(current_time)
+
+    assert ts == int(current_time.timestamp() * 1000)
+
+
+def test_timestamp_to_datetime() -> None:
+    current_time = datetime.now(tz=UTC)
+    dt = timestamp_to_datetime(int(current_time.timestamp() * 1000))
+    print(dt.isoformat(timespec="milliseconds"), current_time.isoformat(timespec="milliseconds"))
+
+    assert dt.isoformat(timespec="milliseconds") == current_time.isoformat(timespec="milliseconds")

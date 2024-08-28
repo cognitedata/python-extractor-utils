@@ -3,12 +3,12 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Generator, List, Optional, Tuple
 
-from cognite.client.data_classes.data_modeling import NodeId
 import pytest
 
 from cognite.client import CogniteClient
 from cognite.client.config import ClientConfig
 from cognite.client.credentials import OAuthClientCredentials
+from cognite.client.data_classes.data_modeling import NodeId
 from cognite.client.exceptions import CogniteAPIError, CogniteNotFoundError
 
 NUM_NODES = 5000
