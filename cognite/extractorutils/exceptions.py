@@ -22,9 +22,10 @@ class InvalidConfigError(Exception):
       * Unkown fields
     """
 
-    def __init__(self, message: str):
+    def __init__(self, message: str, details: list[str] | None = None):
         super(InvalidConfigError, self).__init__()
         self.message = message
+        self.details = details
 
     def __str__(self) -> str:
         return f"Invalid config: {self.message}"
