@@ -18,31 +18,28 @@ class ConfigFormat(Enum):
 
 
 def load_file(path: Path, schema: Type[_T]) -> _T:
-    match path.suffix:
-        case ".yaml" | ".yml":
-            format = ConfigFormat.YAML
-        case ".json":
-            format = ConfigFormat.JSON
-
-        case _:
-            raise InvalidConfigError(f"Unknown file type {path.suffix}")
+    if path.suffix in [".yaml", ".yml"]:
+        format = ConfigFormat.YAML
+    elif path.suffix == ".json":
+        format = ConfigFormat.JSON
+    else:
+        raise InvalidConfigError(f"Unknown file type {path.suffix}")
 
     with open(path, "r") as stream:
         return load_io(stream, format, schema)
 
 
 def load_io(stream: TextIO, format: ConfigFormat, schema: Type[_T]) -> _T:
-    match format:
-        case ConfigFormat.JSON:
-            data = json.load(stream)
+    if format == ConfigFormat.JSON:
+        data = json.load(stream)
 
-        case ConfigFormat.YAML:
-            data = _load_yaml_dict_raw(stream)
+    elif format == ConfigFormat.YAML:
+        data = _load_yaml_dict_raw(stream)
 
-            if "azure-keyvault" in data:
-                data.pop("azure-keyvault")
-            if "key-vault" in data:
-                data.pop("key-vault")
+        if "azure-keyvault" in data:
+            data.pop("azure-keyvault")
+        if "key-vault" in data:
+            data.pop("key-vault")
 
     return load_dict(data, schema)
 

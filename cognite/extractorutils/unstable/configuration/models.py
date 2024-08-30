@@ -25,7 +25,7 @@ class _ClientCredentialsConfig(ConfigModel):
     client_id: str
     client_secret: str
     token_url: str
-    scopes: list[str]
+    scopes: List[str]
 
 
 class _ClientCertificateConfig(ConfigModel):
