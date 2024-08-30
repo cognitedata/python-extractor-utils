@@ -24,7 +24,10 @@ import pytest
 from cognite.client import CogniteClient
 from cognite.client.data_classes import FileMetadata
 from cognite.client.data_classes.data_modeling import NodeId
-from cognite.client.data_classes.data_modeling.extractor_extensions.v1 import CogniteExtractorData, CogniteExtractorFile, CogniteExtractorFileApply
+from cognite.client.data_classes.data_modeling.extractor_extensions.v1 import (
+    CogniteExtractorFile,
+    CogniteExtractorFileApply,
+)
 from cognite.extractorutils.uploader.files import BytesUploadQueue, FileUploadQueue, IOFileUploadQueue
 from tests.conftest import ETestType, ParamTest
 
@@ -108,7 +111,7 @@ def test_file_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest], fun
             space=test_parameter.space,
             extracted_data={"testing": "abc", "untested": "ced"},
             directory="mydirectory",
-            mime_type="application/json"
+            mime_type="application/json",
         ),
         file_name=current_dir.joinpath("empty_file.txt"),
     )
@@ -134,7 +137,9 @@ def test_file_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest], fun
 
     assert file4 == b"test content\n"
     assert file5 == b"other test content\n"
-    node = client.data_modeling.instances.retrieve_nodes(NodeId(test_parameter.space, test_parameter.external_ids[8]), node_cls=CogniteExtractorFile)
+    node = client.data_modeling.instances.retrieve_nodes(
+        NodeId(test_parameter.space, test_parameter.external_ids[8]), node_cls=CogniteExtractorFile
+    )
     assert isinstance(node, CogniteExtractorFile)
     assert file6 is not None and file6.instance_id is not None and file6.instance_id.space == test_parameter.space
 
