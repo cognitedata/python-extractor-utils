@@ -1,13 +1,14 @@
 import os
 from dataclasses import dataclass
 from enum import Enum
-from typing import List, Optional, Tuple
+from typing import Generator, List, Optional, Tuple
 
 import pytest
 
 from cognite.client import CogniteClient
 from cognite.client.config import ClientConfig
 from cognite.client.credentials import OAuthClientCredentials
+from cognite.client.data_classes.data_modeling import NodeId
 from cognite.client.exceptions import CogniteAPIError, CogniteNotFoundError
 
 NUM_NODES = 5000
@@ -29,10 +30,13 @@ class ParamTest:
     external_ids: Optional[List[str]] = None
     database_name: Optional[str] = None
     table_name: Optional[str] = None
+    space: Optional[str] = None
 
 
 @pytest.fixture
-def set_upload_test(set_test_parameters: ParamTest, set_client: CogniteClient) -> Tuple[CogniteClient, ParamTest]:
+def set_upload_test(
+    set_test_parameters: ParamTest, set_client: CogniteClient
+) -> Generator[Tuple[CogniteClient, ParamTest], None, None]:
     client = set_client
     test_parameter = set_test_parameters
     clean_test(client, test_parameter)
@@ -74,7 +78,11 @@ def clean_test(client: CogniteClient, test_parameter: ParamTest) -> None:
     elif test_parameter.test_type.value == ETestType.FILES.value:
         for file in test_parameter.external_ids:
             try:
-                client.files.delete(external_id=file)
+                if "core_dm" in file:
+                    # This according to the core dm team should trigger the file syncer to delete any files associated to this instance
+                    client.data_modeling.instances.delete(NodeId(test_parameter.space, file))
+                else:
+                    client.files.delete(external_id=file)
             except CogniteNotFoundError:
                 pass
     elif test_parameter.test_type.value == ETestType.DATA_MODELING.value:
