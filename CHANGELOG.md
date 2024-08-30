@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.4.0
+
+## Added
+
+ * Upload to Core DM/Classic file.
+
 ## 7.3.0
 
 ### Changed
