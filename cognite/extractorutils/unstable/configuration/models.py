@@ -34,7 +34,7 @@ class _ClientCertificateConfig(ConfigModel):
     certificate_path: Path
 
 
-AuthenticationConfig = Annotated[_ClientCredentialsConfig | _ClientCertificateConfig, Field(discriminator="type")]
+AuthenticationConfig = Annotated[Union[_ClientCredentialsConfig, _ClientCertificateConfig], Field(discriminator="type")]
 
 
 class TimeIntervalConfig:
@@ -47,7 +47,7 @@ class TimeIntervalConfig:
 
     @classmethod
     def __get_pydantic_core_schema__(cls, source_type: Any, handler: GetCoreSchemaHandler) -> CoreSchema:
-        return core_schema.no_info_after_validator_function(cls, handler(str | int))
+        return core_schema.no_info_after_validator_function(cls, handler(Union[str, int]))
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, TimeIntervalConfig):
