@@ -16,7 +16,7 @@ Changes are grouped as follows
 
 ### Changed
 
- * Updated cognite sdk version 
+ * Updated cognite sdk version
 
 
 
