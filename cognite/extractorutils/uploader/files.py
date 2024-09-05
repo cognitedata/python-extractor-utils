@@ -264,7 +264,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
 
     def _upload_bytes(self, size: int, file: BinaryIO, meta_or_apply: FileMetadataOrCogniteExtractorFile) -> None:
         meta_or_apply, url = self._upload_empty(meta_or_apply)
-        resp = self._httpx_client.send(self._get_file_upload_request(url, file, size))
+        resp = self._httpx_client.send(self._get_file_upload_request(url, file, size, meta_or_apply.mime_type))
         resp.raise_for_status()
 
     def _upload_multipart(self, size: int, file: BinaryIO, meta_or_apply: FileMetadataOrCogniteExtractorFile) -> None:
@@ -281,7 +281,9 @@ class IOFileUploadQueue(AbstractUploadQueue):
 
         for url in upload_urls:
             chunks.next_chunk()
-            resp = self._httpx_client.send(self._get_file_upload_request(url, chunks, len(chunks)))
+            resp = self._httpx_client.send(
+                self._get_file_upload_request(url, chunks, len(chunks), meta_or_apply.mime_type)
+            )
             resp.raise_for_status()
 
         completed_headers = (
@@ -400,7 +402,9 @@ class IOFileUploadQueue(AbstractUploadQueue):
             self.files_queued.inc()
             self.queue_size.set(self.upload_queue_size)
 
-    def _get_file_upload_request(self, url_str: str, stream: BinaryIO, size: int) -> Request:
+    def _get_file_upload_request(
+        self, url_str: str, stream: BinaryIO, size: int, mime_type: Optional[str] = None
+    ) -> Request:
         url = URL(url_str)
         headers = Headers(self._httpx_client.headers)
         headers.update(
@@ -411,6 +415,9 @@ class IOFileUploadQueue(AbstractUploadQueue):
                 "x-cdp-app": self.cdf_client._config.client_name,
             }
         )
+
+        if mime_type is not None:
+            headers.update({"Content-Type": mime_type})
 
         return Request(
             method="PUT",
