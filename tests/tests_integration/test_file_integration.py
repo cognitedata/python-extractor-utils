@@ -79,33 +79,33 @@ def test_file_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest], fun
     assert test_parameter.external_ids is not None
     assert test_parameter.space is not None
     queue.add_to_upload_queue(
-        meta_or_apply=FileMetadata(external_id=test_parameter.external_ids[0], name=test_parameter.external_ids[0]),
+        file_meta=FileMetadata(external_id=test_parameter.external_ids[0], name=test_parameter.external_ids[0]),
         file_name=current_dir.joinpath("test_file_1.txt"),
     )
     queue.add_to_upload_queue(
-        meta_or_apply=FileMetadata(external_id=test_parameter.external_ids[1], name=test_parameter.external_ids[1]),
+        file_meta=FileMetadata(external_id=test_parameter.external_ids[1], name=test_parameter.external_ids[1]),
         file_name=current_dir.joinpath("test_file_2.txt"),
     )
     # Upload the Filemetadata of an empty file without trying to upload the "content"
     queue.add_to_upload_queue(
-        meta_or_apply=FileMetadata(external_id=test_parameter.external_ids[3], name=test_parameter.external_ids[3]),
+        file_meta=FileMetadata(external_id=test_parameter.external_ids[3], name=test_parameter.external_ids[3]),
         file_name=current_dir.joinpath("empty_file.txt"),
     )
 
     queue.add_to_upload_queue(
-        meta_or_apply=CogniteExtractorFileApply(
+        file_meta=CogniteExtractorFileApply(
             external_id=test_parameter.external_ids[5], name=test_parameter.external_ids[5], space=test_parameter.space
         ),
         file_name=current_dir.joinpath("test_file_1.txt"),
     )
     queue.add_to_upload_queue(
-        meta_or_apply=CogniteExtractorFileApply(
+        file_meta=CogniteExtractorFileApply(
             external_id=test_parameter.external_ids[6], name=test_parameter.external_ids[6], space=test_parameter.space
         ),
         file_name=current_dir.joinpath("test_file_2.txt"),
     )
     queue.add_to_upload_queue(
-        meta_or_apply=CogniteExtractorFileApply(
+        file_meta=CogniteExtractorFileApply(
             external_id=test_parameter.external_ids[8],
             name=test_parameter.external_ids[8],
             space=test_parameter.space,
@@ -155,22 +155,22 @@ def test_bytes_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest], fu
 
     queue.add_to_upload_queue(
         content=b"bytes content",
-        meta_or_apply=FileMetadata(external_id=test_parameter.external_ids[0], name=test_parameter.external_ids[0]),
+        file_meta=FileMetadata(external_id=test_parameter.external_ids[0], name=test_parameter.external_ids[0]),
     )
     queue.add_to_upload_queue(
         content=b"other bytes content",
-        meta_or_apply=FileMetadata(external_id=test_parameter.external_ids[1], name=test_parameter.external_ids[1]),
+        file_meta=FileMetadata(external_id=test_parameter.external_ids[1], name=test_parameter.external_ids[1]),
     )
 
     queue.add_to_upload_queue(
         content=b"bytes content",
-        meta_or_apply=CogniteExtractorFileApply(
+        file_meta=CogniteExtractorFileApply(
             external_id=test_parameter.external_ids[5], name=test_parameter.external_ids[5], space=test_parameter.space
         ),
     )
     queue.add_to_upload_queue(
         content=b"other bytes content",
-        meta_or_apply=CogniteExtractorFileApply(
+        file_meta=CogniteExtractorFileApply(
             external_id=test_parameter.external_ids[6], name=test_parameter.external_ids[6], space=test_parameter.space
         ),
     )
@@ -207,11 +207,11 @@ def test_big_file_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest],
 
     queue.add_to_upload_queue(
         content=content,
-        meta_or_apply=FileMetadata(external_id=test_parameter.external_ids[2], name=test_parameter.external_ids[2]),
+        file_meta=FileMetadata(external_id=test_parameter.external_ids[2], name=test_parameter.external_ids[2]),
     )
     queue.add_to_upload_queue(
         content=content,
-        meta_or_apply=CogniteExtractorFileApply(
+        file_meta=CogniteExtractorFileApply(
             external_id=test_parameter.external_ids[7], name=test_parameter.external_ids[7], space=test_parameter.space
         ),
     )
@@ -258,11 +258,11 @@ def test_big_file_stream(set_upload_test: Tuple[CogniteClient, ParamTest]) -> No
     assert test_parameter.space is not None
 
     queue.add_io_to_upload_queue(
-        meta_or_apply=FileMetadata(external_id=test_parameter.external_ids[4], name=test_parameter.external_ids[4]),
+        file_meta=FileMetadata(external_id=test_parameter.external_ids[4], name=test_parameter.external_ids[4]),
         read_file=read_file,
     )
     queue.add_io_to_upload_queue(
-        meta_or_apply=CogniteExtractorFileApply(
+        file_meta=CogniteExtractorFileApply(
             external_id=test_parameter.external_ids[9], name=test_parameter.external_ids[9], space=test_parameter.space
         ),
         read_file=read_file,
