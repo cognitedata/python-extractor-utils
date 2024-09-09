@@ -3,6 +3,7 @@ name: test_and_build
 on:
   pull_request:
     branches: [ master ]
+  workflow_call:
 
 jobs:
   build:

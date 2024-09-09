@@ -5,9 +5,16 @@ on:
     branches: [ master ]
 
 jobs:
+  test:
+      uses: ./.github/workflows/test_and_build.yml
+      secrets: inherit
+
   build:
     runs-on: ubuntu-latest
     environment: CD
+
+    needs:
+    - test
 
     steps:
     - uses: actions/checkout@v4
@@ -23,29 +30,6 @@ jobs:
         poetry config virtualenvs.create false
         poetry lock
         poetry install
-
-    - name: Check codestyle
-      run: pre-commit run --all
-
-    - name: Run tests
-      env:
-          COGNITE_CLIENT_ID: ${{ secrets.COGNITE_PROJECT_CLIENT_ID }}
-          COGNITE_CLIENT_SECRET: ${{ secrets.COGNITE_PROJECT_CLIENT_SECRET }}
-          COGNITE_TOKEN_SCOPES: ${{ secrets.COGNITE_PROJECT_SCOPES }}
-          COGNITE_TOKEN_URL: ${{ secrets.COGNITE_PROJECT_TOKEN_URL }}
-          COGNITE_PROJECT: extractor-tests
-          COGNITE_BASE_URL: https://greenfield.cognitedata.com
-          KEYVAULT_CLIENT_ID: ${{ secrets.KEYVAULT_CLIENT_ID }}
-          KEYVAULT_TENANT_ID: ${{ secrets.KEYVAULT_TENANT_ID }}
-          KEYVAULT_CLIENT_SECRET: ${{ secrets.KEYVAULT_CLIENT_SECRET }}
-      run: |
-        coverage run --source cognite.extractorutils -m pytest -v tests
-        coverage xml
-
-    - uses: codecov/codecov-action@v4
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        file: ./coverage.xml
 
     - name: Build package
       run: poetry build
