@@ -13,6 +13,9 @@
 #  limitations under the License.
 
 
+from typing import List, Optional
+
+
 class InvalidConfigError(Exception):
     """
     Exception thrown from ``load_yaml`` and ``load_yaml_dict`` if config file is invalid. This can be due to
@@ -22,9 +25,10 @@ class InvalidConfigError(Exception):
       * Unkown fields
     """
 
-    def __init__(self, message: str):
+    def __init__(self, message: str, details: Optional[List[str]] = None):
         super(InvalidConfigError, self).__init__()
         self.message = message
+        self.details = details
 
     def __str__(self) -> str:
         return f"Invalid config: {self.message}"
