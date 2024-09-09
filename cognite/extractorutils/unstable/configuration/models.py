@@ -2,7 +2,7 @@ import re
 from datetime import timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Annotated, Any, Dict, List, Literal, Union
+from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
 from humps import kebabize
 from pydantic import BaseModel, ConfigDict, Field, GetCoreSchemaHandler
@@ -26,12 +26,15 @@ class _ClientCredentialsConfig(ConfigModel):
     client_secret: str
     token_url: str
     scopes: List[str]
+    resource: Optional[str] = None
+    audience: Optional[str] = None
 
 
 class _ClientCertificateConfig(ConfigModel):
     type: Literal["client-certificate"]
     client_id: str
     certificate_path: Path
+    scopes: List[str]
 
 
 AuthenticationConfig = Annotated[Union[_ClientCredentialsConfig, _ClientCertificateConfig], Field(discriminator="type")]
