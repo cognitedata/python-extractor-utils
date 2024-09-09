@@ -12,11 +12,17 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
-## 7.4.2
+## 7.4.3
 
 ### Fixed:
 
  * Regression: Reverting change related to file_meta parameter in IOUploadQueue
+
+## 7.4.2
+
+### Added
+
+ * Added support for AWS file upload
 
 ## 7.4.1
 
