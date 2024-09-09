@@ -12,13 +12,17 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.4.2
+
+### Fixed:
+
+ * Regression: Reverting change related to file_meta parameter in IOUploadQueue
+
 ## 7.4.1
 
 ### Changed
 
  * Updated cognite sdk version
-
-
 
 ## 7.4.0
 
