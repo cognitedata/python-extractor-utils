@@ -1,10 +1,12 @@
 import json
 from enum import Enum
+from io import StringIO
 from pathlib import Path
-from typing import TextIO, Type, TypeVar
+from typing import Dict, Optional, TextIO, Type, TypeVar, Union
 
 from pydantic import ValidationError
 
+from cognite.client import CogniteClient
 from cognite.extractorutils.configtools.loaders import _load_yaml_dict_raw
 from cognite.extractorutils.exceptions import InvalidConfigError
 from cognite.extractorutils.unstable.configuration.models import ConfigModel
@@ -27,6 +29,22 @@ def load_file(path: Path, schema: Type[_T]) -> _T:
 
     with open(path, "r") as stream:
         return load_io(stream, format, schema)
+
+
+def load_from_cdf(
+    cognite_client: CogniteClient, external_id: str, schema: Type[_T], revision: Optional[int] = None
+) -> _T:
+    params: Dict[str, Union[str, int]] = {"externalId": external_id}
+    if revision:
+        params["revision"] = revision
+    response = cognite_client.get(
+        f"/api/v1/projects/{cognite_client.config.project}/odin/config",
+        params=params,
+        headers={"cdf-version": "alpha"},
+    )
+    response.raise_for_status()
+    data = response.json()
+    return load_io(StringIO(data["config"]), ConfigFormat.YAML, schema)
 
 
 def load_io(stream: TextIO, format: ConfigFormat, schema: Type[_T]) -> _T:
