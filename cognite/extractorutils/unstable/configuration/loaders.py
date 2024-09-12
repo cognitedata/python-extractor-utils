@@ -2,7 +2,7 @@ import json
 from enum import Enum
 from io import StringIO
 from pathlib import Path
-from typing import Dict, Optional, TextIO, Type, TypeVar, Union
+from typing import Dict, Optional, TextIO, Tuple, Type, TypeVar, Union
 
 from pydantic import ValidationError
 
@@ -33,7 +33,7 @@ def load_file(path: Path, schema: Type[_T]) -> _T:
 
 def load_from_cdf(
     cognite_client: CogniteClient, external_id: str, schema: Type[_T], revision: Optional[int] = None
-) -> _T:
+) -> Tuple[_T, int]:
     params: Dict[str, Union[str, int]] = {"externalId": external_id}
     if revision:
         params["revision"] = revision
@@ -44,7 +44,7 @@ def load_from_cdf(
     )
     response.raise_for_status()
     data = response.json()
-    return load_io(StringIO(data["config"]), ConfigFormat.YAML, schema)
+    return load_io(StringIO(data["config"]), ConfigFormat.YAML, schema), data["revision"]
 
 
 def load_io(stream: TextIO, format: ConfigFormat, schema: Type[_T]) -> _T:
