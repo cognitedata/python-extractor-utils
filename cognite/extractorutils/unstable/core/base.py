@@ -4,10 +4,7 @@ from threading import RLock, Thread
 from types import TracebackType
 from typing import Generic, Literal, Optional, Type, TypeVar, Union
 
-try:
-    from typing import Self
-except ImportError:
-    from typing_extensions import Self
+from typing_extensions import Self
 
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.unstable.configuration.models import ConnectionConfig, ExtractorConfig
