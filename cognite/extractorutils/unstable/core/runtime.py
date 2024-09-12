@@ -5,7 +5,13 @@ import time
 from argparse import ArgumentParser, Namespace
 from multiprocessing import Process, Queue
 from pathlib import Path
-from typing import Any, Generic, Type, TypeVar, assert_never
+from typing import Any, Generic, Type, TypeVar
+
+try:
+    from typing import assert_never
+except ImportError:
+    # workaround for 3.10
+    from typing_extensions import assert_never
 
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.unstable.configuration.loaders import load_file, load_from_cdf
