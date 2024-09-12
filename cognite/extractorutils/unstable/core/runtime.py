@@ -5,9 +5,7 @@ import time
 from argparse import ArgumentParser, Namespace
 from multiprocessing import Process, Queue
 from pathlib import Path
-from typing import Any, Generic, Type, TypeVar
-
-from typing_extensions import assert_never
+from typing import Any, Generic, Type, TypeVar, assert_never
 
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.unstable.configuration.loaders import load_file, load_from_cdf
@@ -158,12 +156,13 @@ class Runtime(Generic[ExtractorType]):
 
             # Check if we are asked to restart the extractor, shut down otherwise
             if not self._message_queue.empty():
-                match self._message_queue.get_nowait():
+                message = self._message_queue.get_nowait()
+                match message:
                     case RuntimeMessage.RESTART:
                         continue
 
                     case _:
-                        assert_never()
+                        assert_never(message)
 
             else:
                 self.logger.info("Shutting down runtime")

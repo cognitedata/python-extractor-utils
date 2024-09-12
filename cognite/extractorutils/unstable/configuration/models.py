@@ -188,7 +188,7 @@ class ConnectionConfig(ConfigModel):
                 )
 
             case _:
-                assert_never()
+                assert_never(self.authentication)
 
         client_config = ClientConfig(
             project=self.project,
