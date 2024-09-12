@@ -4,15 +4,10 @@ from enum import Enum
 from pathlib import Path
 from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 
-try:
-    from typing import assert_never
-except ImportError:
-    # workaround for 3.10
-    from typing_extensions import assert_never
-
 from humps import kebabize
 from pydantic import BaseModel, ConfigDict, Field, GetCoreSchemaHandler
 from pydantic_core import CoreSchema, core_schema
+from typing_extensions import assert_never
 
 from cognite.client import CogniteClient
 from cognite.client.config import ClientConfig
