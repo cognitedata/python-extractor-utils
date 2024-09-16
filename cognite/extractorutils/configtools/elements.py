@@ -696,3 +696,33 @@ class StateStoreConfig:
             return LocalStateStore(file_path="states.json", cancellation_token=cancellation_token)
         else:
             return NoStateStore()
+
+
+class RegExpFlag(Enum):
+    IGNORECASE = "i"
+    ASCII_ONLY = "a"
+
+    def get_regex_flag(self) -> int:
+        if self.value == "i":
+            return re.IGNORECASE
+        elif self.value == "a":
+            return re.ASCII
+        return 0
+
+
+@dataclass
+class IgnorePattern:
+    pattern: str
+    flags: list[RegExpFlag]
+
+    def compile(self) -> re.Pattern[str]:
+        """
+        Compile RegExp pattern.
+
+        Returns:
+            Compiled pattern.
+        """
+        flag = 0
+        for f in self.flags or []:
+            flag |= f.get_regex_flag()
+        return re.compile(self.pattern, flag)
