@@ -365,11 +365,10 @@ def compile_patterns(ignore_patterns: List[str | IgnorePattern]) -> list[re.Patt
     """
     compiled = []
     for p in ignore_patterns:
-        match p:
-            case str() as pattern:
-                compiled.append(re.compile(pattern))
-            case IgnorePattern() as pp:
-                compiled.append(re.compile(pp.compile()))
+        if isinstance(p, IgnorePattern):
+            compiled.append(re.compile(p.compile()))
+        else:
+            compiled.append(re.compile(p))
     return compiled
 
 
