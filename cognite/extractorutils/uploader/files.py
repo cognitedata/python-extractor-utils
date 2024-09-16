@@ -296,7 +296,6 @@ class IOFileUploadQueue(AbstractUploadQueue):
         if isinstance(file_meta, CogniteExtractorFileApply):
             node_id = self._apply_cognite_file(file_meta)
             identifiers = IdentifierSequence.load(instance_ids=node_id).as_singleton()
-            self.cdf_client.files._warn_alpha()
             res = self.cdf_client.files._post(
                 url_path="/files/multiuploadlink",
                 json={"items": identifiers.as_dicts()},
@@ -420,7 +419,6 @@ class IOFileUploadQueue(AbstractUploadQueue):
         )
 
     def _create_cdm(self, instance_id: NodeId) -> tuple[FileMetadata, str]:
-        self.cdf_client.files._warn_alpha()
         identifiers = IdentifierSequence.load(instance_ids=instance_id).as_singleton()
         res = self.cdf_client.files._post(
             url_path="/files/uploadlink",
