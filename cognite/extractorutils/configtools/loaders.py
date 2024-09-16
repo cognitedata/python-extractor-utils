@@ -321,7 +321,7 @@ def load_yaml_dict(
     )
 
 
-def matches_patterns(patterns: list[str | re.Pattern[str]], string: str) -> bool:
+def matches_patterns(patterns: list[Union[str, re.Pattern[str]]], string: str) -> bool:
     """
     Check string against list of RegExp patterns.
 
@@ -335,7 +335,7 @@ def matches_patterns(patterns: list[str | re.Pattern[str]], string: str) -> bool
     return True in [matches_pattern(pattern, string) for pattern in patterns]
 
 
-def matches_pattern(pattern: re.Pattern[str] | str, string: str) -> bool:
+def matches_pattern(pattern: Union[str, re.Pattern[str]], string: str) -> bool:
     """
     Match pattern against a string.
 
@@ -353,7 +353,7 @@ def matches_pattern(pattern: re.Pattern[str] | str, string: str) -> bool:
         return False
 
 
-def compile_patterns(ignore_patterns: List[str | IgnorePattern]) -> list[re.Pattern[str]]:
+def compile_patterns(ignore_patterns: List[Union[str, IgnorePattern]]) -> list[re.Pattern[str]]:
     """
     List of patterns to compile
 

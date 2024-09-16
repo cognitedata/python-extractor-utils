@@ -18,6 +18,7 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Union
 
 import pytest
 import yaml
@@ -547,7 +548,7 @@ def test_match_patterns() -> None:
 
 
 def test_compile_patterns() -> None:
-    patterns: list[str | IgnorePattern] = [
+    patterns: list[Union[str, IgnorePattern]] = [
         "a*c",
         IgnorePattern("d*f", [RegExpFlag.IGNORECASE]),
         IgnorePattern("g*i", [RegExpFlag.ASCII_ONLY]),
