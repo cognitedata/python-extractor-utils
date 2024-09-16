@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "cognite-extractor-utils"
-version = "7.4.3"
+version = "7.4.4"
 description = "Utilities for easier development of extractors for CDF"
 authors = ["Mathias Lohne <mathias.lohne@cognite.com>"]
 license = "Apache-2.0"
@@ -58,7 +58,7 @@ exclude = "tests/*"
 
 [tool.poetry.dependencies]
 python = "^3.9.0"
-cognite-sdk = "^7.58.4"
+cognite-sdk = "^7.59.0"
 prometheus-client = ">0.7.0, <=1.0.0"
 arrow = "^1.0.0"
 pyyaml = ">=5.3.0, <7"
