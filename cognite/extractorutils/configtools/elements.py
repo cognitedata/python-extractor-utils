@@ -715,6 +715,7 @@ class IgnorePattern:
     """
     Configuration for regexp for ignore pattern
     """
+
     pattern: str
     flags: list[RegExpFlag]
 
