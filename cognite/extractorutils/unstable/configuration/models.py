@@ -201,6 +201,19 @@ class ConnectionConfig(ConfigModel):
         return CogniteClient(client_config)
 
 
+class CronConfig(ConfigModel):
+    type: Literal["cron"]
+    expression: str
+
+
+class IntervalConfig(ConfigModel):
+    type: Literal["interval"]
+    expression: TimeIntervalConfig
+
+
+ScheduleConfig = Annotated[CronConfig | IntervalConfig, Field(discriminator="type")]
+
+
 class LogLevel(Enum):
     CRITICAL = "CRITICAL"
     ERROR = "ERROR"

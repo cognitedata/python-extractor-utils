@@ -74,6 +74,7 @@ orjson = "^3.10.3"
 httpx = "^0.27.0"
 pydantic = "^2.8.2"
 pyhumps = "^3.8.0"
+croniter = "^3.0.3"
 
 [tool.poetry.extras]
 experimental = ["cognite-sdk-experimental"]
