@@ -334,7 +334,7 @@ class CogniteConfig:
                 self.idp_authentication.certificate.password,
             )
             if not self.idp_authentication.scopes:
-                _logger.warn("No scopes configured. Authenticating with CDF is unlikely to work correctly")
+                _logger.warning("No scopes configured. Authenticating with CDF is unlikely to work correctly")
             credential_provider = OAuthClientCertificate(
                 authority_url=authority_url,
                 client_id=self.idp_authentication.client_id,

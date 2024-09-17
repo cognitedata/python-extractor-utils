@@ -17,6 +17,12 @@ Changes are grouped as follows
 ### Added
  * Configuration for ignore regexp pattern
 
+## 7.4.5
+
+### Removed
+
+ * Remove warnings from data models file uploads
+
 ## 7.4.4
 
 ### Changed
