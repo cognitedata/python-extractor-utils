@@ -334,7 +334,7 @@ class CogniteConfig:
                 self.idp_authentication.certificate.password,
             )
             if not self.idp_authentication.scopes:
-                _logger.warn("No scopes configured. Authenticating with CDF is unlikely to work correctly")
+                _logger.warning("No scopes configured. Authenticating with CDF is unlikely to work correctly")
             credential_provider = OAuthClientCertificate(
                 authority_url=authority_url,
                 client_id=self.idp_authentication.client_id,
@@ -696,37 +696,3 @@ class StateStoreConfig:
             return LocalStateStore(file_path="states.json", cancellation_token=cancellation_token)
         else:
             return NoStateStore()
-
-
-class RegExpFlag(Enum):
-    IGNORECASE = "i"
-    ASCII_ONLY = "a"
-
-    def get_regex_flag(self) -> int:
-        if self.value == "i":
-            return re.IGNORECASE
-        elif self.value == "a":
-            return re.ASCII
-        return 0
-
-
-@dataclass
-class IgnorePattern:
-    """
-    Configuration for regexp for ignore pattern
-    """
-
-    pattern: str
-    flags: list[RegExpFlag]
-
-    def compile(self) -> re.Pattern[str]:
-        """
-        Compile RegExp pattern.
-
-        Returns:
-            Compiled pattern.
-        """
-        flag = 0
-        for f in self.flags or []:
-            flag |= f.get_regex_flag()
-        return re.compile(self.pattern, flag)

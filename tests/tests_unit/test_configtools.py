@@ -15,10 +15,8 @@
 import dataclasses
 import logging
 import os
-import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Union
 
 import pytest
 import yaml
@@ -34,12 +32,9 @@ from cognite.extractorutils.configtools import (
     load_yaml,
 )
 from cognite.extractorutils.configtools._util import _to_snake_case
-from cognite.extractorutils.configtools.elements import AuthenticatorConfig, IgnorePattern, RegExpFlag
+from cognite.extractorutils.configtools.elements import AuthenticatorConfig
 from cognite.extractorutils.configtools.loaders import (
     ConfigResolver,
-    compile_patterns,
-    matches_pattern,
-    matches_patterns,
 )
 from cognite.extractorutils.exceptions import InvalidConfigError
 
@@ -537,24 +532,3 @@ def test_cognite_validation():
     conf.idp_authentication.tenant = None
     conf.idp_authentication.token_url = "https://login.microsoftonline.com/foo/token"
     conf.get_cognite_client("client-name")
-
-
-def test_match_pattern() -> None:
-    assert matches_pattern("a*c", "abc")
-
-
-def test_match_patterns() -> None:
-    assert matches_patterns(["a*c"], "abc")
-
-
-def test_compile_patterns() -> None:
-    patterns: list[Union[str, IgnorePattern]] = [
-        "a*c",
-        IgnorePattern("d*f", [RegExpFlag.IGNORECASE]),
-        IgnorePattern("g*i", [RegExpFlag.ASCII_ONLY]),
-    ]
-
-    compiled = compile_patterns(patterns)
-
-    for c in compiled:
-        assert isinstance(c, re.Pattern)

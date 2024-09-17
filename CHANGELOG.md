@@ -14,8 +14,9 @@ Changes are grouped as follows
 
 ## 7.4.5
 
-### Added
- * Configuration for ignore regexp pattern
+### Removed
+
+ * Removed warnings from data models file uploads
 
 ## 7.4.4
 
