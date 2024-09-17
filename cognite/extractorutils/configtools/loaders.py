@@ -34,7 +34,12 @@ from yaml.scanner import ScannerError
 
 from cognite.client import CogniteClient
 from cognite.extractorutils.configtools._util import _to_snake_case
-from cognite.extractorutils.configtools.elements import BaseConfig, ConfigType, TimeIntervalConfig, _BaseConfig
+from cognite.extractorutils.configtools.elements import (
+    BaseConfig,
+    ConfigType,
+    TimeIntervalConfig,
+    _BaseConfig,
+)
 from cognite.extractorutils.exceptions import InvalidConfigError
 
 _logger = logging.getLogger(__name__)

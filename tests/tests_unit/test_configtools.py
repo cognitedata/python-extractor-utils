@@ -33,7 +33,9 @@ from cognite.extractorutils.configtools import (
 )
 from cognite.extractorutils.configtools._util import _to_snake_case
 from cognite.extractorutils.configtools.elements import AuthenticatorConfig
-from cognite.extractorutils.configtools.loaders import ConfigResolver
+from cognite.extractorutils.configtools.loaders import (
+    ConfigResolver,
+)
 from cognite.extractorutils.exceptions import InvalidConfigError
 
 
