@@ -700,12 +700,14 @@ class StateStoreConfig:
 
 class RegExpFlag(Enum):
     IGNORECASE = "ignore-case"
-    ASCII_ONLY = "ascii-only"
+    I = "i"
+    ASCII = "ascii-only"
+    A = "a"
 
     def get_regex_flag(self) -> int:
-        if self.value == "ignore-case":
+        if self in (RegExpFlag.IGNORECASE, RegExpFlag.I):
             return re.IGNORECASE
-        elif self.value == "ascii-only":
+        elif self.value in (RegExpFlag.ASCII, RegExpFlag.A):
             return re.ASCII
         return 0
 

@@ -550,7 +550,9 @@ def test_compile_patterns() -> None:
     patterns: list[Union[str, IgnorePattern]] = [
         "a*c",
         IgnorePattern("d*f", [RegExpFlag.IGNORECASE]),
-        IgnorePattern("g*i", [RegExpFlag.ASCII_ONLY]),
+        IgnorePattern("m*o", [RegExpFlag.I]),
+        IgnorePattern("g*i", [RegExpFlag.ASCII]),
+        IgnorePattern("j*l", [RegExpFlag.A]),
     ]
 
     compiled = compile_patterns(patterns)
