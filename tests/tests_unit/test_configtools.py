@@ -37,8 +37,9 @@ from cognite.extractorutils.configtools._util import _to_snake_case
 from cognite.extractorutils.configtools.elements import AuthenticatorConfig, IgnorePattern, RegExpFlag
 from cognite.extractorutils.configtools.loaders import (
     ConfigResolver,
+    compile_patterns,
 )
-from cognite.extractorutils.configtools.validators import compile_patterns, matches_pattern, matches_patterns
+from cognite.extractorutils.configtools.validators import matches_pattern, matches_patterns
 from cognite.extractorutils.exceptions import InvalidConfigError
 
 

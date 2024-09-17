@@ -1,8 +1,6 @@
 import logging
 import re
-from typing import List, Union
-
-from cognite.extractorutils.configtools.elements import IgnorePattern
+from typing import Union
 
 _logger = logging.getLogger(__name__)
 
@@ -36,22 +34,3 @@ def matches_pattern(pattern: Union[str, re.Pattern[str]], string: str) -> bool:
     except re.error as e:
         _logger.warning(f"Could not apply RegExp: {pattern}\nReason: {e}")
         return False
-
-
-def compile_patterns(ignore_patterns: List[Union[str, IgnorePattern]]) -> list[re.Pattern[str]]:
-    """
-    List of patterns to compile
-
-    Args:
-        ignore_patterns: A list of strings or IgnorePattern to be compiled.
-
-    Returns:
-        A list of compiled RegExp patterns.
-    """
-    compiled = []
-    for p in ignore_patterns:
-        if isinstance(p, IgnorePattern):
-            compiled.append(re.compile(p.compile()))
-        else:
-            compiled.append(re.compile(p))
-    return compiled
