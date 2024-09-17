@@ -16,7 +16,7 @@ Changes are grouped as follows
 
 ### Removed
 
- * Removed warnings from data models file uploads
+ * Remove warnings from data models file uploads
 
 ## 7.4.4
 
