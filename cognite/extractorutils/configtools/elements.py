@@ -699,13 +699,13 @@ class StateStoreConfig:
 
 
 class RegExpFlag(Enum):
-    IGNORECASE = "i"
-    ASCII_ONLY = "a"
+    IGNORECASE = "ignore-case"
+    ASCII_ONLY = "ascii-only"
 
     def get_regex_flag(self) -> int:
-        if self.value == "i":
+        if self.value == "ignore-case":
             return re.IGNORECASE
-        elif self.value == "a":
+        elif self.value == "ascii-only":
             return re.ASCII
         return 0
 
@@ -717,7 +717,7 @@ class IgnorePattern:
     """
 
     pattern: str
-    flags: list[RegExpFlag]
+    options: list[RegExpFlag]
 
     def compile(self) -> re.Pattern[str]:
         """
@@ -727,6 +727,6 @@ class IgnorePattern:
             Compiled pattern.
         """
         flag = 0
-        for f in self.flags or []:
+        for f in self.options or []:
             flag |= f.get_regex_flag()
         return re.compile(self.pattern, flag)
