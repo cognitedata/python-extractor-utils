@@ -257,7 +257,10 @@ class IOFileUploadQueue(AbstractUploadQueue):
             node_id = self._apply_cognite_file(file_meta)
             file_meta, url = self._create_cdm(instance_id=node_id)
         else:
-            file_meta, url = self.cdf_client.files.create(file_metadata=file_meta, overwrite=self.overwrite_existing)
+            _file_meta, url = self.cdf_client.files.create(file_metadata=file_meta, overwrite=self.overwrite_existing)
+            # upsert =P
+            file_meta = self.cdf_client.files.update(file_meta)
+
         return file_meta, url
 
     def _upload_bytes(self, size: int, file: BinaryIO, file_meta: FileMetadataOrCogniteExtractorFile) -> None:
