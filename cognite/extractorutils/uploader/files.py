@@ -258,6 +258,14 @@ class IOFileUploadQueue(AbstractUploadQueue):
             file_meta, url = self._create_cdm(instance_id=node_id)
         else:
             file_meta, url = self.cdf_client.files.create(file_metadata=file_meta, overwrite=self.overwrite_existing)
+            # trigger update after creation (upsert =P)
+            basic_attributes = set(["externalId", "name"])
+            attr = set(file_meta.dump().keys())
+            diff = attr - basic_attributes
+
+            if len(diff) >= 1 and "externalId" in attr:
+                file_meta = self.cdf_client.files.update(file_meta)
+
         return file_meta, url
 
     def _upload_bytes(self, size: int, file: BinaryIO, file_meta: FileMetadataOrCogniteExtractorFile) -> None:
