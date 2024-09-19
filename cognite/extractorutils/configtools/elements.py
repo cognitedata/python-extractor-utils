@@ -719,7 +719,8 @@ class IgnorePattern:
     """
 
     pattern: str
-    options: list[RegExpFlag]
+    options: Optional[list[RegExpFlag]] = None
+    flags: Optional[list[RegExpFlag]] = None
 
     def compile(self) -> re.Pattern[str]:
         """
@@ -732,3 +733,14 @@ class IgnorePattern:
         for f in self.options or []:
             flag |= f.get_regex_flag()
         return re.compile(self.pattern, flag)
+
+    def __post_init__(self) -> None:
+        if self.options is not None and self.flags is not None:
+            raise ValueError("Only one of either 'options' or 'flags' can be specified.")
+        if self.options is None and self.flags is None:
+            raise ValueError("'options' is required.")
+
+        if self.flags is not None:
+            _logger.warning("'options' is preferred over 'flags' as this may be removed in a future release")
+            self.options = self.flags
+            self.flags = None

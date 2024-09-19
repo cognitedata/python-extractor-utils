@@ -549,9 +549,9 @@ def test_match_patterns() -> None:
 def test_compile_patterns() -> None:
     patterns: list[Union[str, IgnorePattern]] = [
         "a*c",
-        IgnorePattern("d*f", [RegExpFlag.IGNORECASE]),
-        IgnorePattern("m*o", [RegExpFlag.IC]),
-        IgnorePattern("g*i", [RegExpFlag.ASCII]),
+        IgnorePattern("d*f", flags=[RegExpFlag.IGNORECASE]),
+        IgnorePattern("m*o", options=[RegExpFlag.IC]),
+        IgnorePattern("g*i", options=[RegExpFlag.ASCII]),
         IgnorePattern("j*l", [RegExpFlag.A]),
     ]
 
@@ -559,3 +559,15 @@ def test_compile_patterns() -> None:
 
     for c in compiled:
         assert isinstance(c, re.Pattern)
+
+
+def test_ignore_pattern() -> None:
+    a = IgnorePattern("a*b", flags=[RegExpFlag.IC])
+    assert a.options == [RegExpFlag.IC]
+    assert a.flags is None
+
+    with pytest.raises(ValueError, match=r"'options' is required."):
+        IgnorePattern("d*f")
+
+    with pytest.raises(ValueError, match=r"Only one of either 'options' or 'flags' can be specified."):
+        IgnorePattern("g*i", [RegExpFlag.IC], [RegExpFlag.IC])
