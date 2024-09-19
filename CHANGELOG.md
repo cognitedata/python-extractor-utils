@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.4.7
+
+### Added
+
+ * Configuration for ignore regexp pattern
+
 ## 7.4.6
 
 ### Fixed
