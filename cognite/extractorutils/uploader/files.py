@@ -255,10 +255,20 @@ class IOFileUploadQueue(AbstractUploadQueue):
     ) -> tuple[FileMetadataOrCogniteExtractorFile, str]:
         if isinstance(file_meta, CogniteExtractorFileApply):
             node_id = self._apply_cognite_file(file_meta)
-            file_meta, url = self._create_cdm(instance_id=node_id)
+            file_meta_response, url = self._create_cdm(instance_id=node_id)
         else:
-            file_meta, url = self.cdf_client.files.create(file_metadata=file_meta, overwrite=self.overwrite_existing)
-        return file_meta, url
+            file_meta_response, url = self.cdf_client.files.create(
+                file_metadata=file_meta, overwrite=self.overwrite_existing
+            )
+            # trigger update after creation (upsert =P)
+            basic_attributes = set(["externalId", "name"])
+            attr = set(file_meta.dump().keys())
+            diff = attr - basic_attributes
+
+            if len(diff) >= 1 and "externalId" in attr:
+                file_meta_response = self.cdf_client.files.update(file_meta)
+
+        return file_meta_response, url
 
     def _upload_bytes(self, size: int, file: BinaryIO, file_meta: FileMetadataOrCogniteExtractorFile) -> None:
         file_meta, url = self._upload_empty(file_meta)
