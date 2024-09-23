@@ -42,6 +42,8 @@ class TaskScheduler:
                 parsed_schedule = IntervalSchedule(interval=interval_config.expression.seconds)
 
         with self._jobs_lock:
+            if name in self._jobs:
+                raise KeyError(f"Job '{name}' is already added to the scheduler")
             self._jobs[name] = Job(name=name, call=task, schedule=parsed_schedule)
 
     def _get_next(self) -> list[Job]:
