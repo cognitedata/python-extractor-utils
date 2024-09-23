@@ -1,5 +1,4 @@
 from abc import ABC, abstractmethod
-from random import randint
 from time import time
 
 from croniter import croniter
@@ -22,9 +21,7 @@ class CronSchedule(Schedule):
 class IntervalSchedule(Schedule):
     def __init__(self, interval: int) -> None:
         self._interval = interval
-        self._jitter = randint(0, interval)
-
-        self._next = int(time() + self._jitter)
+        self._next = int(time())
 
     def next(self) -> int:
         t = time()
