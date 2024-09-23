@@ -22,7 +22,7 @@ import sys
 from enum import Enum
 from hashlib import sha256
 from pathlib import Path
-from typing import Any, Callable, Dict, Generic, Iterable, Optional, TextIO, Type, TypeVar, Union, cast
+from typing import Any, Callable, Dict, Generic, Iterable, List, Optional, TextIO, Type, TypeVar, Union, cast
 
 import dacite
 import yaml
@@ -34,7 +34,13 @@ from yaml.scanner import ScannerError
 
 from cognite.client import CogniteClient
 from cognite.extractorutils.configtools._util import _to_snake_case
-from cognite.extractorutils.configtools.elements import BaseConfig, ConfigType, TimeIntervalConfig, _BaseConfig
+from cognite.extractorutils.configtools.elements import (
+    BaseConfig,
+    ConfigType,
+    IgnorePattern,
+    TimeIntervalConfig,
+    _BaseConfig,
+)
 from cognite.extractorutils.exceptions import InvalidConfigError
 
 _logger = logging.getLogger(__name__)
@@ -313,6 +319,25 @@ def load_yaml_dict(
     return _load_yaml_dict(
         source=source, case_style=case_style, expand_envvars=expand_envvars, keyvault_loader=keyvault_loader
     )
+
+
+def compile_patterns(ignore_patterns: List[Union[str, IgnorePattern]]) -> list[re.Pattern[str]]:
+    """
+    List of patterns to compile
+
+    Args:
+        ignore_patterns: A list of strings or IgnorePattern to be compiled.
+
+    Returns:
+        A list of compiled RegExp patterns.
+    """
+    compiled = []
+    for p in ignore_patterns:
+        if isinstance(p, IgnorePattern):
+            compiled.append(re.compile(p.compile()))
+        else:
+            compiled.append(re.compile(p))
+    return compiled
 
 
 class ConfigResolver(Generic[CustomConfigClass]):

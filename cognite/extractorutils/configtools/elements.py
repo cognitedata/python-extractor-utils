@@ -334,7 +334,7 @@ class CogniteConfig:
                 self.idp_authentication.certificate.password,
             )
             if not self.idp_authentication.scopes:
-                _logger.warn("No scopes configured. Authenticating with CDF is unlikely to work correctly")
+                _logger.warning("No scopes configured. Authenticating with CDF is unlikely to work correctly")
             credential_provider = OAuthClientCertificate(
                 authority_url=authority_url,
                 client_id=self.idp_authentication.client_id,
@@ -696,3 +696,51 @@ class StateStoreConfig:
             return LocalStateStore(file_path="states.json", cancellation_token=cancellation_token)
         else:
             return NoStateStore()
+
+
+class RegExpFlag(Enum):
+    IGNORECASE = "ignore-case"
+    IC = "i"
+    ASCII = "ascii-only"
+    A = "a"
+
+    def get_regex_flag(self) -> int:
+        if self in (RegExpFlag.IGNORECASE, RegExpFlag.IC):
+            return re.IGNORECASE
+        elif self.value in (RegExpFlag.ASCII, RegExpFlag.A):
+            return re.ASCII
+        return 0
+
+
+@dataclass
+class IgnorePattern:
+    """
+    Configuration for regexp for ignore pattern
+    """
+
+    pattern: str
+    options: Optional[list[RegExpFlag]] = None
+    flags: Optional[list[RegExpFlag]] = None
+
+    def compile(self) -> re.Pattern[str]:
+        """
+        Compile RegExp pattern.
+
+        Returns:
+            Compiled pattern.
+        """
+        flag = 0
+        for f in self.options or []:
+            flag |= f.get_regex_flag()
+        return re.compile(self.pattern, flag)
+
+    def __post_init__(self) -> None:
+        if self.options is not None and self.flags is not None:
+            raise ValueError("Only one of either 'options' or 'flags' can be specified.")
+        if self.options is None and self.flags is None:
+            raise ValueError("'options' is required.")
+
+        if self.flags is not None:
+            _logger.warning("'options' is preferred over 'flags' as this may be removed in a future release")
+            self.options = self.flags
+            self.flags = None
