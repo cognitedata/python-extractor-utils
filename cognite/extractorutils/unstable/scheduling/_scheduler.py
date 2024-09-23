@@ -4,6 +4,7 @@ from threading import RLock, Thread
 from time import time
 from typing import Callable
 
+import arrow
 from humps import pascalize
 
 from cognite.extractorutils.threading import CancellationToken
@@ -50,37 +51,51 @@ class TaskScheduler:
             next_runs = sorted([(j.schedule.next(), j) for j in self._jobs.values()], key=lambda tup: tup[0])
         return [job for (next, job) in next_runs if next == next_runs[0][0]] if next_runs else []
 
-    def _run_job(self, job: Job) -> None:
+    def _run_job(self, job: Job) -> bool:
         with self._running_lock:
             if job in self._running:
                 self._logger.warning(f"Job {job.name} already running")
-                return None
+                return False
 
         def wrap() -> None:
             with self._running_lock:
                 self._running.add(job)
             try:
                 job.call()
+
+                self._logger.info(f"Job {job.name} done. Next run at {arrow.get(job.schedule.next()).isoformat()}")
+
             finally:
                 with self._running_lock:
                     self._running.remove(job)
 
         Thread(target=wrap, name=f"Run{pascalize(job.name)}").start()
+        return True
 
-    def trigger(self, name: str) -> None:
-        self._run_job(self._jobs[name])
+    def trigger(self, name: str) -> bool:
+        return self._run_job(self._jobs[name])
 
     def run(self) -> None:
         if not self._jobs:
             raise ValueError("Can't run scheduler without any scheduled tasks")
 
+        # Run all interval jobs on startup since the first next() is one interval from now
+        for job in [j for j in self._jobs.values() if isinstance(j.schedule, IntervalSchedule)]:
+            self.trigger(job.name)
+
         while not self._cancellation_token.is_cancelled:
             next_runs = self._get_next()
 
-            if self._cancellation_token.wait(next_runs[0].schedule.next() - time()):
-                break
+            next_time = next_runs[0].schedule.next()
+            wait_time = max(next_time - time(), 0)
+
+            if wait_time:
+                self._logger.info(f"Waiting until {arrow.get(next_time).isoformat()}")
+                if self._cancellation_token.wait(wait_time):
+                    break
 
             for job in next_runs:
+                self._logger.info(f"Starting job {job.name}")
                 self._run_job(job)
 
     def stop(self) -> None:
