@@ -7,7 +7,16 @@ from typing import Annotated, Any, Dict, List, Literal, Optional, Union
 from humps import kebabize
 from pydantic import BaseModel, ConfigDict, Field, GetCoreSchemaHandler
 from pydantic_core import CoreSchema, core_schema
+from typing_extensions import assert_never
 
+from cognite.client import CogniteClient
+from cognite.client.config import ClientConfig
+from cognite.client.credentials import (
+    CredentialProvider,
+    OAuthClientCertificate,
+    OAuthClientCredentials,
+)
+from cognite.extractorutils.configtools._util import _load_certificate_data
 from cognite.extractorutils.exceptions import InvalidConfigError
 
 
@@ -33,7 +42,9 @@ class _ClientCredentialsConfig(ConfigModel):
 class _ClientCertificateConfig(ConfigModel):
     type: Literal["client-certificate"]
     client_id: str
-    certificate_path: Path
+    path: Path
+    password: Optional[str] = None
+    authority_url: str
     scopes: List[str]
 
 
@@ -121,6 +132,7 @@ class _ConnectionParameters(ConfigModel):
     max_connection_pool_size: int = 50
     ssl_verify: bool = True
     proxies: Dict[str, str] = Field(default_factory=dict)
+    timeout: TimeIntervalConfig = Field(default_factory=lambda: TimeIntervalConfig("30s"))
 
 
 class ConnectionConfig(ConfigModel):
@@ -132,6 +144,61 @@ class ConnectionConfig(ConfigModel):
     authentication: AuthenticationConfig
 
     connection: _ConnectionParameters = Field(default_factory=_ConnectionParameters)
+
+    def get_cognite_client(self, client_name: str) -> CogniteClient:
+        from cognite.client.config import global_config
+
+        global_config.disable_pypi_version_check = True
+        global_config.disable_gzip = not self.connection.gzip_compression
+        global_config.status_forcelist = set(self.connection.status_forcelist)
+        global_config.max_retries = self.connection.max_retries
+        global_config.max_retries_connect = self.connection.max_retries_connect
+        global_config.max_retry_backoff = self.connection.max_retry_backoff.seconds
+        global_config.max_connection_pool_size = self.connection.max_connection_pool_size
+        global_config.disable_ssl = not self.connection.ssl_verify
+        global_config.proxies = self.connection.proxies
+
+        credential_provider: CredentialProvider
+        match self.authentication:
+            case _ClientCredentialsConfig() as client_credentials:
+                kwargs = {
+                    "token_url": client_credentials.token_url,
+                    "client_id": client_credentials.client_id,
+                    "client_secret": client_credentials.client_secret,
+                    "scopes": client_credentials.scopes,
+                }
+                if client_credentials.audience is not None:
+                    kwargs["audience"] = client_credentials.audience
+                if client_credentials.resource is not None:
+                    kwargs["resource"] = client_credentials.resource
+
+                credential_provider = OAuthClientCredentials(**kwargs)  # type: ignore  # I know what I'm doing
+
+            case _ClientCertificateConfig() as client_certificate:
+                thumbprint, key = _load_certificate_data(
+                    client_certificate.path,
+                    client_certificate.password,
+                )
+                credential_provider = OAuthClientCertificate(
+                    authority_url=client_certificate.authority_url,
+                    client_id=client_certificate.client_id,
+                    cert_thumbprint=str(thumbprint),
+                    certificate=str(key),
+                    scopes=client_certificate.scopes,
+                )
+
+            case _:
+                assert_never(self.authentication)
+
+        client_config = ClientConfig(
+            project=self.project,
+            base_url=self.base_url,
+            client_name=client_name,
+            timeout=self.connection.timeout.seconds,
+            credentials=credential_provider,
+        )
+
+        return CogniteClient(client_config)
 
 
 class LogLevel(Enum):

@@ -2,43 +2,43 @@ name: release
 
 on:
   push:
-    branches: [ master ]
+    branches: [master]
 
 jobs:
   test:
-      uses: ./.github/workflows/test_and_build.yml
-      secrets: inherit
+    uses: ./.github/workflows/test_and_build.yml
+    secrets: inherit
 
   build:
     runs-on: ubuntu-latest
     environment: CD
 
     needs:
-    - test
+      - test
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: 3.9
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
 
-    - name: Install dependencies
-      run: |
-        python3 -m pip install --upgrade pip poetry
-        poetry config virtualenvs.create false
-        poetry lock
-        poetry install
+      - name: Install dependencies
+        run: |
+          python3 -m pip install --upgrade pip poetry
+          poetry config virtualenvs.create false
+          poetry lock
+          poetry install
 
-    - name: Build package
-      run: poetry build
+      - name: Build package
+        run: poetry build
 
-    - name: Build docs
-      run: cd docs && make html
+      - name: Build docs
+        run: cd docs && make html
 
-    - name: Release to PyPI
-      env:
-        TWINE_USERNAME: __token__
-        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-      run: twine upload --verbose dist/* || echo 'Version exists'
+      - name: Release to PyPI
+        env:
+          TWINE_USERNAME: __token__
+          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
+        run: twine upload --verbose dist/* || echo 'Version exists'
