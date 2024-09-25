@@ -410,11 +410,13 @@ class IOFileUploadQueue(AbstractUploadQueue):
         url = URL(url_str)
         base_url = URL(self.cdf_client.config.base_url)
 
-        # same logic as the SDK
-        if url.netloc:
+        if url.host == base_url.host:
             upload_url = url
         else:
-            upload_url = URL.join(base_url, url)
+            private_host = str(base_url.host)
+            upload_path = str(url.path)
+            # swap the "restricted-api" prefix to the valid host
+            upload_url = URL(f"{private_host}{upload_path}")
 
         headers = Headers(self._httpx_client.headers)
         headers.update(
