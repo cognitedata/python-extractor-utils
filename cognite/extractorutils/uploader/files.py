@@ -19,6 +19,7 @@ from math import ceil
 from os import PathLike
 from types import TracebackType
 from typing import Any, BinaryIO, Callable, Dict, Iterator, List, Optional, Tuple, Type, Union
+from urllib.parse import urlparse
 
 from httpx import URL, Client, Headers, Request, StreamConsumed, SyncByteStream
 from requests.utils import super_len
@@ -413,10 +414,10 @@ class IOFileUploadQueue(AbstractUploadQueue):
         if url.host == base_url.host:
             upload_url = url
         else:
-            private_host = str(base_url.host)
-            upload_path = str(url.path)
-            # swap the "restricted-api" prefix to the valid host
-            upload_url = URL(f"{private_host}{upload_path}")
+            parsed_url = urlparse(url_str)
+            parsed_base_url = urlparse(self.cdf_client.config.base_url)
+            replaced_upload_url = parsed_url._replace(netloc=parsed_base_url.netloc).geturl()
+            upload_url = URL(replaced_upload_url)
 
         headers = Headers(self._httpx_client.headers)
         headers.update(
