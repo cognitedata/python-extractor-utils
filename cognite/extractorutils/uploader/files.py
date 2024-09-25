@@ -408,12 +408,20 @@ class IOFileUploadQueue(AbstractUploadQueue):
         self, url_str: str, stream: BinaryIO, size: int, mime_type: Optional[str] = None
     ) -> Request:
         url = URL(url_str)
+        base_url = URL(self.cdf_client.config.base_url)
+
+        # same logic as the SDK
+        if url.netloc:
+            upload_url = url
+        else:
+            upload_url = URL.join(base_url, url)
+
         headers = Headers(self._httpx_client.headers)
         headers.update(
             {
                 "Accept": "*/*",
                 "Content-Length": str(size),
-                "Host": url.netloc.decode("ascii"),
+                "Host": upload_url.netloc.decode("ascii"),
                 "x-cdp-app": self.cdf_client._config.client_name,
             }
         )
@@ -423,7 +431,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
 
         return Request(
             method="PUT",
-            url=url,
+            url=upload_url,
             stream=IOByteStream(stream),
             headers=headers,
         )
