@@ -19,7 +19,7 @@ from math import ceil
 from os import PathLike
 from types import TracebackType
 from typing import Any, BinaryIO, Callable, Dict, Iterator, List, Optional, Tuple, Type, Union
-from urllib.parse import urlparse
+from urllib.parse import ParseResult, urlparse
 
 from httpx import URL, Client, Headers, Request, StreamConsumed, SyncByteStream
 from requests.utils import super_len
@@ -414,8 +414,8 @@ class IOFileUploadQueue(AbstractUploadQueue):
         if url.host == base_url.host:
             upload_url = url
         else:
-            parsed_url = urlparse(url_str)
-            parsed_base_url = urlparse(self.cdf_client.config.base_url)
+            parsed_url: ParseResult = urlparse(url_str)
+            parsed_base_url: ParseResult = urlparse(self.cdf_client.config.base_url)
             replaced_upload_url = parsed_url._replace(netloc=parsed_base_url.netloc).geturl()
             upload_url = URL(replaced_upload_url)
 
