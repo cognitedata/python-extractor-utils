@@ -17,10 +17,13 @@ import math
 import time
 from unittest.mock import patch
 
+from httpx import URL, Request
+
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Event, Row
 from cognite.extractorutils.uploader import (
     EventUploadQueue,
+    IOFileUploadQueue,
     RawUploadQueue,
     SequenceUploadQueue,
     TimeSeriesUploadQueue,
@@ -270,3 +273,23 @@ def test_sequence_uploader2(MockCogniteClient):
     assert post_upload_test["rows"] == 2
 
     queue.stop()
+
+
+@patch("cognite.client.CogniteClient")
+def test_mock_private_link_upload(MockCogniteClient):
+    # mocking privatelink behavior, testing the URL swap
+    client: CogniteClient = MockCogniteClient()
+    base_url_str = "https://qweasd-666.gremiocampeao.cognitedata.com"
+    base_url = URL(base_url_str)
+
+    client.config.base_url = "https://qweasd-666.gremiocampeao.cognitedata.com"
+
+    queue = IOFileUploadQueue(cdf_client=client, overwrite_existing=True, max_queue_size=1, max_parallelism=1)
+
+    mock_download_url = "https://restricted-api.gremiocampeao.cognitedata.com/downloadUrl/myfile"
+
+    mock_stream = "Até a pé nós iremos, para o que der e vier, mas o certo, mas o certo é que nós estaremos, com o Grêmio onde o Grêmio estiver".encode()
+
+    response: Request = queue._get_file_upload_request(mock_download_url, mock_stream, len(mock_stream))
+
+    assert response.url.netloc == base_url.netloc

@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.4.8
+
+### Fixed
+
+ * Fix file upload when private link is used
+
 ## 7.4.7
 
 ### Added

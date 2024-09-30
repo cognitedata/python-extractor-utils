@@ -19,6 +19,7 @@ from math import ceil
 from os import PathLike
 from types import TracebackType
 from typing import Any, BinaryIO, Callable, Dict, Iterator, List, Optional, Tuple, Type, Union
+from urllib.parse import ParseResult, urlparse
 
 from httpx import URL, Client, Headers, Request, StreamConsumed, SyncByteStream
 from requests.utils import super_len
@@ -408,12 +409,22 @@ class IOFileUploadQueue(AbstractUploadQueue):
         self, url_str: str, stream: BinaryIO, size: int, mime_type: Optional[str] = None
     ) -> Request:
         url = URL(url_str)
+        base_url = URL(self.cdf_client.config.base_url)
+
+        if url.host == base_url.host:
+            upload_url = url
+        else:
+            parsed_url: ParseResult = urlparse(url_str)
+            parsed_base_url: ParseResult = urlparse(self.cdf_client.config.base_url)
+            replaced_upload_url = parsed_url._replace(netloc=parsed_base_url.netloc).geturl()
+            upload_url = URL(replaced_upload_url)
+
         headers = Headers(self._httpx_client.headers)
         headers.update(
             {
                 "Accept": "*/*",
                 "Content-Length": str(size),
-                "Host": url.netloc.decode("ascii"),
+                "Host": upload_url.netloc.decode("ascii"),
                 "x-cdp-app": self.cdf_client._config.client_name,
             }
         )
@@ -423,7 +434,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
 
         return Request(
             method="PUT",
-            url=url,
+            url=upload_url,
             stream=IOByteStream(stream),
             headers=headers,
         )
