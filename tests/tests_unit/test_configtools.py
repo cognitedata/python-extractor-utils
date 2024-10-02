@@ -295,18 +295,6 @@ def test_read_relative_path():
     assert config.path_field.name == "file.txt"
 
 
-def test_castable_int():
-    config = """
-    boolean-field: true
-    another-boolean-field: false
-    yet-another-boolean-field: false
-    string-field: "true"
-    another-string-field: "test"
-    yet-another-string-field: "test"
-    path-field: "./folder/file.txt"
-    """
-
-
 def test_read_absolute_path():
     config = """
     boolean-field: true
