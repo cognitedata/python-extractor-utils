@@ -36,8 +36,10 @@ from cognite.client import CogniteClient
 from cognite.extractorutils.configtools._util import _to_snake_case
 from cognite.extractorutils.configtools.elements import (
     BaseConfig,
+    CastableInt,
     ConfigType,
     IgnorePattern,
+    PortNumber,
     TimeIntervalConfig,
     _BaseConfig,
 )
@@ -224,7 +226,7 @@ def _load_yaml(
         config = dacite.from_dict(
             data=config_dict,
             data_class=config_type,
-            config=dacite.Config(strict=True, cast=[Enum, TimeIntervalConfig, Path]),
+            config=dacite.Config(strict=True, cast=[Enum, TimeIntervalConfig, Path, CastableInt, PortNumber]),
         )
     except dacite.UnexpectedDataError as e:
         unknowns = [f'"{k.replace("_", "-") if case_style == "hyphen" else k}"' for k in e.keys]

@@ -12,6 +12,14 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+
+## 7.4.9
+
+### Added
+
+ * `CastableInt` class the represents an interger to be used in config schema definitions. The difference from using `int` is that the field of this type in the yaml file can be either a string or a number, while a field of type `int` must be a number in yaml.
+ * `PortNumber` class that represents a valid port number to be used in config schema definitions. Just like `CastableInt` it can be a string or a number in the yaml file. This allows for example setting a port number using an environment variable.
+
 ## 7.4.8
 
 ### Fixed
