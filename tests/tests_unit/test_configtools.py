@@ -34,7 +34,13 @@ from cognite.extractorutils.configtools import (
     load_yaml,
 )
 from cognite.extractorutils.configtools._util import _to_snake_case
-from cognite.extractorutils.configtools.elements import AuthenticatorConfig, IgnorePattern, RegExpFlag
+from cognite.extractorutils.configtools.elements import (
+    AuthenticatorConfig,
+    CastableInt,
+    IgnorePattern,
+    PortNumber,
+    RegExpFlag,
+)
 from cognite.extractorutils.configtools.loaders import (
     ConfigResolver,
     compile_patterns,
@@ -571,3 +577,37 @@ def test_ignore_pattern() -> None:
 
     with pytest.raises(ValueError, match=r"Only one of either 'options' or 'flags' can be specified."):
         IgnorePattern("g*i", [RegExpFlag.IC], [RegExpFlag.IC])
+
+
+def test_castable_int_parsing(monkeypatch):
+    monkeypatch.setenv("PORT_NUMBER", "8080")
+
+    config = """
+    host: 'localhost'
+    port: ${PORT_NUMBER}
+    connections: 4
+    batch-size: ' 1000 '
+    """
+
+    @dataclass
+    class DbConfigStd:
+        host: str
+        port: int
+        connections: int
+        batch_size: int
+
+    @dataclass
+    class DbConfigCastable:
+        host: str
+        port: PortNumber
+        connections: CastableInt
+        batch_size: CastableInt
+
+    with pytest.raises(InvalidConfigError):
+        load_yaml(config, DbConfigStd)
+
+    parsed: DbConfigCastable = load_yaml(config, DbConfigCastable)
+    assert parsed.host == "localhost"
+    assert parsed.port == 8080
+    assert parsed.connections == 4
+    assert parsed.batch_size == 1000

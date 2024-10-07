@@ -90,6 +90,7 @@ from cognite.extractorutils.exceptions import InvalidConfigError
 from .elements import (
     AuthenticatorConfig,
     BaseConfig,
+    CastableInt,
     CertificateConfig,
     CogniteConfig,
     ConfigType,
@@ -99,6 +100,7 @@ from .elements import (
     LocalStateStoreConfig,
     LoggingConfig,
     MetricsConfig,
+    PortNumber,
     RawDestinationConfig,
     RawStateStoreConfig,
     StateStoreConfig,

@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "cognite-extractor-utils"
-version = "7.4.8"
+version = "7.4.9"
 description = "Utilities for easier development of extractors for CDF"
 authors = ["Mathias Lohne <mathias.lohne@cognite.com>"]
 license = "Apache-2.0"
@@ -85,8 +85,8 @@ ruff = "^0.6.0"
 pytest = "^8.0.0"
 pytest-cov = "^5.0.0"
 sphinx = "^7.0.0"
-sphinx-rtd-theme = "^2.0.0"
-pre-commit = "^3.3.0"
+sphinx-rtd-theme = "^3.0.0"
+pre-commit = "^4.0.0"
 SecretStorage = "^3.1.2"
 twine = "^5.0.0"
 pytest-order = "^1.0.1"

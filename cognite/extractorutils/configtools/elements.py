@@ -744,3 +744,43 @@ class IgnorePattern:
             _logger.warning("'options' is preferred over 'flags' as this may be removed in a future release")
             self.options = self.flags
             self.flags = None
+
+
+class CastableInt(int):
+    """
+    Represents an integer in a config schema. Difference from regular int is that the
+    value if this type can be  either a string or an integer in the yaml file.
+    """
+
+    def __new__(cls, value: Any) -> "CastableInt":
+        """
+        Returns value as is if it's int. If it's str or bytes try to convert to int.
+        Raises ValueError if conversion is unsuccessful or value is of not supported type.
+
+        Type check is required to avoid unexpected behaviour, such as implictly casting booleans,
+        floats and other types supported by standard int.
+        """
+
+        if not isinstance(value, (int, str, bytes)):
+            raise ValueError(f"CastableInt cannot be created form value {value!r} of type {type(value)!r}.")
+
+        return super().__new__(cls, value)
+
+
+class PortNumber(CastableInt):
+    """
+    A subclass of int to be used in config schemas. It represents a valid port number (0 to 65535) and allows the value
+    to be of either str or int type. If the value is not a valid port number raises a ValueError at instantiation.
+    """
+
+    def __new__(cls, value: Any) -> "PortNumber":
+        """
+        Try to convert the `value` to int. If successful, check if it's within a valid range for a port number.
+        Raises ValueError if conversion to int or validation is unsuccessful.
+        """
+        value = super().__new__(cls, value)
+
+        if not (0 <= value <= 65535):
+            raise ValueError(f"Port number must be between 0 and 65535. Got: {value}.")
+
+        return value
