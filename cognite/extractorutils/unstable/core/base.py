@@ -58,20 +58,21 @@ class Extractor(Generic[ConfigType]):
 
     def _checkin(self) -> None:
         with self._checkin_lock:
-            res = self.cognite_client.post(
-                f"/api/v1/projects/{self.cognite_client.config.project}/odin/checkin",
-                json={
-                    "externalId": self.connection_config.extraction_pipeline,
-                    "taskEvents": [t.model_dump() for t in self._task_updates],
-                },
-                headers={"cdf-version": "alpha"},
-            )
-            new_config_revision = res.json().get("lastConfigRevision")
-
-            if new_config_revision and new_config_revision != self.current_config_revision:
-                self.restart()
-
+            task_updates = [t.model_dump() for t in self._task_updates]
             self._task_updates.clear()
+
+        res = self.cognite_client.post(
+            f"/api/v1/projects/{self.cognite_client.config.project}/odin/checkin",
+            json={
+                "externalId": self.connection_config.extraction_pipeline,
+                "taskEvents": task_updates,
+            },
+            headers={"cdf-version": "alpha"},
+        )
+        new_config_revision = res.json().get("lastConfigRevision")
+
+        if new_config_revision and new_config_revision != self.current_config_revision:
+            self.restart()
 
     def _run_checkin(self) -> None:
         while not self.cancellation_token.is_cancelled:
