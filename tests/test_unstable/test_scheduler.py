@@ -7,16 +7,7 @@ from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.unstable.configuration.models import IntervalConfig, TimeIntervalConfig
 from cognite.extractorutils.unstable.scheduling._scheduler import TaskScheduler
 
-
-class MockFunction:
-    def __init__(self, sleep_time: int) -> None:
-        self.called_times: list[float] = []
-
-        self.sleep_time = sleep_time
-
-    def __call__(self) -> None:
-        self.called_times.append(time())
-        sleep(self.sleep_time)
+from .conftest import MockFunction
 
 
 def test_interval_schedules() -> None:

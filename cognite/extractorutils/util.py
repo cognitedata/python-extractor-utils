@@ -510,3 +510,10 @@ def datetime_to_timestamp(dt: datetime) -> int:
 
 def timestamp_to_datetime(ts: int) -> datetime:
     return datetime.fromtimestamp(ts / 1000, tz=timezone.utc)
+
+
+def now() -> int:
+    """
+    Current time in CDF format (milliseonds since 1970-01-01 00:00:00 UTC)
+    """
+    return int(time() * 1000)
