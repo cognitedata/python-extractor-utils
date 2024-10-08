@@ -12,6 +12,11 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.4.10
+
+### Added
+
+ * File processing utils
 
 ## 7.4.9
 
