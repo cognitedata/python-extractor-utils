@@ -522,7 +522,17 @@ def now() -> int:
 
 
 def truncate_byte_len(item: str, ln: int) -> str:
-    # Safely truncate an arbitrary utf-8 string
+    """Safely truncate an arbitrary utf-8 string.
+    Used to sanitize metadata.
+
+    Args:
+        item (str): string to be truncated
+        ln (int): length (bytes)
+
+    Returns:
+        str: truncated string
+    """
+
     bts = item.encode("utf-8")
     if len(bts) <= ln:
         return item
