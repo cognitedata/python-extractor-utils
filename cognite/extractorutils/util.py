@@ -17,10 +17,12 @@ The ``util`` package contains miscellaneous functions and classes that can some 
 extractors.
 """
 
+import io
 import logging
 import random
 from datetime import datetime, timezone
 from functools import partial, wraps
+from io import RawIOBase
 from threading import Thread
 from time import time
 from typing import Any, Callable, Dict, Generator, Iterable, List, Optional, Tuple, Type, TypeVar, Union
@@ -517,3 +519,106 @@ def now() -> int:
     Current time in CDF format (milliseonds since 1970-01-01 00:00:00 UTC)
     """
     return int(time() * 1000)
+
+
+def truncate_byte_len(item: str, ln: int) -> str:
+    """Safely truncate an arbitrary utf-8 string.
+    Used to sanitize metadata.
+
+    Args:
+        item (str): string to be truncated
+        ln (int): length (bytes)
+
+    Returns:
+        str: truncated string
+    """
+
+    bts = item.encode("utf-8")
+    if len(bts) <= ln:
+        return item
+    bts = bts[:ln]
+    last_codepoint_index = len(bts) - 1
+    # Find the last byte that's the start of an UTF-8 codepoint
+    while last_codepoint_index > 0 and (bts[last_codepoint_index] & 0b11000000) == 0b10000000:
+        last_codepoint_index -= 1
+
+    last_codepoint_start = bts[last_codepoint_index]
+    last_codepoint_len = 0
+    if last_codepoint_start & 0b11111000 == 0b11110000:
+        last_codepoint_len = 4
+    elif last_codepoint_start & 0b11110000 == 0b11100000:
+        last_codepoint_len = 3
+    elif last_codepoint_start & 0b11100000 == 0b11000000:
+        last_codepoint_len = 2
+    elif last_codepoint_start & 0b10000000 == 0:
+        last_codepoint_len = 1
+    else:
+        if last_codepoint_index - 2 <= 0:
+            return ""
+        # Somehow a longer codepoint? In this case just use the previous codepoint.
+        return bts[: (last_codepoint_index - 2)].decode("utf-8")
+
+    last_codepoint_end_index = last_codepoint_index + last_codepoint_len - 1
+    if last_codepoint_end_index > ln - 1:
+        if last_codepoint_index - 2 <= 0:
+            return ""
+        # We're in the middle of a codepoint, cut to the previous one
+        return bts[:last_codepoint_index].decode("utf-8")
+    else:
+        return bts.decode("utf-8")
+
+
+class BufferedReadWithLength(io.BufferedReader):
+    def __init__(
+        self, raw: RawIOBase, buffer_size: int, len: int, on_close: Optional[Callable[[], None]] = None
+    ) -> None:
+        super().__init__(raw, buffer_size)
+        # Do not remove even if it appears to be unused. :P
+        # Requests uses this to add the content-length header, which is necessary for writing to files in azure clusters
+        self.len = len
+        self.on_close = on_close
+
+    def close(self) -> None:
+        if self.on_close:
+            self.on_close()
+        return super().close()
+
+
+def iterable_to_stream(
+    iterator: Iterable[bytes],
+    file_size_bytes: int,
+    buffer_size: int = io.DEFAULT_BUFFER_SIZE,
+    on_close: Optional[Callable[[], None]] = None,
+) -> BufferedReadWithLength:
+    class ChunkIteratorStream(io.RawIOBase):
+        def __init__(self) -> None:
+            self.last_chunk = None
+            self.loaded_bytes = 0
+            self.file_size_bytes = file_size_bytes
+
+        def tell(self) -> int:
+            return self.loaded_bytes
+
+        def __len__(self) -> int:
+            return self.file_size_bytes
+
+        def readable(self) -> bool:
+            return True
+
+        def readinto(self, buffer: Any) -> int | None:
+            try:
+                # Bytes to return
+                ln = len(buffer)
+                chunk = self.last_chunk or next(iterator)  # type: ignore
+                output, self.last_chunk = chunk[:ln], chunk[ln:]
+                if len(self.last_chunk) == 0:  # type: ignore
+                    self.last_chunk = None
+                buffer[: len(output)] = output
+                self.loaded_bytes += len(output)
+                return len(output)
+            except StopIteration:
+                return 0
+
+    return BufferedReadWithLength(
+        ChunkIteratorStream(), buffer_size=buffer_size, len=file_size_bytes, on_close=on_close
+    )

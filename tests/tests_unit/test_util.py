@@ -34,6 +34,7 @@ from cognite.extractorutils.util import (
     requests_exceptions,
     retry,
     timestamp_to_datetime,
+    truncate_byte_len,
 )
 
 
@@ -422,3 +423,27 @@ def test_timestamp_to_datetime() -> None:
     dt = timestamp_to_datetime(int(current_time.timestamp() * 1000))
 
     assert dt.isoformat(timespec="milliseconds") == current_time.isoformat(timespec="milliseconds")
+
+
+@pytest.mark.parametrize(
+    "test_case,expected,ln",
+    [
+        ("test", "test", 4),
+        ("test", "tes", 3),
+        ("æææ", "ææ", 4),
+        ("æææ", "ææ", 5),
+        ("æææ", "æææ", 6),
+        ("そそ", "そ", 4),
+        ("そそ", "", 2),
+        ("そそ", "そそ", 6),
+        ("そそ", "そ", 5),
+        ("bæbæ", "bæbæ", 6),
+        ("bæbæ", "bæb", 5),
+        ("bæbæ", "bæb", 4),
+        ("bæbæ", "bæ", 3),
+    ],
+)
+def test_truncate_byte_len(test_case, expected, ln):
+    truncated = truncate_byte_len(test_case, ln)
+    assert len(truncated) <= ln
+    assert truncated == expected
