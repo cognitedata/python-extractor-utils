@@ -25,7 +25,7 @@ The changelog is found [here](./CHANGELOG.md).
 The best way to start a new extractor project is to use the `cogex` CLI. You can install that from PyPI:
 
 ``` bash
-pip install cognite-extractor-manager
+pip install cognite-extractor-utils
 ```
 
 To initialize a new extractor project, run
