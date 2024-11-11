@@ -76,12 +76,12 @@ def test_simple_task_report(
 
     # Test that the task run is entered into the history for that task
     res = extractor.cognite_client.get(
-        f"/api/v1/projects/{extractor.cognite_client.config.project}/odin/{connection_config.extraction_pipeline}/tasks/TestTask/history",
+        f"/api/v1/projects/{extractor.cognite_client.config.project}/odin/history?extpipe={connection_config.extraction_pipeline}&taskName=TestTask",
         headers={"cdf-version": "alpha"},
     ).json()
 
     assert len(res["items"]) == 1
     assert res["items"][0]["taskName"] == "TestTask"
-    assert res["items"][0]["errorsCount"] == 0
+    assert res["items"][0]["errorCount"] == 0
     assert start_time <= res["items"][0]["startTime"] < mid_way
     assert mid_way < res["items"][0]["endTime"] < end_time
