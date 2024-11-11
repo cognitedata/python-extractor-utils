@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.5.1
+
+### Changed
+
+ * The file upload queue will now use `file_transfer_timeout` from the passed `CogniteClient`.
+
 ## 7.5.0
 
 ### Added

@@ -230,7 +230,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
 
         self._full_queue = threading.Condition()
 
-        self._httpx_client = Client(follow_redirects=True)
+        self._httpx_client = Client(follow_redirects=True, timeout=cdf_client.config.file_transfer_timeout)
 
         global _QUEUES, _QUEUES_LOCK
         with _QUEUES_LOCK:
