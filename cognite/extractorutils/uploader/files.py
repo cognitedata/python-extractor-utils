@@ -267,6 +267,8 @@ class IOFileUploadQueue(AbstractUploadQueue):
             diff = attr - basic_attributes
 
             if len(diff) >= 1 and "externalId" in attr:
+                # Don't change the mime type, updating mime type always fails.
+                file_meta.mime_type = None
                 file_meta_response = self.cdf_client.files.update(file_meta)
 
         return file_meta_response, url
