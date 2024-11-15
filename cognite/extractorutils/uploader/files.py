@@ -25,7 +25,7 @@ from httpx import URL, Client, Headers, Request, StreamConsumed, SyncByteStream
 from requests.utils import super_len
 
 from cognite.client import CogniteClient
-from cognite.client.data_classes import FileMetadata
+from cognite.client.data_classes import FileMetadata, FileMetadataUpdate
 from cognite.client.data_classes.data_modeling import NodeId
 from cognite.client.data_classes.data_modeling.extractor_extensions.v1 import CogniteExtractorFileApply
 from cognite.client.utils._identifier import IdentifierSequence
@@ -261,13 +261,23 @@ class IOFileUploadQueue(AbstractUploadQueue):
             file_meta_response, url = self.cdf_client.files.create(
                 file_metadata=file_meta, overwrite=self.overwrite_existing
             )
-            # trigger update after creation (upsert =P)
-            basic_attributes = set(["externalId", "name"])
-            attr = set(file_meta.dump().keys())
-            diff = attr - basic_attributes
 
-            if len(diff) >= 1 and "externalId" in attr:
-                file_meta_response = self.cdf_client.files.update(file_meta)
+            # The files API for whatever reason doesn't update directory or source when you overwrite,
+            # so we need to update those later.
+            any_unchaged = (
+                file_meta_response.directory != file_meta.directory or file_meta_response.source != file_meta.source
+            )
+            if any_unchaged:
+                update = FileMetadataUpdate(external_id=file_meta.external_id)
+                any = False
+                if file_meta.source:
+                    any = True
+                    update.source.set(file_meta.source)
+                if file_meta.directory:
+                    any = True
+                    update.directory.set(file_meta.directory)
+                if any:
+                    self.cdf_client.files.update(update)
 
         return file_meta_response, url
 
