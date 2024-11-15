@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.5.3
+
+### Fixed
+
+ * Revert change in 7.5.2, the root cause is a different issue.
+
 ## 7.5.2
 
 ### Fixed
