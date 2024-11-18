@@ -277,3 +277,27 @@ def test_big_file_stream(set_upload_test: Tuple[CogniteClient, ParamTest]) -> No
 
     assert len(bigfile) == 10_000_000
     assert len(bigfile2) == 10_000_000
+
+
+def test_update_files(set_upload_test: Tuple[CogniteClient, ParamTest]) -> None:
+    client, test_parameter = set_upload_test
+    queue = BytesUploadQueue(cdf_client=client, overwrite_existing=True, max_queue_size=1)
+
+    queue.add_to_upload_queue(
+        content=b"bytes content",
+        file_meta=FileMetadata(external_id=test_parameter.external_ids[0], name=test_parameter.external_ids[0]),
+    )
+    queue.add_to_upload_queue(
+        content=b"bytes content",
+        file_meta=FileMetadata(
+            external_id=test_parameter.external_ids[0],
+            name=test_parameter.external_ids[0],
+            source="some-source",
+            directory="/some/directory",
+        ),
+    )
+
+    queue.upload()
+    file = client.files.retrieve(external_id=test_parameter.external_ids[0])
+    assert file.source == "some-source"
+    assert file.directory == "/some/directory"

@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.5.4
+
+### Fixed
+
+ * Fix issue caused by attempting to update file mimeType on AWS clusters.
+
 ## 7.5.3
 
 ### Fixed
