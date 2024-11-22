@@ -236,4 +236,4 @@ LogHandlerConfig = Union[LogFileHandlerConfig, LogConsoleHandlerConfig]
 
 
 class ExtractorConfig(ConfigModel):
-    log_handlers: List[LogHandlerConfig] = Field(default_factory=lambda: [LogConsoleHandlerConfig(level=LogLevel.INFO)])
+    log_handlers: List[LogHandlerConfig] = Field(default_factory=lambda: [LogConsoleHandlerConfig(level=LogLevel.INFO)])  # type: ignore[arg-type]

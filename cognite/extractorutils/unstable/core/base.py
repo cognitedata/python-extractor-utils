@@ -113,7 +113,13 @@ class Extractor(Generic[ConfigType]):
         details: str | None = None,
         task: Task | None = None,
     ) -> Error:
-        return Error(level=level, description=description, details=details, extractor=self, task=task)
+        return Error(
+            level=level,
+            description=description,
+            details=details,
+            extractor=self,
+            task=task,
+        )
 
     def restart(self) -> None:
         if self._runtime_messages:
