@@ -87,7 +87,7 @@ class Runtime(Generic[ExtractorType]):
         current_config_revision: ConfigRevision,
     ) -> None:
         # This code is run inside the new extractor process
-        extractor = self._extractor_class.init_from_runtime(
+        extractor = self._extractor_class._init_from_runtime(
             connection_config,
             application_config,
             current_config_revision,

@@ -2,6 +2,7 @@ import logging
 from concurrent.futures import ThreadPoolExecutor
 from multiprocessing import Queue
 from threading import RLock, Thread
+from traceback import format_exception
 from types import TracebackType
 from typing import Generic, Literal, Optional, Type, TypeVar, Union
 
@@ -10,8 +11,10 @@ from typing_extensions import Self, assert_never
 
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.unstable.configuration.models import ConnectionConfig, ExtractorConfig
+from cognite.extractorutils.unstable.core._dto import Error as DtoError
 from cognite.extractorutils.unstable.core._dto import TaskUpdate
 from cognite.extractorutils.unstable.core._messaging import RuntimeMessage
+from cognite.extractorutils.unstable.core.errors import Error, ErrorLevel
 from cognite.extractorutils.unstable.core.tasks import ContinuousTask, ScheduledTask, StartupTask, Task
 from cognite.extractorutils.unstable.scheduling import TaskScheduler
 from cognite.extractorutils.util import now
@@ -50,6 +53,7 @@ class Extractor(Generic[ConfigType]):
 
         self._tasks: list[Task] = []
         self._task_updates: list[TaskUpdate] = []
+        self._errors: dict[str, Error] = {}
 
         self.logger = logging.getLogger(f"{self.EXTERNAL_ID}.main")
 
@@ -61,11 +65,26 @@ class Extractor(Generic[ConfigType]):
             task_updates = [t.model_dump() for t in self._task_updates]
             self._task_updates.clear()
 
+            error_updates = [
+                DtoError(
+                    external_id=e.external_id,
+                    level=e.level,
+                    description=e.description,
+                    details=e.details,
+                    start_time=e.start_time,
+                    end_time=e.end_time,
+                    task=e._task.name if e._task is not None else None,
+                ).model_dump()
+                for e in self._errors.values()
+            ]
+            self._errors.clear()
+
         res = self.cognite_client.post(
             f"/api/v1/projects/{self.cognite_client.config.project}/odin/checkin",
             json={
                 "externalId": self.connection_config.extraction_pipeline,
                 "taskEvents": task_updates,
+                "errors": error_updates,
             },
             headers={"cdf-version": "alpha"},
         )
@@ -83,13 +102,26 @@ class Extractor(Generic[ConfigType]):
                 self.logger.exception("Error during checkin")
             self.cancellation_token.wait(10)
 
+    def _report_error(self, error: Error) -> None:
+        with self._checkin_lock:
+            self._errors[error.external_id] = error
+
+    def error(
+        self,
+        level: ErrorLevel,
+        description: str,
+        details: str | None = None,
+        task: Task | None = None,
+    ) -> Error:
+        return Error(level=level, description=description, details=details, extractor=self, task=task)
+
     def restart(self) -> None:
         if self._runtime_messages:
             self._runtime_messages.put(RuntimeMessage.RESTART)
         self.cancellation_token.cancel()
 
     @classmethod
-    def init_from_runtime(
+    def _init_from_runtime(
         cls,
         connection_config: ConnectionConfig,
         application_config: ConfigType,
@@ -108,6 +140,16 @@ class Extractor(Generic[ConfigType]):
 
             try:
                 target()
+
+            except Exception as e:
+                self.error(
+                    ErrorLevel.fatal,
+                    description="Task crashed unexpectedly",
+                    details="".join(format_exception(e)),
+                    task=task,
+                ).finish()
+
+                raise e
 
             finally:
                 with self._checkin_lock:
@@ -186,7 +228,7 @@ class Extractor(Generic[ConfigType]):
                 case _:
                     assert_never(task)
 
-        self.logger.info("Starting up extractor")
+        self.logger.info("Starting extractor")
         if startup:
             with ThreadPoolExecutor() as pool:
                 for task in startup:
