@@ -1,5 +1,6 @@
 import logging
 from concurrent.futures import ThreadPoolExecutor
+from contextvars import ContextVar, Token
 from multiprocessing import Queue
 from threading import RLock, Thread
 from traceback import format_exception
@@ -57,6 +58,8 @@ class Extractor(Generic[ConfigType]):
 
         self.logger = logging.getLogger(f"{self.EXTERNAL_ID}.main")
 
+        self._current_task: ContextVar[str | None] = ContextVar("current_task", default=None)
+
     def _set_runtime_message_queue(self, queue: Queue) -> None:
         self._runtime_messages = queue
 
@@ -73,7 +76,7 @@ class Extractor(Generic[ConfigType]):
                     details=e.details,
                     start_time=e.start_time,
                     end_time=e.end_time,
-                    task=e._task.name if e._task is not None else None,
+                    task=e._task_name if e._task_name is not None else None,
                 ).model_dump()
                 for e in self._errors.values()
             ]
@@ -106,19 +109,15 @@ class Extractor(Generic[ConfigType]):
         with self._checkin_lock:
             self._errors[error.external_id] = error
 
-    def error(
-        self,
-        level: ErrorLevel,
-        description: str,
-        details: str | None = None,
-        task: Task | None = None,
-    ) -> Error:
+    def error(self, level: ErrorLevel, description: str, details: str | None = None) -> Error:
+        task_name = self._current_task.get()
+
         return Error(
             level=level,
             description=description,
             details=details,
             extractor=self,
-            task=task,
+            task_name=task_name,
         )
 
     def restart(self) -> None:
@@ -144,7 +143,10 @@ class Extractor(Generic[ConfigType]):
                     TaskUpdate(type="started", name=task.name, timestamp=now()),
                 )
 
+            context_token: Token[str | None] | None = None
             try:
+                context_token = self._current_task.set(task.name)
+
                 target()
 
             except Exception as e:
@@ -152,12 +154,14 @@ class Extractor(Generic[ConfigType]):
                     ErrorLevel.fatal,
                     description="Task crashed unexpectedly",
                     details="".join(format_exception(e)),
-                    task=task,
                 ).finish()
 
                 raise e
 
             finally:
+                if context_token is not None:
+                    self._current_task.reset(context_token)
+
                 with self._checkin_lock:
                     self._task_updates.append(
                         TaskUpdate(type="ended", name=task.name, timestamp=now()),

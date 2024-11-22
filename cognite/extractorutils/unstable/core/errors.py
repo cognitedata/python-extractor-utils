@@ -3,7 +3,6 @@ from enum import Enum
 from types import TracebackType
 from uuid import uuid4
 
-from cognite.extractorutils.unstable.core.tasks import Task
 from cognite.extractorutils.util import now
 
 if typing.TYPE_CHECKING:
@@ -22,7 +21,7 @@ class Error:
         level: ErrorLevel,
         description: str,
         details: str | None,
-        task: Task | None,
+        task_name: str | None,
         extractor: "Extractor",
     ) -> None:
         self.level = level
@@ -34,7 +33,7 @@ class Error:
         self.end_time: int | None = None
 
         self._extractor = extractor
-        self._task = task
+        self._task_name = task_name
 
         self._extractor._report_error(self)
 
