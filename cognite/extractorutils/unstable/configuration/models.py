@@ -235,5 +235,10 @@ class LogConsoleHandlerConfig(ConfigModel):
 LogHandlerConfig = Union[LogFileHandlerConfig, LogConsoleHandlerConfig]
 
 
+# Mypy BS
+def _log_handler_default() -> List[Union[LogFileHandlerConfig, LogConsoleHandlerConfig]]:
+    return [LogConsoleHandlerConfig(level=LogLevel.INFO)]
+
+
 class ExtractorConfig(ConfigModel):
-    log_handlers: List[LogHandlerConfig] = Field(default_factory=lambda: [LogConsoleHandlerConfig(level=LogLevel.INFO)])
+    log_handlers: List[LogHandlerConfig] = Field(default_factory=_log_handler_default)
