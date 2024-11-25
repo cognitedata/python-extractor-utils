@@ -32,6 +32,7 @@ from cognite.client.credentials import (
     OAuthClientCredentials,
 )
 from cognite.client.data_classes import Asset, DataSet, ExtractionPipeline
+from cognite.extractorutils._inner_util import resolve_log_level_for_httpx
 from cognite.extractorutils.configtools._util import _load_certificate_data
 from cognite.extractorutils.exceptions import InvalidConfigError
 from cognite.extractorutils.metrics import (
@@ -490,6 +491,14 @@ class LoggingConfig:
 
             if root.getEffectiveLevel() > file_handler.level:
                 root.setLevel(file_handler.level)
+
+            log_level = logging.getLevelName(root.getEffectiveLevel())
+            httpx_log_level = resolve_log_level_for_httpx(log_level)
+            httpx_logger = logging.getLogger("httpx")
+            httpx_logger.setLevel(httpx_log_level)
+
+            http_core_logger = logging.getLogger("httpcore")
+            http_core_logger.setLevel(httpx_log_level)
 
 
 @dataclass
