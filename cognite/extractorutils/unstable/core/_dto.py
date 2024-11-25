@@ -7,8 +7,6 @@ from typing import Any, Literal
 from humps import camelize
 from pydantic import BaseModel, ConfigDict
 
-from cognite.extractorutils.unstable.core.errors import ErrorLevel
-
 
 class CogniteModel(BaseModel):
     """
@@ -38,7 +36,7 @@ class TaskUpdate(CogniteModel):
 
 class Error(CogniteModel):
     external_id: str
-    level: ErrorLevel
+    level: str
     description: str
     details: str | None
     start_time: int

@@ -71,7 +71,7 @@ class Extractor(Generic[ConfigType]):
             error_updates = [
                 DtoError(
                     external_id=e.external_id,
-                    level=e.level,
+                    level=e.level.value,
                     description=e.description,
                     details=e.details,
                     start_time=e.start_time,
