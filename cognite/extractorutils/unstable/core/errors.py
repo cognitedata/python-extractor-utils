@@ -28,7 +28,7 @@ class Error:
         self.description = description
         self.details = details
 
-        self.external_id = uuid4().hex
+        self.external_id = str(uuid4())
         self.start_time = now()
         self.end_time: int | None = None
 

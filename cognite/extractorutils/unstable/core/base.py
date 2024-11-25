@@ -154,7 +154,7 @@ class Extractor(Generic[ConfigType]):
                     ErrorLevel.fatal,
                     description="Task crashed unexpectedly",
                     details="".join(format_exception(e)),
-                ).finish()
+                ).instant()
 
                 raise e
 
