@@ -48,7 +48,6 @@ class FileFailureManager:
 
         if len(self) >= self.MAX_QUEUE_SIZE:
             self.write_to_file()
-            self.clear()
 
     def write_to_file(self) -> None:
         if len(self.failure_logs[self.FILE_REASON_MAP_KEY]) == 0:
@@ -56,3 +55,5 @@ class FileFailureManager:
 
         with jsonlines.open(self.path_to_failure_log, mode="a") as writer:
             writer.write(self.failure_logs)
+
+        self.clear()

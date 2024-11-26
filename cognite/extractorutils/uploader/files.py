@@ -281,7 +281,6 @@ class IOFileUploadQueue(AbstractUploadQueue):
         if self._file_failure_manager is not None:
             self.logger.info("Flushing failure logs")
             self._file_failure_manager.write_to_file()
-            self._file_failure_manager.clear()
 
     def _remove_done_from_queue(self) -> None:
         while not self.cancellation_token.is_cancelled:
