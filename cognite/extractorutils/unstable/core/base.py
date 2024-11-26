@@ -109,7 +109,14 @@ class Extractor(Generic[ConfigType]):
         with self._checkin_lock:
             self._errors[error.external_id] = error
 
-    def error(self, level: ErrorLevel, description: str, details: str | None = None) -> Error:
+    def error(
+        self,
+        level: ErrorLevel,
+        description: str,
+        details: str | None = None,
+        *,
+        force_global: bool = False,
+    ) -> Error:
         task_name = self._current_task.get()
 
         return Error(
@@ -117,7 +124,7 @@ class Extractor(Generic[ConfigType]):
             description=description,
             details=details,
             extractor=self,
-            task_name=task_name,
+            task_name=None if force_global else task_name,
         )
 
     def restart(self) -> None:
@@ -135,21 +142,30 @@ class Extractor(Generic[ConfigType]):
         return cls(connection_config, application_config, current_config_revision)
 
     def add_task(self, task: Task) -> None:
+        # Store this for later, since we'll override it with the wrapped version
         target = task.target
 
         def wrapped() -> None:
+            """
+            A wrapped version of the task's target, with tracking and error handling
+            """
+            # Record a task start
             with self._checkin_lock:
                 self._task_updates.append(
                     TaskUpdate(type="started", name=task.name, timestamp=now()),
                 )
 
             context_token: Token[str | None] | None = None
+
             try:
+                # Set the current task context var, used to track that we're in a task for error reporting
                 context_token = self._current_task.set(task.name)
 
+                # Run task
                 target()
 
             except Exception as e:
+                # Task crashed, record it as a fatal error
                 self.error(
                     ErrorLevel.fatal,
                     description="Task crashed unexpectedly",
@@ -159,9 +175,11 @@ class Extractor(Generic[ConfigType]):
                 raise e
 
             finally:
+                # Unset the current task
                 if context_token is not None:
                     self._current_task.reset(context_token)
 
+                # Record task end
                 with self._checkin_lock:
                     self._task_updates.append(
                         TaskUpdate(type="ended", name=task.name, timestamp=now()),
