@@ -1,7 +1,6 @@
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from contextvars import ContextVar, Token
-from enum import Enum
 from multiprocessing import Queue
 from threading import RLock, Thread
 from traceback import format_exception
@@ -17,18 +16,13 @@ from cognite.extractorutils.unstable.core._dto import Error as DtoError
 from cognite.extractorutils.unstable.core._dto import TaskUpdate
 from cognite.extractorutils.unstable.core._messaging import RuntimeMessage
 from cognite.extractorutils.unstable.core.errors import Error, ErrorLevel
+from cognite.extractorutils.unstable.core.restart_policy import WHEN_CONTINUOUS_TASKS_CRASHES, RestartPolicy
 from cognite.extractorutils.unstable.core.tasks import ContinuousTask, ScheduledTask, StartupTask, Task
 from cognite.extractorutils.unstable.scheduling import TaskScheduler
 from cognite.extractorutils.util import now
 
 ConfigType = TypeVar("ConfigType", bound=ExtractorConfig)
 ConfigRevision = Union[Literal["local"], int]
-
-
-class RestartPolicy(Enum):
-    NEVER = 0
-    WHEN_CONTINUOUS_TASKS_CRASHES = 1
-    WHEN_ANY_TASK_CRASHES = 2
 
 
 class Extractor(Generic[ConfigType]):
@@ -39,7 +33,7 @@ class Extractor(Generic[ConfigType]):
 
     CONFIG_TYPE: Type[ConfigType]
 
-    RESTART_POLICY = RestartPolicy.WHEN_CONTINUOUS_TASKS_CRASHES
+    RESTART_POLICY: RestartPolicy = WHEN_CONTINUOUS_TASKS_CRASHES
 
     def __init__(
         self,
@@ -155,7 +149,7 @@ class Extractor(Generic[ConfigType]):
         # Store this for later, since we'll override it with the wrapped version
         target = task.target
 
-        def wrapped() -> None:
+        def run_task() -> None:
             """
             A wrapped version of the task's target, with tracking and error handling
             """
@@ -184,11 +178,8 @@ class Extractor(Generic[ConfigType]):
                     details="".join(format_exception(e)),
                 ).instant()
 
-                match self.RESTART_POLICY, task:
-                    case RestartPolicy.WHEN_ANY_TASK_CRASHES, _:
-                        self.restart()
-                    case RestartPolicy.WHEN_CONTINUOUS_TASKS_CRASHES, ContinuousTask():
-                        self.restart()
+                if self.__class__.RESTART_POLICY(task):
+                    self.restart()
 
             finally:
                 # Unset the current task
@@ -201,7 +192,7 @@ class Extractor(Generic[ConfigType]):
                         TaskUpdate(type="ended", name=task.name, timestamp=now()),
                     )
 
-        task.target = wrapped
+        task.target = run_task
         self._tasks.append(task)
 
         match task:
