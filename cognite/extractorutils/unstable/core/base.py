@@ -178,7 +178,7 @@ class Extractor(Generic[ConfigType]):
                     details="".join(format_exception(e)),
                 ).instant()
 
-                if self.__class__.RESTART_POLICY(task):
+                if self.__class__.RESTART_POLICY(task, e):
                     self.restart()
 
             finally:

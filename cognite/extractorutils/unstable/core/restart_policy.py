@@ -2,18 +2,18 @@ from typing import Callable
 
 from cognite.extractorutils.unstable.core.tasks import ContinuousTask, Task
 
-RestartPolicy = Callable[[Task], bool]
+RestartPolicy = Callable[[Task, Exception], bool]
 
 
-def _false(_task: Task) -> bool:
+def _false(_task: Task, _exception: Exception) -> bool:
     return False
 
 
-def _true(_task: Task) -> bool:
+def _true(_task: Task, _exception: Exception) -> bool:
     return True
 
 
-def _is_continuous(task: Task) -> bool:
+def _is_continuous(task: Task, _exception: Exception) -> bool:
     return isinstance(task, ContinuousTask)
 
 
