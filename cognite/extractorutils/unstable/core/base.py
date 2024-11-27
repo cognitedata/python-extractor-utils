@@ -1,6 +1,7 @@
 import logging
 from concurrent.futures import ThreadPoolExecutor
 from contextvars import ContextVar, Token
+from enum import Enum
 from multiprocessing import Queue
 from threading import RLock, Thread
 from traceback import format_exception
@@ -24,6 +25,12 @@ ConfigType = TypeVar("ConfigType", bound=ExtractorConfig)
 ConfigRevision = Union[Literal["local"], int]
 
 
+class RestartPolicy(Enum):
+    NEVER = 0
+    WHEN_CONTINUOUS_TASKS_CRASHES = 1
+    WHEN_ANY_TASK_CRASHES = 2
+
+
 class Extractor(Generic[ConfigType]):
     NAME: str
     EXTERNAL_ID: str
@@ -31,6 +38,8 @@ class Extractor(Generic[ConfigType]):
     VERSION: str
 
     CONFIG_TYPE: Type[ConfigType]
+
+    RESTART_POLICY = RestartPolicy.WHEN_CONTINUOUS_TASKS_CRASHES
 
     def __init__(
         self,
@@ -128,6 +137,7 @@ class Extractor(Generic[ConfigType]):
         )
 
     def restart(self) -> None:
+        self.logger.info("Restarting extractor")
         if self._runtime_messages:
             self._runtime_messages.put(RuntimeMessage.RESTART)
         self.cancellation_token.cancel()
@@ -165,6 +175,8 @@ class Extractor(Generic[ConfigType]):
                 target()
 
             except Exception as e:
+                self.logger.exception(f"Unexpected error in {task.name}")
+
                 # Task crashed, record it as a fatal error
                 self.error(
                     ErrorLevel.fatal,
@@ -172,7 +184,11 @@ class Extractor(Generic[ConfigType]):
                     details="".join(format_exception(e)),
                 ).instant()
 
-                raise e
+                match self.RESTART_POLICY, task:
+                    case RestartPolicy.WHEN_ANY_TASK_CRASHES, _:
+                        self.restart()
+                    case RestartPolicy.WHEN_CONTINUOUS_TASKS_CRASHES, ContinuousTask():
+                        self.restart()
 
             finally:
                 # Unset the current task
