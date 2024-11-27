@@ -16,6 +16,7 @@ from cognite.extractorutils.unstable.core._dto import Error as DtoError
 from cognite.extractorutils.unstable.core._dto import TaskUpdate
 from cognite.extractorutils.unstable.core._messaging import RuntimeMessage
 from cognite.extractorutils.unstable.core.errors import Error, ErrorLevel
+from cognite.extractorutils.unstable.core.restart_policy import WHEN_CONTINUOUS_TASKS_CRASHES, RestartPolicy
 from cognite.extractorutils.unstable.core.tasks import ContinuousTask, ScheduledTask, StartupTask, Task
 from cognite.extractorutils.unstable.scheduling import TaskScheduler
 from cognite.extractorutils.util import now
@@ -31,6 +32,8 @@ class Extractor(Generic[ConfigType]):
     VERSION: str
 
     CONFIG_TYPE: Type[ConfigType]
+
+    RESTART_POLICY: RestartPolicy = WHEN_CONTINUOUS_TASKS_CRASHES
 
     def __init__(
         self,
@@ -133,6 +136,7 @@ class Extractor(Generic[ConfigType]):
         )
 
     def restart(self) -> None:
+        self.logger.info("Restarting extractor")
         if self._runtime_messages:
             self._runtime_messages.put(RuntimeMessage.RESTART)
         self.cancellation_token.cancel()
@@ -150,7 +154,7 @@ class Extractor(Generic[ConfigType]):
         # Store this for later, since we'll override it with the wrapped version
         target = task.target
 
-        def wrapped() -> None:
+        def run_task() -> None:
             """
             A wrapped version of the task's target, with tracking and error handling
             """
@@ -170,6 +174,8 @@ class Extractor(Generic[ConfigType]):
                 target()
 
             except Exception as e:
+                self.logger.exception(f"Unexpected error in {task.name}")
+
                 # Task crashed, record it as a fatal error
                 self.error(
                     ErrorLevel.fatal,
@@ -177,7 +183,8 @@ class Extractor(Generic[ConfigType]):
                     details="".join(format_exception(e)),
                 ).instant()
 
-                raise e
+                if self.__class__.RESTART_POLICY(task, e):
+                    self.restart()
 
             finally:
                 # Unset the current task
@@ -190,7 +197,7 @@ class Extractor(Generic[ConfigType]):
                         TaskUpdate(type="ended", name=task.name, timestamp=now()),
                     )
 
-        task.target = wrapped
+        task.target = run_task
         self._tasks.append(task)
 
         match task:
