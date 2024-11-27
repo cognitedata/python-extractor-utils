@@ -63,6 +63,11 @@ class Extractor(Generic[ConfigType]):
 
         self._current_task: ContextVar[str | None] = ContextVar("current_task", default=None)
 
+        self.__init_tasks__()
+
+    def __init_tasks__(self) -> None:
+        pass
+
     def _set_runtime_message_queue(self, queue: Queue) -> None:
         self._runtime_messages = queue
 
