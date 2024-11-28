@@ -369,10 +369,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
         def upload_file(read_file: Callable[[], BinaryIO], file_meta: FileMetadataOrCogniteExtractorFile) -> None:
             with read_file() as file:
                 size = super_len(file)
-                if size == 0:
-                    # upload just the file metadata witout data
-                    file_meta, _ = self._upload_empty(file_meta)
-                elif size >= self.max_single_chunk_file_size:
+                if size >= self.max_single_chunk_file_size:
                     # The minimum chunk size is 4000MiB.
                     self._upload_multipart(size, file, file_meta)
 
