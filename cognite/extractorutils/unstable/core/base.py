@@ -101,7 +101,11 @@ class Extractor(Generic[ConfigType]):
         )
         new_config_revision = res.json().get("lastConfigRevision")
 
-        if new_config_revision and new_config_revision != self.current_config_revision:
+        if (
+            new_config_revision
+            and self.current_config_revision != "local"
+            and new_config_revision != self.current_config_revision
+        ):
             self.restart()
 
     def _run_checkin(self) -> None:
