@@ -71,7 +71,7 @@ class TaskScheduler:
                 with self._running_lock:
                     self._running.remove(job)
 
-        Thread(target=wrap, name=f"Run{pascalize(job.name)}").start()
+        Thread(target=wrap, name=f"{pascalize(job.name)}").start()
         return True
 
     def trigger(self, name: str) -> bool:

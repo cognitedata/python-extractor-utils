@@ -65,7 +65,7 @@ class Runtime(Generic[ExtractorType]):
     def _setup_logging(self) -> None:
         # TODO: Figure out file logging for runtime
         fmt = logging.Formatter(
-            "%(asctime)s.%(msecs)03d UTC [%(levelname)-8s] %(threadName)s - %(message)s",
+            "%(asctime)s.%(msecs)03d UTC [%(levelname)-8s] %(process)d %(threadName)s - %(message)s",
             "%Y-%m-%d %H:%M:%S",
         )
         # Set logging to UTC
