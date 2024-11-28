@@ -16,6 +16,8 @@ from cognite.extractorutils.unstable.configuration.models import ConnectionConfi
 from ._messaging import RuntimeMessage
 from .base import ConfigRevision, ConfigType, Extractor
 
+__all__ = ["Runtime", "ExtractorType"]
+
 ExtractorType = TypeVar("ExtractorType", bound=Extractor)
 
 

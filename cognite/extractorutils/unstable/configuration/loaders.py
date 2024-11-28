@@ -11,6 +11,9 @@ from cognite.extractorutils.configtools.loaders import _load_yaml_dict_raw
 from cognite.extractorutils.exceptions import InvalidConfigError
 from cognite.extractorutils.unstable.configuration.models import ConfigModel
 
+__all__ = ["ConfigFormat", "load_file", "load_from_cdf", "load_io", "load_dict"]
+
+
 _T = TypeVar("_T", bound=ConfigModel)
 
 
