@@ -165,7 +165,7 @@ def test_reporting_errors(
         extractor._checkin()
 
         res = extractor.cognite_client.get(
-            f"/api/v1/projects/{extractor.cognite_client.config.project}/odin/errors?extpipe={connection_config.extraction_pipeline}",
+            f"/api/v1/projects/{extractor.cognite_client.config.project}/odin/errors?integration={connection_config.integration}",
             headers={"cdf-version": "alpha"},
         ).json()["items"]
         assert len(res) == 1
@@ -182,7 +182,7 @@ def test_reporting_errors(
     extractor._checkin()
 
     res = extractor.cognite_client.get(
-        f"/api/v1/projects/{extractor.cognite_client.config.project}/odin/errors?extpipe={connection_config.extraction_pipeline}",
+        f"/api/v1/projects/{extractor.cognite_client.config.project}/odin/errors?integration={connection_config.integration}",
         headers={"cdf-version": "alpha"},
     ).json()["items"]
     assert len(res) == 1
