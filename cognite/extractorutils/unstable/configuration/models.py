@@ -139,7 +139,7 @@ class ConnectionConfig(ConfigModel):
     project: str
     base_url: str
 
-    extraction_pipeline: str
+    integration: str
 
     authentication: AuthenticationConfig
 
