@@ -1,6 +1,9 @@
 import logging
+import logging.config
+import time
 from concurrent.futures import ThreadPoolExecutor
 from contextvars import ContextVar, Token
+from logging.handlers import TimedRotatingFileHandler
 from multiprocessing import Queue
 from threading import RLock, Thread
 from traceback import format_exception
@@ -10,8 +13,14 @@ from typing import Generic, Literal, Optional, Type, TypeVar, Union
 from humps import pascalize
 from typing_extensions import Self, assert_never
 
+from cognite.extractorutils._inner_util import _resolve_log_level
 from cognite.extractorutils.threading import CancellationToken
-from cognite.extractorutils.unstable.configuration.models import ConnectionConfig, ExtractorConfig
+from cognite.extractorutils.unstable.configuration.models import (
+    ConnectionConfig,
+    ExtractorConfig,
+    LogConsoleHandlerConfig,
+    LogFileHandlerConfig,
+)
 from cognite.extractorutils.unstable.core._dto import Error as DtoError
 from cognite.extractorutils.unstable.core._dto import TaskUpdate
 from cognite.extractorutils.unstable.core._messaging import RuntimeMessage
@@ -77,6 +86,49 @@ class Extractor(Generic[ConfigType]):
         self._current_task: ContextVar[str | None] = ContextVar("current_task", default=None)
 
         self.__init_tasks__()
+
+    def _setup_logging(self) -> None:
+        min_level = min([_resolve_log_level(h.level.value) for h in self.application_config.log_handlers])
+        max_level = max([_resolve_log_level(h.level.value) for h in self.application_config.log_handlers])
+
+        root = logging.getLogger()
+        root.setLevel(min_level)
+
+        # The oathlib logs too much on debug level, including secrets
+        logging.getLogger("requests_oauthlib.oauth2_session").setLevel(max(max_level, logging.INFO))
+
+        fmt = logging.Formatter(
+            "%(asctime)s.%(msecs)03d UTC [%(levelname)-8s] %(process)d %(threadName)s - %(message)s",
+            "%Y-%m-%d %H:%M:%S",
+        )
+        # Set logging to UTC
+        fmt.converter = time.gmtime
+
+        # Remove any previous logging handlers
+        for handler in root.handlers:
+            root.removeHandler(handler)
+
+        # Define new handlers
+        for handler_config in self.application_config.log_handlers:
+            match handler_config:
+                case LogConsoleHandlerConfig() as console_handler:
+                    sh = logging.StreamHandler()
+                    sh.setFormatter(fmt)
+                    sh.setLevel(_resolve_log_level(console_handler.level.value))
+
+                    root.addHandler(sh)
+
+                case LogFileHandlerConfig() as file_handler:
+                    fh = TimedRotatingFileHandler(
+                        filename=file_handler.path,
+                        when="midnight",
+                        utc=True,
+                        backupCount=file_handler.retention,
+                    )
+                    fh.setLevel(_resolve_log_level(file_handler.level.value))
+                    fh.setFormatter(fmt)
+
+                    root.addHandler(fh)
 
     def __init_tasks__(self) -> None:
         pass
@@ -238,6 +290,7 @@ class Extractor(Generic[ConfigType]):
         )
 
     def start(self) -> None:
+        self._setup_logging()
         self._report_extractor_info()
         Thread(target=self._run_checkin, name="ExtractorCheckin", daemon=True).start()
 
@@ -258,6 +311,7 @@ class Extractor(Generic[ConfigType]):
         with self._checkin_lock:
             self._checkin()
 
+        self.logger.info("Shutting down extractor")
         return exc_val is None
 
     def run(self) -> None:
