@@ -154,7 +154,7 @@ class ConnectionConfig(ConfigModel):
     project: str
     base_url: str
 
-    extraction_pipeline: str
+    integration: str
 
     authentication: AuthenticationConfig
 
@@ -238,21 +238,23 @@ class LogLevel(Enum):
 
 
 class LogFileHandlerConfig(ConfigModel):
+    type: Literal["file"]
     path: Path
     level: LogLevel
     retention: int = 7
 
 
 class LogConsoleHandlerConfig(ConfigModel):
+    type: Literal["console"]
     level: LogLevel
 
 
-LogHandlerConfig = Union[LogFileHandlerConfig, LogConsoleHandlerConfig]
+LogHandlerConfig = Annotated[LogFileHandlerConfig | LogConsoleHandlerConfig, Field(discriminator="type")]
 
 
 # Mypy BS
-def _log_handler_default() -> List[Union[LogFileHandlerConfig, LogConsoleHandlerConfig]]:
-    return [LogConsoleHandlerConfig(level=LogLevel.INFO)]
+def _log_handler_default() -> List[LogHandlerConfig]:
+    return [LogConsoleHandlerConfig(type="console", level=LogLevel.INFO)]
 
 
 class ExtractorConfig(ConfigModel):

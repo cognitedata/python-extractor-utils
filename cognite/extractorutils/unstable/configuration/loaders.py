@@ -8,7 +8,8 @@ from pydantic import ValidationError
 
 from cognite.client import CogniteClient
 from cognite.extractorutils.configtools.loaders import _load_yaml_dict_raw
-from cognite.extractorutils.exceptions import InvalidConfigError
+from cognite.extractorutils.exceptions import InvalidConfigError as OldInvalidConfigError
+from cognite.extractorutils.unstable.configuration.exceptions import InvalidConfigError
 from cognite.extractorutils.unstable.configuration.models import ConfigModel
 
 __all__ = ["ConfigFormat", "load_file", "load_from_cdf", "load_io", "load_dict"]
@@ -47,7 +48,17 @@ def load_from_cdf(
     )
     response.raise_for_status()
     data = response.json()
-    return load_io(StringIO(data["config"]), ConfigFormat.YAML, schema), data["revision"]
+
+    try:
+        return load_io(StringIO(data["config"]), ConfigFormat.YAML, schema), data["revision"]
+
+    except InvalidConfigError as e:
+        e.attempted_revision = data["revision"]
+        raise e
+    except OldInvalidConfigError as e:
+        new_e = InvalidConfigError(e.message)
+        new_e.attempted_revision = data["revision"]
+        raise new_e from e
 
 
 def load_io(stream: TextIO, format: ConfigFormat, schema: Type[_T]) -> _T:
@@ -103,12 +114,9 @@ def load_dict(data: dict, schema: Type[_T]) -> _T:
             if "ctx" in err and "error" in err["ctx"]:
                 exc = err["ctx"]["error"]
                 if isinstance(exc, ValueError) or isinstance(exc, AssertionError):
-                    messages.append(f"{loc_str}: {str(exc)}")
+                    messages.append(f"{str(exc)}: {loc_str}")
                     continue
 
-            if err.get("type") == "json_invalid":
-                messages.append(f"{err.get('msg')}: {loc_str}")
-            else:
-                messages.append(f"{loc_str}: {err.get('msg')}")
+            messages.append(f"{err.get('msg')}: {loc_str}")
 
         raise InvalidConfigError(", ".join(messages), details=messages) from e
