@@ -163,6 +163,9 @@ def _load_yaml_dict_raw(
     SafeLoaderIgnoreUnknown.add_constructor(None, SafeLoaderIgnoreUnknown.ignore_unknown)  # type: ignore
     initial_load = yaml.load(source, Loader=SafeLoaderIgnoreUnknown)  # noqa: S506
 
+    if not isinstance(initial_load, dict):
+        raise InvalidConfigError("The root node of the YAML document must be an object")
+
     if not isinstance(source, str):
         source.seek(0)
 

@@ -3,6 +3,7 @@ from time import sleep
 import pytest
 
 from cognite.extractorutils.unstable.configuration.models import ConnectionConfig, IntervalConfig, TimeIntervalConfig
+from cognite.extractorutils.unstable.core.base import FullConfig
 from cognite.extractorutils.unstable.core.tasks import ScheduledTask
 from cognite.extractorutils.util import now
 
@@ -19,9 +20,12 @@ def test_simple_task_report(
 
     # Create a simple test extractor
     extractor = TestExtractor(
-        connection_config=connection_config,
-        application_config=application_config,
-        current_config_revision=1,
+        FullConfig(
+            connection_config=connection_config,
+            application_config=application_config,
+            current_config_revision=1,
+            newest_config_revision=1,
+        )
     )
 
     extractor.add_task(
@@ -76,7 +80,7 @@ def test_simple_task_report(
 
     # Test that the task run is entered into the history for that task
     res = extractor.cognite_client.get(
-        f"/api/v1/projects/{extractor.cognite_client.config.project}/odin/history?extpipe={connection_config.extraction_pipeline}&taskName=TestTask",
+        f"/api/v1/projects/{extractor.cognite_client.config.project}/odin/history?integration={connection_config.integration}&taskName=TestTask",
         headers={"cdf-version": "alpha"},
     ).json()
 

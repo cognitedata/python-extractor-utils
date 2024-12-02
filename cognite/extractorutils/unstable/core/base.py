@@ -25,6 +25,23 @@ ConfigType = TypeVar("ConfigType", bound=ExtractorConfig)
 ConfigRevision = Union[Literal["local"], int]
 
 
+_T = TypeVar("_T", bound=ExtractorConfig)
+
+
+class FullConfig(Generic[_T]):
+    def __init__(
+        self,
+        connection_config: ConnectionConfig,
+        application_config: _T,
+        current_config_revision: ConfigRevision,
+        newest_config_revision: ConfigRevision,
+    ) -> None:
+        self.connection_config = connection_config
+        self.application_config = application_config
+        self.current_config_revision = current_config_revision
+        self.newest_config_revision = newest_config_revision
+
+
 class Extractor(Generic[ConfigType]):
     NAME: str
     EXTERNAL_ID: str
@@ -35,18 +52,14 @@ class Extractor(Generic[ConfigType]):
 
     RESTART_POLICY: RestartPolicy = WHEN_CONTINUOUS_TASKS_CRASHES
 
-    def __init__(
-        self,
-        connection_config: ConnectionConfig,
-        application_config: ConfigType,
-        current_config_revision: ConfigRevision,
-    ) -> None:
+    def __init__(self, config: FullConfig[ConfigType]) -> None:
         self.cancellation_token = CancellationToken()
         self.cancellation_token.cancel_on_interrupt()
 
-        self.connection_config = connection_config
-        self.application_config = application_config
-        self.current_config_revision = current_config_revision
+        self.connection_config = config.connection_config
+        self.application_config = config.application_config
+        self.current_config_revision = config.current_config_revision
+        self.newest_config_revision = config.newest_config_revision
 
         self.cognite_client = self.connection_config.get_cognite_client(f"{self.EXTERNAL_ID}-{self.VERSION}")
 
@@ -93,7 +106,7 @@ class Extractor(Generic[ConfigType]):
         res = self.cognite_client.post(
             f"/api/v1/projects/{self.cognite_client.config.project}/odin/checkin",
             json={
-                "externalId": self.connection_config.extraction_pipeline,
+                "externalId": self.connection_config.integration,
                 "taskEvents": task_updates,
                 "errors": error_updates,
             },
@@ -104,7 +117,7 @@ class Extractor(Generic[ConfigType]):
         if (
             new_config_revision
             and self.current_config_revision != "local"
-            and new_config_revision != self.current_config_revision
+            and new_config_revision > self.newest_config_revision
         ):
             self.restart()
 
@@ -146,13 +159,8 @@ class Extractor(Generic[ConfigType]):
         self.cancellation_token.cancel()
 
     @classmethod
-    def _init_from_runtime(
-        cls,
-        connection_config: ConnectionConfig,
-        application_config: ConfigType,
-        current_config_revision: ConfigRevision,
-    ) -> Self:
-        return cls(connection_config, application_config, current_config_revision)
+    def _init_from_runtime(cls, config: FullConfig[ConfigType]) -> Self:
+        return cls(config)
 
     def add_task(self, task: Task) -> None:
         # Store this for later, since we'll override it with the wrapped version
@@ -212,7 +220,7 @@ class Extractor(Generic[ConfigType]):
         self.cognite_client.post(
             f"/api/v1/projects/{self.cognite_client.config.project}/odin/extractorinfo",
             json={
-                "externalId": self.connection_config.extraction_pipeline,
+                "externalId": self.connection_config.integration,
                 "activeConfigRevision": self.current_config_revision,
                 "extractor": {
                     "version": self.VERSION,

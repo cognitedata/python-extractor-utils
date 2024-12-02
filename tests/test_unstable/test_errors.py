@@ -3,6 +3,7 @@ from time import sleep
 import pytest
 
 from cognite.extractorutils.unstable.configuration.models import ConnectionConfig, IntervalConfig, TimeIntervalConfig
+from cognite.extractorutils.unstable.core.base import FullConfig
 from cognite.extractorutils.unstable.core.errors import ErrorLevel
 from cognite.extractorutils.unstable.core.tasks import ScheduledTask
 from tests.test_unstable.conftest import TestConfig, TestExtractor
@@ -13,9 +14,12 @@ def test_global_error(
     application_config: TestConfig,
 ) -> None:
     extractor = TestExtractor(
-        connection_config=connection_config,
-        application_config=application_config,
-        current_config_revision=1,
+        FullConfig(
+            connection_config=connection_config,
+            application_config=application_config,
+            current_config_revision=1,
+            newest_config_revision=1,
+        )
     )
 
     err = extractor.error(level=ErrorLevel.error, description="Oh no!", details="There was an error")
@@ -41,9 +45,12 @@ def test_instant_error(
     application_config: TestConfig,
 ) -> None:
     extractor = TestExtractor(
-        connection_config=connection_config,
-        application_config=application_config,
-        current_config_revision=1,
+        FullConfig(
+            connection_config=connection_config,
+            application_config=application_config,
+            current_config_revision=1,
+            newest_config_revision=1,
+        )
     )
 
     err = extractor.error(level=ErrorLevel.error, description="Oh no!", details="There was an error")
@@ -66,9 +73,12 @@ def test_task_error(
     application_config: TestConfig,
 ) -> None:
     extractor = TestExtractor(
-        connection_config=connection_config,
-        application_config=application_config,
-        current_config_revision=1,
+        FullConfig(
+            connection_config=connection_config,
+            application_config=application_config,
+            current_config_revision=1,
+            newest_config_revision=1,
+        )
     )
 
     def task() -> None:
@@ -108,9 +118,12 @@ def test_crashing_task(
     application_config: TestConfig,
 ) -> None:
     extractor = TestExtractor(
-        connection_config=connection_config,
-        application_config=application_config,
-        current_config_revision=1,
+        FullConfig(
+            connection_config=connection_config,
+            application_config=application_config,
+            current_config_revision=1,
+            newest_config_revision=1,
+        )
     )
 
     def task() -> None:
@@ -151,9 +164,12 @@ def test_reporting_errors(
     checkin_between: bool,
 ) -> None:
     extractor = TestExtractor(
-        connection_config=connection_config,
-        application_config=application_config,
-        current_config_revision=1,
+        FullConfig(
+            connection_config=connection_config,
+            application_config=application_config,
+            current_config_revision=1,
+            newest_config_revision=1,
+        )
     )
 
     err = extractor.error(level=ErrorLevel.error, description="Oh no!", details="There was an error")
@@ -165,7 +181,7 @@ def test_reporting_errors(
         extractor._checkin()
 
         res = extractor.cognite_client.get(
-            f"/api/v1/projects/{extractor.cognite_client.config.project}/odin/errors?extpipe={connection_config.extraction_pipeline}",
+            f"/api/v1/projects/{extractor.cognite_client.config.project}/odin/errors?integration={connection_config.integration}",
             headers={"cdf-version": "alpha"},
         ).json()["items"]
         assert len(res) == 1
@@ -182,7 +198,7 @@ def test_reporting_errors(
     extractor._checkin()
 
     res = extractor.cognite_client.get(
-        f"/api/v1/projects/{extractor.cognite_client.config.project}/odin/errors?extpipe={connection_config.extraction_pipeline}",
+        f"/api/v1/projects/{extractor.cognite_client.config.project}/odin/errors?integration={connection_config.integration}",
         headers={"cdf-version": "alpha"},
     ).json()["items"]
     assert len(res) == 1
