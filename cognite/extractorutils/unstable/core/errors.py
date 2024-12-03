@@ -8,6 +8,8 @@ from cognite.extractorutils.util import now
 if typing.TYPE_CHECKING:
     from .base import Extractor
 
+__all__ = ["Error", "ErrorLevel"]
+
 
 class ErrorLevel(Enum):
     warning = "warning"

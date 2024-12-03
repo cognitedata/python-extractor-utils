@@ -12,6 +12,9 @@ from cognite.extractorutils.exceptions import InvalidConfigError as OldInvalidCo
 from cognite.extractorutils.unstable.configuration.exceptions import InvalidConfigError
 from cognite.extractorutils.unstable.configuration.models import ConfigModel
 
+__all__ = ["ConfigFormat", "load_file", "load_from_cdf", "load_io", "load_dict"]
+
+
 _T = TypeVar("_T", bound=ConfigModel)
 
 

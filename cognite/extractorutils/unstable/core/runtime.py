@@ -22,6 +22,8 @@ from cognite.extractorutils.util import now
 from ._messaging import RuntimeMessage
 from .base import ConfigRevision, ConfigType, Extractor, FullConfig
 
+__all__ = ["Runtime", "ExtractorType"]
+
 ExtractorType = TypeVar("ExtractorType", bound=Extractor)
 
 
