@@ -12,6 +12,17 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.5.5
+
+### Added
+
+* Added better mapping of log levels to avoid aggressive logging from HTTPX and HTTPCORE
+
+### Fixed
+
+* Handling of files with size 0
+
+
 ## 7.5.4
 
 ### Fixed
