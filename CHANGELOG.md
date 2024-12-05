@@ -14,7 +14,7 @@ Changes are grouped as follows
 
 ## 7.5.5
 
-### Added
+### Changed
 
 * Added better mapping of log levels to avoid aggressive logging from HTTPX and HTTPCORE
 
