@@ -4,6 +4,8 @@ from typing import Callable
 
 from cognite.extractorutils.unstable.configuration.models import ScheduleConfig
 
+__all__ = ["ScheduledTask", "ContinuousTask", "StartupTask", "Task"]
+
 
 @dataclass
 class _Task(ABC):

@@ -7,7 +7,7 @@ CONFIG_EXAMPLE_ONLY_REQUIRED = """
 project: test-project
 base-url: https://baseurl.com
 
-extraction-pipeline: test-pipeline
+integration: test-pipeline
 
 authentication:
   type: client-credentials

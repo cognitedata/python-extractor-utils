@@ -73,7 +73,7 @@ def connection_config(extraction_pipeline: str) -> ConnectionConfig:
     return ConnectionConfig(
         project=os.environ["COGNITE_DEV_PROJECT"],
         base_url=os.environ["COGNITE_DEV_BASE_URL"],
-        extraction_pipeline=extraction_pipeline,
+        integration=extraction_pipeline,
         authentication=_ClientCredentialsConfig(
             type="client-credentials",
             client_id=os.environ.get("COGNITE_DEV_CLIENT_ID", os.environ["COGNITE_CLIENT_ID"]),

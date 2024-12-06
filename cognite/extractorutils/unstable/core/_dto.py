@@ -32,3 +32,13 @@ class TaskUpdate(CogniteModel):
     type: Literal["started"] | Literal["ended"]
     name: str
     timestamp: int
+
+
+class Error(CogniteModel):
+    external_id: str
+    level: str
+    description: str
+    details: str | None
+    start_time: int
+    end_time: int | None
+    task: str | None

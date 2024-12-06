@@ -25,6 +25,17 @@ def _resolve_log_level(level: str) -> int:
     return {"NOTSET": 0, "DEBUG": 10, "INFO": 20, "WARNING": 30, "ERROR": 40, "CRITICAL": 50}[level.upper()]
 
 
+def resolve_log_level_for_httpx(level: str) -> str:
+    return {
+        None: "WARNING",
+        "INFO": "WARNING",
+        "WARNING": "WARNING",
+        "ERROR": "ERROR",
+        "CRITICAL": "CRITICAL",
+        "DEBUG": "DEBUG",
+    }.get(level, "WARNING")
+
+
 class _DecimalEncoder(json.JSONEncoder):
     def default(self, obj: Any) -> Dict[str, str]:
         if isinstance(obj, Decimal):

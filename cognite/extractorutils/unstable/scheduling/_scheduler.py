@@ -56,7 +56,7 @@ class TaskScheduler:
     def _run_job(self, job: Job) -> bool:
         with self._running_lock:
             if job in self._running:
-                self._logger.warning(f"Job {job.name} already running")
+                self._logger.warning(f"Job '{job.name}' already running")
                 return False
 
         def wrap() -> None:
@@ -65,13 +65,13 @@ class TaskScheduler:
             try:
                 job.call()
 
-                self._logger.info(f"Job {job.name} done. Next run at {arrow.get(job.schedule.next()).isoformat()}")
+                self._logger.info(f"Job '{job.name}' done. Next run at {arrow.get(job.schedule.next()).isoformat()}")
 
             finally:
                 with self._running_lock:
                     self._running.remove(job)
 
-        Thread(target=wrap, name=f"Run{pascalize(job.name)}").start()
+        Thread(target=wrap, name=f"{pascalize(job.name)}").start()
         return True
 
     def trigger(self, name: str) -> bool:
@@ -97,7 +97,7 @@ class TaskScheduler:
                     break
 
             for job in next_runs:
-                self._logger.info(f"Starting job {job.name}")
+                self._logger.info(f"Starting job '{job.name}'")
                 self._run_job(job)
 
     def stop(self) -> None:

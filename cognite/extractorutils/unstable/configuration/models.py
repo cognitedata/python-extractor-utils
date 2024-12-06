@@ -19,6 +19,21 @@ from cognite.client.credentials import (
 from cognite.extractorutils.configtools._util import _load_certificate_data
 from cognite.extractorutils.exceptions import InvalidConfigError
 
+__all__ = [
+    "ConfigModel",
+    "AuthenticationConfig",
+    "TimeIntervalConfig",
+    "ConnectionConfig",
+    "CronConfig",
+    "IntervalConfig",
+    "ScheduleConfig",
+    "LogLevel",
+    "LogFileHandlerConfig",
+    "LogConsoleHandlerConfig",
+    "LogHandlerConfig",
+    "ExtractorConfig",
+]
+
 
 class ConfigModel(BaseModel):
     model_config = ConfigDict(
@@ -139,7 +154,7 @@ class ConnectionConfig(ConfigModel):
     project: str
     base_url: str
 
-    extraction_pipeline: str
+    integration: str
 
     authentication: AuthenticationConfig
 
@@ -223,17 +238,24 @@ class LogLevel(Enum):
 
 
 class LogFileHandlerConfig(ConfigModel):
+    type: Literal["file"]
     path: Path
     level: LogLevel
     retention: int = 7
 
 
 class LogConsoleHandlerConfig(ConfigModel):
+    type: Literal["console"]
     level: LogLevel
 
 
-LogHandlerConfig = Union[LogFileHandlerConfig, LogConsoleHandlerConfig]
+LogHandlerConfig = Annotated[LogFileHandlerConfig | LogConsoleHandlerConfig, Field(discriminator="type")]
+
+
+# Mypy BS
+def _log_handler_default() -> List[LogHandlerConfig]:
+    return [LogConsoleHandlerConfig(type="console", level=LogLevel.INFO)]
 
 
 class ExtractorConfig(ConfigModel):
-    log_handlers: List[LogHandlerConfig] = Field(default_factory=lambda: [LogConsoleHandlerConfig(level=LogLevel.INFO)])
+    log_handlers: List[LogHandlerConfig] = Field(default_factory=_log_handler_default)
