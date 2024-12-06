@@ -42,8 +42,9 @@ class FileFailureManager:
 
     def add(self, file_name: str, error_reason: str) -> None:
         error_file_object = FileErrorMapping(file_name=file_name, error_reason=error_reason)
+        error_file_dict = dict(error_file_object)
 
-        self.failure_logs.update(dict(error_file_object))
+        self.failure_logs.update(error_file_dict)
 
         if len(self) >= self.MAX_QUEUE_SIZE:
             self.write_to_file()
