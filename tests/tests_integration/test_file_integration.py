@@ -106,7 +106,7 @@ def test_errored_file(set_upload_test: Tuple[CogniteClient, ParamTest], function
     with jsonlines.open(LOG_FAILURE_FILE) as reader:
         for obj in reader:
             assert FILE_REASON_MAP_KEY in obj
-            assert "Permission denied" in obj[FILE_REASON_MAP_KEY]
+            assert "Permission denied" in obj[FILE_REASON_MAP_KEY][NO_PERMISSION_FILE]
 
     os.remove(LOG_FAILURE_FILE)
 
