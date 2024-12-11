@@ -95,7 +95,7 @@ def test_errored_file(set_upload_test: Tuple[CogniteClient, ParamTest], function
     queue.add_io_to_upload_queue(
         file_meta=FileMetadata(
             external_id=test_parameter.external_ids[0],
-            name=test_parameter.external_ids[0],
+            name=NO_PERMISSION_FILE,
         ),
         read_file=load_file_from_path,
     )
@@ -106,8 +106,6 @@ def test_errored_file(set_upload_test: Tuple[CogniteClient, ParamTest], function
         time.sleep(5)
     except Exception as e:
         failure_logger = queue.get_failure_logger()
-        print(f"Failure logs: {failure_logger.failure_logs}")
-        print(f"Check for file: {os.path.isfile(fully_qualified_failure_logging_path)}")
 
         with jsonlines.open(fully_qualified_failure_logging_path, "r") as reader:
             for failure_logger_run in reader:

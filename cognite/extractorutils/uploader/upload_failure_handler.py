@@ -41,7 +41,6 @@ class FileFailureManager:
         self._initialize_failure_logs()
 
     def add(self, file_name: str, error_reason: str) -> None:
-        print(f"file_name: {file_name}, error_reason: {error_reason}")  # noqa
         error_file_object = FileErrorMapping(file_name=file_name, error_reason=error_reason)
         error_file_dict = dict(error_file_object)
 

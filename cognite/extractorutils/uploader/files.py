@@ -273,7 +273,6 @@ class IOFileUploadQueue(AbstractUploadQueue):
         return self._file_failure_manager
 
     def add_entry_failure_logger(self, file_name: str, error: Exception) -> None:
-        print(f"is {self._file_failure_manager} is none?")  # noqa
         if self._file_failure_manager is not None:
             error_reason = str(error)
             self._file_failure_manager.add(file_name=file_name, error_reason=error_reason)
@@ -453,8 +452,6 @@ class IOFileUploadQueue(AbstractUploadQueue):
                 self.logger.exception(
                     f"Unexpected error while uploading file: {file_meta.external_id} {file_meta.name}"
                 )
-                # TODO: Remove after integration test passes
-                print("faced error while uploading error")  # noqa
                 self.add_entry_failure_logger(file_name=str(file_meta.name), error=e)
                 self.errors.append(e)
 
