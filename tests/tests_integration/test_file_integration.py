@@ -99,18 +99,19 @@ def test_errored_file(set_upload_test: Tuple[CogniteClient, ParamTest], function
         read_file=load_file_from_path,
     )
 
-    queue.upload()
+    try:
+        queue.upload()
 
-    time.sleep(5)
+        time.sleep(5)
+    except Exception as e:
+        failure_logger = queue.get_failure_logger()
+        print(f"Failure logs: {failure_logger.failure_logs}")
+        print(f"Check for file: {os.path.isfile(qualified_failure_logging_path)}")
 
-    failure_logger = queue.get_failure_logger()
-    print(f"Failure logs: {failure_logger.failure_logs}")
-    print(f"Check for file: {os.path.isfile(qualified_failure_logging_path)}")
-
-    assert len(failure_logger) == 1
-    assert FILE_REASON_MAP_KEY in failure_logger
-    assert NO_PERMISSION_FILE in failure_logger[FILE_REASON_MAP_KEY]
-    assert ERROR_RAISED_ON_FILE_READ in failure_logger[FILE_REASON_MAP_KEY][NO_PERMISSION_FILE]
+        assert len(failure_logger) == 1
+        assert FILE_REASON_MAP_KEY in failure_logger
+        assert NO_PERMISSION_FILE in failure_logger[FILE_REASON_MAP_KEY]
+        assert ERROR_RAISED_ON_FILE_READ in failure_logger[FILE_REASON_MAP_KEY][NO_PERMISSION_FILE]
 
 
 @pytest.mark.parametrize("functions_runtime", ["true", "false"])
