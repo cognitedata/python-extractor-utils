@@ -101,14 +101,14 @@ def test_errored_file(set_upload_test: Tuple[CogniteClient, ParamTest], function
 
     queue.upload()
 
-    assert os.path.isfile(current_dir.joinpath(LOG_FAILURE_FILE))
+    assert os.path.isfile(LOG_FAILURE_FILE)
 
-    with jsonlines.open(current_dir.joinpath(LOG_FAILURE_FILE)) as reader:
+    with jsonlines.open(LOG_FAILURE_FILE) as reader:
         for obj in reader:
             assert FILE_REASON_MAP_KEY in obj
             assert "Permission denied" in obj[FILE_REASON_MAP_KEY][NO_PERMISSION_FILE]
 
-    os.remove(current_dir.joinpath(LOG_FAILURE_FILE))
+    os.remove(LOG_FAILURE_FILE)
 
 
 @pytest.mark.parametrize("functions_runtime", ["true", "false"])
