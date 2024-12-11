@@ -90,7 +90,7 @@ def test_errored_file(set_upload_test: Tuple[CogniteClient, ParamTest], function
     # Upload a pair of actual files
     assert test_parameter.external_ids is not None
     assert test_parameter.space is None
-    queue.add_to_upload_queue(
+    queue.add_io_to_upload_queue(
         file_meta=FileMetadata(
             external_id=test_parameter.external_ids[0],
             name=test_parameter.external_ids[0],
