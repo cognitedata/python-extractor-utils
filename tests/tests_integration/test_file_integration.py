@@ -19,6 +19,7 @@ import random
 import time
 from typing import BinaryIO, Callable, Optional, Tuple
 
+import jsonlines
 import pytest
 
 from cognite.client import CogniteClient
@@ -77,12 +78,12 @@ def test_errored_file(set_upload_test: Tuple[CogniteClient, ParamTest], function
     current_dir = pathlib.Path(__file__).parent.resolve()
     os.environ["COGNITE_FUNCTION_RUNTIME"] = functions_runtime
     client, test_parameter = set_upload_test
-    qualified_failure_logging_path = str(current_dir.joinpath(LOG_FAILURE_FILE))
+    fully_qualified_failure_logging_path = str(current_dir.joinpath(LOG_FAILURE_FILE))
     queue = IOFileUploadQueue(
         cdf_client=client,
         overwrite_existing=True,
         max_queue_size=2,
-        failure_logging_path=qualified_failure_logging_path,
+        failure_logging_path=fully_qualified_failure_logging_path,
     )
 
     def load_file_from_path() -> BinaryIO:
@@ -106,12 +107,15 @@ def test_errored_file(set_upload_test: Tuple[CogniteClient, ParamTest], function
     except Exception as e:
         failure_logger = queue.get_failure_logger()
         print(f"Failure logs: {failure_logger.failure_logs}")
-        print(f"Check for file: {os.path.isfile(qualified_failure_logging_path)}")
+        print(f"Check for file: {os.path.isfile(fully_qualified_failure_logging_path)}")
 
-        assert len(failure_logger) == 1
-        assert FILE_REASON_MAP_KEY in failure_logger
-        assert NO_PERMISSION_FILE in failure_logger[FILE_REASON_MAP_KEY]
-        assert ERROR_RAISED_ON_FILE_READ in failure_logger[FILE_REASON_MAP_KEY][NO_PERMISSION_FILE]
+        with jsonlines.open(fully_qualified_failure_logging_path, "r") as reader:
+            for failure_logger_run in reader:
+                assert len(failure_logger_run) == 1
+                assert FILE_REASON_MAP_KEY in failure_logger_run
+                assert NO_PERMISSION_FILE in failure_logger_run[FILE_REASON_MAP_KEY]
+                assert ERROR_RAISED_ON_FILE_READ in failure_logger_run[FILE_REASON_MAP_KEY][NO_PERMISSION_FILE]
+        os.remove(fully_qualified_failure_logging_path)
 
 
 @pytest.mark.parametrize("functions_runtime", ["true", "false"])
