@@ -72,6 +72,7 @@ def test_errored_file(set_upload_test: Tuple[CogniteClient, ParamTest], function
     LOG_FAILURE_FILE = "integration_test_failure_log.jsonl"
     NO_PERMISSION_FILE = "file_with_no_permission.txt"
     FILE_REASON_MAP_KEY = "file_error_reason_map"
+    ERROR_RAISED_ON_FILE_READ = "No permission to read file"
 
     current_dir = pathlib.Path(__file__).parent.resolve()
     os.environ["COGNITE_FUNCTION_RUNTIME"] = functions_runtime
@@ -85,7 +86,7 @@ def test_errored_file(set_upload_test: Tuple[CogniteClient, ParamTest], function
     )
 
     def load_file_from_path() -> BinaryIO:
-        raise Exception("No permission to read file")
+        raise Exception(ERROR_RAISED_ON_FILE_READ)
 
     # Upload a pair of actual files
     assert test_parameter.external_ids is not None
@@ -106,7 +107,10 @@ def test_errored_file(set_upload_test: Tuple[CogniteClient, ParamTest], function
     print(f"Failure logs: {failure_logger.failure_logs}")
     print(f"Check for file: {os.path.isfile(qualified_failure_logging_path)}")
 
-    assert os.path.isfile(qualified_failure_logging_path)
+    assert len(failure_logger) == 1
+    assert FILE_REASON_MAP_KEY in failure_logger
+    assert NO_PERMISSION_FILE in failure_logger[FILE_REASON_MAP_KEY]
+    assert ERROR_RAISED_ON_FILE_READ in failure_logger[FILE_REASON_MAP_KEY][NO_PERMISSION_FILE]
 
 
 @pytest.mark.parametrize("functions_runtime", ["true", "false"])
