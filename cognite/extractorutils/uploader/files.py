@@ -273,6 +273,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
         return self._file_failure_manager
 
     def add_entry_failure_logger(self, file_name: str, error: Exception) -> None:
+        print(f"is {self._file_failure_manager} is none?")  # noqa
         if self._file_failure_manager is not None:
             error_reason = str(error)
             self._file_failure_manager.add(file_name=file_name, error_reason=error_reason)
