@@ -19,7 +19,6 @@ import random
 import time
 from typing import BinaryIO, Callable, Optional, Tuple
 
-import jsonlines
 import pytest
 
 from cognite.client import CogniteClient
@@ -100,16 +99,11 @@ def test_errored_file(set_upload_test: Tuple[CogniteClient, ParamTest], function
     )
 
     queue.upload()
-    queue.flush_failure_logger()
 
-    assert os.path.isfile(LOG_FAILURE_FILE)
-
-    with jsonlines.open(LOG_FAILURE_FILE) as reader:
-        for obj in reader:
-            assert FILE_REASON_MAP_KEY in obj
-            assert "Permission denied" in obj[FILE_REASON_MAP_KEY][NO_PERMISSION_FILE]
-
-    os.remove(LOG_FAILURE_FILE)
+    failure_logger = queue.get_failure_logger()
+    assert len(failure_logger) == 1
+    assert NO_PERMISSION_FILE in failure_logger.failure_logs
+    assert "Permission denied" in failure_logger.failure_logs[NO_PERMISSION_FILE]
 
 
 @pytest.mark.parametrize("functions_runtime", ["true", "false"])
