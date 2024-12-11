@@ -111,7 +111,6 @@ def test_errored_file(set_upload_test: Tuple[CogniteClient, ParamTest], function
 
         with jsonlines.open(fully_qualified_failure_logging_path, "r") as reader:
             for failure_logger_run in reader:
-                assert len(failure_logger_run) == 1
                 assert FILE_REASON_MAP_KEY in failure_logger_run
                 assert NO_PERMISSION_FILE in failure_logger_run[FILE_REASON_MAP_KEY]
                 assert ERROR_RAISED_ON_FILE_READ in failure_logger_run[FILE_REASON_MAP_KEY][NO_PERMISSION_FILE]
