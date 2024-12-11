@@ -55,6 +55,7 @@ from cognite.extractorutils.uploader._metrics import (
     FILES_UPLOADER_QUEUED,
     FILES_UPLOADER_WRITTEN,
 )
+from cognite.extractorutils.uploader.upload_failure_handler import FileFailureManager
 from cognite.extractorutils.util import cognite_exceptions, retry
 
 _QUEUES: int = 0
@@ -66,6 +67,7 @@ _MAX_SINGLE_CHUNK_FILE_SIZE = 5 * 1024 * 1024 * 1024
 _MAX_FILE_CHUNK_SIZE = 4 * 1024 * 1024 * 1000
 
 _CDF_ALPHA_VERSION_HEADER = {"cdf-version": "alpha"}
+
 
 FileMetadataOrCogniteExtractorFile = Union[FileMetadata, CogniteExtractorFileApply]
 
@@ -209,6 +211,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
         overwrite_existing: bool = False,
         cancellation_token: Optional[CancellationToken] = None,
         max_parallelism: Optional[int] = None,
+        failure_logging_path: None | str = None,
     ):
         # Super sets post_upload and threshold
         super().__init__(
@@ -223,6 +226,9 @@ class IOFileUploadQueue(AbstractUploadQueue):
 
         if self.threshold <= 0:
             raise ValueError("Max queue size must be positive for file upload queues")
+
+        self.failure_logging_path = failure_logging_path or None
+        self.initialize_failure_logging()
 
         self.upload_queue: List[Future] = []
         self.errors: List[Exception] = []
@@ -255,6 +261,26 @@ class IOFileUploadQueue(AbstractUploadQueue):
                 thread_name_prefix=f"FileUploadQueue-{_QUEUES}",
             )
             _QUEUES += 1
+
+    def initialize_failure_logging(self) -> None:
+        self._file_failure_manager: FileFailureManager | None = (
+            FileFailureManager(path_to_file=self.failure_logging_path)
+            if self.failure_logging_path is not None
+            else None
+        )
+
+    def get_failure_logger(self) -> FileFailureManager | None:
+        return self._file_failure_manager
+
+    def add_entry_failure_logger(self, file_name: str, error: Exception) -> None:
+        if self._file_failure_manager is not None:
+            error_reason = str(error)
+            self._file_failure_manager.add(file_name=file_name, error_reason=error_reason)
+
+    def flush_failure_logger(self) -> None:
+        if self._file_failure_manager is not None:
+            self.logger.info("Flushing failure logs")
+            self._file_failure_manager.write_to_file()
 
     def _remove_done_from_queue(self) -> None:
         while not self.cancellation_token.is_cancelled:
@@ -309,6 +335,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
     def _upload_bytes(self, size: int, file: BinaryIO, file_meta: FileMetadataOrCogniteExtractorFile) -> None:
         file_meta, url = self._upload_only_metadata(file_meta)
         resp = self._httpx_client.send(self._get_file_upload_request(url, file, size, file_meta.mime_type))
+
         resp.raise_for_status()
 
     def _prepare_request_data_for_empty_file(self, url_str: str) -> Request:
@@ -461,7 +488,10 @@ class IOFileUploadQueue(AbstractUploadQueue):
                 upload_file(read_file, file_meta)
 
             except Exception as e:
-                self.logger.exception(f"Unexpected error while uploading file: {file_meta.external_id}")
+                self.logger.exception(
+                    f"Unexpected error while uploading file: {file_meta.external_id} {file_meta.name}"
+                )
+                self.add_entry_failure_logger(file_name=str(file_meta.name), error=e)
                 self.errors.append(e)
 
             finally:
@@ -538,6 +568,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
             self.queue_size.set(self.upload_queue_size)
         if fail_on_errors and self.errors:
             # There might be more errors, but we can only have one as the cause, so pick the first
+            self.flush_failure_logger()
             raise RuntimeError(f"{len(self.errors)} upload(s) finished with errors") from self.errors[0]
 
     def __enter__(self) -> "IOFileUploadQueue":
