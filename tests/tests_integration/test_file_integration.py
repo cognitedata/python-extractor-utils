@@ -100,6 +100,7 @@ def test_errored_file(set_upload_test: Tuple[CogniteClient, ParamTest], function
     )
 
     queue.upload()
+    queue.flush_failure_logger()
 
     assert os.path.isfile(LOG_FAILURE_FILE)
 
