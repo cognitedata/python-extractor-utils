@@ -105,6 +105,8 @@ def test_errored_file(set_upload_test: Tuple[CogniteClient, ParamTest], function
     print(f"Failure logs: {failure_logger.failure_logs}")
     print(f"Check for file: {os.path.isfile(str(current_dir.joinpath(LOG_FAILURE_FILE)))}")
 
+    assert os.path.isfile(str(current_dir.joinpath(LOG_FAILURE_FILE)))
+
 
 @pytest.mark.parametrize("functions_runtime", ["true", "false"])
 def test_file_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest], functions_runtime: str) -> None:
