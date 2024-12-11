@@ -100,6 +100,8 @@ def test_errored_file(set_upload_test: Tuple[CogniteClient, ParamTest], function
 
     queue.upload()
 
+    time.sleep(5)
+
     failure_logger = queue.get_failure_logger()
     assert len(failure_logger) == 1
     assert NO_PERMISSION_FILE in failure_logger.failure_logs
