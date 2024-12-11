@@ -80,11 +80,11 @@ def test_errored_file(set_upload_test: Tuple[CogniteClient, ParamTest], function
         cdf_client=client,
         overwrite_existing=True,
         max_queue_size=2,
-        failure_logging_path=current_dir.joinpath(LOG_FAILURE_FILE),
+        failure_logging_path=str(current_dir.joinpath(LOG_FAILURE_FILE)),
     )
 
     def load_file_from_path() -> BinaryIO:
-        return open(current_dir.joinpath(NO_PERMISSION_FILE), "rb")
+        return open(str(current_dir.joinpath(NO_PERMISSION_FILE)), "rb")
 
     # Upload a pair of actual files
     assert test_parameter.external_ids is not None
@@ -103,7 +103,7 @@ def test_errored_file(set_upload_test: Tuple[CogniteClient, ParamTest], function
 
     failure_logger = queue.get_failure_logger()
     print(f"Failure logs: {failure_logger.failure_logs}")
-    print(f"Check for file: {os.path.isfile(current_dir.joinpath(LOG_FAILURE_FILE))}")
+    print(f"Check for file: {os.path.isfile(str(current_dir.joinpath(LOG_FAILURE_FILE)))}")
 
 
 @pytest.mark.parametrize("functions_runtime", ["true", "false"])
