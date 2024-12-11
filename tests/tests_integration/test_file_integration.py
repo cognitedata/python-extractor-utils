@@ -19,6 +19,7 @@ import random
 import time
 from typing import Callable, Optional, Tuple
 
+import jsonlines
 import pytest
 
 from cognite.client import CogniteClient
@@ -65,6 +66,48 @@ def await_is_uploaded_status(
         if retrieved is not None and retrieved.uploaded:
             return
         time.sleep(1)
+
+
+@pytest.mark.parametrize("functions_runtime", ["true", "false"])
+def test_errored_file(set_upload_test: Tuple[CogniteClient, ParamTest], functions_runtime: str) -> None:
+    LOG_FAILURE_FILE = "integration_test_failure_log.jsonl"
+    NO_PERMISSION_FILE = "file_with_no_permission.txt"
+    FILE_REASON_MAP_KEY = "file_error_reason_map"
+
+    os.environ["COGNITE_FUNCTION_RUNTIME"] = functions_runtime
+    client, test_parameter = set_upload_test
+    queue = IOFileUploadQueue(
+        cdf_client=client,
+        overwrite_existing=True,
+        max_queue_size=2,
+        failure_logging_path=LOG_FAILURE_FILE,
+    )
+
+    current_dir = pathlib.Path(__file__).parent.resolve()
+
+    test_parameter.space = None
+
+    # Upload a pair of actual files
+    assert test_parameter.external_ids is not None
+    assert test_parameter.space is None
+    queue.add_to_upload_queue(
+        file_meta=FileMetadata(
+            external_id=test_parameter.external_ids[0],
+            name=test_parameter.external_ids[0],
+        ),
+        file_name=current_dir.joinpath(NO_PERMISSION_FILE),
+    )
+
+    queue.upload()
+
+    assert os.path.isfile(LOG_FAILURE_FILE)
+
+    with jsonlines.open(LOG_FAILURE_FILE) as reader:
+        for obj in reader:
+            assert FILE_REASON_MAP_KEY in obj
+            assert "Permission denied" in obj[FILE_REASON_MAP_KEY]
+
+    os.remove(LOG_FAILURE_FILE)
 
 
 @pytest.mark.parametrize("functions_runtime", ["true", "false"])
@@ -137,9 +180,11 @@ def test_file_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest], fun
 
     assert file4 == b"test content\n"
     assert file5 == b"other test content\n"
+
     node = client.data_modeling.instances.retrieve_nodes(
         NodeId(test_parameter.space, test_parameter.external_ids[8]), node_cls=CogniteExtractorFile
     )
+
     assert isinstance(node, CogniteExtractorFile)
     assert file6 is not None and file6.instance_id is not None and file6.instance_id.space == test_parameter.space
 
