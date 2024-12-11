@@ -17,7 +17,7 @@ import os
 import pathlib
 import random
 import time
-from typing import Callable, Optional, Tuple
+from typing import BinaryIO, Callable, Optional, Tuple
 
 import jsonlines
 import pytest
@@ -83,6 +83,9 @@ def test_errored_file(set_upload_test: Tuple[CogniteClient, ParamTest], function
         failure_logging_path=LOG_FAILURE_FILE,
     )
 
+    def load_file_from_path() -> BinaryIO:
+        return open(NO_PERMISSION_FILE, "rb")
+
     current_dir = pathlib.Path(__file__).parent.resolve()
 
     # Upload a pair of actual files
@@ -93,7 +96,7 @@ def test_errored_file(set_upload_test: Tuple[CogniteClient, ParamTest], function
             external_id=test_parameter.external_ids[0],
             name=test_parameter.external_ids[0],
         ),
-        file_name=current_dir.joinpath(NO_PERMISSION_FILE),
+        read_file=load_file_from_path,
     )
 
     queue.upload()
