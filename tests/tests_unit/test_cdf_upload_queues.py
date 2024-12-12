@@ -15,11 +15,12 @@
 import datetime
 import math
 import time
-from unittest.mock import patch
+from io import BytesIO
+from typing import Any
+from unittest.mock import Mock, patch
 
 from httpx import URL, Request
 
-from cognite.client import CogniteClient
 from cognite.client.data_classes import Event, Row
 from cognite.extractorutils.uploader import (
     EventUploadQueue,
@@ -31,8 +32,8 @@ from cognite.extractorutils.uploader import (
 
 
 @patch("cognite.client.CogniteClient")
-def test_raw_uploader1(MockCogniteClient):
-    client: CogniteClient = MockCogniteClient()
+def test_raw_uploader1(MockCogniteClient: Mock) -> None:
+    client = MockCogniteClient()
 
     queue = RawUploadQueue(client)
 
@@ -53,12 +54,12 @@ def test_raw_uploader1(MockCogniteClient):
 
 
 @patch("cognite.client.CogniteClient")
-def test_raw_uploader2(MockCogniteClient):
-    client: CogniteClient = MockCogniteClient()
+def test_raw_uploader2(MockCogniteClient: Mock) -> None:
+    client = MockCogniteClient()
 
     post_upload_test = {"value": False}
 
-    def post(x):
+    def post(_x: Any) -> None:
         post_upload_test["value"] = True
 
     queue = RawUploadQueue(client, post_upload_function=post, max_queue_size=2)
@@ -73,8 +74,8 @@ def test_raw_uploader2(MockCogniteClient):
 
 
 @patch("cognite.client.CogniteClient")
-def test_ts_uploader1(MockCogniteClient):
-    client: CogniteClient = MockCogniteClient()
+def test_ts_uploader1(MockCogniteClient: Mock) -> None:
+    client = MockCogniteClient()
 
     queue = TimeSeriesUploadQueue(client)
 
@@ -97,12 +98,12 @@ def test_ts_uploader1(MockCogniteClient):
 
 
 @patch("cognite.client.CogniteClient")
-def test_ts_uploader2(MockCogniteClient):
-    client: CogniteClient = MockCogniteClient()
+def test_ts_uploader2(MockCogniteClient: Mock) -> None:
+    client = MockCogniteClient()
 
     post_upload_test = {"value": False}
 
-    def post(x):
+    def post(_x: Any) -> None:
         post_upload_test["value"] = True
 
     queue = TimeSeriesUploadQueue(client, max_upload_interval=2, post_upload_function=post)
@@ -130,12 +131,12 @@ def test_ts_uploader2(MockCogniteClient):
 
 
 @patch("cognite.client.CogniteClient")
-def test_ts_uploader_discard(MockCogniteClient):
-    client: CogniteClient = MockCogniteClient()
+def test_ts_uploader_discard(MockCogniteClient: Mock) -> None:
+    client = MockCogniteClient()
 
     post_upload_test = {"value": False}
 
-    def post(x):
+    def post(_x: Any) -> None:
         post_upload_test["value"] = True
 
     queue = TimeSeriesUploadQueue(client, max_upload_interval=2, post_upload_function=post)
@@ -167,8 +168,8 @@ def test_ts_uploader_discard(MockCogniteClient):
 
 
 @patch("cognite.client.CogniteClient")
-def test_event_uploader1(MockCogniteClient):
-    client: CogniteClient = MockCogniteClient()
+def test_event_uploader1(MockCogniteClient: Mock) -> None:
+    client = MockCogniteClient()
 
     queue = EventUploadQueue(client)
 
@@ -184,12 +185,12 @@ def test_event_uploader1(MockCogniteClient):
 
 
 @patch("cognite.client.CogniteClient")
-def test_event_uploader2(MockCogniteClient):
-    client: CogniteClient = MockCogniteClient()
+def test_event_uploader2(MockCogniteClient: Mock) -> None:
+    client = MockCogniteClient()
 
     post_upload_test = {"value": False}
 
-    def post(x):
+    def post(_x: Any) -> None:
         post_upload_test["value"] = True
 
     queue = EventUploadQueue(client, max_upload_interval=2, post_upload_function=post)
@@ -210,12 +211,12 @@ def test_event_uploader2(MockCogniteClient):
 
 
 @patch("cognite.client.CogniteClient")
-def test_sequence_uploader1(MockCogniteClient):
-    client: CogniteClient = MockCogniteClient()
+def test_sequence_uploader1(MockCogniteClient: Mock) -> None:
+    client = MockCogniteClient()
 
     post_upload_test = {"value": 0, "rows": 0}
 
-    def post(x):
+    def post(x: Any) -> None:
         post_upload_test["value"] += 1
         post_upload_test["rows"] += sum([len(e.values) for e in x])
 
@@ -243,12 +244,12 @@ def test_sequence_uploader1(MockCogniteClient):
 
 
 @patch("cognite.client.CogniteClient")
-def test_sequence_uploader2(MockCogniteClient):
-    client: CogniteClient = MockCogniteClient()
+def test_sequence_uploader2(MockCogniteClient: Mock) -> None:
+    client = MockCogniteClient()
 
     post_upload_test = {"value": 0, "rows": 0}
 
-    def post(x):
+    def post(x: Any) -> None:
         post_upload_test["value"] += 1
         post_upload_test["rows"] += sum([len(e.values) for e in x])
 
@@ -276,9 +277,9 @@ def test_sequence_uploader2(MockCogniteClient):
 
 
 @patch("cognite.client.CogniteClient")
-def test_mock_private_link_upload(MockCogniteClient):
+def test_mock_private_link_upload(MockCogniteClient: Mock) -> None:
     # mocking privatelink behavior, testing the URL swap
-    client: CogniteClient = MockCogniteClient()
+    client = MockCogniteClient()
     base_url_str = "https://qweasd-666.gremiocampeao.cognitedata.com"
     base_url = URL(base_url_str)
 
@@ -288,8 +289,9 @@ def test_mock_private_link_upload(MockCogniteClient):
 
     mock_download_url = "https://restricted-api.gremiocampeao.cognitedata.com/downloadUrl/myfile"
 
-    mock_stream = "Até a pé nós iremos, para o que der e vier, mas o certo, mas o certo é que nós estaremos, com o Grêmio onde o Grêmio estiver".encode()
+    bytes_ = "Até a pé nós iremos, para o que der e vier, mas o certo, mas o certo é que nós estaremos, com o Grêmio onde o Grêmio estiver".encode()
+    mock_stream = BytesIO(bytes_)
 
-    response: Request = queue._get_file_upload_request(mock_download_url, mock_stream, len(mock_stream))
+    response: Request = queue._get_file_upload_request(mock_download_url, mock_stream, len(bytes_))
 
     assert response.url.netloc == base_url.netloc
