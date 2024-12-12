@@ -25,7 +25,7 @@ from functools import partial, wraps
 from io import RawIOBase
 from threading import Thread
 from time import time
-from typing import Any, Callable, Dict, Generator, Iterable, List, Optional, Tuple, Type, TypeVar, Union
+from typing import Any, Callable, Generator, Iterable, Type, TypeVar
 
 from decorator import decorator
 
@@ -89,7 +89,7 @@ class EitherId:
         TypeError: If none of both of id types are set.
     """
 
-    def __init__(self, **kwargs: Union[int, str, None]):
+    def __init__(self, **kwargs: int | str | None):
         internal_id = kwargs.get("id")
         external_id = kwargs.get("externalId") or kwargs.get("external_id")
 
@@ -105,8 +105,8 @@ class EitherId:
         if external_id is not None and not isinstance(external_id, str):
             raise TypeError("External IDs must be strings")
 
-        self.internal_id: Optional[int] = internal_id
-        self.external_id: Optional[str] = external_id
+        self.internal_id: int | None = internal_id
+        self.external_id: str | None = external_id
 
     def type(self) -> str:
         """
@@ -117,7 +117,7 @@ class EitherId:
         """
         return "id" if self.internal_id is not None else "externalId"
 
-    def content(self) -> Union[int, str]:
+    def content(self) -> int | str:
         """
         Get the value of the ID
 
@@ -249,7 +249,7 @@ def add_extraction_pipeline(
             ##############################
             _logger.info(f"Starting to run function: {input_function.__name__}")
 
-            heartbeat_thread: Optional[Thread] = None
+            heartbeat_thread: Thread | None = None
             try:
                 heartbeat_thread = Thread(target=heartbeat_loop, name="HeartbeatLoop", daemon=True)
                 heartbeat_thread.start()
@@ -313,12 +313,12 @@ _T2 = TypeVar("_T2")
 def _retry_internal(
     f: Callable[..., _T2],
     cancellation_token: CancellationToken,
-    exceptions: Union[Tuple[Type[Exception], ...], Dict[Type[Exception], Callable[[Exception], bool]]],
+    exceptions: tuple[Type[Exception], ...] | dict[Type[Exception], Callable[[Exception], bool]],
     tries: int,
     delay: float,
-    max_delay: Optional[float],
+    max_delay: float | None,
     backoff: float,
-    jitter: Union[float, Tuple[float, float]],
+    jitter: float | tuple[float, float],
 ) -> _T2:
     logger = logging.getLogger(__name__)
 
@@ -366,13 +366,13 @@ def _retry_internal(
 
 
 def retry(
-    cancellation_token: Optional[CancellationToken] = None,
-    exceptions: Union[Tuple[Type[Exception], ...], Dict[Type[Exception], Callable[[Any], bool]]] = (Exception,),
+    cancellation_token: CancellationToken | None = None,
+    exceptions: tuple[Type[Exception], ...] | dict[Type[Exception], Callable[[Any], bool]] = (Exception,),
     tries: int = 10,
     delay: float = 1,
-    max_delay: Optional[float] = 60,
+    max_delay: float | None = 60,
     backoff: float = 2,
-    jitter: Union[float, Tuple[float, float]] = (0, 2),
+    jitter: float | tuple[float, float] = (0, 2),
 ) -> Callable[[Callable[..., _T2]], Callable[..., _T2]]:
     """
     Returns a retry decorator.
@@ -414,8 +414,8 @@ def retry(
 
 
 def requests_exceptions(
-    status_codes: Optional[List[int]] = None,
-) -> Dict[Type[Exception], Callable[[Any], bool]]:
+    status_codes: list[int] | None = None,
+) -> dict[Type[Exception], Callable[[Any], bool]]:
     """
     Retry exceptions from using the ``requests`` library. This will retry all connection and HTTP errors matching
     the given status codes.
@@ -448,8 +448,8 @@ def requests_exceptions(
 
 
 def httpx_exceptions(
-    status_codes: Optional[List[int]] = None,
-) -> Dict[Type[Exception], Callable[[Any], bool]]:
+    status_codes: list[int] | None = None,
+) -> dict[Type[Exception], Callable[[Any], bool]]:
     """
     Retry exceptions from using the ``httpx`` library. This will retry all connection and HTTP errors matching
     the given status codes.
@@ -482,8 +482,8 @@ def httpx_exceptions(
 
 
 def cognite_exceptions(
-    status_codes: Optional[List[int]] = None,
-) -> Dict[Type[Exception], Callable[[Any], bool]]:
+    status_codes: list[int] | None = None,
+) -> dict[Type[Exception], Callable[[Any], bool]]:
     """
     Retry exceptions from using the Cognite SDK. This will retry all connection and HTTP errors matching
     the given status codes.
@@ -569,9 +569,7 @@ def truncate_byte_len(item: str, ln: int) -> str:
 
 
 class BufferedReadWithLength(io.BufferedReader):
-    def __init__(
-        self, raw: RawIOBase, buffer_size: int, len: int, on_close: Optional[Callable[[], None]] = None
-    ) -> None:
+    def __init__(self, raw: RawIOBase, buffer_size: int, len: int, on_close: Callable[[], None] | None = None) -> None:
         super().__init__(raw, buffer_size)
         # Do not remove even if it appears to be unused. :P
         # Requests uses this to add the content-length header, which is necessary for writing to files in azure clusters
@@ -588,7 +586,7 @@ def iterable_to_stream(
     iterator: Iterable[bytes],
     file_size_bytes: int,
     buffer_size: int = io.DEFAULT_BUFFER_SIZE,
-    on_close: Optional[Callable[[], None]] = None,
+    on_close: Callable[[], None] | None = None,
 ) -> BufferedReadWithLength:
     class ChunkIteratorStream(io.RawIOBase):
         def __init__(self) -> None:

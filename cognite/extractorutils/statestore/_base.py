@@ -1,7 +1,6 @@
 import logging
 import threading
 from abc import ABC, abstractmethod
-from typing import Optional
 
 from cognite.extractorutils._inner_util import _resolve_log_level
 from cognite.extractorutils.threading import CancellationToken
@@ -15,10 +14,10 @@ RETRIES = 10
 class _BaseStateStore(ABC):
     def __init__(
         self,
-        save_interval: Optional[int] = None,
+        save_interval: int | None = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: Optional[str] = None,
-        cancellation_token: Optional[CancellationToken] = None,
+        thread_name: str | None = None,
+        cancellation_token: CancellationToken | None = None,
     ) -> None:
         self._initialized = False
 

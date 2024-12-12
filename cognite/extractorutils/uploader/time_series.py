@@ -15,7 +15,7 @@
 import math
 from datetime import datetime
 from types import TracebackType
-from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
+from typing import Any, Callable, Type
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import (
@@ -50,13 +50,13 @@ MAX_DATAPOINT_STRING_LENGTH = 255
 MAX_DATAPOINT_VALUE = 1e100
 MIN_DATAPOINT_VALUE = -1e100
 
-TimeStamp = Union[int, datetime]
+TimeStamp = int | datetime
 
-DataPointWithoutStatus = Union[Tuple[TimeStamp, float], Tuple[TimeStamp, str], Tuple[TimeStamp, int]]
-FullStatusCode = Union[StatusCode, int]
-DataPointWithStatus = Union[Tuple[TimeStamp, float, FullStatusCode], Tuple[TimeStamp, str, FullStatusCode]]
-DataPoint = Union[DataPointWithoutStatus, DataPointWithStatus]
-DataPointList = List[DataPoint]
+DataPointWithoutStatus = tuple[TimeStamp, float] | tuple[TimeStamp, str] | tuple[TimeStamp, int]
+FullStatusCode = StatusCode | int
+DataPointWithStatus = tuple[TimeStamp, float, FullStatusCode] | tuple[TimeStamp, str, FullStatusCode]
+DataPoint = DataPointWithoutStatus | DataPointWithStatus
+DataPointList = list[DataPoint]
 
 
 def default_time_series_factory(external_id: str, datapoints: DataPointList) -> TimeSeries:
@@ -103,14 +103,14 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[List[Dict[str, Union[str, DataPointList]]]], None]] = None,
-        max_queue_size: Optional[int] = None,
-        max_upload_interval: Optional[int] = None,
+        post_upload_function: Callable[[list[dict[str, str | DataPointList]]], None] | None = None,
+        max_queue_size: int | None = None,
+        max_upload_interval: int | None = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: Optional[str] = None,
-        create_missing: Union[Callable[[str, DataPointList], TimeSeries], bool] = False,
-        data_set_id: Optional[int] = None,
-        cancellation_token: Optional[CancellationToken] = None,
+        thread_name: str | None = None,
+        create_missing: Callable[[str, DataPointList], TimeSeries] | bool = False,
+        data_set_id: int | None = None,
+        cancellation_token: CancellationToken | None = None,
     ):
         # Super sets post_upload and threshold
         super().__init__(
@@ -132,14 +132,14 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
             self.create_missing = True
             self.missing_factory = create_missing
 
-        self.upload_queue: Dict[EitherId, DataPointList] = {}
+        self.upload_queue: dict[EitherId, DataPointList] = {}
 
         self.points_queued = TIMESERIES_UPLOADER_POINTS_QUEUED
         self.points_written = TIMESERIES_UPLOADER_POINTS_WRITTEN
         self.queue_size = TIMESERIES_UPLOADER_QUEUE_SIZE
         self.data_set_id = data_set_id
 
-    def _verify_datapoint_time(self, time: Union[int, float, datetime, str]) -> bool:
+    def _verify_datapoint_time(self, time: int | float | datetime | str) -> bool:
         if isinstance(time, int) or isinstance(time, float):
             return not math.isnan(time) and time >= MIN_DATAPOINT_TIMESTAMP
         elif isinstance(time, str):
@@ -147,7 +147,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         else:
             return time.timestamp() * 1000.0 >= MIN_DATAPOINT_TIMESTAMP
 
-    def _verify_datapoint_value(self, value: Union[int, float, datetime, str]) -> bool:
+    def _verify_datapoint_value(self, value: int | float | datetime | str) -> bool:
         if isinstance(value, float):
             return not (
                 math.isnan(value) or math.isinf(value) or value > MAX_DATAPOINT_VALUE or value < MIN_DATAPOINT_VALUE
@@ -171,7 +171,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
             return True
 
     def add_to_upload_queue(
-        self, *, id: Optional[int] = None, external_id: Optional[str] = None, datapoints: Optional[DataPointList] = None
+        self, *, id: int | None = None, external_id: str | None = None, datapoints: DataPointList | None = None
     ) -> None:
         """
         Add data points to upload queue. The queue will be uploaded if the queue size is larger than the threshold
@@ -180,7 +180,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         Args:
             id: Internal ID of time series. Either this or external_id must be set.
             external_id: External ID of time series. Either this or external_id must be set.
-            datapoints: List of data points to add
+            datapoints: list of data points to add
         """
         datapoints = datapoints or []
         old_len = len(datapoints)
@@ -219,7 +219,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
             max_delay=RETRY_MAX_DELAY,
             backoff=RETRY_BACKOFF_FACTOR,
         )
-        def _upload_batch(upload_this: List[Dict], retries: int = 5) -> List[Dict]:
+        def _upload_batch(upload_this: list[dict], retries: int = 5) -> list[dict]:
             if len(upload_this) == 0:
                 return upload_this
 
@@ -241,14 +241,14 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
                     create_these_ids = set(
                         [id_dict["externalId"] for id_dict in ex.not_found if "externalId" in id_dict]
                     )
-                    datapoints_lists: Dict[str, DataPointList] = {
+                    datapoints_lists: dict[str, DataPointList] = {
                         ts_dict["externalId"]: ts_dict["datapoints"]
                         for ts_dict in upload_this
                         if ts_dict["externalId"] in create_these_ids
                     }
 
                     self.logger.info(f"Creating {len(create_these_ids)} time series")
-                    to_create: List[TimeSeries] = [
+                    to_create: list[TimeSeries] = [
                         self.missing_factory(external_id, datapoints_lists[external_id])
                         for external_id in create_these_ids
                     ]
@@ -317,7 +317,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         return self
 
     def __exit__(
-        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+        self, exc_type: Type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         """
         Wraps around stop method, for use as context manager
@@ -343,13 +343,13 @@ class SequenceUploadQueue(AbstractUploadQueue):
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[List[Any]], None]] = None,
-        max_queue_size: Optional[int] = None,
-        max_upload_interval: Optional[int] = None,
+        post_upload_function: Callable[[list[Any]], None] | None = None,
+        max_queue_size: int | None = None,
+        max_upload_interval: int | None = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: Optional[str] = None,
+        thread_name: str | None = None,
         create_missing: bool = False,
-        cancellation_token: Optional[CancellationToken] = None,
+        cancellation_token: CancellationToken | None = None,
     ):
         """
         Args:
@@ -374,15 +374,15 @@ class SequenceUploadQueue(AbstractUploadQueue):
             thread_name,
             cancellation_token,
         )
-        self.upload_queue: Dict[EitherId, SequenceRows] = {}
-        self.sequence_metadata: Dict[EitherId, Dict[str, Union[str, int, float]]] = {}
-        self.sequence_asset_external_ids: Dict[EitherId, str] = {}
-        self.sequence_dataset_external_ids: Dict[EitherId, str] = {}
-        self.sequence_names: Dict[EitherId, str] = {}
-        self.sequence_descriptions: Dict[EitherId, str] = {}
-        self.column_definitions: Dict[EitherId, List[Dict[str, str]]] = {}
-        self.asset_ids: Dict[str, int] = {}
-        self.dataset_ids: Dict[str, int] = {}
+        self.upload_queue: dict[EitherId, SequenceRows] = {}
+        self.sequence_metadata: dict[EitherId, dict[str, str | int | float]] = {}
+        self.sequence_asset_external_ids: dict[EitherId, str] = {}
+        self.sequence_dataset_external_ids: dict[EitherId, str] = {}
+        self.sequence_names: dict[EitherId, str] = {}
+        self.sequence_descriptions: dict[EitherId, str] = {}
+        self.column_definitions: dict[EitherId, list[dict[str, str]]] = {}
+        self.asset_ids: dict[str, int] = {}
+        self.dataset_ids: dict[str, int] = {}
         self.create_missing = create_missing
 
         self.points_queued = SEQUENCES_UPLOADER_POINTS_QUEUED
@@ -391,13 +391,13 @@ class SequenceUploadQueue(AbstractUploadQueue):
 
     def set_sequence_metadata(
         self,
-        metadata: Dict[str, Union[str, int, float]],
-        id: Optional[int] = None,
-        external_id: Optional[str] = None,
-        asset_external_id: Optional[str] = None,
-        dataset_external_id: Optional[str] = None,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
+        metadata: dict[str, str | int | float],
+        id: int | None = None,
+        external_id: str | None = None,
+        asset_external_id: str | None = None,
+        dataset_external_id: str | None = None,
+        name: str | None = None,
+        description: str | None = None,
     ) -> None:
         """
         Set sequence metadata. Metadata will be cached until the sequence is created. The metadata will be updated
@@ -426,7 +426,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
             self.sequence_descriptions[either_id] = description
 
     def set_sequence_column_definition(
-        self, col_def: List[Dict[str, str]], id: Optional[int] = None, external_id: Optional[str] = None
+        self, col_def: list[dict[str, str]], id: int | None = None, external_id: str | None = None
     ) -> None:
         """
         Set sequence column definition
@@ -443,16 +443,14 @@ class SequenceUploadQueue(AbstractUploadQueue):
 
     def add_to_upload_queue(
         self,
-        rows: Union[
-            Dict[int, List[Union[int, float, str]]],
-            List[Tuple[int, Union[int, float, str]]],
-            List[Dict[str, Any]],
-            SequenceData,
-            SequenceRows,
-        ],
-        column_external_ids: Optional[List[dict]] = None,
-        id: Optional[int] = None,
-        external_id: Optional[str] = None,
+        rows: dict[int, list[int | float | str]]
+        | list[tuple[int, int | float | str]]
+        | list[dict[str, Any]]
+        | SequenceData
+        | SequenceRows,
+        column_external_ids: list[dict] | None = None,
+        id: int | None = None,
+        external_id: str | None = None,
     ) -> None:
         """
         Add sequence rows to upload queue. Mirrors implementation of SequenceApi.insert. Inserted rows will be
@@ -461,7 +459,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
         Args:
             rows: The rows to be inserted. Can either be a list of tuples, a list of ["rownumber": ..., "values": ...]
                 objects, a dictionary of rowNumber: data, or a SequenceData object.
-            column_external_ids: List of external id for the columns of the sequence
+            column_external_ids: list of external id for the columns of the sequence
             id: Sequence internal ID
                 Use if external_id is None
             external_id: Sequence external ID
@@ -477,7 +475,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
             # Already in the desired format
             pass
         elif isinstance(rows, (dict, list)):
-            rows_raw: List[Dict[str, Any]]
+            rows_raw: list[dict[str, Any]]
             if isinstance(rows, dict):
                 rows_raw = [{"rowNumber": row_number, "values": values} for row_number, values in rows.items()]
             elif isinstance(rows, list) and rows and isinstance(rows[0], (tuple, list)):
@@ -658,7 +656,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
         return self
 
     def __exit__(
-        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+        self, exc_type: Type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         """
         Wraps around stop method, for use as context manager

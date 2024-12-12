@@ -43,7 +43,7 @@ import threading
 from abc import ABC, abstractmethod
 from time import sleep
 from types import TracebackType
-from typing import Any, Callable, Dict, List, Optional, Tuple, Type, TypeVar, Union
+from typing import Any, Callable, Type, TypeVar
 
 import arrow
 import psutil
@@ -177,14 +177,14 @@ class AbstractMetricsPusher(ABC):
 
     def __init__(
         self,
-        push_interval: Optional[int] = None,
-        thread_name: Optional[str] = None,
-        cancellation_token: Optional[CancellationToken] = None,
+        push_interval: int | None = None,
+        thread_name: str | None = None,
+        cancellation_token: CancellationToken | None = None,
     ):
         self.push_interval = push_interval
         self.thread_name = thread_name
 
-        self.thread: Optional[threading.Thread] = None
+        self.thread: threading.Thread | None = None
         self.thread_name = thread_name
         self.cancellation_token = cancellation_token.create_child_token() if cancellation_token else CancellationToken()
 
@@ -232,7 +232,7 @@ class AbstractMetricsPusher(ABC):
         return self
 
     def __exit__(
-        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+        self, exc_type: Type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         """
         Wraps around stop method, for use as context manager
@@ -264,10 +264,10 @@ class PrometheusPusher(AbstractMetricsPusher):
         job_name: str,
         url: str,
         push_interval: int,
-        username: Optional[str] = None,
-        password: Optional[str] = None,
-        thread_name: Optional[str] = None,
-        cancellation_token: Optional[CancellationToken] = None,
+        username: str | None = None,
+        password: str | None = None,
+        thread_name: str | None = None,
+        cancellation_token: CancellationToken | None = None,
     ):
         super(PrometheusPusher, self).__init__(push_interval, thread_name, cancellation_token)
 
@@ -277,7 +277,7 @@ class PrometheusPusher(AbstractMetricsPusher):
 
         self.url = url
 
-    def _auth_handler(self, url: str, method: str, timeout: int, headers: List[Tuple[str, str]], data: Any) -> Callable:
+    def _auth_handler(self, url: str, method: str, timeout: int, headers: list[tuple[str, str]], data: Any) -> Callable:
         """
         Returns a authentication handler against the Prometheus Pushgateway to use in the pushadd_to_gateway method.
 
@@ -340,10 +340,10 @@ class CognitePusher(AbstractMetricsPusher):
         cdf_client: CogniteClient,
         external_id_prefix: str,
         push_interval: int,
-        asset: Optional[Asset] = None,
-        data_set: Optional[EitherId] = None,
-        thread_name: Optional[str] = None,
-        cancellation_token: Optional[CancellationToken] = None,
+        asset: Asset | None = None,
+        data_set: EitherId | None = None,
+        thread_name: str | None = None,
+        cancellation_token: CancellationToken | None = None,
     ):
         super(CognitePusher, self).__init__(push_interval, thread_name, cancellation_token)
 
@@ -360,11 +360,11 @@ class CognitePusher(AbstractMetricsPusher):
         """
         Initialize the CDF tenant with the necessary time series and asset.
         """
-        time_series: List[TimeSeries] = []
+        time_series: list[TimeSeries] = []
 
         if self.asset is not None:
             # Ensure that asset exist, and retrieve internal ID
-            asset: Optional[Asset]
+            asset: Asset | None
             try:
                 asset = self.cdf_client.assets.create(self.asset)
             except CogniteDuplicatedError:
@@ -406,7 +406,7 @@ class CognitePusher(AbstractMetricsPusher):
         """
         timestamp = int(arrow.get().float_timestamp * 1000)
 
-        datapoints: List[Dict[str, Union[str, int, List[Any], Datapoints, DatapointsArray]]] = []
+        datapoints: list[dict[str, str | int | list[Any] | Datapoints | DatapointsArray]] = []
 
         for metric in REGISTRY.collect():
             if type(metric) == Metric and metric.type in ["gauge", "counter"]:

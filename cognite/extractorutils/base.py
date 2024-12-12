@@ -19,7 +19,7 @@ from dataclasses import is_dataclass
 from enum import Enum
 from threading import Thread
 from types import TracebackType
-from typing import Any, Callable, Dict, Generic, Optional, Type, TypeVar
+from typing import Any, Callable, Generic, Type, TypeVar
 
 from dotenv import find_dotenv, load_dotenv
 
@@ -40,6 +40,7 @@ class ReloadConfigAction(Enum):
 
 
 CustomConfigClass = TypeVar("CustomConfigClass", bound=BaseConfig)
+RunHandle = Callable[[CogniteClient, AbstractStateStore, CustomConfigClass, CancellationToken], None]
 
 
 class Extractor(Generic[CustomConfigClass]):
@@ -68,27 +69,25 @@ class Extractor(Generic[CustomConfigClass]):
         heartbeat_waiting_time: Time interval between each heartbeat to the extraction pipeline in seconds.
     """
 
-    _config_singleton: Optional[CustomConfigClass] = None
-    _statestore_singleton: Optional[AbstractStateStore] = None
+    _config_singleton: CustomConfigClass | None = None
+    _statestore_singleton: AbstractStateStore | None = None
 
     def __init__(
         self,
         *,
         name: str,
         description: str,
-        version: Optional[str] = None,
-        run_handle: Optional[
-            Callable[[CogniteClient, AbstractStateStore, CustomConfigClass, CancellationToken], None]
-        ] = None,
+        version: str | None = None,
+        run_handle: RunHandle | None = None,
         config_class: Type[CustomConfigClass],
-        metrics: Optional[BaseMetrics] = None,
+        metrics: BaseMetrics | None = None,
         use_default_state_store: bool = True,
-        cancellation_token: Optional[CancellationToken] = None,
-        config_file_path: Optional[str] = None,
+        cancellation_token: CancellationToken | None = None,
+        config_file_path: str | None = None,
         continuous_extractor: bool = False,
         heartbeat_waiting_time: int = 600,
         handle_interrupts: bool = True,
-        reload_config_interval: Optional[int] = 300,
+        reload_config_interval: int | None = 300,
         reload_config_action: ReloadConfigAction = ReloadConfigAction.DO_NOTHING,
     ):
         self.name = name
@@ -111,7 +110,7 @@ class Extractor(Generic[CustomConfigClass]):
         self.cognite_client: CogniteClient
         self.state_store: AbstractStateStore
         self.config: CustomConfigClass
-        self.extraction_pipeline: Optional[ExtractionPipeline]
+        self.extraction_pipeline: ExtractionPipeline | None
         self.logger: logging.Logger
 
         self.should_be_restarted = False
@@ -121,7 +120,7 @@ class Extractor(Generic[CustomConfigClass]):
         else:
             self.metrics = BaseMetrics(extractor_name=name, extractor_version=self.version)
 
-    def _initial_load_config(self, override_path: Optional[str] = None) -> None:
+    def _initial_load_config(self, override_path: str | None = None) -> None:
         """
         Load a configuration file, either from the specified path, or by a path specified by the user in a command line
         arg. Will quit further execution of no path is given.
@@ -177,7 +176,7 @@ class Extractor(Generic[CustomConfigClass]):
         Either way, the state_store attribute is guaranteed to be set after calling this method.
         """
 
-        def recursive_find_state_store(d: Dict[str, Any]) -> Optional[StateStoreConfig]:
+        def recursive_find_state_store(d: dict[str, Any]) -> StateStoreConfig | None:
             for k in d:
                 if is_dataclass(d[k]):
                     res = recursive_find_state_store(d[k].__dict__)
@@ -323,7 +322,7 @@ class Extractor(Generic[CustomConfigClass]):
         return self
 
     def __exit__(
-        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+        self, exc_type: Type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> bool:
         """
         Shuts down the extractor. Makes sure states are preserved, that all uploads of data and metrics are done, etc.

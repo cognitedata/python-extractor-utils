@@ -16,7 +16,7 @@ import logging
 import threading
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Callable, List, Optional
+from typing import Any, Callable
 
 from arrow import Arrow
 
@@ -43,12 +43,12 @@ class AbstractUploadQueue(ABC):
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[List[Any]], None]] = None,
-        max_queue_size: Optional[int] = None,
-        max_upload_interval: Optional[int] = None,
+        post_upload_function: Callable[[list[Any]], None] | None = None,
+        max_queue_size: int | None = None,
+        max_upload_interval: int | None = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: Optional[str] = None,
-        cancellation_token: Optional[CancellationToken] = None,
+        thread_name: str | None = None,
+        cancellation_token: CancellationToken | None = None,
     ):
         self.cdf_client = cdf_client
 
@@ -81,12 +81,12 @@ class AbstractUploadQueue(ABC):
 
         return None
 
-    def _post_upload(self, uploaded: List[Any]) -> None:
+    def _post_upload(self, uploaded: list[Any]) -> None:
         """
         Perform post_upload_function to uploaded data, if applicable
 
         Args:
-            uploaded: List of uploaded data
+            uploaded: list of uploaded data
         """
         if self.post_upload_function is not None:
             try:
