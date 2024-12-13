@@ -2,7 +2,7 @@ import logging
 import signal
 from threading import Condition
 from time import time
-from typing import Any, Optional
+from typing import Any
 
 
 class CancellationToken:
@@ -14,10 +14,10 @@ class CancellationToken:
     cancelled if the parent is cancelled, but can be canceled alone without affecting the parent token.
     """
 
-    def __init__(self, condition: Optional[Condition] = None) -> None:
+    def __init__(self, condition: Condition | None = None) -> None:
         self._cv: Condition = condition or Condition()
         self._is_cancelled_int: bool = False
-        self._parent: Optional["CancellationToken"] = None
+        self._parent: "CancellationToken" | None = None
 
     def __repr__(self) -> str:
         cls = self.__class__
@@ -59,7 +59,7 @@ class CancellationToken:
         """
         self.cancel()
 
-    def wait(self, timeout: Optional[float] = None) -> bool:
+    def wait(self, timeout: float | None = None) -> bool:
         endtime = None
         if timeout is not None:
             endtime = time() + timeout

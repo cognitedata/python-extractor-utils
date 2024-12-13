@@ -22,13 +22,8 @@ from typing import (
     Any,
     BinaryIO,
     Callable,
-    Dict,
     Iterator,
-    List,
-    Optional,
-    Tuple,
     Type,
-    Union,
 )
 from urllib.parse import ParseResult, urlparse
 
@@ -67,7 +62,7 @@ _MAX_FILE_CHUNK_SIZE = 4 * 1024 * 1024 * 1000
 
 _CDF_ALPHA_VERSION_HEADER = {"cdf-version": "alpha"}
 
-FileMetadataOrCogniteExtractorFile = Union[FileMetadata, CogniteExtractorFileApply]
+FileMetadataOrCogniteExtractorFile = FileMetadata | CogniteExtractorFileApply
 
 
 class ChunkedStream(RawIOBase, BinaryIO):
@@ -111,9 +106,9 @@ class ChunkedStream(RawIOBase, BinaryIO):
 
     def __exit__(
         self,
-        exc_type: Optional[Type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: Type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         return super().__exit__(exc_type, exc_val, exc_tb)
 
@@ -202,13 +197,13 @@ class IOFileUploadQueue(AbstractUploadQueue):
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[List[FileMetadataOrCogniteExtractorFile]], None]] = None,
-        max_queue_size: Optional[int] = None,
+        post_upload_function: Callable[[list[FileMetadataOrCogniteExtractorFile]], None] | None = None,
+        max_queue_size: int | None = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: Optional[str] = None,
+        thread_name: str | None = None,
         overwrite_existing: bool = False,
-        cancellation_token: Optional[CancellationToken] = None,
-        max_parallelism: Optional[int] = None,
+        cancellation_token: CancellationToken | None = None,
+        max_parallelism: int | None = None,
     ):
         # Super sets post_upload and threshold
         super().__init__(
@@ -224,8 +219,8 @@ class IOFileUploadQueue(AbstractUploadQueue):
         if self.threshold <= 0:
             raise ValueError("Max queue size must be positive for file upload queues")
 
-        self.upload_queue: List[Future] = []
-        self.errors: List[Exception] = []
+        self.upload_queue: list[Future] = []
+        self.errors: list[Exception] = []
 
         self.overwrite_existing = overwrite_existing
 
@@ -398,12 +393,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
         self,
         file_meta: FileMetadataOrCogniteExtractorFile,
         read_file: Callable[[], BinaryIO],
-        extra_retries: Optional[
-            Union[
-                Tuple[Type[Exception], ...],
-                Dict[Type[Exception], Callable[[Any], bool]],
-            ]
-        ] = None,
+        extra_retries: tuple[Type[Exception], ...] | dict[Type[Exception], Callable[[Any], bool]] | None = None,
     ) -> None:
         """
         Add file to upload queue. The file will start uploading immedeately. If the size of the queue is larger than
@@ -484,7 +474,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
             self.queue_size.set(self.upload_queue_size)
 
     def _get_file_upload_request(
-        self, url_str: str, stream: BinaryIO, size: int, mime_type: Optional[str] = None
+        self, url_str: str, stream: BinaryIO, size: int, mime_type: str | None = None
     ) -> Request:
         url = URL(url_str)
         base_url = URL(self.cdf_client.config.base_url)
@@ -528,7 +518,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
         resp_json = res.json()["items"][0]
         return FileMetadata.load(resp_json), resp_json["uploadUrl"]
 
-    def upload(self, fail_on_errors: bool = True, timeout: Optional[float] = None) -> None:
+    def upload(self, fail_on_errors: bool = True, timeout: float | None = None) -> None:
         """
         Wait for all uploads to finish
         """
@@ -554,9 +544,9 @@ class IOFileUploadQueue(AbstractUploadQueue):
 
     def __exit__(
         self,
-        exc_type: Optional[Type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: Type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         """
         Wraps around stop method, for use as context manager
@@ -595,13 +585,13 @@ class FileUploadQueue(IOFileUploadQueue):
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[List[FileMetadataOrCogniteExtractorFile]], None]] = None,
-        max_queue_size: Optional[int] = None,
-        max_upload_interval: Optional[int] = None,
+        post_upload_function: Callable[[list[FileMetadataOrCogniteExtractorFile]], None] | None = None,
+        max_queue_size: int | None = None,
+        max_upload_interval: int | None = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: Optional[str] = None,
+        thread_name: str | None = None,
         overwrite_existing: bool = False,
-        cancellation_token: Optional[CancellationToken] = None,
+        cancellation_token: CancellationToken | None = None,
     ):
         # Super sets post_upload and threshold
         super().__init__(
@@ -617,7 +607,7 @@ class FileUploadQueue(IOFileUploadQueue):
     def add_to_upload_queue(
         self,
         file_meta: FileMetadataOrCogniteExtractorFile,
-        file_name: Union[str, PathLike],
+        file_name: str | PathLike,
     ) -> None:
         """
         Add file to upload queue. The queue will be uploaded if the queue size is larger than the threshold
@@ -652,12 +642,12 @@ class BytesUploadQueue(IOFileUploadQueue):
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[List[FileMetadataOrCogniteExtractorFile]], None]] = None,
-        max_queue_size: Optional[int] = None,
+        post_upload_function: Callable[[list[FileMetadataOrCogniteExtractorFile]], None] | None = None,
+        max_queue_size: int | None = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: Optional[str] = None,
+        thread_name: str | None = None,
         overwrite_existing: bool = False,
-        cancellation_token: Optional[CancellationToken] = None,
+        cancellation_token: CancellationToken | None = None,
     ) -> None:
         super().__init__(
             cdf_client,

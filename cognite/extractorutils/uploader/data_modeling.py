@@ -1,5 +1,5 @@
 from types import TracebackType
-from typing import Any, Callable, List, Optional, Type
+from typing import Any, Callable, Type
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes.data_modeling import EdgeApply, NodeApply
@@ -18,12 +18,12 @@ class InstanceUploadQueue(AbstractUploadQueue):
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[List[Any]], None]] = None,
-        max_queue_size: Optional[int] = None,
-        max_upload_interval: Optional[int] = None,
+        post_upload_function: Callable[[list[Any]], None] | None = None,
+        max_queue_size: int | None = None,
+        max_upload_interval: int | None = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: Optional[str] = None,
-        cancellation_token: Optional[CancellationToken] = None,
+        thread_name: str | None = None,
+        cancellation_token: CancellationToken | None = None,
         auto_create_start_nodes: bool = True,
         auto_create_end_nodes: bool = True,
         auto_create_direct_relations: bool = True,
@@ -42,14 +42,14 @@ class InstanceUploadQueue(AbstractUploadQueue):
         self.auto_create_end_nodes = auto_create_end_nodes
         self.auto_create_direct_relations = auto_create_direct_relations
 
-        self.node_queue: List[NodeApply] = []
-        self.edge_queue: List[EdgeApply] = []
+        self.node_queue: list[NodeApply] = []
+        self.edge_queue: list[EdgeApply] = []
 
     def add_to_upload_queue(
         self,
         *,
-        node_data: Optional[List[NodeApply]] = None,
-        edge_data: Optional[List[EdgeApply]] = None,
+        node_data: list[NodeApply] | None = None,
+        edge_data: list[EdgeApply] | None = None,
     ) -> None:
         if node_data:
             with self.lock:
@@ -100,9 +100,9 @@ class InstanceUploadQueue(AbstractUploadQueue):
 
     def __exit__(
         self,
-        exc_type: Optional[Type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: Type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         """
         Wraps around stop method, for use as context manager

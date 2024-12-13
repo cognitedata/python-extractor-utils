@@ -8,7 +8,7 @@ from multiprocessing import Queue
 from threading import RLock, Thread
 from traceback import format_exception
 from types import TracebackType
-from typing import Generic, Literal, Optional, Type, TypeVar, Union
+from typing import Generic, Literal, Type, TypeVar
 
 from humps import pascalize
 from typing_extensions import Self, assert_never
@@ -33,7 +33,7 @@ from cognite.extractorutils.util import now
 __all__ = ["ConfigType", "ConfigRevision", "Extractor"]
 
 ConfigType = TypeVar("ConfigType", bound=ExtractorConfig)
-ConfigRevision = Union[Literal["local"], int]
+ConfigRevision = Literal["local"] | int
 
 
 _T = TypeVar("_T", bound=ExtractorConfig)
@@ -75,7 +75,7 @@ class Extractor(Generic[ConfigType]):
         self.cognite_client = self.connection_config.get_cognite_client(f"{self.EXTERNAL_ID}-{self.VERSION}")
 
         self._checkin_lock = RLock()
-        self._runtime_messages: Optional[Queue[RuntimeMessage]] = None
+        self._runtime_messages: Queue[RuntimeMessage] | None = None
 
         self._scheduler = TaskScheduler(self.cancellation_token.create_child_token())
 
@@ -305,9 +305,9 @@ class Extractor(Generic[ConfigType]):
 
     def __exit__(
         self,
-        exc_type: Optional[Type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: Type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> bool:
         self.stop()
         with self._checkin_lock:
