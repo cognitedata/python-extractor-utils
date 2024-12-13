@@ -12,9 +12,8 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 import datetime
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
-from cognite.client import CogniteClient
 from cognite.client.data_classes import Row
 from cognite.extractorutils.uploader import EventUploadQueue, RawUploadQueue, TimeSeriesUploadQueue
 from cognite.extractorutils.uploader_extractor import UploaderExtractor, UploaderExtractorConfig
@@ -22,8 +21,8 @@ from cognite.extractorutils.uploader_types import Event, InsertDatapoints, RawRo
 
 
 @patch("cognite.client.CogniteClient")
-def test_handle_events(MockCogniteClient):
-    client: CogniteClient = MockCogniteClient()
+def test_handle_events(MockCogniteClient: Mock) -> None:
+    client = MockCogniteClient()
 
     ex = UploaderExtractor[UploaderExtractorConfig](
         name="ext_extractor1", description="description", config_class=UploaderExtractorConfig
@@ -46,8 +45,8 @@ def test_handle_events(MockCogniteClient):
 
 
 @patch("cognite.client.CogniteClient")
-def test_handle_raw_rows(MockCogniteClient):
-    client: CogniteClient = MockCogniteClient()
+def test_handle_raw_rows(MockCogniteClient: Mock) -> None:
+    client = MockCogniteClient()
 
     ex = UploaderExtractor[UploaderExtractorConfig](
         name="ext_extractor2", description="description", config_class=UploaderExtractorConfig
@@ -76,8 +75,8 @@ def test_handle_raw_rows(MockCogniteClient):
 
 
 @patch("cognite.client.CogniteClient")
-def test_handle_timeseries(MockCogniteClient):
-    client: CogniteClient = MockCogniteClient()
+def test_handle_timeseries(MockCogniteClient: Mock) -> None:
+    client = MockCogniteClient()
 
     ex = UploaderExtractor[UploaderExtractorConfig](
         name="ext_extractor3", description="description", config_class=UploaderExtractorConfig

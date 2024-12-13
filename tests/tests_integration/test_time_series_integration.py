@@ -16,7 +16,7 @@ import random
 import string
 import time
 from datetime import datetime, timezone
-from typing import Tuple
+from typing import Any
 
 import pytest
 
@@ -38,7 +38,7 @@ def set_test_parameters() -> ParamTest:
     return test_parameter
 
 
-def test_time_series_upload_queue1(set_upload_test: Tuple[CogniteClient, ParamTest]) -> None:
+def test_time_series_upload_queue1(set_upload_test: tuple[CogniteClient, ParamTest]) -> None:
     client, test_parameter = set_upload_test
     created = client.time_series.create(
         [
@@ -49,7 +49,7 @@ def test_time_series_upload_queue1(set_upload_test: Tuple[CogniteClient, ParamTe
 
     last_point = {"timestamp": 0}
 
-    def store_latest(points):
+    def store_latest(points: Any) -> None:
         last_point["timestamp"] = max(last_point["timestamp"], *[ts["datapoints"][-1][0] for ts in points])
 
     queue = TimeSeriesUploadQueue(cdf_client=client, post_upload_function=store_latest, max_upload_interval=1)
@@ -82,7 +82,7 @@ def test_time_series_upload_queue1(set_upload_test: Tuple[CogniteClient, ParamTe
     queue.stop()
 
 
-def test_time_series_upload_queue2(set_upload_test: Tuple[CogniteClient, ParamTest]) -> None:
+def test_time_series_upload_queue2(set_upload_test: tuple[CogniteClient, ParamTest]) -> None:
     client, test_parameter = set_upload_test
     client.time_series.create(TimeSeries(external_id=test_parameter.external_ids[0]))
 
@@ -109,7 +109,7 @@ def test_time_series_upload_queue2(set_upload_test: Tuple[CogniteClient, ParamTe
     queue.stop()
 
 
-def test_time_series_upload_queue_create_missing(set_upload_test: Tuple[CogniteClient, ParamTest]) -> None:
+def test_time_series_upload_queue_create_missing(set_upload_test: tuple[CogniteClient, ParamTest]) -> None:
     client, test_parameter = set_upload_test
 
     queue = TimeSeriesUploadQueue(cdf_client=client, create_missing=True)
@@ -144,7 +144,7 @@ def test_time_series_upload_queue_create_missing(set_upload_test: Tuple[CogniteC
     queue.stop()
 
 
-def test_time_seires_with_status(set_upload_test: Tuple[CogniteClient, ParamTest]) -> None:
+def test_time_seires_with_status(set_upload_test: tuple[CogniteClient, ParamTest]) -> None:
     client, test_parameter = set_upload_test
 
     queue = TimeSeriesUploadQueue(cdf_client=client, create_missing=True)

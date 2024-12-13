@@ -12,10 +12,12 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 from dataclasses import dataclass, field
+from typing import Callable
 from unittest.mock import patch
 
 import pytest
 
+from cognite.client import CogniteClient
 from cognite.extractorutils import Extractor
 from cognite.extractorutils.configtools import BaseConfig, StateStoreConfig
 from cognite.extractorutils.statestore import LocalStateStore, NoStateStore
@@ -42,13 +44,13 @@ class ConfigWithoutStates(BaseConfig):
     source: SourceConfig
 
 
-def test_load_config():
+def test_load_config() -> None:
     e1 = Extractor(name="my_extractor1", description="description", config_class=ConfigWithStates)
     e1._initial_load_config("tests/tests_unit/dummyconfig.yaml")
     assert isinstance(e1.config, ConfigWithStates)
 
 
-def test_load_config_keyvault():
+def test_load_config_keyvault() -> None:
     e7 = Extractor(name="my_extractor7", description="description", config_class=ConfigWithoutStates)
     e7._initial_load_config("tests/tests_unit/dummyconfig_keyvault.yaml")
 
@@ -58,7 +60,7 @@ def test_load_config_keyvault():
 
 
 @patch("cognite.client.CogniteClient")
-def test_load_state_store(get_client_mock):
+def test_load_state_store(get_client_mock: Callable[[], CogniteClient]) -> None:
     e2 = Extractor(name="my_extractor2", description="description", config_class=ConfigWithStates)
     e2._initial_load_config("tests/tests_unit/dummyconfig.yaml")
     e2.cognite_client = get_client_mock()
@@ -95,7 +97,7 @@ def test_load_state_store(get_client_mock):
 
 
 @pytest.mark.order(1)
-def test_config_getter():
+def test_config_getter() -> None:
     with pytest.raises(ValueError):
         Extractor.get_current_config()
 
@@ -110,7 +112,7 @@ def test_config_getter():
 
 
 @pytest.mark.order(2)
-def test_state_store_getter():
+def test_state_store_getter() -> None:
     with pytest.raises(ValueError):
         Extractor.get_current_statestore()
 

@@ -15,7 +15,6 @@
 import os
 import random
 import time
-from typing import Tuple
 
 import pytest
 
@@ -35,7 +34,7 @@ def set_test_parameters() -> ParamTest:
 
 
 @pytest.mark.parametrize("functions_runtime", ["true", "false"])
-def test_raw_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest], functions_runtime: str):
+def test_raw_upload_queue(set_upload_test: tuple[CogniteClient, ParamTest], functions_runtime: str) -> None:
     os.environ["COGNITE_FUNCTION_RUNTIME"] = functions_runtime
     client, test_parameter = set_upload_test
     queue = RawUploadQueue(cdf_client=client, max_queue_size=500)

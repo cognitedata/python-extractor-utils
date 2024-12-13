@@ -21,12 +21,12 @@ from cognite.extractorutils.util import add_extraction_pipeline
 
 with monkeypatch_cognite_client() as m_client:
 
-    def test_work_as_expected():
+    def test_work_as_expected() -> None:
         @add_extraction_pipeline(
             extraction_pipeline_ext_id="1",
             cognite_client=m_client,
         )
-        def test_success():
+        def test_success() -> None:
             print("Starting function 'test_work_as_expected'")
             print("Stopping function 'test_work_as_expected'")
 
@@ -38,12 +38,12 @@ with monkeypatch_cognite_client() as m_client:
 
 with monkeypatch_cognite_client() as m2_client:
 
-    def test_raise_error():
+    def test_raise_error() -> None:
         @add_extraction_pipeline(
             extraction_pipeline_ext_id="2",
             cognite_client=m2_client,
         )
-        def test_failure():
+        def test_failure() -> None:
             print("Starting function 'test_raise_error'")
             raise Exception("Testing exceptions")
             print("Stopping function 'test_raise_error'")
@@ -54,9 +54,9 @@ with monkeypatch_cognite_client() as m2_client:
 
 with monkeypatch_cognite_client() as m3_client:
 
-    def test_2_heartbeats():
+    def test_2_heartbeats() -> None:
         @add_extraction_pipeline(extraction_pipeline_ext_id="3", cognite_client=m3_client, heartbeat_waiting_time=1)
-        def test_success_2():
+        def test_success_2() -> None:
             print("Starting function 'test_2_heartbeats'")
             time.sleep(1.5)
             print("Stopping function 'test_2_heartbeats'")
@@ -65,7 +65,3 @@ with monkeypatch_cognite_client() as m3_client:
 
         print(f"{m3_client.extraction_pipelines.runs.create.call_count=}")
         assert m3_client.extraction_pipelines.runs.create.call_count == 3
-
-
-if __name__ == "__main__":
-    pytest.main(verbosity=2)

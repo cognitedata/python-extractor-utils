@@ -14,7 +14,6 @@
 
 import os
 import random
-from typing import Tuple
 
 import pytest
 
@@ -37,7 +36,7 @@ def set_test_parameters() -> ParamTest:
 
 
 @pytest.mark.parametrize("functions_runtime", ["true", "false"])
-def test_assets_upload_queue_upsert(set_upload_test: Tuple[CogniteClient, ParamTest], functions_runtime: str):
+def test_assets_upload_queue_upsert(set_upload_test: tuple[CogniteClient, ParamTest], functions_runtime: str) -> None:
     os.environ["COGNITE_FUNCTION_RUNTIME"] = functions_runtime
     client, test_parameter = set_upload_test
     queue = AssetUploadQueue(cdf_client=client)

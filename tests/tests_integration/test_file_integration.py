@@ -17,7 +17,7 @@ import os
 import pathlib
 import random
 import time
-from typing import Callable, Optional, Tuple
+from typing import Callable
 
 import pytest
 
@@ -53,7 +53,7 @@ def set_test_parameters() -> ParamTest:
 
 
 def await_is_uploaded_status(
-    client: CogniteClient, external_id: Optional[str] = None, instance_id: Optional[NodeId] = None
+    client: CogniteClient, external_id: str | None = None, instance_id: NodeId | None = None
 ) -> None:
     for _ in range(10):
         if external_id is not None:
@@ -68,7 +68,7 @@ def await_is_uploaded_status(
 
 
 @pytest.mark.parametrize("functions_runtime", ["true", "false"])
-def test_file_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest], functions_runtime: str) -> None:
+def test_file_upload_queue(set_upload_test: tuple[CogniteClient, ParamTest], functions_runtime: str) -> None:
     os.environ["COGNITE_FUNCTION_RUNTIME"] = functions_runtime
     client, test_parameter = set_upload_test
     queue = FileUploadQueue(cdf_client=client, overwrite_existing=True, max_queue_size=2)
@@ -145,7 +145,7 @@ def test_file_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest], fun
 
 
 @pytest.mark.parametrize("functions_runtime", ["true", "false"])
-def test_bytes_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest], functions_runtime: str) -> None:
+def test_bytes_upload_queue(set_upload_test: tuple[CogniteClient, ParamTest], functions_runtime: str) -> None:
     os.environ["COGNITE_FUNCTION_RUNTIME"] = functions_runtime
     client, test_parameter = set_upload_test
     queue = BytesUploadQueue(cdf_client=client, overwrite_existing=True, max_queue_size=1)
@@ -193,7 +193,7 @@ def test_bytes_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest], fu
 
 
 @pytest.mark.parametrize("functions_runtime", ["true", "false"])
-def test_big_file_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest], functions_runtime: str) -> None:
+def test_big_file_upload_queue(set_upload_test: tuple[CogniteClient, ParamTest], functions_runtime: str) -> None:
     os.environ["COGNITE_FUNCTION_RUNTIME"] = functions_runtime
     client, test_parameter = set_upload_test
     queue = BytesUploadQueue(cdf_client=client, overwrite_existing=True, max_queue_size=1)
@@ -228,7 +228,7 @@ def test_big_file_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest],
     assert len(bigfile2) == 10_000_000
 
 
-def test_big_file_stream(set_upload_test: Tuple[CogniteClient, ParamTest]) -> None:
+def test_big_file_stream(set_upload_test: tuple[CogniteClient, ParamTest]) -> None:
     client, test_parameter = set_upload_test
     queue = IOFileUploadQueue(cdf_client=client, overwrite_existing=True, max_queue_size=1)
     queue.max_file_chunk_size = 6_000_000
@@ -238,7 +238,7 @@ def test_big_file_stream(set_upload_test: Tuple[CogniteClient, ParamTest]) -> No
 
     class BufferedReadWithLength(io.BufferedReader):
         def __init__(
-            self, raw: io.RawIOBase, buffer_size: int, len: int, on_close: Optional[Callable[[], None]] = None
+            self, raw: io.RawIOBase, buffer_size: int, len: int, on_close: Callable[[], None] | None = None
         ) -> None:
             super().__init__(raw, buffer_size)
             # Do not remove even if it appears to be unused. :P
@@ -279,7 +279,7 @@ def test_big_file_stream(set_upload_test: Tuple[CogniteClient, ParamTest]) -> No
     assert len(bigfile2) == 10_000_000
 
 
-def test_update_files(set_upload_test: Tuple[CogniteClient, ParamTest]) -> None:
+def test_update_files(set_upload_test: tuple[CogniteClient, ParamTest]) -> None:
     client, test_parameter = set_upload_test
     queue = BytesUploadQueue(cdf_client=client, overwrite_existing=True, max_queue_size=1)
 

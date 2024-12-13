@@ -13,6 +13,7 @@
 #  limitations under the License.
 
 import time
+from types import ModuleType
 from unittest.mock import Mock, patch
 
 import arrow
@@ -28,7 +29,7 @@ from cognite.extractorutils.metrics import CognitePusher, safe_get
 
 # For testing PrometheusPusher
 @pytest.fixture
-def altered_metrics() -> metrics:
+def altered_metrics() -> ModuleType:
     altered_metrics = metrics
     altered_metrics.delete_from_gateway = Mock()
     altered_metrics.pushadd_to_gateway = Mock()
@@ -36,18 +37,17 @@ def altered_metrics() -> metrics:
 
 
 # For testing CognitePusher
-class GauceSetUp:
+class GaugeSetUp:
     gauge = Gauge("gauge", "Test gauge")
 
     @classmethod
-    def initGauge(self) -> None:
-        if GauceSetUp.gauge is None:
-            GauceSetUp.gauge = Gauge("gauge", "Test gauge")
+    def init_gauge(self) -> None:
+        if GaugeSetUp.gauge is None:
+            GaugeSetUp.gauge = Gauge("gauge", "Test gauge")
 
 
-@pytest.fixture
-def initGauge() -> None:
-    GauceSetUp.initGauge()
+def init_gauge() -> None:
+    GaugeSetUp.init_gauge()
 
 
 # For testing the metrics utils
@@ -55,19 +55,19 @@ my_class_counter = 0
 
 
 class MyClass:
-    def __init__(self):
+    def __init__(self) -> None:
         global my_class_counter
         my_class_counter += 1
 
 
-class MyBettrerClass:
-    def __init__(self, value):
+class AnotherClass:
+    def __init__(self, value: int) -> None:
         global my_class_counter
         my_class_counter += value
 
 
 # PrometheusPusher test
-def test_normal_run(altered_metrics: metrics):
+def test_normal_run(altered_metrics: ModuleType) -> None:
     prom = altered_metrics.PrometheusPusher(job_name="test-job", url="none", push_interval=1)
 
     last = altered_metrics.pushadd_to_gateway.call_count
@@ -85,7 +85,7 @@ def test_normal_run(altered_metrics: metrics):
     assert altered_metrics.pushadd_to_gateway.call_count >= last
 
 
-def test_error_doesnt_stop1(altered_metrics: metrics):
+def test_error_doesnt_stop1(altered_metrics: ModuleType) -> None:
     altered_metrics.pushadd_to_gateway = Mock(side_effect=OSError)
 
     prom = altered_metrics.PrometheusPusher(job_name="test-job", url="none", push_interval=1)
@@ -98,7 +98,7 @@ def test_error_doesnt_stop1(altered_metrics: metrics):
     prom.stop()
 
 
-def test_error_doesnt_stop2(altered_metrics: metrics):
+def test_error_doesnt_stop2(altered_metrics: ModuleType) -> None:
     altered_metrics.pushadd_to_gateway = Mock(side_effect=Exception)
 
     prom = altered_metrics.PrometheusPusher(job_name="test-job", url="none", push_interval=1)
@@ -111,7 +111,7 @@ def test_error_doesnt_stop2(altered_metrics: metrics):
     prom.stop()
 
 
-def test_clear(altered_metrics: metrics):
+def test_clear(altered_metrics: ModuleType) -> None:
     prom = altered_metrics.PrometheusPusher(job_name="test-job", url="none", push_interval=1)
     prom.clear_gateway()
 
@@ -120,8 +120,9 @@ def test_clear(altered_metrics: metrics):
 
 # CognitePusher test
 @patch("cognite.client.CogniteClient")
-def test_init_empty_cdf(MockCogniteClient, initGauge):
-    client: CogniteClient = MockCogniteClient()
+def test_init_empty_cdf(MockCogniteClient: Mock) -> None:
+    init_gauge()
+    client = MockCogniteClient()
     client.time_series.retrieve_multiple = Mock(side_effect=CogniteNotFoundError([{"externalId": "pre_gauge"}]))
 
     return_asset = Asset(id=123, external_id="asset", name="asset")
@@ -147,8 +148,9 @@ def test_init_empty_cdf(MockCogniteClient, initGauge):
 
 
 @patch("cognite.client.CogniteClient")
-def test_init_existing_asset(MockCogniteClient, initGauge):
-    client: CogniteClient = MockCogniteClient()
+def test_init_existing_asset(MockCogniteClient: Mock) -> None:
+    init_gauge()
+    client = MockCogniteClient()
     client.time_series.retrieve_multiple = Mock(side_effect=CogniteNotFoundError([{"externalId": "pre_gauge"}]))
 
     return_asset = Asset(id=123, external_id="assetid", name="asset")
@@ -179,8 +181,9 @@ def test_init_existing_asset(MockCogniteClient, initGauge):
 
 
 @patch("cognite.client.CogniteClient")
-def test_init_existing_all(MockCogniteClient, initGauge):
-    client: CogniteClient = MockCogniteClient()
+def test_init_existing_all(MockCogniteClient: Mock) -> None:
+    init_gauge()
+    client = MockCogniteClient()
     return_asset = Asset(id=123, external_id="assetid", name="asset")
     new_asset = Asset(external_id="assetid", name="asset")
 
@@ -198,11 +201,12 @@ def test_init_existing_all(MockCogniteClient, initGauge):
 
 
 @patch("cognite.client.CogniteClient")
-def test_push(MockCogniteClient, initGauge):
+def test_push(MockCogniteClient: Mock) -> None:
+    init_gauge()
     client: CogniteClient = MockCogniteClient()
     pusher = CognitePusher(client, "pre_", push_interval=1)
 
-    GauceSetUp.gauge.set(5)
+    GaugeSetUp.gauge.set(5)
     pusher._push_to_server()
 
     client.time_series.data.insert_multiple.assert_called_once()
@@ -219,12 +223,12 @@ def test_push(MockCogniteClient, initGauge):
 
 # MetricsUtils test
 @pytest.fixture
-def init_counter():
+def init_counter() -> None:
     global my_class_counter
     my_class_counter = 0
 
 
-def test_safe_get(init_counter):
+def test_safe_get(init_counter: None) -> None:
     assert my_class_counter == 0
 
     a = safe_get(MyClass)
@@ -236,6 +240,6 @@ def test_safe_get(init_counter):
     assert isinstance(b, MyClass)
     assert a == b
 
-    c = safe_get(MyBettrerClass, 5)
+    c = safe_get(AnotherClass, 5)
     assert my_class_counter == 6
-    assert isinstance(c, MyBettrerClass)
+    assert isinstance(c, AnotherClass)
