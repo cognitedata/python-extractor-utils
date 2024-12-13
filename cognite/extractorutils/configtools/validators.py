@@ -1,11 +1,10 @@
 import logging
 import re
-from typing import Union
 
 _logger = logging.getLogger(__name__)
 
 
-def matches_patterns(patterns: list[Union[str, re.Pattern[str]]], string: str) -> bool:
+def matches_patterns(patterns: list[str | re.Pattern[str]], string: str) -> bool:
     """
     Check string against list of RegExp patterns.
 
@@ -19,7 +18,7 @@ def matches_patterns(patterns: list[Union[str, re.Pattern[str]]], string: str) -
     return any([matches_pattern(pattern, string) for pattern in patterns])
 
 
-def matches_pattern(pattern: Union[str, re.Pattern[str]], string: str) -> bool:
+def matches_pattern(pattern: str | re.Pattern[str], string: str) -> bool:
     """
     Match pattern against a string.
 
