@@ -28,7 +28,7 @@ class DummyConfig(BaseConfig):
     dummy_secret: str
 
 
-def test_dataset_resolve(set_client: CogniteClient):
+def test_dataset_resolve(set_client: CogniteClient) -> None:
     client = set_client
     data_set_name: str = "Extractor Utils Test Data Set"
     data_set_extid: str = "extractorUtils-testdataset"
@@ -92,7 +92,7 @@ def test_dataset_resolve(set_client: CogniteClient):
     assert config2.cognite.get_data_set(client).name == data_set_name
 
 
-def test_keyvault_and_remote(set_client: CogniteClient):
+def test_keyvault_and_remote(set_client: CogniteClient) -> None:
     # Set up extraction pipeline
     data_set_name: str = "Extractor Utils Test Data Set"
     data_set_extid: str = "extractorUtils-testdataset"

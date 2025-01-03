@@ -22,11 +22,9 @@ from typing import (
     Any,
     BinaryIO,
     Callable,
-    Dict,
     Iterator,
     List,
     Optional,
-    Tuple,
     Type,
     Union,
 )
@@ -55,6 +53,7 @@ from cognite.extractorutils.uploader._metrics import (
     FILES_UPLOADER_QUEUED,
     FILES_UPLOADER_WRITTEN,
 )
+from cognite.extractorutils.uploader.upload_failure_handler import FileFailureManager
 from cognite.extractorutils.util import cognite_exceptions, retry
 
 _QUEUES: int = 0
@@ -66,6 +65,7 @@ _MAX_SINGLE_CHUNK_FILE_SIZE = 5 * 1024 * 1024 * 1024
 _MAX_FILE_CHUNK_SIZE = 4 * 1024 * 1024 * 1000
 
 _CDF_ALPHA_VERSION_HEADER = {"cdf-version": "alpha"}
+
 
 FileMetadataOrCogniteExtractorFile = Union[FileMetadata, CogniteExtractorFileApply]
 
@@ -111,9 +111,9 @@ class ChunkedStream(RawIOBase, BinaryIO):
 
     def __exit__(
         self,
-        exc_type: Optional[Type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: Type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         return super().__exit__(exc_type, exc_val, exc_tb)
 
@@ -202,13 +202,14 @@ class IOFileUploadQueue(AbstractUploadQueue):
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[List[FileMetadataOrCogniteExtractorFile]], None]] = None,
-        max_queue_size: Optional[int] = None,
+        post_upload_function: Callable[[list[FileMetadataOrCogniteExtractorFile]], None] | None = None,
+        max_queue_size: int | None = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: Optional[str] = None,
+        thread_name: str | None = None,
         overwrite_existing: bool = False,
         cancellation_token: Optional[CancellationToken] = None,
         max_parallelism: Optional[int] = None,
+        failure_logging_path: None | str = None,
     ):
         # Super sets post_upload and threshold
         super().__init__(
@@ -223,6 +224,9 @@ class IOFileUploadQueue(AbstractUploadQueue):
 
         if self.threshold <= 0:
             raise ValueError("Max queue size must be positive for file upload queues")
+
+        self.failure_logging_path = failure_logging_path or None
+        self.initialize_failure_logging()
 
         self.upload_queue: List[Future] = []
         self.errors: List[Exception] = []
@@ -255,6 +259,26 @@ class IOFileUploadQueue(AbstractUploadQueue):
                 thread_name_prefix=f"FileUploadQueue-{_QUEUES}",
             )
             _QUEUES += 1
+
+    def initialize_failure_logging(self) -> None:
+        self._file_failure_manager: FileFailureManager | None = (
+            FileFailureManager(path_to_file=self.failure_logging_path)
+            if self.failure_logging_path is not None
+            else None
+        )
+
+    def get_failure_logger(self) -> FileFailureManager | None:
+        return self._file_failure_manager
+
+    def add_entry_failure_logger(self, file_name: str, error: Exception) -> None:
+        if self._file_failure_manager is not None:
+            error_reason = str(error)
+            self._file_failure_manager.add(file_name=file_name, error_reason=error_reason)
+
+    def flush_failure_logger(self) -> None:
+        if self._file_failure_manager is not None:
+            self.logger.info("Flushing failure logs")
+            self._file_failure_manager.write_to_file()
 
     def _remove_done_from_queue(self) -> None:
         while not self.cancellation_token.is_cancelled:
@@ -398,12 +422,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
         self,
         file_meta: FileMetadataOrCogniteExtractorFile,
         read_file: Callable[[], BinaryIO],
-        extra_retries: Optional[
-            Union[
-                Tuple[Type[Exception], ...],
-                Dict[Type[Exception], Callable[[Any], bool]],
-            ]
-        ] = None,
+        extra_retries: tuple[Type[Exception], ...] | dict[Type[Exception], Callable[[Any], bool]] | None = None,
     ) -> None:
         """
         Add file to upload queue. The file will start uploading immedeately. If the size of the queue is larger than
@@ -461,7 +480,10 @@ class IOFileUploadQueue(AbstractUploadQueue):
                 upload_file(read_file, file_meta)
 
             except Exception as e:
-                self.logger.exception(f"Unexpected error while uploading file: {file_meta.external_id}")
+                self.logger.exception(
+                    f"Unexpected error while uploading file: {file_meta.external_id} {file_meta.name}"
+                )
+                self.add_entry_failure_logger(file_name=str(file_meta.name), error=e)
                 self.errors.append(e)
 
             finally:
@@ -484,7 +506,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
             self.queue_size.set(self.upload_queue_size)
 
     def _get_file_upload_request(
-        self, url_str: str, stream: BinaryIO, size: int, mime_type: Optional[str] = None
+        self, url_str: str, stream: BinaryIO, size: int, mime_type: str | None = None
     ) -> Request:
         url = URL(url_str)
         base_url = URL(self.cdf_client.config.base_url)
@@ -528,7 +550,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
         resp_json = res.json()["items"][0]
         return FileMetadata.load(resp_json), resp_json["uploadUrl"]
 
-    def upload(self, fail_on_errors: bool = True, timeout: Optional[float] = None) -> None:
+    def upload(self, fail_on_errors: bool = True, timeout: float | None = None) -> None:
         """
         Wait for all uploads to finish
         """
@@ -538,6 +560,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
             self.queue_size.set(self.upload_queue_size)
         if fail_on_errors and self.errors:
             # There might be more errors, but we can only have one as the cause, so pick the first
+            self.flush_failure_logger()
             raise RuntimeError(f"{len(self.errors)} upload(s) finished with errors") from self.errors[0]
 
     def __enter__(self) -> "IOFileUploadQueue":
@@ -595,13 +618,13 @@ class FileUploadQueue(IOFileUploadQueue):
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[List[FileMetadataOrCogniteExtractorFile]], None]] = None,
-        max_queue_size: Optional[int] = None,
-        max_upload_interval: Optional[int] = None,
+        post_upload_function: Callable[[list[FileMetadataOrCogniteExtractorFile]], None] | None = None,
+        max_queue_size: int | None = None,
+        max_upload_interval: int | None = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: Optional[str] = None,
+        thread_name: str | None = None,
         overwrite_existing: bool = False,
-        cancellation_token: Optional[CancellationToken] = None,
+        cancellation_token: CancellationToken | None = None,
     ):
         # Super sets post_upload and threshold
         super().__init__(
@@ -652,12 +675,12 @@ class BytesUploadQueue(IOFileUploadQueue):
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[List[FileMetadataOrCogniteExtractorFile]], None]] = None,
-        max_queue_size: Optional[int] = None,
+        post_upload_function: Callable[[list[FileMetadataOrCogniteExtractorFile]], None] | None = None,
+        max_queue_size: int | None = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: Optional[str] = None,
+        thread_name: str | None = None,
         overwrite_existing: bool = False,
-        cancellation_token: Optional[CancellationToken] = None,
+        cancellation_token: CancellationToken | None = None,
     ) -> None:
         super().__init__(
             cdf_client,

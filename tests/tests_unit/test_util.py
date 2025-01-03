@@ -20,7 +20,6 @@ import httpx
 import pytest
 import requests
 
-from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset, TimeSeries
 from cognite.client.exceptions import CogniteAPIError, CogniteFileUploadError, CogniteNotFoundError
 from cognite.extractorutils.threading import CancellationToken
@@ -39,8 +38,8 @@ from cognite.extractorutils.util import (
 
 
 @patch("cognite.client.CogniteClient")
-def test_ts_nothing_in_cdf(MockCogniteClient):
-    client: CogniteClient = MockCogniteClient()
+def test_ts_nothing_in_cdf(MockCogniteClient: Mock) -> None:
+    client = MockCogniteClient()
     time_series = [TimeSeries(external_id="a"), TimeSeries(external_id="b")]
 
     client.time_series.retrieve_multiple = Mock(
@@ -53,8 +52,8 @@ def test_ts_nothing_in_cdf(MockCogniteClient):
 
 
 @patch("cognite.client.CogniteClient")
-def test_ts_some_in_cdf(MockCogniteClient):
-    client: CogniteClient = MockCogniteClient()
+def test_ts_some_in_cdf(MockCogniteClient: Mock) -> None:
+    client = MockCogniteClient()
     existing = [TimeSeries(external_id="a")]
     new = [TimeSeries(external_id="b")]
 
@@ -68,8 +67,8 @@ def test_ts_some_in_cdf(MockCogniteClient):
 
 
 @patch("cognite.client.CogniteClient")
-def test_ts_all_in_cdf(MockCogniteClient):
-    client: CogniteClient = MockCogniteClient()
+def test_ts_all_in_cdf(MockCogniteClient: Mock) -> None:
+    client = MockCogniteClient()
     time_series = [TimeSeries(external_id="a"), TimeSeries(external_id="b")]
 
     ensure_time_series(client, time_series)
@@ -78,8 +77,8 @@ def test_ts_all_in_cdf(MockCogniteClient):
 
 
 @patch("cognite.client.CogniteClient")
-def test_assets_nothing_in_cdf(MockCogniteClient):
-    client: CogniteClient = MockCogniteClient()
+def test_assets_nothing_in_cdf(MockCogniteClient: Mock) -> None:
+    client = MockCogniteClient()
     assets = [Asset(external_id="a"), Asset(external_id="b")]
 
     client.assets.retrieve_multiple = Mock(
@@ -92,8 +91,8 @@ def test_assets_nothing_in_cdf(MockCogniteClient):
 
 
 @patch("cognite.client.CogniteClient")
-def test_assets_some_in_cdf(MockCogniteClient):
-    client: CogniteClient = MockCogniteClient()
+def test_assets_some_in_cdf(MockCogniteClient: Mock) -> None:
+    client = MockCogniteClient()
     existing = [Asset(external_id="a")]
     new = [Asset(external_id="b")]
 
@@ -107,8 +106,8 @@ def test_assets_some_in_cdf(MockCogniteClient):
 
 
 @patch("cognite.client.CogniteClient")
-def test_assets_all_in_cdf(MockCogniteClient):
-    client: CogniteClient = MockCogniteClient()
+def test_assets_all_in_cdf(MockCogniteClient: Mock) -> None:
+    client = MockCogniteClient()
     assets = [Asset(external_id="a"), Asset(external_id="b")]
 
     ensure_assets(client, assets)
@@ -116,14 +115,14 @@ def test_assets_all_in_cdf(MockCogniteClient):
     client.assets.create.assert_not_called()
 
 
-def test_init():
+def test_init() -> None:
     with pytest.raises(TypeError):
         EitherId(id=123, external_id="extId")
     with pytest.raises(TypeError):
         EitherId()
 
 
-def test_getters():
+def test_getters() -> None:
     assert EitherId(id=123).content() == 123
     assert EitherId(id=123).type() == "id"
     assert EitherId(external_id="abc").content() == "abc"
@@ -132,7 +131,7 @@ def test_getters():
     assert EitherId(externalId="abc").type() == "externalId"
 
 
-def test_eq():
+def test_eq() -> None:
     id1 = EitherId(id=123)
     id2 = EitherId(id=123)
 
@@ -146,7 +145,7 @@ def test_eq():
     assert id1 == id2
 
 
-def test_hash():
+def test_hash() -> None:
     id1 = EitherId(id=123)
     id2 = EitherId(id=123)
 
@@ -158,11 +157,11 @@ def test_hash():
     assert hash(id1) == hash(id2)
 
 
-def test_repr():
+def test_repr() -> None:
     assert EitherId(externalId="extId").__repr__() == "externalId: extId"
 
 
-def test_cancel():
+def test_cancel() -> None:
     token = CancellationToken()
     assert not token.is_cancelled
     token.cancel()
@@ -172,10 +171,10 @@ def test_cancel():
     assert token.wait(1)  # Returns immediately.
 
 
-def test_wait():
+def test_wait() -> None:
     token = CancellationToken()
 
-    def wait():
+    def wait() -> None:
         token.wait()
 
     t1 = threading.Thread(target=wait)
@@ -194,15 +193,15 @@ def test_wait():
     assert not t2.is_alive()
 
 
-def test_child_token():
+def test_child_token() -> None:
     token = CancellationToken()
     child_a = token.create_child_token()
     child_b = token.create_child_token()
 
-    def wait_a():
+    def wait_a() -> None:
         child_a.wait()
 
-    def wait_b():
+    def wait_b() -> None:
         child_b.wait()
 
     t1 = threading.Thread(target=wait_a)
@@ -443,7 +442,7 @@ def test_timestamp_to_datetime() -> None:
         ("bæbæ", "bæ", 3),
     ],
 )
-def test_truncate_byte_len(test_case, expected, ln):
+def test_truncate_byte_len(test_case: str, expected: str, ln: int) -> None:
     truncated = truncate_byte_len(test_case, ln)
     assert len(truncated) <= ln
     assert truncated == expected

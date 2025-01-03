@@ -13,7 +13,7 @@
 #  limitations under the License.
 
 from types import TracebackType
-from typing import Any, Callable, Dict, List, Optional, Type
+from typing import Any, Callable, Type
 
 import arrow
 from arrow import Arrow
@@ -56,12 +56,12 @@ class RawUploadQueue(AbstractUploadQueue):
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[List[Any]], None]] = None,
-        max_queue_size: Optional[int] = None,
-        max_upload_interval: Optional[int] = None,
+        post_upload_function: Callable[[list[Any]], None] | None = None,
+        max_queue_size: int | None = None,
+        max_upload_interval: int | None = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: Optional[str] = None,
-        cancellation_token: Optional[CancellationToken] = None,
+        thread_name: str | None = None,
+        cancellation_token: CancellationToken | None = None,
     ):
         # Super sets post_upload and thresholds
         super().__init__(
@@ -73,7 +73,7 @@ class RawUploadQueue(AbstractUploadQueue):
             thread_name,
             cancellation_token,
         )
-        self.upload_queue: Dict[str, Dict[str, List[TimestampedObject]]] = {}
+        self.upload_queue: dict[str, dict[str, list[TimestampedObject]]] = {}
 
         # It is a hack since Prometheus client registers metrics on object creation, so object has to be created once
         self.rows_queued = RAW_UPLOADER_ROWS_QUEUED
@@ -119,7 +119,7 @@ class RawUploadQueue(AbstractUploadQueue):
             max_delay=RETRY_MAX_DELAY,
             backoff=RETRY_BACKOFF_FACTOR,
         )
-        def _upload_batch(database: str, table: str, patch: List[Row]) -> None:
+        def _upload_batch(database: str, table: str, patch: list[Row]) -> None:
             # Upload
             self.cdf_client.raw.rows.insert(db_name=database, table_name=table, row=patch, ensure_parent=True)
 
@@ -133,7 +133,7 @@ class RawUploadQueue(AbstractUploadQueue):
 
                     # Deduplicate
                     # In case of duplicate keys, the first key is preserved, and the last value is preserved.
-                    patch: Dict[str, Row] = {r.payload.key: r.payload for r in rows}
+                    patch: dict[str, Row] = {r.payload.key: r.payload for r in rows}
                     self.rows_duplicates.labels(_labels).inc(len(rows) - len(patch))
 
                     _upload_batch(database=database, table=table, patch=list(patch.values()))
@@ -162,7 +162,7 @@ class RawUploadQueue(AbstractUploadQueue):
         return self
 
     def __exit__(
-        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+        self, exc_type: Type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         """
         Wraps around stop method, for use as context manager

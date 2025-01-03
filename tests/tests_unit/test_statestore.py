@@ -30,7 +30,7 @@ from cognite.extractorutils.statestore import LocalHashStateStore, LocalStateSto
 from cognite.extractorutils.uploader import TimeSeriesUploadQueue
 
 
-def test_set_state():
+def test_set_state() -> None:
     state_store = NoStateStore()
 
     assert "extId" not in state_store._local_state
@@ -48,7 +48,7 @@ def test_set_state():
     assert state_store._local_state["newExtId"] == {"low": None, "high": 7}
 
 
-def test_expand_state():
+def test_expand_state() -> None:
     state_store = NoStateStore()
 
     assert "extId" not in state_store._local_state
@@ -71,7 +71,7 @@ def test_expand_state():
     assert state_store._local_state["newExtId"] == {"low": None, "high": 7}
 
 
-def test_outside_state():
+def test_outside_state() -> None:
     state_store = NoStateStore()
 
     state_store.set_state("extId", low=3, high=10)
@@ -91,7 +91,7 @@ def test_outside_state():
     assert state_store.outside_state("onlyLow", 1)
 
 
-def test_delete_state():
+def test_delete_state() -> None:
     state_store = NoStateStore()
 
     assert "extId" not in state_store._local_state
@@ -104,7 +104,7 @@ def test_delete_state():
     assert state_store._deleted == ["extId"]
 
 
-def test_get_state():
+def test_get_state() -> None:
     state_store = NoStateStore()
 
     state_store._local_state = {
@@ -123,7 +123,7 @@ def test_get_state():
     assert state_store.get_state(["extId1", "extId3", "extId5"]) == [(1, 5), (0, None), (None, None)]
 
 
-def test_local_state_interaction():
+def test_local_state_interaction() -> None:
     state_store = NoStateStore()
     state_store._local_state = {
         "extId1": {"low": 1, "high": 5},
@@ -173,7 +173,7 @@ TABLE = "testTable"
 
 
 @patch("cognite.client.CogniteClient")
-def test_init_no_preexisting_raw(get_client_mock):
+def test_init_no_preexisting_raw(get_client_mock: Mock) -> None:
     client: CogniteClient = get_client_mock()
     state_store = RawStateStore(cdf_client=client, database=DATABASE, table=TABLE)
 
@@ -182,7 +182,7 @@ def test_init_no_preexisting_raw(get_client_mock):
 
 
 @patch("cognite.client.CogniteClient")
-def test_init_preexisting_db(get_client_mock):
+def test_init_preexisting_db(get_client_mock: Mock) -> None:
     client: CogniteClient = get_client_mock()
     client.raw.databases.create = Mock(side_effect=CogniteAPIError("", code=400))
 
@@ -191,7 +191,7 @@ def test_init_preexisting_db(get_client_mock):
 
 
 @patch("cognite.client.CogniteClient")
-def test_init_preexisting_table(get_client_mock):
+def test_init_preexisting_table(get_client_mock: Mock) -> None:
     client: CogniteClient = get_client_mock()
     client.raw.databases.create = Mock(side_effect=CogniteAPIError("", code=400))
     client.raw.tables.create = Mock(side_effect=CogniteAPIError("", code=400))
@@ -203,7 +203,7 @@ def test_init_preexisting_table(get_client_mock):
 
 
 @patch("cognite.client.CogniteClient")
-def test_get_raw_states_empty(get_client_mock):
+def test_get_raw_states_empty(get_client_mock: Mock) -> None:
     client: CogniteClient = get_client_mock()
     state_store = RawStateStore(cdf_client=client, database=DATABASE, table=TABLE)
 
@@ -224,7 +224,7 @@ def test_get_raw_states_empty(get_client_mock):
 
 
 @patch("cognite.client.CogniteClient")
-def test_get_raw_states_content(get_client_mock):
+def test_get_raw_states_content(get_client_mock: Mock) -> None:
     client: CogniteClient = get_client_mock()
     state_store = RawStateStore(cdf_client=client, database=DATABASE, table=TABLE)
 
@@ -242,7 +242,7 @@ def test_get_raw_states_content(get_client_mock):
 
 
 @patch("cognite.client.CogniteClient")
-def test_cdf_sync(get_client_mock):
+def test_cdf_sync(get_client_mock: Mock) -> None:
     client: CogniteClient = get_client_mock()
     state_store = RawStateStore(cdf_client=client, database=DATABASE, table=TABLE)
 
@@ -267,12 +267,12 @@ def test_cdf_sync(get_client_mock):
     assert state_store._deleted == []
 
 
-def test_init_no_file():
+def test_init_no_file() -> None:
     state_store = LocalStateStore("nosuchfile.json")
     state_store.initialize()
 
 
-def test_save_and_load():
+def test_save_and_load() -> None:
     filename = "testfile-localstatestore.json"
     try:
         os.remove("testfile-localstatestore.json")
@@ -301,7 +301,7 @@ def test_save_and_load():
     os.remove(filename)
 
 
-def test_start_stop():
+def test_start_stop() -> None:
     filename = "testfile-startstop.json"
     try:
         os.remove(filename)
@@ -338,7 +338,7 @@ def test_start_stop():
     os.remove(filename)
 
 
-def test_invalid_file():
+def test_invalid_file() -> None:
     filename = "testfile-invalid.json"
     try:
         os.remove(filename)
@@ -352,7 +352,7 @@ def test_invalid_file():
         LocalStateStore(filename).initialize()
 
 
-def test_indexing():
+def test_indexing() -> None:
     state_store = NoStateStore()
 
     state_store["id1"] = (1, 7)
