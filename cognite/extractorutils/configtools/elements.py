@@ -19,7 +19,7 @@ from datetime import timedelta
 from enum import Enum
 from logging.handlers import TimedRotatingFileHandler
 from time import sleep
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Any
 from urllib.parse import urljoin, urlparse
 
 import yaml
@@ -32,6 +32,7 @@ from cognite.client.credentials import (
     OAuthClientCredentials,
 )
 from cognite.client.data_classes import Asset, DataSet, ExtractionPipeline
+from cognite.extractorutils._inner_util import resolve_log_level_for_httpx
 from cognite.extractorutils.configtools._util import _load_certificate_data
 from cognite.extractorutils.exceptions import InvalidConfigError
 from cognite.extractorutils.metrics import (
@@ -58,8 +59,8 @@ class CertificateConfig:
     """
 
     path: str
-    password: Optional[str]
-    authority_url: Optional[str] = None
+    password: str | None
+    authority_url: str | None = None
 
 
 @dataclass
@@ -69,15 +70,15 @@ class AuthenticatorConfig:
     """
 
     client_id: str
-    scopes: List[str]
-    secret: Optional[str] = None
-    tenant: Optional[str] = None
-    token_url: Optional[str] = None
-    resource: Optional[str] = None
-    audience: Optional[str] = None
+    scopes: list[str]
+    secret: str | None = None
+    tenant: str | None = None
+    token_url: str | None = None
+    resource: str | None = None
+    audience: str | None = None
     authority: str = "https://login.microsoftonline.com/"
     min_ttl: float = 30  # minimum time to live: refresh token ahead of expiration
-    certificate: Optional[CertificateConfig] = None
+    certificate: CertificateConfig | None = None
 
 
 @dataclass
@@ -87,13 +88,13 @@ class ConnectionConfig:
     """
 
     disable_gzip: bool = False
-    status_forcelist: List[int] = field(default_factory=lambda: [429, 502, 503, 504])
+    status_forcelist: list[int] = field(default_factory=lambda: [429, 502, 503, 504])
     max_retries: int = 10
     max_retries_connect: int = 3
     max_retry_backoff: int = 30
     max_connection_pool_size: int = 50
     disable_ssl: bool = False
-    proxies: Dict[str, str] = field(default_factory=dict)
+    proxies: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -103,8 +104,8 @@ class EitherIdConfig:
     An EitherId can only hold one ID type, not both.
     """
 
-    id: Optional[int]
-    external_id: Optional[str]
+    id: int | None
+    external_id: str | None
 
     @property
     def either_id(self) -> EitherId:
@@ -128,7 +129,7 @@ class TimeIntervalConfig(yaml.YAMLObject):
         return hash(self._interval)
 
     @classmethod
-    def _parse_expression(cls, expression: str) -> Tuple[int, str]:
+    def _parse_expression(cls, expression: str) -> tuple[int, str]:
         # First, try to parse pure number and assume seconds (for backwards compatibility)
         try:
             return int(expression), f"{expression}s"
@@ -188,7 +189,7 @@ class FileSizeConfig(yaml.YAMLObject):
         self._bytes, self._expression = FileSizeConfig._parse_expression(expression)
 
     @classmethod
-    def _parse_expression(cls, expression: str) -> Tuple[int, str]:
+    def _parse_expression(cls, expression: str) -> tuple[int, str]:
         # First, try to parse pure number and assume bytes
         try:
             return int(expression), f"{expression}s"
@@ -284,20 +285,20 @@ class CogniteConfig:
 
     project: str
     idp_authentication: AuthenticatorConfig
-    data_set: Optional[EitherIdConfig] = None
-    data_set_id: Optional[int] = None
-    data_set_external_id: Optional[str] = None
-    extraction_pipeline: Optional[EitherIdConfig] = None
+    data_set: EitherIdConfig | None = None
+    data_set_id: int | None = None
+    data_set_external_id: str | None = None
+    extraction_pipeline: EitherIdConfig | None = None
     timeout: TimeIntervalConfig = TimeIntervalConfig("30s")
     connection: ConnectionConfig = field(default_factory=ConnectionConfig)
-    security_categories: Optional[List[int]] = None
+    security_categories: list[int] | None = None
     external_id_prefix: str = ""
     host: str = "https://api.cognitedata.com"
 
     def get_cognite_client(
         self,
         client_name: str,
-        token_custom_args: Optional[Dict[str, str]] = None,
+        token_custom_args: dict[str, str] | None = None,
         use_experimental_sdk: bool = False,
     ) -> CogniteClient:
         from cognite.client.config import global_config
@@ -344,7 +345,7 @@ class CogniteConfig:
             )
 
         elif self.idp_authentication.secret:
-            kwargs: Dict[str, Any] = {}
+            kwargs: dict[str, Any] = {}
             if self.idp_authentication.token_url:
                 _validate_https_url(self.idp_authentication.token_url, "Token URL")
                 kwargs["token_url"] = self.idp_authentication.token_url
@@ -387,7 +388,7 @@ class CogniteConfig:
 
         return CogniteClient(client_config)
 
-    def get_data_set(self, cdf_client: CogniteClient) -> Optional[DataSet]:
+    def get_data_set(self, cdf_client: CogniteClient) -> DataSet | None:
         if self.data_set_external_id:
             logging.getLogger(__name__).warning(
                 "Using data-set-external-id is deprecated, please use data-set/external-id instead"
@@ -406,7 +407,7 @@ class CogniteConfig:
             external_id=self.data_set.either_id.external_id,
         )
 
-    def get_extraction_pipeline(self, cdf_client: CogniteClient) -> Optional[ExtractionPipeline]:
+    def get_extraction_pipeline(self, cdf_client: CogniteClient) -> ExtractionPipeline | None:
         if not self.extraction_pipeline:
             return None
 
@@ -438,12 +439,12 @@ class LoggingConfig:
     Logging settings, such as log levels and path to log file
     """
 
-    console: Optional[_ConsoleLoggingConfig]
-    file: Optional[_FileLoggingConfig]
+    console: _ConsoleLoggingConfig | None
+    file: _FileLoggingConfig | None
     # enables metrics on the number of log messages recorded (per logger and level)
     # In order to collect/see result MetricsConfig should be set as well, so metrics are propagated to
     # Prometheus and/or Cognite
-    metrics: Optional[bool] = False
+    metrics: bool | None = False
 
     def setup_logging(self, suppress_console: bool = False) -> None:
         """
@@ -491,15 +492,23 @@ class LoggingConfig:
             if root.getEffectiveLevel() > file_handler.level:
                 root.setLevel(file_handler.level)
 
+            log_level = logging.getLevelName(root.getEffectiveLevel())
+            httpx_log_level = resolve_log_level_for_httpx(log_level)
+            httpx_logger = logging.getLogger("httpx")
+            httpx_logger.setLevel(httpx_log_level)
+
+            http_core_logger = logging.getLogger("httpcore")
+            http_core_logger.setLevel(httpx_log_level)
+
 
 @dataclass
 class _PushGatewayConfig:
     host: str
     job_name: str
-    username: Optional[str]
-    password: Optional[str]
+    username: str | None
+    password: str | None
 
-    clear_after: Optional[TimeIntervalConfig]
+    clear_after: TimeIntervalConfig | None
     push_interval: TimeIntervalConfig = TimeIntervalConfig("30s")
 
 
@@ -511,9 +520,9 @@ class _PromServerConfig:
 @dataclass
 class _CogniteMetricsConfig:
     external_id_prefix: str
-    asset_name: Optional[str]
-    asset_external_id: Optional[str]
-    data_set: Optional[EitherIdConfig] = None
+    asset_name: str | None
+    asset_external_id: str | None
+    data_set: EitherIdConfig | None = None
 
     push_interval: TimeIntervalConfig = TimeIntervalConfig("30s")
 
@@ -525,13 +534,13 @@ class MetricsConfig:
     Series.
     """
 
-    push_gateways: Optional[List[_PushGatewayConfig]]
-    cognite: Optional[_CogniteMetricsConfig]
-    server: Optional[_PromServerConfig]
+    push_gateways: list[_PushGatewayConfig] | None
+    cognite: _CogniteMetricsConfig | None
+    server: _PromServerConfig | None
 
-    def start_pushers(self, cdf_client: CogniteClient, cancellation_token: Optional[CancellationToken] = None) -> None:
-        self._pushers: List[AbstractMetricsPusher] = []
-        self._clear_on_stop: Dict[PrometheusPusher, int] = {}
+    def start_pushers(self, cdf_client: CogniteClient, cancellation_token: CancellationToken | None = None) -> None:
+        self._pushers: list[AbstractMetricsPusher] = []
+        self._clear_on_stop: dict[PrometheusPusher, int] = {}
 
         push_gateways = self.push_gateways or []
 
@@ -599,9 +608,9 @@ class ConfigType(Enum):
 
 @dataclass
 class _BaseConfig:
-    _file_hash: Optional[str] = field(init=False, repr=False, default=None)
+    _file_hash: str | None = field(init=False, repr=False, default=None)
 
-    type: Optional[ConfigType]
+    type: ConfigType | None
     cognite: CogniteConfig
 
 
@@ -611,7 +620,7 @@ class BaseConfig(_BaseConfig):
     Basis for an extractor config, containing config version, ``CogniteConfig`` and ``LoggingConfig``
     """
 
-    version: Optional[Union[str, int]]
+    version: str | int | None
     logger: LoggingConfig
 
 
@@ -650,14 +659,14 @@ class StateStoreConfig:
     Configuration of the State Store, containing ``LocalStateStoreConfig`` or ``RawStateStoreConfig``
     """
 
-    raw: Optional[RawStateStoreConfig] = None
-    local: Optional[LocalStateStoreConfig] = None
+    raw: RawStateStoreConfig | None = None
+    local: LocalStateStoreConfig | None = None
 
     def create_state_store(
         self,
-        cdf_client: Optional[CogniteClient] = None,
+        cdf_client: CogniteClient | None = None,
         default_to_local: bool = True,
-        cancellation_token: Optional[CancellationToken] = None,
+        cancellation_token: CancellationToken | None = None,
     ) -> AbstractStateStore:
         """
         Create a state store object based on the config.
@@ -719,8 +728,8 @@ class IgnorePattern:
     """
 
     pattern: str
-    options: Optional[list[RegExpFlag]] = None
-    flags: Optional[list[RegExpFlag]] = None
+    options: list[RegExpFlag] | None = None
+    flags: list[RegExpFlag] | None = None
 
     def compile(self) -> re.Pattern[str]:
         """

@@ -22,7 +22,7 @@ import sys
 from enum import Enum
 from hashlib import sha256
 from pathlib import Path
-from typing import Any, Callable, Dict, Generic, Iterable, List, Optional, TextIO, Type, TypeVar, Union, cast
+from typing import Any, Callable, Generic, Iterable, TextIO, Type, TypeVar, cast
 
 import dacite
 import yaml
@@ -61,11 +61,11 @@ class KeyVaultLoader:
     Class responsible for configuring keyvault for clients using Azure
     """
 
-    def __init__(self, config: Optional[dict]):
+    def __init__(self, config: dict | None):
         self.config = config
 
-        self.credentials: Optional[TokenCredential] = None
-        self.client: Optional[SecretClient] = None
+        self.credentials: TokenCredential | None = None
+        self.client: SecretClient | None = None
 
     def _init_client(self) -> None:
         from dotenv import find_dotenv, load_dotenv
@@ -148,10 +148,10 @@ def _env_constructor(_: yaml.SafeLoader, node: yaml.Node) -> bool:
 
 
 def _load_yaml_dict_raw(
-    source: Union[TextIO, str],
+    source: TextIO | str,
     expand_envvars: bool = True,
-    keyvault_loader: Optional[KeyVaultLoader] = None,
-) -> Dict[str, Any]:
+    keyvault_loader: KeyVaultLoader | None = None,
+) -> dict[str, Any]:
     loader = _EnvLoader if expand_envvars else yaml.SafeLoader
 
     class SafeLoaderIgnoreUnknown(yaml.SafeLoader):
@@ -162,6 +162,9 @@ def _load_yaml_dict_raw(
 
     SafeLoaderIgnoreUnknown.add_constructor(None, SafeLoaderIgnoreUnknown.ignore_unknown)  # type: ignore
     initial_load = yaml.load(source, Loader=SafeLoaderIgnoreUnknown)  # noqa: S506
+
+    if not isinstance(initial_load, dict):
+        raise InvalidConfigError("The root node of the YAML document must be an object")
 
     if not isinstance(source, str):
         source.seek(0)
@@ -187,12 +190,12 @@ def _load_yaml_dict_raw(
 
 
 def _load_yaml_dict(
-    source: Union[TextIO, str],
+    source: TextIO | str,
     case_style: str = "hyphen",
     expand_envvars: bool = True,
-    dict_manipulator: Callable[[Dict[str, Any]], Dict[str, Any]] = lambda x: x,
-    keyvault_loader: Optional[KeyVaultLoader] = None,
-) -> Dict[str, Any]:
+    dict_manipulator: Callable[[dict[str, Any]], dict[str, Any]] = lambda x: x,
+    keyvault_loader: KeyVaultLoader | None = None,
+) -> dict[str, Any]:
     config_dict = _load_yaml_dict_raw(source, expand_envvars, keyvault_loader)
 
     config_dict = dict_manipulator(config_dict)
@@ -207,12 +210,12 @@ def _load_yaml_dict(
 
 
 def _load_yaml(
-    source: Union[TextIO, str],
+    source: TextIO | str,
     config_type: Type[CustomConfigClass],
     case_style: str = "hyphen",
     expand_envvars: bool = True,
-    dict_manipulator: Callable[[Dict[str, Any]], Dict[str, Any]] = lambda x: x,
-    keyvault_loader: Optional[KeyVaultLoader] = None,
+    dict_manipulator: Callable[[dict[str, Any]], dict[str, Any]] = lambda x: x,
+    keyvault_loader: KeyVaultLoader | None = None,
 ) -> CustomConfigClass:
     config_dict = _load_yaml_dict(
         source,
@@ -264,11 +267,11 @@ def _load_yaml(
 
 
 def load_yaml(
-    source: Union[TextIO, str],
+    source: TextIO | str,
     config_type: Type[CustomConfigClass],
     case_style: str = "hyphen",
     expand_envvars: bool = True,
-    keyvault_loader: Optional[KeyVaultLoader] = None,
+    keyvault_loader: KeyVaultLoader | None = None,
 ) -> CustomConfigClass:
     """
     Read a YAML file, and create a config object based on its contents.
@@ -297,11 +300,11 @@ def load_yaml(
 
 
 def load_yaml_dict(
-    source: Union[TextIO, str],
+    source: TextIO | str,
     case_style: str = "hyphen",
     expand_envvars: bool = True,
-    keyvault_loader: Optional[KeyVaultLoader] = None,
-) -> Dict[str, Any]:
+    keyvault_loader: KeyVaultLoader | None = None,
+) -> dict[str, Any]:
     """
     Read a YAML file and return a dictionary from its contents
 
@@ -323,9 +326,9 @@ def load_yaml_dict(
     )
 
 
-def compile_patterns(ignore_patterns: List[Union[str, IgnorePattern]]) -> list[re.Pattern[str]]:
+def compile_patterns(ignore_patterns: list[str | IgnorePattern]) -> list[re.Pattern[str]]:
     """
-    List of patterns to compile
+    list of patterns to compile
 
     Args:
         ignore_patterns: A list of strings or IgnorePattern to be compiled.
@@ -347,17 +350,17 @@ class ConfigResolver(Generic[CustomConfigClass]):
         self.config_path = config_path
         self.config_type = config_type
 
-        self._config: Optional[CustomConfigClass] = None
-        self._next_config: Optional[CustomConfigClass] = None
+        self._config: CustomConfigClass | None = None
+        self._next_config: CustomConfigClass | None = None
 
-        self._cognite_client: Optional[CogniteClient] = None
+        self._cognite_client: CogniteClient | None = None
 
     def _reload_file(self) -> None:
         with open(self.config_path, "r") as stream:
             self._config_text = stream.read()
 
     @property
-    def cognite_client(self) -> Optional[CogniteClient]:
+    def cognite_client(self) -> CogniteClient | None:
         if self._cognite_client is None and self._config is not None:
             self._cognite_client = self._config.cognite.get_cognite_client("config_resolver")
         return self._cognite_client
@@ -409,7 +412,7 @@ class ConfigResolver(Generic[CustomConfigClass]):
 
         return cls(args.config[0], config_type)
 
-    def _inject_cognite(self, local_part: _BaseConfig, remote_part: Dict[str, Any]) -> Dict[str, Any]:
+    def _inject_cognite(self, local_part: _BaseConfig, remote_part: dict[str, Any]) -> dict[str, Any]:
         # We can not dump 'local_part.cognite' directly because e.g. 'data_set' may be set remote only...
         remote_part.setdefault("cognite", {})
         remote_part["cognite"]["idp_authentication"] = dataclasses.asdict(local_part.cognite.idp_authentication)

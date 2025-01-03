@@ -88,7 +88,7 @@ You can set a state store to automatically update on upload triggers from an upl
 import json
 from abc import ABC
 from types import TracebackType
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Type, Union
+from typing import Any, Callable, Dict, Iterator, List, Tuple, Type, Union
 
 from cognite.client import CogniteClient
 from cognite.client.exceptions import CogniteAPIError
@@ -114,10 +114,10 @@ class AbstractStateStore(_BaseStateStore, ABC):
 
     def __init__(
         self,
-        save_interval: Optional[int] = None,
+        save_interval: int | None = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: Optional[str] = None,
-        cancellation_token: Optional[CancellationToken] = None,
+        thread_name: str | None = None,
+        cancellation_token: CancellationToken | None = None,
     ):
         super().__init__(
             save_interval=save_interval,
@@ -152,7 +152,7 @@ class AbstractStateStore(_BaseStateStore, ABC):
                 state = self._local_state.get(external_id, {})
                 return state.get("low"), state.get("high")
 
-    def set_state(self, external_id: str, low: Optional[Any] = None, high: Optional[Any] = None) -> None:
+    def set_state(self, external_id: str, low: Any | None = None, high: Any | None = None) -> None:
         """
         Set/update state of a singe external ID.
 
@@ -166,7 +166,7 @@ class AbstractStateStore(_BaseStateStore, ABC):
             state["low"] = low if low is not None else state.get("low")
             state["high"] = high if high is not None else state.get("high")
 
-    def expand_state(self, external_id: str, low: Optional[Any] = None, high: Optional[Any] = None) -> None:
+    def expand_state(self, external_id: str, low: Any | None = None, high: Any | None = None) -> None:
         """
         Like set_state, but only sets state if the proposed state is outside the stored state. That is if e.g. low is
         lower than the stored low.
@@ -275,10 +275,10 @@ class RawStateStore(AbstractStateStore):
         cdf_client: CogniteClient,
         database: str,
         table: str,
-        save_interval: Optional[int] = None,
+        save_interval: int | None = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: Optional[str] = None,
-        cancellation_token: Optional[CancellationToken] = None,
+        thread_name: str | None = None,
+        cancellation_token: CancellationToken | None = None,
     ):
         super().__init__(save_interval, trigger_log_level, thread_name, cancellation_token)
 
@@ -380,7 +380,7 @@ class RawStateStore(AbstractStateStore):
         return self
 
     def __exit__(
-        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+        self, exc_type: Type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         """
         Wraps around stop method, for use as context manager
@@ -409,10 +409,10 @@ class LocalStateStore(AbstractStateStore):
     def __init__(
         self,
         file_path: str,
-        save_interval: Optional[int] = None,
+        save_interval: int | None = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: Optional[str] = None,
-        cancellation_token: Optional[CancellationToken] = None,
+        thread_name: str | None = None,
+        cancellation_token: CancellationToken | None = None,
     ):
         super().__init__(save_interval, trigger_log_level, thread_name, cancellation_token)
 
@@ -459,7 +459,10 @@ class LocalStateStore(AbstractStateStore):
         return self
 
     def __exit__(
-        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+        self,
+        exc_type: Type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         """
         Wraps around stop method, for use as context manager

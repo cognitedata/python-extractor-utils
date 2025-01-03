@@ -2,7 +2,7 @@ import hashlib
 import json
 from abc import ABC
 from types import TracebackType
-from typing import Any, Dict, Iterable, Iterator, Optional, Set, Type
+from typing import Any, Iterable, Iterator, Type
 
 import orjson
 
@@ -19,10 +19,10 @@ from ._base import RETRIES, RETRY_BACKOFF_FACTOR, RETRY_DELAY, RETRY_MAX_DELAY, 
 class AbstractHashStateStore(_BaseStateStore, ABC):
     def __init__(
         self,
-        save_interval: Optional[int] = None,
+        save_interval: int | None = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: Optional[str] = None,
-        cancellation_token: Optional[CancellationToken] = None,
+        thread_name: str | None = None,
+        cancellation_token: CancellationToken | None = None,
     ) -> None:
         super().__init__(
             save_interval=save_interval,
@@ -31,31 +31,31 @@ class AbstractHashStateStore(_BaseStateStore, ABC):
             cancellation_token=cancellation_token,
         )
 
-        self._local_state: Dict[str, Dict[str, str]] = {}
-        self._seen: Set[str] = set()
+        self._local_state: dict[str, dict[str, str]] = {}
+        self._seen: set[str] = set()
 
-    def get_state(self, external_id: str) -> Optional[str]:
+    def get_state(self, external_id: str) -> str | None:
         with self.lock:
             return self._local_state.get(external_id, {}).get("digest")
 
-    def _hash_row(self, data: Dict[str, Any]) -> str:
+    def _hash_row(self, data: dict[str, Any]) -> str:
         return hashlib.sha256(orjson.dumps(data, option=orjson.OPT_SORT_KEYS)).hexdigest()
 
-    def set_state(self, external_id: str, data: Dict[str, Any]) -> None:
+    def set_state(self, external_id: str, data: dict[str, Any]) -> None:
         with self.lock:
             self._local_state[external_id] = {"digest": self._hash_row(data)}
 
-    def has_changed(self, external_id: str, data: Dict[str, Any]) -> bool:
+    def has_changed(self, external_id: str, data: dict[str, Any]) -> bool:
         with self.lock:
             if external_id not in self._local_state:
                 return True
 
             return self._hash_row(data) != self._local_state[external_id]["digest"]
 
-    def __getitem__(self, external_id: str) -> Optional[str]:
+    def __getitem__(self, external_id: str) -> str | None:
         return self.get_state(external_id)
 
-    def __setitem__(self, key: str, value: Dict[str, Any]) -> None:
+    def __setitem__(self, key: str, value: dict[str, Any]) -> None:
         self.set_state(external_id=key, data=value)
 
     def __contains__(self, external_id: str) -> bool:
@@ -76,10 +76,10 @@ class RawHashStateStore(AbstractHashStateStore):
         cdf_client: CogniteClient,
         database: str,
         table: str,
-        save_interval: Optional[int] = None,
+        save_interval: int | None = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: Optional[str] = None,
-        cancellation_token: Optional[CancellationToken] = None,
+        thread_name: str | None = None,
+        cancellation_token: CancellationToken | None = None,
     ) -> None:
         super().__init__(
             save_interval=save_interval,
@@ -169,9 +169,9 @@ class RawHashStateStore(AbstractHashStateStore):
 
     def __exit__(
         self,
-        exc_type: Optional[Type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: Type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         """
         Wraps around stop method, for use as context manager
@@ -188,10 +188,10 @@ class LocalHashStateStore(AbstractHashStateStore):
     def __init__(
         self,
         file_path: str,
-        save_interval: Optional[int] = None,
+        save_interval: int | None = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: Optional[str] = None,
-        cancellation_token: Optional[CancellationToken] = None,
+        thread_name: str | None = None,
+        cancellation_token: CancellationToken | None = None,
     ) -> None:
         super().__init__(
             save_interval=save_interval,
@@ -243,9 +243,9 @@ class LocalHashStateStore(AbstractHashStateStore):
 
     def __exit__(
         self,
-        exc_type: Optional[Type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: Type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         """
         Wraps around stop method, for use as context manager

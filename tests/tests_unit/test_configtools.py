@@ -65,7 +65,7 @@ class SimpleStringConfig:
     string_field: str
 
 
-def test_ensure_snake_case():
+def test_ensure_snake_case() -> None:
     snake_dict = {
         "test_key": "testValue",
         "another_key": "another-value",
@@ -93,7 +93,7 @@ def test_ensure_snake_case():
     assert snake_dict == _to_snake_case(pascal_dict, "pascal")
 
 
-def test_read_cognite_config():
+def test_read_cognite_config() -> None:
     config_raw = """
     # CDF project (also known as tenant name)
     project: tenant-name
@@ -124,7 +124,7 @@ def test_read_cognite_config():
     assert client.config.client_name == "test-client"
 
 
-def test_read_base_config():
+def test_read_base_config() -> None:
     config_raw = """
     version: "1"
 
@@ -166,7 +166,7 @@ def test_read_base_config():
     assert config.logger.file is None
 
 
-def test_read_invalid_missing_fields():
+def test_read_invalid_missing_fields() -> None:
     # missing project
     config_raw = """
     # How to label uploaded data in CDF
@@ -177,7 +177,7 @@ def test_read_invalid_missing_fields():
         load_yaml(config_raw, CogniteConfig)
 
 
-def test_read_invalid_extra_fields():
+def test_read_invalid_extra_fields() -> None:
     config_raw = """
     # CDF project (also known as tenant name)
     project: tenant-name
@@ -200,7 +200,7 @@ def test_read_invalid_extra_fields():
         load_yaml(config_raw, CogniteConfig)
 
 
-def test_read_invalid_wrong_type():
+def test_read_invalid_wrong_type() -> None:
     config_raw = """
     # CDF project (also known as tenant name)
     project: 1234
@@ -220,7 +220,7 @@ def test_read_invalid_wrong_type():
         load_yaml(config_raw, CogniteConfig)
 
 
-def test_get_cognite_client_from_aad():
+def test_get_cognite_client_from_aad() -> None:
     config_raw = """
     idp-authentication:
         tenant: foo
@@ -242,7 +242,7 @@ def test_get_cognite_client_from_aad():
     assert isinstance(cdf, CogniteClient)
 
 
-def test_read_boolean_casting():
+def test_read_boolean_casting() -> None:
     os.environ["TRUE_FLAG"] = "true"
     os.environ["FALSE_FLAG"] = "FALSE"
     os.environ["STR_VAL"] = "TeST"
@@ -264,7 +264,7 @@ def test_read_boolean_casting():
     assert config.yet_another_string_field == "TeST"
 
 
-def test_read_invalid_boolean_casting():
+def test_read_invalid_boolean_casting() -> None:
     os.environ["TRUE_FLAG"] = "true"
     os.environ["FALSE_FLAG"] = "FALSE"
     os.environ["INVALID_FLAG"] = "TEST"
@@ -281,7 +281,7 @@ def test_read_invalid_boolean_casting():
         load_yaml(config, CastingClass)
 
 
-def test_read_relative_path():
+def test_read_relative_path() -> None:
     config = """
     boolean-field: true
     another-boolean-field: false
@@ -295,7 +295,7 @@ def test_read_relative_path():
     assert config.path_field.name == "file.txt"
 
 
-def test_read_absolute_path():
+def test_read_absolute_path() -> None:
     config = """
     boolean-field: true
     another-boolean-field: false
@@ -309,7 +309,7 @@ def test_read_absolute_path():
     assert config.path_field.name == "file.txt"
 
 
-def test_parse_time_interval():
+def test_parse_time_interval() -> None:
     assert TimeIntervalConfig("54").seconds == 54
     assert TimeIntervalConfig("54s").seconds == 54
     assert TimeIntervalConfig("120s").seconds == 120
@@ -320,7 +320,7 @@ def test_parse_time_interval():
     assert TimeIntervalConfig("1h").minutes == pytest.approx(60)
 
 
-def test_parse_file_size():
+def test_parse_file_size() -> None:
     assert FileSizeConfig("154584").bytes == 154584
     assert FileSizeConfig("1kB").bytes == 1000
     assert FileSizeConfig("25MB").bytes == 25_000_000
@@ -334,7 +334,7 @@ def test_parse_file_size():
     assert FileSizeConfig("14.5 mb").kilobytes == pytest.approx(14_500)
 
 
-def test_multiple_logging_console():
+def test_multiple_logging_console() -> None:
     config_file = """
     logger:
         console:
@@ -364,7 +364,7 @@ def test_multiple_logging_console():
     logger.handlers.clear()
 
 
-def test_multiple_logging_file():
+def test_multiple_logging_file() -> None:
     config_file_1 = """
     logger:
         file:
@@ -414,7 +414,7 @@ def test_multiple_logging_file():
     logger.handlers.clear()
 
 
-def test_dump_and_reload_config():
+def test_dump_and_reload_config() -> None:
     # Verify that dumping and reloading a config file doesn't fail due to _file_hash
     config = BaseConfig(
         type=None,
@@ -443,7 +443,7 @@ def test_dump_and_reload_config():
         load_yaml(config_file, BaseConfig)
 
 
-def test_env_substitution():
+def test_env_substitution() -> None:
     os.environ["STRING_VALUE"] = "heyo"
 
     config_file1 = "string-field: ${STRING_VALUE}"
@@ -472,7 +472,7 @@ def test_env_substitution():
     assert config5.string_field == "veryheyocrowded"
 
 
-def test_env_substitution_remote_check():
+def test_env_substitution_remote_check() -> None:
     os.environ["STRING_VALUE"] = "test"
 
     resolver = ConfigResolver("some-path.yml", BaseConfig)
@@ -492,7 +492,7 @@ def test_env_substitution_remote_check():
     assert resolver.is_remote
 
 
-def test_cognite_validation():
+def test_cognite_validation() -> None:
     conf = CogniteConfig(project="", idp_authentication=AuthenticatorConfig(client_id="", scopes=[]))
     with pytest.raises(InvalidConfigError) as e:
         conf.get_cognite_client("client-name")
@@ -579,7 +579,7 @@ def test_ignore_pattern() -> None:
         IgnorePattern("g*i", [RegExpFlag.IC], [RegExpFlag.IC])
 
 
-def test_castable_int_parsing(monkeypatch):
+def test_castable_int_parsing(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("PORT_NUMBER", "8080")
 
     config = """

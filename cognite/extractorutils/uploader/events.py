@@ -13,7 +13,7 @@
 #  limitations under the License.
 
 from types import TracebackType
-from typing import Callable, List, Optional, Type
+from typing import Callable, Type
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Event
@@ -52,12 +52,12 @@ class EventUploadQueue(AbstractUploadQueue):
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[List[Event]], None]] = None,
-        max_queue_size: Optional[int] = None,
-        max_upload_interval: Optional[int] = None,
+        post_upload_function: Callable[[list[Event]], None] | None = None,
+        max_queue_size: int | None = None,
+        max_upload_interval: int | None = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: Optional[str] = None,
-        cancellation_token: Optional[CancellationToken] = None,
+        thread_name: str | None = None,
+        cancellation_token: CancellationToken | None = None,
     ):
         # Super sets post_upload and threshold
         super().__init__(
@@ -70,7 +70,7 @@ class EventUploadQueue(AbstractUploadQueue):
             cancellation_token,
         )
 
-        self.upload_queue: List[Event] = []
+        self.upload_queue: list[Event] = []
 
         self.events_queued = EVENTS_UPLOADER_QUEUED
         self.events_written = EVENTS_UPLOADER_WRITTEN
@@ -110,7 +110,7 @@ class EventUploadQueue(AbstractUploadQueue):
                 self.cdf_client.events.create([e for e in self.upload_queue])
             except CogniteDuplicatedError as e:
                 duplicated_ids = set([dup["externalId"] for dup in e.duplicated if "externalId" in dup])
-                failed: List[Event] = [e for e in e.failed]
+                failed: list[Event] = [e for e in e.failed]
                 to_create = []
                 to_update = []
                 for evt in failed:
@@ -151,7 +151,7 @@ class EventUploadQueue(AbstractUploadQueue):
         return self
 
     def __exit__(
-        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+        self, exc_type: Type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         """
         Wraps around stop method, for use as context manager

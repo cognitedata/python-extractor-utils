@@ -14,7 +14,7 @@
 import base64
 import re
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any, Callable
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import serialization as serialization
@@ -24,7 +24,7 @@ from cryptography.x509 import load_pem_x509_certificate
 from cognite.extractorutils.exceptions import InvalidConfigError
 
 
-def _to_snake_case(dictionary: Dict[str, Any], case_style: str) -> Dict[str, Any]:
+def _to_snake_case(dictionary: dict[str, Any], case_style: str) -> dict[str, Any]:
     """
     Ensure that all keys in the dictionary follows the snake casing convention (recursively, so any sub-dictionaries are
     changed too).
@@ -37,11 +37,11 @@ def _to_snake_case(dictionary: Dict[str, Any], case_style: str) -> Dict[str, Any
         An updated dictionary with keys in the given convention.
     """
 
-    def fix_list(list_: List[Any], key_translator: Callable[[str], str]) -> List[Any]:
+    def fix_list(list_: list[Any], key_translator: Callable[[str], str]) -> list[Any]:
         if list_ is None:
             return []
 
-        new_list: List[Any] = [None] * len(list_)
+        new_list: list[Any] = [None] * len(list_)
         for i, element in enumerate(list_):
             if isinstance(element, dict):
                 new_list[i] = fix_dict(element, key_translator)
@@ -51,11 +51,11 @@ def _to_snake_case(dictionary: Dict[str, Any], case_style: str) -> Dict[str, Any
                 new_list[i] = element
         return new_list
 
-    def fix_dict(dict_: Dict[str, Any], key_translator: Callable[[str], str]) -> Dict[str, Any]:
+    def fix_dict(dict_: dict[str, Any], key_translator: Callable[[str], str]) -> dict[str, Any]:
         if dict_ is None:
             return {}
 
-        new_dict: Dict[str, Any] = {}
+        new_dict: dict[str, Any] = {}
         for key in dict_:
             if isinstance(dict_[key], dict):
                 new_dict[key_translator(key)] = fix_dict(dict_[key], key_translator)
@@ -81,9 +81,7 @@ def _to_snake_case(dictionary: Dict[str, Any], case_style: str) -> Dict[str, Any
         raise ValueError(f"Invalid case style: {case_style}")
 
 
-def _load_certificate_data(
-    cert_path: str | Path, password: Optional[str]
-) -> Union[Tuple[str, str], Tuple[bytes, bytes]]:
+def _load_certificate_data(cert_path: str | Path, password: str | None) -> tuple[str, str] | tuple[bytes, bytes]:
     path = Path(cert_path) if isinstance(cert_path, str) else cert_path
     cert_data = Path(path).read_bytes()
 

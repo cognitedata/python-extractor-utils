@@ -22,11 +22,9 @@ from typing import (
     Any,
     BinaryIO,
     Callable,
-    Dict,
     Iterator,
     List,
     Optional,
-    Tuple,
     Type,
     Union,
 )
@@ -113,9 +111,9 @@ class ChunkedStream(RawIOBase, BinaryIO):
 
     def __exit__(
         self,
-        exc_type: Optional[Type[BaseException]],
-        exc_val: Optional[BaseException],
-        exc_tb: Optional[TracebackType],
+        exc_type: Type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         return super().__exit__(exc_type, exc_val, exc_tb)
 
@@ -204,10 +202,10 @@ class IOFileUploadQueue(AbstractUploadQueue):
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[List[FileMetadataOrCogniteExtractorFile]], None]] = None,
-        max_queue_size: Optional[int] = None,
+        post_upload_function: Callable[[list[FileMetadataOrCogniteExtractorFile]], None] | None = None,
+        max_queue_size: int | None = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: Optional[str] = None,
+        thread_name: str | None = None,
         overwrite_existing: bool = False,
         cancellation_token: Optional[CancellationToken] = None,
         max_parallelism: Optional[int] = None,
@@ -294,7 +292,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
         node = instance_result.nodes[0]
         return node.as_id()
 
-    def _upload_empty(
+    def _upload_only_metadata(
         self, file_meta: FileMetadataOrCogniteExtractorFile
     ) -> tuple[FileMetadataOrCogniteExtractorFile, str]:
         if isinstance(file_meta, CogniteExtractorFileApply):
@@ -324,10 +322,49 @@ class IOFileUploadQueue(AbstractUploadQueue):
 
         return file_meta_response, url
 
-    def _upload_bytes(self, size: int, file: BinaryIO, file_meta: FileMetadataOrCogniteExtractorFile) -> None:
-        file_meta, url = self._upload_empty(file_meta)
-        resp = self._httpx_client.send(self._get_file_upload_request(url, file, size, file_meta.mime_type))
+    def _upload_empty_file(
+        self,
+        file_meta: FileMetadataOrCogniteExtractorFile,
+    ) -> None:
+        file_meta_response, url = self._upload_only_metadata(file_meta)
 
+        self._upload_only_file_reference(file_meta, url)
+
+    def _upload_bytes(self, size: int, file: BinaryIO, file_meta: FileMetadataOrCogniteExtractorFile) -> None:
+        file_meta, url = self._upload_only_metadata(file_meta)
+        resp = self._httpx_client.send(self._get_file_upload_request(url, file, size, file_meta.mime_type))
+        resp.raise_for_status()
+
+    def _prepare_request_data_for_empty_file(self, url_str: str) -> Request:
+        FILE_SIZE = 0  # this path is only entered for an empty file
+        EMPTY_CONTENT = ""
+
+        url = URL(url_str)
+        base_url = URL(self.cdf_client.config.base_url)
+
+        if url.host == base_url.host:
+            upload_url = url
+        else:
+            parsed_url: ParseResult = urlparse(url_str)
+            parsed_base_url: ParseResult = urlparse(self.cdf_client.config.base_url)
+            replaced_upload_url = parsed_url._replace(netloc=parsed_base_url.netloc).geturl()
+            upload_url = URL(replaced_upload_url)
+
+        headers = Headers(self._httpx_client.headers)
+        headers.update(
+            {
+                "Accept": "*/*",
+                "Content-Length": str(FILE_SIZE),
+                "Host": upload_url.netloc.decode("ascii"),
+                "x-cdp-app": self.cdf_client._config.client_name,
+            }
+        )
+
+        return Request(method="PUT", url=upload_url, headers=headers, content=EMPTY_CONTENT)
+
+    def _upload_only_file_reference(self, file_meta: FileMetadataOrCogniteExtractorFile, url_str: str) -> None:
+        request_data = self._prepare_request_data_for_empty_file(url_str)
+        resp = self._httpx_client.send(request_data)
         resp.raise_for_status()
 
     def _upload_multipart(self, size: int, file: BinaryIO, file_meta: FileMetadataOrCogniteExtractorFile) -> None:
@@ -385,12 +422,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
         self,
         file_meta: FileMetadataOrCogniteExtractorFile,
         read_file: Callable[[], BinaryIO],
-        extra_retries: Optional[
-            Union[
-                Tuple[Type[Exception], ...],
-                Dict[Type[Exception], Callable[[Any], bool]],
-            ]
-        ] = None,
+        extra_retries: tuple[Type[Exception], ...] | dict[Type[Exception], Callable[[Any], bool]] | None = None,
     ) -> None:
         """
         Add file to upload queue. The file will start uploading immedeately. If the size of the queue is larger than
@@ -423,8 +455,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
             with read_file() as file:
                 size = super_len(file)
                 if size == 0:
-                    # upload just the file metadata witout data
-                    file_meta, _ = self._upload_empty(file_meta)
+                    self._upload_empty_file(file_meta)
                 elif size >= self.max_single_chunk_file_size:
                     # The minimum chunk size is 4000MiB.
                     self._upload_multipart(size, file, file_meta)
@@ -475,7 +506,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
             self.queue_size.set(self.upload_queue_size)
 
     def _get_file_upload_request(
-        self, url_str: str, stream: BinaryIO, size: int, mime_type: Optional[str] = None
+        self, url_str: str, stream: BinaryIO, size: int, mime_type: str | None = None
     ) -> Request:
         url = URL(url_str)
         base_url = URL(self.cdf_client.config.base_url)
@@ -519,7 +550,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
         resp_json = res.json()["items"][0]
         return FileMetadata.load(resp_json), resp_json["uploadUrl"]
 
-    def upload(self, fail_on_errors: bool = True, timeout: Optional[float] = None) -> None:
+    def upload(self, fail_on_errors: bool = True, timeout: float | None = None) -> None:
         """
         Wait for all uploads to finish
         """
@@ -587,13 +618,13 @@ class FileUploadQueue(IOFileUploadQueue):
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[List[FileMetadataOrCogniteExtractorFile]], None]] = None,
-        max_queue_size: Optional[int] = None,
-        max_upload_interval: Optional[int] = None,
+        post_upload_function: Callable[[list[FileMetadataOrCogniteExtractorFile]], None] | None = None,
+        max_queue_size: int | None = None,
+        max_upload_interval: int | None = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: Optional[str] = None,
+        thread_name: str | None = None,
         overwrite_existing: bool = False,
-        cancellation_token: Optional[CancellationToken] = None,
+        cancellation_token: CancellationToken | None = None,
     ):
         # Super sets post_upload and threshold
         super().__init__(
@@ -644,12 +675,12 @@ class BytesUploadQueue(IOFileUploadQueue):
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[List[FileMetadataOrCogniteExtractorFile]], None]] = None,
-        max_queue_size: Optional[int] = None,
+        post_upload_function: Callable[[list[FileMetadataOrCogniteExtractorFile]], None] | None = None,
+        max_queue_size: int | None = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: Optional[str] = None,
+        thread_name: str | None = None,
         overwrite_existing: bool = False,
-        cancellation_token: Optional[CancellationToken] = None,
+        cancellation_token: CancellationToken | None = None,
     ) -> None:
         super().__init__(
             cdf_client,

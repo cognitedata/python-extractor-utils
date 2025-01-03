@@ -15,9 +15,10 @@
 """
 A module containing a slightly more advanced base extractor class, sorting a generic output into upload queues.
 """
+
 from dataclasses import dataclass
 from types import TracebackType
-from typing import Any, Callable, Iterable, List, Optional, Type, TypeVar
+from typing import Any, Callable, Iterable, Type, TypeVar
 
 from more_itertools import peekable
 
@@ -41,10 +42,11 @@ class QueueConfigClass:
 
 @dataclass
 class UploaderExtractorConfig(BaseConfig):
-    queues: Optional[QueueConfigClass]
+    queues: QueueConfigClass | None
 
 
 UploaderExtractorConfigClass = TypeVar("UploaderExtractorConfigClass", bound=UploaderExtractorConfig)
+RunHandle = Callable[[CogniteClient, AbstractStateStore, UploaderExtractorConfigClass, CancellationToken], None]
 
 
 class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
@@ -76,19 +78,17 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
         *,
         name: str,
         description: str,
-        version: Optional[str] = None,
-        run_handle: Optional[
-            Callable[[CogniteClient, AbstractStateStore, UploaderExtractorConfigClass, CancellationToken], None]
-        ] = None,
+        version: str | None = None,
+        run_handle: RunHandle | None = None,
         config_class: Type[UploaderExtractorConfigClass],
-        metrics: Optional[BaseMetrics] = None,
+        metrics: BaseMetrics | None = None,
         use_default_state_store: bool = True,
-        cancellation_token: Optional[CancellationToken] = None,
-        config_file_path: Optional[str] = None,
+        cancellation_token: CancellationToken | None = None,
+        config_file_path: str | None = None,
         continuous_extractor: bool = False,
         heartbeat_waiting_time: int = 600,
         handle_interrupts: bool = True,
-        middleware: Optional[List[Callable[[dict], dict]]] = None,
+        middleware: list[Callable[[dict], dict]] | None = None,
     ):
         super(UploaderExtractor, self).__init__(
             name=name,
@@ -170,7 +170,7 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
         return self
 
     def __exit__(
-        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+        self, exc_type: Type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> bool:
         self.event_queue.__exit__(exc_type, exc_val, exc_tb)
         self.raw_queue.__exit__(exc_type, exc_val, exc_tb)
