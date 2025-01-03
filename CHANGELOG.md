@@ -14,6 +14,10 @@ Changes are grouped as follows
 
 ## 7.5.5
 
+### Added
+
+* Added the ability to report a list of files and the reasons they couldn't be uploaded
+
 ### Changed
 
 * Added better mapping of log levels to avoid aggressive logging from HTTPX and HTTPCORE
