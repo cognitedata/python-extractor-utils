@@ -16,11 +16,11 @@ Changes are grouped as follows
 
 ### Added
 
-* Added the ability to report a list of files and the reasons they couldn't be uploaded
+* Added a feature to report file upload errors
 
 ### Changed
 
-* Added better mapping of log levels to avoid aggressive logging from HTTPX and HTTPCORE
+* Improved logging when uploading files
 
 ### Fixed
 
