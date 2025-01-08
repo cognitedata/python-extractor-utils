@@ -1,8 +1,9 @@
 import hashlib
 import json
 from abc import ABC
+from collections.abc import Iterable, Iterator
 from types import TracebackType
-from typing import Any, Iterable, Iterator, Type
+from typing import Any
 
 import orjson
 
@@ -66,8 +67,7 @@ class AbstractHashStateStore(_BaseStateStore, ABC):
 
     def __iter__(self) -> Iterator[str]:
         with self.lock:
-            for key in self._local_state:
-                yield key
+            yield from self._local_state
 
 
 class RawHashStateStore(AbstractHashStateStore):
@@ -169,7 +169,7 @@ class RawHashStateStore(AbstractHashStateStore):
 
     def __exit__(
         self,
-        exc_type: Type[BaseException] | None,
+        exc_type: type[BaseException] | None,
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> None:
@@ -214,7 +214,7 @@ class LocalHashStateStore(AbstractHashStateStore):
 
         with self.lock:
             try:
-                with open(self._file_path, "r") as f:
+                with open(self._file_path) as f:
                     self._local_state = json.load(f, cls=_DecimalDecoder)
             except FileNotFoundError:
                 pass
@@ -243,7 +243,7 @@ class LocalHashStateStore(AbstractHashStateStore):
 
     def __exit__(
         self,
-        exc_type: Type[BaseException] | None,
+        exc_type: type[BaseException] | None,
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> None:

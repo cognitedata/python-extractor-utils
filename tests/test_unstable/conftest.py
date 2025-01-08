@@ -1,6 +1,6 @@
 import os
+from collections.abc import Generator
 from time import sleep, time
-from typing import Generator
 from uuid import uuid4
 
 import pytest

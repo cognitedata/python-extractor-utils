@@ -13,8 +13,9 @@
 #  limitations under the License.
 import base64
 import re
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives import serialization as serialization

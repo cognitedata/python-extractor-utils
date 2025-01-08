@@ -23,7 +23,7 @@ class InvalidConfigError(Exception):
     """
 
     def __init__(self, message: str, details: list[str] | None = None):
-        super(InvalidConfigError, self).__init__()
+        super().__init__()
         self.message = message
         self.details = details
 

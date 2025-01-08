@@ -5,7 +5,7 @@ import time
 from argparse import ArgumentParser, Namespace
 from multiprocessing import Process, Queue
 from pathlib import Path
-from typing import Any, Generic, Type, TypeVar
+from typing import Any, Generic, TypeVar
 from uuid import uuid4
 
 from requests.exceptions import ConnectionError
@@ -30,7 +30,7 @@ ExtractorType = TypeVar("ExtractorType", bound=Extractor)
 class Runtime(Generic[ExtractorType]):
     def __init__(
         self,
-        extractor: Type[ExtractorType],
+        extractor: type[ExtractorType],
     ) -> None:
         self._extractor_class = extractor
         self._cancellation_token = CancellationToken()

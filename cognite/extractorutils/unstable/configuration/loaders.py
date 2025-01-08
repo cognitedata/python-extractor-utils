@@ -2,7 +2,7 @@ import json
 from enum import Enum
 from io import StringIO
 from pathlib import Path
-from typing import Dict, Optional, TextIO, Tuple, Type, TypeVar, Union
+from typing import TextIO, TypeVar
 
 from pydantic import ValidationError
 
@@ -23,7 +23,7 @@ class ConfigFormat(Enum):
     YAML = "yaml"
 
 
-def load_file(path: Path, schema: Type[_T]) -> _T:
+def load_file(path: Path, schema: type[_T]) -> _T:
     if path.suffix in [".yaml", ".yml"]:
         format = ConfigFormat.YAML
     elif path.suffix == ".json":
@@ -31,14 +31,14 @@ def load_file(path: Path, schema: Type[_T]) -> _T:
     else:
         raise InvalidConfigError(f"Unknown file type {path.suffix}")
 
-    with open(path, "r") as stream:
+    with open(path) as stream:
         return load_io(stream, format, schema)
 
 
 def load_from_cdf(
-    cognite_client: CogniteClient, external_id: str, schema: Type[_T], revision: Optional[int] = None
-) -> Tuple[_T, int]:
-    params: Dict[str, Union[str, int]] = {"externalId": external_id}
+    cognite_client: CogniteClient, external_id: str, schema: type[_T], revision: int | None = None
+) -> tuple[_T, int]:
+    params: dict[str, str | int] = {"externalId": external_id}
     if revision:
         params["revision"] = revision
     response = cognite_client.get(
@@ -61,7 +61,7 @@ def load_from_cdf(
         raise new_e from e
 
 
-def load_io(stream: TextIO, format: ConfigFormat, schema: Type[_T]) -> _T:
+def load_io(stream: TextIO, format: ConfigFormat, schema: type[_T]) -> _T:
     if format == ConfigFormat.JSON:
         data = json.load(stream)
 
@@ -97,7 +97,7 @@ def _make_loc_str(loc: tuple) -> str:
     return loc_str
 
 
-def load_dict(data: dict, schema: Type[_T]) -> _T:
+def load_dict(data: dict, schema: type[_T]) -> _T:
     try:
         return schema.model_validate(data)
 

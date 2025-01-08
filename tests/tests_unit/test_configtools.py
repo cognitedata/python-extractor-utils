@@ -18,7 +18,6 @@ import os
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Union
 
 import pytest
 import yaml
@@ -235,7 +234,7 @@ def test_get_cognite_client_from_aad() -> None:
     config = load_yaml(config_raw, CogniteConfig)
     cdf = config.get_cognite_client("client_name", token_custom_args={"audience": "lol"})
     assert cdf.config.credentials.token_custom_args == {"audience": "lol"}
-    assert type(cdf.config.credentials) == OAuthClientCredentials
+    assert isinstance(cdf.config.credentials, OAuthClientCredentials)
     assert cdf.config.credentials.client_id == "cid"
     assert cdf.config.credentials.client_secret == "scrt"
     assert cdf.config.credentials.scopes == ["scp"]
@@ -439,7 +438,7 @@ def test_dump_and_reload_config() -> None:
 
     with open("test_dump_config.yml", "w") as config_file:
         yaml.dump(dataclasses.asdict(config), config_file)
-    with open("test_dump_config.yml", "r") as config_file:
+    with open("test_dump_config.yml") as config_file:
         load_yaml(config_file, BaseConfig)
 
 
@@ -553,7 +552,7 @@ def test_match_patterns() -> None:
 
 
 def test_compile_patterns() -> None:
-    patterns: list[Union[str, IgnorePattern]] = [
+    patterns: list[str | IgnorePattern] = [
         "a*c",
         IgnorePattern("d*f", flags=[RegExpFlag.IGNORECASE]),
         IgnorePattern("m*o", options=[RegExpFlag.IC]),

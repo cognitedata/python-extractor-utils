@@ -13,9 +13,10 @@
 #  limitations under the License.
 
 import math
+from collections.abc import Callable
 from datetime import datetime
 from types import TracebackType
-from typing import Any, Callable, Type
+from typing import Any
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import (
@@ -317,7 +318,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         return self
 
     def __exit__(
-        self, exc_type: Type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         """
         Wraps around stop method, for use as context manager
@@ -474,11 +475,11 @@ class SequenceUploadQueue(AbstractUploadQueue):
         if isinstance(rows, SequenceRows):
             # Already in the desired format
             pass
-        elif isinstance(rows, (dict, list)):
+        elif isinstance(rows, dict | list):
             rows_raw: list[dict[str, Any]]
             if isinstance(rows, dict):
                 rows_raw = [{"rowNumber": row_number, "values": values} for row_number, values in rows.items()]
-            elif isinstance(rows, list) and rows and isinstance(rows[0], (tuple, list)):
+            elif isinstance(rows, list) and rows and isinstance(rows[0], tuple | list):
                 rows_raw = [{"rowNumber": row_number, "values": values} for row_number, values in rows]
             else:
                 rows_raw = rows  # type: ignore[assignment]
@@ -491,7 +492,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
                 }
             )
         else:
-            raise TypeError("Unsupported type for sequence rows: {}".format(type(rows)))
+            raise TypeError(f"Unsupported type for sequence rows: {type(rows)}")
 
         with self.lock:
             seq = self.upload_queue.get(either_id)
@@ -520,7 +521,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
             backoff=RETRY_BACKOFF_FACTOR,
         )
         def _upload_single(either_id: EitherId, upload_this: SequenceData) -> SequenceData:
-            self.logger.debug("Writing {} rows to sequence {}".format(len(upload_this.values), either_id))
+            self.logger.debug(f"Writing {len(upload_this.values)} rows to sequence {either_id}")
 
             try:
                 self.cdf_client.sequences.data.insert(
@@ -595,7 +596,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
             )
 
         except CogniteDuplicatedError:
-            self.logger.info("Sequnce already exist: {}".format(either_id))
+            self.logger.info(f"Sequnce already exist: {either_id}")
             seq = self.cdf_client.sequences.retrieve(  # type: ignore [assignment]
                 id=either_id.internal_id,
                 external_id=either_id.external_id,
@@ -656,7 +657,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
         return self
 
     def __exit__(
-        self, exc_type: Type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         """
         Wraps around stop method, for use as context manager

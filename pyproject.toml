@@ -12,30 +12,32 @@ packages = [
 ]
 
 [tool.ruff]
-select = ["E", "F", "I", "T20", "S", "B"]
-ignore = ["S104", "S303", "S311"]
-fixable = ["A", "B", "C", "D", "E", "F", "I"]
-unfixable = []
-
 exclude = [
     ".git",
     ".mypy_cache",
     ".ruff_cache",
 ]
-
 line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "T20", "S", "B", "UP"]
+ignore = ["S104", "S303", "S311"]
+fixable = ["A", "B", "C", "D", "E", "F", "I", "UP"]
+unfixable = []
+
+
 
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
-target-version = "py310"
 
-[tool.ruff.per-file-ignores]
+[tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101", "T201", "S105", "S106", "S608", "E501", "S113", "F841", "B017"]
 "**/__init__.py" = ["F401"]
 "docs/*" = ["E402"]
 
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 known-third-party = ["alembic"]
 
 [tool.pytest.ini_options]
@@ -57,7 +59,7 @@ warn_unused_ignores = true
 exclude = "tests/*"
 
 [tool.poetry.dependencies]
-python = "^3.9.0"
+python = "^3.10.0"
 cognite-sdk = "^7.59.0"
 prometheus-client = ">0.7.0, <=1.0.0"
 arrow = "^1.0.0"

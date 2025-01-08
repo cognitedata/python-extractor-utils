@@ -1,5 +1,5 @@
+from collections.abc import Iterator
 from datetime import datetime
-from typing import Iterator, List
 
 import jsonlines
 
@@ -9,7 +9,7 @@ class FileErrorMapping:
         self.file_name = file_name
         self.error_reason = error_reason
 
-    def __iter__(self) -> Iterator[List[str]]:
+    def __iter__(self) -> Iterator[list[str]]:
         return iter([[self.file_name, self.error_reason]])
 
 

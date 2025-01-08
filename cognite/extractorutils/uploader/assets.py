@@ -12,8 +12,9 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from collections.abc import Callable
 from types import TracebackType
-from typing import Any, Callable, Type
+from typing import Any
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes.assets import Asset
@@ -147,7 +148,7 @@ class AssetUploadQueue(AbstractUploadQueue):
 
     def __exit__(
         self,
-        exc_type: Type[BaseException] | None,
+        exc_type: type[BaseException] | None,
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> None:

@@ -2,7 +2,7 @@ import re
 from datetime import timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Annotated, Any, Dict, List, Literal, Optional, Union
+from typing import Annotated, Any, Literal
 
 from humps import kebabize
 from pydantic import BaseModel, ConfigDict, Field, GetCoreSchemaHandler
@@ -49,21 +49,21 @@ class _ClientCredentialsConfig(ConfigModel):
     client_id: str
     client_secret: str
     token_url: str
-    scopes: List[str]
-    resource: Optional[str] = None
-    audience: Optional[str] = None
+    scopes: list[str]
+    resource: str | None = None
+    audience: str | None = None
 
 
 class _ClientCertificateConfig(ConfigModel):
     type: Literal["client-certificate"]
     client_id: str
     path: Path
-    password: Optional[str] = None
+    password: str | None = None
     authority_url: str
-    scopes: List[str]
+    scopes: list[str]
 
 
-AuthenticationConfig = Annotated[Union[_ClientCredentialsConfig, _ClientCertificateConfig], Field(discriminator="type")]
+AuthenticationConfig = Annotated[_ClientCredentialsConfig | _ClientCertificateConfig, Field(discriminator="type")]
 
 
 class TimeIntervalConfig:
@@ -76,7 +76,7 @@ class TimeIntervalConfig:
 
     @classmethod
     def __get_pydantic_core_schema__(cls, source_type: Any, handler: GetCoreSchemaHandler) -> CoreSchema:
-        return core_schema.no_info_after_validator_function(cls, handler(Union[str, int]))
+        return core_schema.no_info_after_validator_function(cls, handler(str | int))
 
     def __eq__(self, other: object) -> bool:
         if not isinstance(other, TimeIntervalConfig):
@@ -140,13 +140,13 @@ class TimeIntervalConfig:
 
 class _ConnectionParameters(ConfigModel):
     gzip_compression: bool = False
-    status_forcelist: List[int] = Field(default_factory=lambda: [429, 502, 503, 504])
+    status_forcelist: list[int] = Field(default_factory=lambda: [429, 502, 503, 504])
     max_retries: int = 10
     max_retries_connect: int = 3
     max_retry_backoff: TimeIntervalConfig = Field(default_factory=lambda: TimeIntervalConfig("30s"))
     max_connection_pool_size: int = 50
     ssl_verify: bool = True
-    proxies: Dict[str, str] = Field(default_factory=dict)
+    proxies: dict[str, str] = Field(default_factory=dict)
     timeout: TimeIntervalConfig = Field(default_factory=lambda: TimeIntervalConfig("30s"))
 
 
@@ -253,9 +253,9 @@ LogHandlerConfig = Annotated[LogFileHandlerConfig | LogConsoleHandlerConfig, Fie
 
 
 # Mypy BS
-def _log_handler_default() -> List[LogHandlerConfig]:
+def _log_handler_default() -> list[LogHandlerConfig]:
     return [LogConsoleHandlerConfig(type="console", level=LogLevel.INFO)]
 
 
 class ExtractorConfig(ConfigModel):
-    log_handlers: List[LogHandlerConfig] = Field(default_factory=_log_handler_default)
+    log_handlers: list[LogHandlerConfig] = Field(default_factory=_log_handler_default)

@@ -8,7 +8,7 @@ from multiprocessing import Queue
 from threading import RLock, Thread
 from traceback import format_exception
 from types import TracebackType
-from typing import Generic, Literal, Type, TypeVar
+from typing import Generic, Literal, TypeVar
 
 from humps import pascalize
 from typing_extensions import Self, assert_never
@@ -59,7 +59,7 @@ class Extractor(Generic[ConfigType]):
     DESCRIPTION: str
     VERSION: str
 
-    CONFIG_TYPE: Type[ConfigType]
+    CONFIG_TYPE: type[ConfigType]
 
     RESTART_POLICY: RestartPolicy = WHEN_CONTINUOUS_TASKS_CRASHES
 
@@ -305,7 +305,7 @@ class Extractor(Generic[ConfigType]):
 
     def __exit__(
         self,
-        exc_type: Type[BaseException] | None,
+        exc_type: type[BaseException] | None,
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> bool:

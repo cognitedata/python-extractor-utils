@@ -17,7 +17,7 @@ class CancellationToken:
     def __init__(self, condition: Condition | None = None) -> None:
         self._cv: Condition = condition or Condition()
         self._is_cancelled_int: bool = False
-        self._parent: "CancellationToken" | None = None
+        self._parent: CancellationToken | None = None
 
     def __repr__(self) -> str:
         cls = self.__class__

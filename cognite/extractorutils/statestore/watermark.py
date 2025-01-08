@@ -87,8 +87,9 @@ You can set a state store to automatically update on upload triggers from an upl
 
 import json
 from abc import ABC
+from collections.abc import Callable, Iterator
 from types import TracebackType
-from typing import Any, Callable, Dict, Iterator, List, Tuple, Type, Union
+from typing import Any
 
 from cognite.client import CogniteClient
 from cognite.client.exceptions import CogniteAPIError
@@ -126,10 +127,10 @@ class AbstractStateStore(_BaseStateStore, ABC):
             cancellation_token=cancellation_token,
         )
 
-        self._local_state: Dict[str, Dict[str, Any]] = {}
-        self._deleted: List[str] = []
+        self._local_state: dict[str, dict[str, Any]] = {}
+        self._deleted: list[str] = []
 
-    def get_state(self, external_id: Union[str, List[str]]) -> Union[Tuple[Any, Any], List[Tuple[Any, Any]]]:
+    def get_state(self, external_id: str | list[str]) -> tuple[Any, Any] | list[tuple[Any, Any]]:
         """
         Get state(s) for external ID(s)
 
@@ -192,7 +193,7 @@ class AbstractStateStore(_BaseStateStore, ABC):
             self._local_state.pop(external_id, None)
             self._deleted.append(external_id)
 
-    def post_upload_handler(self) -> Callable[[List[Dict[str, Union[str, DataPointList]]]], None]:
+    def post_upload_handler(self) -> Callable[[list[dict[str, str | DataPointList]]], None]:
         """
         Get a callable suitable for passing to a time series upload queue as post_upload_function, that will
         automatically update the states in this state store when that upload queue is uploading.
@@ -201,7 +202,7 @@ class AbstractStateStore(_BaseStateStore, ABC):
             A function that expands the current states with the values given
         """
 
-        def callback(uploaded_points: List[Dict[str, Union[str, DataPointList]]]) -> None:
+        def callback(uploaded_points: list[dict[str, str | DataPointList]]) -> None:
             for time_series in uploaded_points:
                 # Use CDF timestamps
                 data_points = time_series["datapoints"]
@@ -238,10 +239,10 @@ class AbstractStateStore(_BaseStateStore, ABC):
 
         return False
 
-    def __getitem__(self, external_id: str) -> Tuple[Any, Any]:
+    def __getitem__(self, external_id: str) -> tuple[Any, Any]:
         return self.get_state(external_id)  # type: ignore  # will not be list if input is single str
 
-    def __setitem__(self, key: str, value: Tuple[Any, Any]) -> None:
+    def __setitem__(self, key: str, value: tuple[Any, Any]) -> None:
         self.set_state(external_id=key, low=value[0], high=value[1])
 
     def __contains__(self, external_id: str) -> bool:
@@ -251,8 +252,7 @@ class AbstractStateStore(_BaseStateStore, ABC):
         return len(self._local_state)
 
     def __iter__(self) -> Iterator[str]:
-        for key in self._local_state:
-            yield key
+        yield from self._local_state
 
 
 class RawStateStore(AbstractStateStore):
@@ -380,7 +380,7 @@ class RawStateStore(AbstractStateStore):
         return self
 
     def __exit__(
-        self, exc_type: Type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         """
         Wraps around stop method, for use as context manager
@@ -430,7 +430,7 @@ class LocalStateStore(AbstractStateStore):
 
         with self.lock:
             try:
-                with open(self._file_path, "r") as f:
+                with open(self._file_path) as f:
                     self._local_state = json.load(f, cls=_DecimalDecoder)
             except FileNotFoundError:
                 pass
@@ -460,7 +460,7 @@ class LocalStateStore(AbstractStateStore):
 
     def __exit__(
         self,
-        exc_type: Type[BaseException] | None,
+        exc_type: type[BaseException] | None,
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> None:

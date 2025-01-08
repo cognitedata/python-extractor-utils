@@ -1,6 +1,5 @@
 import random
 from time import sleep
-from typing import Tuple
 
 import pytest
 from faker import Faker
@@ -29,7 +28,7 @@ def set_test_parameters() -> ParamTest:
     )
 
 
-def test_dm_upload_queue(set_upload_test: Tuple[CogniteClient, ParamTest]) -> None:
+def test_dm_upload_queue(set_upload_test: tuple[CogniteClient, ParamTest]) -> None:
     client, test_params = set_upload_test
     queue = InstanceUploadQueue(client)
 
