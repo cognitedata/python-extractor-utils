@@ -197,6 +197,8 @@ class IOFileUploadQueue(AbstractUploadQueue):
         thread_name: Thread name of uploader thread.
         max_parallelism: Maximum number of parallel uploads. If nothing is given, the parallelism will be capped by the
             max_workers of the cognite client.
+        ssl_verify: Either a string (path to a CA bundle) or a bool (false to turn off completely, true to use standard
+            CA bundle)
     """
 
     def __init__(
@@ -210,6 +212,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
         cancellation_token: Optional[CancellationToken] = None,
         max_parallelism: Optional[int] = None,
         failure_logging_path: None | str = None,
+        ssl_verify: bool | str = True,
     ):
         # Super sets post_upload and threshold
         super().__init__(
@@ -250,7 +253,11 @@ class IOFileUploadQueue(AbstractUploadQueue):
 
         self._full_queue = threading.Condition()
 
-        self._httpx_client = Client(follow_redirects=True, timeout=cdf_client.config.file_transfer_timeout)
+        self._httpx_client = Client(
+            follow_redirects=True,
+            timeout=cdf_client.config.file_transfer_timeout,
+            verify=ssl_verify,
+        )
 
         global _QUEUES, _QUEUES_LOCK
         with _QUEUES_LOCK:
@@ -625,16 +632,18 @@ class FileUploadQueue(IOFileUploadQueue):
         thread_name: str | None = None,
         overwrite_existing: bool = False,
         cancellation_token: CancellationToken | None = None,
+        ssl_verify: bool | str = True,
     ):
         # Super sets post_upload and threshold
         super().__init__(
-            cdf_client,
-            post_upload_function,
-            max_queue_size,
-            trigger_log_level,
-            thread_name,
-            overwrite_existing,
-            cancellation_token,
+            cdf_client=cdf_client,
+            post_upload_function=post_upload_function,
+            max_queue_size=max_queue_size,
+            trigger_log_level=trigger_log_level,
+            thread_name=thread_name,
+            overwrite_existing=overwrite_existing,
+            cancellation_token=cancellation_token,
+            ssl_verify=ssl_verify,
         )
 
     def add_to_upload_queue(
@@ -681,15 +690,17 @@ class BytesUploadQueue(IOFileUploadQueue):
         thread_name: str | None = None,
         overwrite_existing: bool = False,
         cancellation_token: CancellationToken | None = None,
+        ssl_verify: bool | str = True,
     ) -> None:
         super().__init__(
-            cdf_client,
-            post_upload_function,
-            max_queue_size,
-            trigger_log_level,
-            thread_name,
-            overwrite_existing,
-            cancellation_token,
+            cdf_client=cdf_client,
+            post_upload_function=post_upload_function,
+            max_queue_size=max_queue_size,
+            trigger_log_level=trigger_log_level,
+            thread_name=thread_name,
+            overwrite_existing=overwrite_existing,
+            cancellation_token=cancellation_token,
+            ssl_verify=ssl_verify,
         )
 
     def add_to_upload_queue(self, content: bytes, file_meta: FileMetadataOrCogniteExtractorFile) -> None:

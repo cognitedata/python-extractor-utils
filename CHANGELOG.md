@@ -12,6 +12,13 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+
+## 7.5.6
+
+### Added
+
+* Added a `ssl_verify` argument to file uploaders to either use custom CA bundles or to diable SSL verification completely.
+
 ## 7.5.5
 
 ### Added
