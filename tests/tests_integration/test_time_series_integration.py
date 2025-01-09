@@ -19,11 +19,11 @@ from datetime import datetime, timezone
 from typing import Any
 
 import pytest
+from conftest import ETestType, ParamTest
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import StatusCode, TimeSeries
 from cognite.extractorutils.uploader import TimeSeriesUploadQueue
-from tests.conftest import ETestType, ParamTest
 
 
 @pytest.fixture
