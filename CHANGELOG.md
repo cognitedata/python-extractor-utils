@@ -13,6 +13,12 @@ Changes are grouped as follows
 - `Security` in case of vulnerabilities.
 
 
+## 7.6.7
+
+### Changed
+
+* Loosened dependency restrictions on `0.*` packages
+
 ## 7.5.6
 
 ### Added
