@@ -9,6 +9,11 @@ license = { text = "Apache-2.0" }
 readme = "README.md"
 requires-python = ">=3.9"
 
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Programming Language :: Python"
+]
+
 dependencies = [
     "cognite-sdk>=7.59.0",
     "prometheus-client>=0.7.0,<=1.0.0",
