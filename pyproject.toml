@@ -108,11 +108,12 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 exclude = "tests/*"
 
-[tool.setuptools]
-packages = ["cognite"]
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = ["tests*", "docs*"]
 
-[tool.setuptools.package-data]
-cognite = ["**/py.typed"]
+[tool.setuptools]
+py-modules = ["cognite"]
 
 [build-system]
 requires = ["setuptools >= 61.0"]
