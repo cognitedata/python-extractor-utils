@@ -111,6 +111,9 @@ exclude = "tests/*"
 [tool.setuptools]
 packages = ["cognite"]
 
+[tool.setuptools.package-data]
+cognite = ["**/py.typed"]
+
 [build-system]
 requires = ["setuptools >= 61.0"]
 build-backend = "setuptools.build_meta"
