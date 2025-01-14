@@ -16,9 +16,10 @@
 A module containing a slightly more advanced base extractor class, sorting a generic output into upload queues.
 """
 
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from types import TracebackType
-from typing import Any, Callable, Iterable, Type, TypeVar
+from typing import Any, TypeVar
 
 from more_itertools import peekable
 
@@ -80,7 +81,7 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
         description: str,
         version: str | None = None,
         run_handle: RunHandle | None = None,
-        config_class: Type[UploaderExtractorConfigClass],
+        config_class: type[UploaderExtractorConfigClass],
         metrics: BaseMetrics | None = None,
         use_default_state_store: bool = True,
         cancellation_token: CancellationToken | None = None,
@@ -90,7 +91,7 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
         handle_interrupts: bool = True,
         middleware: list[Callable[[dict], dict]] | None = None,
     ):
-        super(UploaderExtractor, self).__init__(
+        super().__init__(
             name=name,
             description=description,
             version=version,
@@ -144,7 +145,7 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
         return item
 
     def __enter__(self) -> "UploaderExtractor":
-        super(UploaderExtractor, self).__enter__()
+        super().__enter__()
 
         queue_config = self.config.queues if self.config.queues else QueueConfigClass()
         self.event_queue = EventUploadQueue(
@@ -170,9 +171,9 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
         return self
 
     def __exit__(
-        self, exc_type: Type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> bool:
         self.event_queue.__exit__(exc_type, exc_val, exc_tb)
         self.raw_queue.__exit__(exc_type, exc_val, exc_tb)
         self.time_series_queue.__exit__(exc_type, exc_val, exc_tb)
-        return super(UploaderExtractor, self).__exit__(exc_type, exc_val, exc_tb)
+        return super().__exit__(exc_type, exc_val, exc_tb)

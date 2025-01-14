@@ -42,7 +42,7 @@ def test_raw_upload_queue(set_upload_test: tuple[CogniteClient, ParamTest], func
     uploaded = []
 
     for i in range(500):
-        r = Row("key{:03}".format(i), {"col": "val{}".format(i)})
+        r = Row(f"key{i:03}", {"col": f"val{i}"})
 
         queue.add_to_upload_queue(test_parameter.database_name, test_parameter.table_name, r)
         uploaded.append(r)

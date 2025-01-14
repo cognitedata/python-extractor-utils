@@ -12,8 +12,9 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from collections.abc import Callable
 from types import TracebackType
-from typing import Any, Callable, Type
+from typing import Any
 
 import arrow
 from arrow import Arrow
@@ -162,7 +163,7 @@ class RawUploadQueue(AbstractUploadQueue):
         return self
 
     def __exit__(
-        self, exc_type: Type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         """
         Wraps around stop method, for use as context manager

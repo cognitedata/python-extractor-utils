@@ -1,5 +1,6 @@
+from collections.abc import Callable
 from types import TracebackType
-from typing import Any, Callable, Type
+from typing import Any
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes.data_modeling import EdgeApply, NodeApply
@@ -100,7 +101,7 @@ class InstanceUploadQueue(AbstractUploadQueue):
 
     def __exit__(
         self,
-        exc_type: Type[BaseException] | None,
+        exc_type: type[BaseException] | None,
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> None:

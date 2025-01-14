@@ -41,9 +41,10 @@ import logging
 import os
 import threading
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from time import sleep
 from types import TracebackType
-from typing import Any, Callable, Type, TypeVar
+from typing import Any, TypeVar
 
 import arrow
 import psutil
@@ -65,7 +66,7 @@ _metrics_singularities = {}
 T = TypeVar("T")
 
 
-def safe_get(cls: Type[T], *args: Any, **kwargs: Any) -> T:
+def safe_get(cls: type[T], *args: Any, **kwargs: Any) -> T:
     """
     A factory for instances of metrics collections.
 
@@ -232,7 +233,7 @@ class AbstractMetricsPusher(ABC):
         return self
 
     def __exit__(
-        self, exc_type: Type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         """
         Wraps around stop method, for use as context manager
@@ -269,7 +270,7 @@ class PrometheusPusher(AbstractMetricsPusher):
         thread_name: str | None = None,
         cancellation_token: CancellationToken | None = None,
     ):
-        super(PrometheusPusher, self).__init__(push_interval, thread_name, cancellation_token)
+        super().__init__(push_interval, thread_name, cancellation_token)
 
         self.username = username
         self.job_name = job_name
@@ -345,7 +346,7 @@ class CognitePusher(AbstractMetricsPusher):
         thread_name: str | None = None,
         cancellation_token: CancellationToken | None = None,
     ):
-        super(CognitePusher, self).__init__(push_interval, thread_name, cancellation_token)
+        super().__init__(push_interval, thread_name, cancellation_token)
 
         self.cdf_client = cdf_client
         self.asset = asset
@@ -409,7 +410,7 @@ class CognitePusher(AbstractMetricsPusher):
         datapoints: list[dict[str, str | int | list[Any] | Datapoints | DatapointsArray]] = []
 
         for metric in REGISTRY.collect():
-            if type(metric) == Metric and metric.type in ["gauge", "counter"]:
+            if isinstance(metric, Metric) and metric.type in ["gauge", "counter"]:
                 if len(metric.samples) == 0:
                     continue
 

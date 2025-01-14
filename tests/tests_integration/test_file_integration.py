@@ -17,7 +17,8 @@ import os
 import pathlib
 import random
 import time
-from typing import BinaryIO, Callable, Tuple
+from collections.abc import Callable
+from typing import BinaryIO
 
 import jsonlines
 import pytest
@@ -75,7 +76,7 @@ def await_is_uploaded_status(
 
 
 @pytest.mark.parametrize("functions_runtime", ["true"])
-def test_errored_file(set_upload_test: Tuple[CogniteClient, ParamTest], functions_runtime: str) -> None:
+def test_errored_file(set_upload_test: tuple[CogniteClient, ParamTest], functions_runtime: str) -> None:
     LOG_FAILURE_FILE = "integration_test_failure_log.jsonl"
     NO_PERMISSION_FILE = "file_with_no_permission.txt"
     FILE_REASON_MAP_KEY = "file_error_reason_map"

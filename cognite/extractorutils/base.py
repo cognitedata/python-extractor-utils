@@ -15,11 +15,12 @@
 import logging
 import os
 import sys
+from collections.abc import Callable
 from dataclasses import is_dataclass
 from enum import Enum
 from threading import Thread
 from types import TracebackType
-from typing import Any, Callable, Generic, Type, TypeVar
+from typing import Any, Generic, TypeVar
 
 from dotenv import find_dotenv, load_dotenv
 
@@ -79,7 +80,7 @@ class Extractor(Generic[CustomConfigClass]):
         description: str,
         version: str | None = None,
         run_handle: RunHandle | None = None,
-        config_class: Type[CustomConfigClass],
+        config_class: type[CustomConfigClass],
         metrics: BaseMetrics | None = None,
         use_default_state_store: bool = True,
         cancellation_token: CancellationToken | None = None,
@@ -322,7 +323,7 @@ class Extractor(Generic[CustomConfigClass]):
         return self
 
     def __exit__(
-        self, exc_type: Type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> bool:
         """
         Shuts down the extractor. Makes sure states are preserved, that all uploads of data and metrics are done, etc.

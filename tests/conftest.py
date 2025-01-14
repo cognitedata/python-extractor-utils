@@ -1,7 +1,7 @@
 import os
+from collections.abc import Generator
 from dataclasses import dataclass
 from enum import Enum
-from typing import Generator
 
 import pytest
 

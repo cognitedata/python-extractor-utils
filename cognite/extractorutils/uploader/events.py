@@ -12,8 +12,8 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+from collections.abc import Callable
 from types import TracebackType
-from typing import Callable, Type
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Event
@@ -151,7 +151,7 @@ class EventUploadQueue(AbstractUploadQueue):
         return self
 
     def __exit__(
-        self, exc_type: Type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         """
         Wraps around stop method, for use as context manager

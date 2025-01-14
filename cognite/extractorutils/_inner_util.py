@@ -40,7 +40,7 @@ class _DecimalEncoder(json.JSONEncoder):
     def default(self, obj: Any) -> dict[str, str]:
         if isinstance(obj, Decimal):
             return {"type": "decimal_encoded", "value": str(obj)}
-        return super(_DecimalEncoder, self).default(obj)
+        return super().default(obj)
 
 
 class _DecimalDecoder(json.JSONDecoder):

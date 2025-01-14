@@ -18,7 +18,6 @@ import os
 import time
 from collections import OrderedDict
 from decimal import Decimal
-from typing import Type
 from unittest.mock import Mock, patch
 
 import pytest
@@ -138,7 +137,7 @@ def test_local_state_interaction() -> None:
 
 
 @patch("cognite.client.CogniteClient")
-def test_upload_queue_integration(MockCogniteClient: Type[CogniteClient]) -> None:
+def test_upload_queue_integration(MockCogniteClient: type[CogniteClient]) -> None:
     state_store = NoStateStore()
 
     upload_queue = TimeSeriesUploadQueue(

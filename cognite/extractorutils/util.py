@@ -20,12 +20,13 @@ extractors.
 import io
 import logging
 import random
+from collections.abc import Callable, Generator, Iterable
 from datetime import datetime, timezone
 from functools import partial, wraps
 from io import RawIOBase
 from threading import Thread
 from time import time
-from typing import Any, Callable, Generator, Iterable, Type, TypeVar
+from typing import Any, TypeVar
 
 from decorator import decorator
 
@@ -157,7 +158,7 @@ class EitherId:
         Returns:
             A string rep of the EitherId
         """
-        return "{}: {}".format(self.type(), self.content())
+        return f"{self.type()}: {self.content()}"
 
     def __repr__(self) -> str:
         """
@@ -313,7 +314,7 @@ _T2 = TypeVar("_T2")
 def _retry_internal(
     f: Callable[..., _T2],
     cancellation_token: CancellationToken,
-    exceptions: tuple[Type[Exception], ...] | dict[Type[Exception], Callable[[Exception], bool]],
+    exceptions: tuple[type[Exception], ...] | dict[type[Exception], Callable[[Exception], bool]],
     tries: int,
     delay: float,
     max_delay: float | None,
@@ -367,7 +368,7 @@ def _retry_internal(
 
 def retry(
     cancellation_token: CancellationToken | None = None,
-    exceptions: tuple[Type[Exception], ...] | dict[Type[Exception], Callable[[Any], bool]] = (Exception,),
+    exceptions: tuple[type[Exception], ...] | dict[type[Exception], Callable[[Any], bool]] = (Exception,),
     tries: int = 10,
     delay: float = 1,
     max_delay: float | None = 60,
@@ -415,7 +416,7 @@ def retry(
 
 def requests_exceptions(
     status_codes: list[int] | None = None,
-) -> dict[Type[Exception], Callable[[Any], bool]]:
+) -> dict[type[Exception], Callable[[Any], bool]]:
     """
     Retry exceptions from using the ``requests`` library. This will retry all connection and HTTP errors matching
     the given status codes.
@@ -449,7 +450,7 @@ def requests_exceptions(
 
 def httpx_exceptions(
     status_codes: list[int] | None = None,
-) -> dict[Type[Exception], Callable[[Any], bool]]:
+) -> dict[type[Exception], Callable[[Any], bool]]:
     """
     Retry exceptions from using the ``httpx`` library. This will retry all connection and HTTP errors matching
     the given status codes.
@@ -483,7 +484,7 @@ def httpx_exceptions(
 
 def cognite_exceptions(
     status_codes: list[int] | None = None,
-) -> dict[Type[Exception], Callable[[Any], bool]]:
+) -> dict[type[Exception], Callable[[Any], bool]]:
     """
     Retry exceptions from using the Cognite SDK. This will retry all connection and HTTP errors matching
     the given status codes.
@@ -499,7 +500,7 @@ def cognite_exceptions(
     status_codes = status_codes or [408, 425, 429, 500, 502, 503, 504]
 
     def handle_cognite_errors(exception: CogniteException) -> bool:
-        if isinstance(exception, (CogniteAPIError, CogniteFileUploadError)):
+        if isinstance(exception, CogniteAPIError | CogniteFileUploadError):
             return exception.code in status_codes
         return True
 

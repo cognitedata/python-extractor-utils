@@ -1,8 +1,8 @@
+from collections.abc import Callable
 from dataclasses import dataclass
 from logging import getLogger
 from threading import RLock, Thread
 from time import time
-from typing import Callable
 
 import arrow
 from humps import pascalize

@@ -1,4 +1,5 @@
-from typing import Iterable, TypeAlias
+from collections.abc import Iterable
+from typing import TypeAlias
 
 from cognite.client.data_classes import Event as _Event
 from cognite.client.data_classes import Row as _Row

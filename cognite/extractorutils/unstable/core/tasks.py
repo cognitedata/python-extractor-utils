@@ -1,6 +1,6 @@
 from abc import ABC
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable
 
 from cognite.extractorutils.unstable.configuration.models import ScheduleConfig
 

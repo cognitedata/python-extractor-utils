@@ -19,10 +19,11 @@ import logging
 import os
 import re
 import sys
+from collections.abc import Callable, Iterable
 from enum import Enum
 from hashlib import sha256
 from pathlib import Path
-from typing import Any, Callable, Generic, Iterable, TextIO, Type, TypeVar, cast
+from typing import Any, Generic, TextIO, TypeVar, cast
 
 import dacite
 import yaml
@@ -211,7 +212,7 @@ def _load_yaml_dict(
 
 def _load_yaml(
     source: TextIO | str,
-    config_type: Type[CustomConfigClass],
+    config_type: type[CustomConfigClass],
     case_style: str = "hyphen",
     expand_envvars: bool = True,
     dict_manipulator: Callable[[dict[str, Any]], dict[str, Any]] = lambda x: x,
@@ -243,13 +244,13 @@ def _load_yaml(
         else:
             path = None
 
-        def name(type_: Type) -> str:
+        def name(type_: type) -> str:
             return type_.__name__ if hasattr(type_, "__name__") else str(type_)
 
-        def all_types(type_: Type) -> Iterable[Type]:
+        def all_types(type_: type) -> Iterable[type]:
             return type_.__args__ if hasattr(type_, "__args__") else [type_]
 
-        if isinstance(e, (dacite.WrongTypeError, dacite.UnionMatchError)) and e.value is not None:
+        if isinstance(e, dacite.WrongTypeError | dacite.UnionMatchError) and e.value is not None:
             got_type = name(type(e.value))
             need_type = ", ".join(name(t) for t in all_types(e.field_type))
 
@@ -268,7 +269,7 @@ def _load_yaml(
 
 def load_yaml(
     source: TextIO | str,
-    config_type: Type[CustomConfigClass],
+    config_type: type[CustomConfigClass],
     case_style: str = "hyphen",
     expand_envvars: bool = True,
     keyvault_loader: KeyVaultLoader | None = None,
@@ -346,7 +347,7 @@ def compile_patterns(ignore_patterns: list[str | IgnorePattern]) -> list[re.Patt
 
 
 class ConfigResolver(Generic[CustomConfigClass]):
-    def __init__(self, config_path: str, config_type: Type[CustomConfigClass]):
+    def __init__(self, config_path: str, config_type: type[CustomConfigClass]):
         self.config_path = config_path
         self.config_type = config_type
 
@@ -356,7 +357,7 @@ class ConfigResolver(Generic[CustomConfigClass]):
         self._cognite_client: CogniteClient | None = None
 
     def _reload_file(self) -> None:
-        with open(self.config_path, "r") as stream:
+        with open(self.config_path) as stream:
             self._config_text = stream.read()
 
     @property
@@ -401,7 +402,7 @@ class ConfigResolver(Generic[CustomConfigClass]):
 
     @classmethod
     def from_cli(
-        cls, name: str, description: str, version: str, config_type: Type[CustomConfigClass]
+        cls, name: str, description: str, version: str, config_type: type[CustomConfigClass]
     ) -> "ConfigResolver":
         argument_parser = argparse.ArgumentParser(sys.argv[0], description=description)
         argument_parser.add_argument(
