@@ -24,21 +24,21 @@ jobs:
         with:
           python-version: "3.10"
 
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+
       - name: Install dependencies
         run: |
-          python3 -m pip install --upgrade pip poetry
-          poetry config virtualenvs.create false
-          poetry lock
-          poetry install
+          uv sync
+          python3 -m pip install pre-commit==3.6.2
 
       - name: Build package
-        run: poetry build
+        run: uv build
 
       - name: Build docs
-        run: cd docs && make html
+        run: cd docs && make html SPHINXBUILD="uv run sphinx-build"
 
       - name: Release to PyPI
         env:
-          TWINE_USERNAME: __token__
-          TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-        run: twine upload --verbose dist/* || echo 'Version exists'
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: uv publish || echo 'Version exists'

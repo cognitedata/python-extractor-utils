@@ -17,11 +17,11 @@ import random
 import time
 
 import pytest
+from conftest import ETestType, ParamTest
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Row
 from cognite.extractorutils.uploader import RawUploadQueue
-from tests.conftest import ETestType, ParamTest
 
 
 @pytest.fixture
