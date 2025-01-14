@@ -22,6 +22,7 @@ from typing import BinaryIO
 
 import jsonlines
 import pytest
+from conftest import ETestType, ParamTest
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import FileMetadata
@@ -35,7 +36,6 @@ from cognite.extractorutils.uploader.files import (
     FileUploadQueue,
     IOFileUploadQueue,
 )
-from tests.conftest import ETestType, ParamTest
 
 
 @pytest.fixture

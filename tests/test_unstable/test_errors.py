@@ -6,7 +6,7 @@ from cognite.extractorutils.unstable.configuration.models import ConnectionConfi
 from cognite.extractorutils.unstable.core.base import FullConfig
 from cognite.extractorutils.unstable.core.errors import ErrorLevel
 from cognite.extractorutils.unstable.core.tasks import ScheduledTask
-from tests.test_unstable.conftest import TestConfig, TestExtractor
+from test_unstable.conftest import TestConfig, TestExtractor
 
 
 def test_global_error(

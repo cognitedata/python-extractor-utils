@@ -58,10 +58,10 @@ as a code of conduct.
 
 ### Development environment
 
-We use [poetry](https://python-poetry.org) to manage dependencies and to administrate virtual environments. To develop
+We use [uv](https://docs.astral.sh/uv/) to manage dependencies and to administrate virtual environments. To develop
 `extractor-utils`, follow the following steps to set up your local environment:
 
- 1. [Install poetry](https://python-poetry.org/docs/#installation) if you haven't already.
+ 1. [Install uv](https://docs.astral.sh/uv/getting-started/installation/) if you haven't already.
 
  2. Clone repository:
     ```
@@ -73,7 +73,7 @@ We use [poetry](https://python-poetry.org) to manage dependencies and to adminis
     ```
  4. Create virtual environment and install dependencies:
     ```
-    $ poetry install
+    $ uv sync
     ```
 
 

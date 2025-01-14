@@ -284,6 +284,7 @@ def test_mock_private_link_upload(MockCogniteClient: Mock) -> None:
     base_url = URL(base_url_str)
 
     client.config.base_url = "https://qweasd-666.gremiocampeao.cognitedata.com"
+    client._config.client_name = "extutil-unit-test"
 
     queue = IOFileUploadQueue(cdf_client=client, overwrite_existing=True, max_queue_size=1, max_parallelism=1)
 

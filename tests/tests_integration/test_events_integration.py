@@ -16,11 +16,11 @@ import os
 import random
 
 import pytest
+from conftest import ETestType, ParamTest
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Event
 from cognite.extractorutils.uploader.events import EventUploadQueue
-from tests.conftest import ETestType, ParamTest
 
 
 @pytest.fixture

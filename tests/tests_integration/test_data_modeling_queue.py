@@ -2,6 +2,7 @@ import random
 from time import sleep
 
 import pytest
+from conftest import NUM_EDGES, NUM_NODES, ETestType, ParamTest
 from faker import Faker
 
 from cognite.client import CogniteClient
@@ -12,7 +13,6 @@ from cognite.client.data_classes.data_modeling import (
     ViewId,
 )
 from cognite.extractorutils.uploader.data_modeling import InstanceUploadQueue
-from tests.conftest import NUM_EDGES, NUM_NODES, ETestType, ParamTest
 
 fake = Faker()
 

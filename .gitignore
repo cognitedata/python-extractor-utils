@@ -103,6 +103,7 @@ ipython_config.py
 #   install all needed dependencies.
 #Pipfile.lock
 
+uv.lock
 poetry.lock
 
 # pyenv
