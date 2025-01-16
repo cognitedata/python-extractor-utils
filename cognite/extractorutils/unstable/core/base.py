@@ -45,12 +45,10 @@ class FullConfig(Generic[_T]):
         connection_config: ConnectionConfig,
         application_config: _T,
         current_config_revision: ConfigRevision,
-        newest_config_revision: ConfigRevision,
     ) -> None:
         self.connection_config = connection_config
         self.application_config = application_config
         self.current_config_revision = current_config_revision
-        self.newest_config_revision = newest_config_revision
 
 
 class Extractor(Generic[ConfigType]):
@@ -70,7 +68,6 @@ class Extractor(Generic[ConfigType]):
         self.connection_config = config.connection_config
         self.application_config = config.application_config
         self.current_config_revision = config.current_config_revision
-        self.newest_config_revision = config.newest_config_revision
 
         self.cognite_client = self.connection_config.get_cognite_client(f"{self.EXTERNAL_ID}-{self.VERSION}")
 
@@ -158,7 +155,7 @@ class Extractor(Generic[ConfigType]):
             self._errors.clear()
 
         res = self.cognite_client.post(
-            f"/api/v1/projects/{self.cognite_client.config.project}/odin/checkin",
+            f"/api/v1/projects/{self.cognite_client.config.project}/integrations/checkin",
             json={
                 "externalId": self.connection_config.integration,
                 "taskEvents": task_updates,
@@ -171,7 +168,7 @@ class Extractor(Generic[ConfigType]):
         if (
             new_config_revision
             and self.current_config_revision != "local"
-            and new_config_revision > self.newest_config_revision
+            and new_config_revision > self.current_config_revision
         ):
             self.restart()
 
@@ -272,7 +269,7 @@ class Extractor(Generic[ConfigType]):
 
     def _report_extractor_info(self) -> None:
         self.cognite_client.post(
-            f"/api/v1/projects/{self.cognite_client.config.project}/odin/extractorinfo",
+            f"/api/v1/projects/{self.cognite_client.config.project}/integrations/extractorinfo",
             json={
                 "externalId": self.connection_config.integration,
                 "activeConfigRevision": self.current_config_revision,

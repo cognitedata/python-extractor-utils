@@ -12,8 +12,14 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.5.8
 
-## 7.6.7
+### Changed
+
+* In the `unstable` package: update path and query params to adapt to changes in the unstable API
+* In the `unstable` package: remove logic to attempt older config revisions, just fail if current config is invalid
+
+## 7.5.7
 
 ### Changed
 

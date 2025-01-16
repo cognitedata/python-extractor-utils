@@ -16,7 +16,7 @@
 Cognite extractor utils is a Python package that simplifies the development of new extractors.
 """
 
-__version__ = "7.5.7"
+__version__ = "7.5.8"
 from .base import Extractor
 
 __all__ = ["Extractor"]

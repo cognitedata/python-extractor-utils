@@ -38,7 +38,7 @@ def load_file(path: Path, schema: type[_T]) -> _T:
 def load_from_cdf(
     cognite_client: CogniteClient, external_id: str, schema: type[_T], revision: int | None = None
 ) -> tuple[_T, int]:
-    params: dict[str, str | int] = {"externalId": external_id}
+    params: dict[str, str | int] = {"integration": external_id}
     if revision:
         params["revision"] = revision
     response = cognite_client.get(
