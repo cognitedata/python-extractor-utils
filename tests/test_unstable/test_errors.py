@@ -18,7 +18,6 @@ def test_global_error(
             connection_config=connection_config,
             application_config=application_config,
             current_config_revision=1,
-            newest_config_revision=1,
         )
     )
 
@@ -49,7 +48,6 @@ def test_instant_error(
             connection_config=connection_config,
             application_config=application_config,
             current_config_revision=1,
-            newest_config_revision=1,
         )
     )
 
@@ -77,7 +75,6 @@ def test_task_error(
             connection_config=connection_config,
             application_config=application_config,
             current_config_revision=1,
-            newest_config_revision=1,
         )
     )
 
@@ -122,7 +119,6 @@ def test_crashing_task(
             connection_config=connection_config,
             application_config=application_config,
             current_config_revision=1,
-            newest_config_revision=1,
         )
     )
 
@@ -168,7 +164,6 @@ def test_reporting_errors(
             connection_config=connection_config,
             application_config=application_config,
             current_config_revision=1,
-            newest_config_revision=1,
         )
     )
 
@@ -181,7 +176,7 @@ def test_reporting_errors(
         extractor._checkin()
 
         res = extractor.cognite_client.get(
-            f"/api/v1/projects/{extractor.cognite_client.config.project}/odin/errors?integration={connection_config.integration}",
+            f"/api/v1/projects/{extractor.cognite_client.config.project}/integrations/errors?integration={connection_config.integration}",
             headers={"cdf-version": "alpha"},
         ).json()["items"]
         assert len(res) == 1
@@ -198,7 +193,7 @@ def test_reporting_errors(
     extractor._checkin()
 
     res = extractor.cognite_client.get(
-        f"/api/v1/projects/{extractor.cognite_client.config.project}/odin/errors?integration={connection_config.integration}",
+        f"/api/v1/projects/{extractor.cognite_client.config.project}/integrations/errors?integration={connection_config.integration}",
         headers={"cdf-version": "alpha"},
     ).json()["items"]
     assert len(res) == 1

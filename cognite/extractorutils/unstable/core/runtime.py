@@ -6,7 +6,6 @@ from argparse import ArgumentParser, Namespace
 from multiprocessing import Process, Queue
 from pathlib import Path
 from typing import Any, Generic, TypeVar
-from uuid import uuid4
 
 from requests.exceptions import ConnectionError
 from typing_extensions import assert_never
@@ -17,7 +16,6 @@ from cognite.extractorutils.unstable.configuration.exceptions import InvalidConf
 from cognite.extractorutils.unstable.configuration.loaders import load_file, load_from_cdf
 from cognite.extractorutils.unstable.configuration.models import ConnectionConfig
 from cognite.extractorutils.unstable.core._dto import Error
-from cognite.extractorutils.util import now
 
 from ._messaging import RuntimeMessage
 from .base import ConfigRevision, ConfigType, Extractor, FullConfig
@@ -127,15 +125,13 @@ class Runtime(Generic[ExtractorType]):
         self,
         args: Namespace,
         connection_config: ConnectionConfig,
-    ) -> tuple[ConfigType, ConfigRevision, ConfigRevision]:
+    ) -> tuple[ConfigType, ConfigRevision]:
         current_config_revision: ConfigRevision
-        newest_config_revision: ConfigRevision
 
         if args.local_override:
             self.logger.info("Loading local application config")
 
             current_config_revision = "local"
-            newest_config_revision = "local"
             try:
                 application_config = load_file(args.local_override[0], self._extractor_class.CONFIG_TYPE)
             except InvalidConfigError as e:
@@ -153,50 +149,12 @@ class Runtime(Generic[ExtractorType]):
 
             errors: list[Error] = []
 
-            revision: int | None = None
             try:
-                while True:
-                    try:
-                        application_config, current_config_revision = load_from_cdf(
-                            client,
-                            connection_config.integration,
-                            self._extractor_class.CONFIG_TYPE,
-                            revision=revision,
-                        )
-                        break
-
-                    except InvalidConfigError as e:
-                        if e.attempted_revision is None:
-                            # Should never happen, attempted_revision is set in every handler in load_from_cdf, but it's
-                            # needed for type checks to pass
-                            raise e
-
-                        self.logger.error(f"Revision {e.attempted_revision} is invalid: {e.message}")
-
-                        t = now()
-                        errors.append(
-                            Error(
-                                external_id=str(uuid4()),
-                                level="error",
-                                description=f"Revision {e.attempted_revision} is invalid",
-                                details=e.message,
-                                start_time=t,
-                                end_time=t,
-                                task=None,
-                            )
-                        )
-
-                        if revision is None:
-                            revision = e.attempted_revision - 1
-                            newest_config_revision = e.attempted_revision
-                        else:
-                            revision -= 1
-
-                        if revision > 0:
-                            self.logger.info(f"Falling back to revision {revision}")
-                        else:
-                            self.logger.critical("No more revisions to fall back to")
-                            raise e
+                application_config, current_config_revision = load_from_cdf(
+                    client,
+                    connection_config.integration,
+                    self._extractor_class.CONFIG_TYPE,
+                )
 
             finally:
                 if errors:
@@ -209,7 +167,7 @@ class Runtime(Generic[ExtractorType]):
                         headers={"cdf-version": "alpha"},
                     )
 
-        return application_config, current_config_revision, newest_config_revision
+        return application_config, current_config_revision
 
     def _verify_connection_config(self, connection_config: ConnectionConfig) -> bool:
         client = connection_config.get_cognite_client(
@@ -281,9 +239,7 @@ class Runtime(Generic[ExtractorType]):
         application_config: Any
         while not self._cancellation_token.is_cancelled:
             try:
-                application_config, current_config_revision, newest_config_revision = self._get_application_config(
-                    args, connection_config
-                )
+                application_config, current_config_revision = self._get_application_config(args, connection_config)
 
             except InvalidConfigError:
                 self.logger.critical("Could not get a valid application config file. Shutting down")
@@ -295,7 +251,6 @@ class Runtime(Generic[ExtractorType]):
                     connection_config=connection_config,
                     application_config=application_config,
                     current_config_revision=current_config_revision,
-                    newest_config_revision=newest_config_revision,
                 )
             )
             process.join()
