@@ -281,6 +281,8 @@ class Extractor(Generic[ConfigType]):
                     {
                         "name": t.name,
                         "type": "continuous" if isinstance(t, ContinuousTask) else "batch",
+                        "action": True if isinstance(t, ScheduledTask) else False,
+                        "description": t.description,
                     }
                     for t in self._tasks
                 ],

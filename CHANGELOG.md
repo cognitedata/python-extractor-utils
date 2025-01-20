@@ -12,6 +12,21 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.5.9
+
+### Added
+
+* In the `unstable` package: Task description
+* In the `unstable` package: Convenience methods to create scheduled tasks (ie, `from_interval`, `from_cron`)
+
+### Changed
+
+* In the `unstable` package: Don't base tasks on dataclasses
+
+### Fixed
+
+* In the `unstable` package: Correctly set the `action` attribute on reported tasks
+
 ## 7.5.8
 
 ### Changed
