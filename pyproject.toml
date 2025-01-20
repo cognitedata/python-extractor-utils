@@ -78,8 +78,6 @@ ignore = ["S104", "S303", "S311"]
 fixable = ["A", "B", "C", "D", "E", "F", "I", "UP"]
 unfixable = []
 
-
-
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
@@ -110,13 +108,12 @@ warn_redundant_casts = true
 warn_unused_ignores = true
 exclude = "tests/*"
 
-[tool.setuptools.packages.find]
-where = ["."]
-exclude = ["tests*", "docs*"]
+[tool.hatch.build.targets.wheel]
+packages = ["cognite"]
 
-[tool.setuptools]
-py-modules = ["cognite"]
+[tool.hatch.build.targets.sdist]
+only-include = ["cognite"]
 
 [build-system]
-requires = ["setuptools >= 61.0"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
