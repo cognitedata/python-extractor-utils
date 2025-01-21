@@ -2,7 +2,7 @@ from time import sleep
 
 import pytest
 
-from cognite.extractorutils.unstable.configuration.models import ConnectionConfig, IntervalConfig, TimeIntervalConfig
+from cognite.extractorutils.unstable.configuration.models import ConnectionConfig
 from cognite.extractorutils.unstable.core.base import FullConfig
 from cognite.extractorutils.unstable.core.errors import ErrorLevel
 from cognite.extractorutils.unstable.core.tasks import ScheduledTask
@@ -21,7 +21,7 @@ def test_global_error(
         )
     )
 
-    err = extractor.error(level=ErrorLevel.error, description="Oh no!", details="There was an error")
+    err = extractor.begin_error("Oh no!", details="There was an error")
 
     assert len(extractor._errors) == 1
     assert err.external_id in extractor._errors
@@ -51,7 +51,7 @@ def test_instant_error(
         )
     )
 
-    err = extractor.error(level=ErrorLevel.error, description="Oh no!", details="There was an error")
+    err = extractor.begin_error("Oh no!", details="There was an error")
 
     assert len(extractor._errors) == 1
     assert err.external_id in extractor._errors
@@ -80,17 +80,14 @@ def test_task_error(
 
     def task() -> None:
         sleep(0.05)
-        extractor.error(level=ErrorLevel.warning, description="Hey now").instant()
+        extractor.warning(description="Hey now")
         sleep(0.05)
 
     extractor.add_task(
-        ScheduledTask(
-            "TestTask",
+        ScheduledTask.from_interval(
+            interval="15m",
+            name="TestTask",
             target=task,
-            schedule=IntervalConfig(
-                type="interval",
-                expression=TimeIntervalConfig("15m"),
-            ),
         )
     )
 
@@ -127,13 +124,10 @@ def test_crashing_task(
         raise ValueError("Try catching this!")
 
     extractor.add_task(
-        ScheduledTask(
-            "TestTask",
+        ScheduledTask.from_interval(
+            interval="15m",
+            name="TestTask",
             target=task,
-            schedule=IntervalConfig(
-                type="interval",
-                expression=TimeIntervalConfig("15m"),
-            ),
         )
     )
 
@@ -167,7 +161,7 @@ def test_reporting_errors(
         )
     )
 
-    err = extractor.error(level=ErrorLevel.error, description="Oh no!", details="There was an error")
+    err = extractor.begin_error(description="Oh no!", details="There was an error")
 
     assert len(extractor._errors) == 1
     assert err.external_id in extractor._errors
