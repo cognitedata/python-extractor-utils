@@ -2,7 +2,7 @@ import logging
 import logging.config
 import time
 from concurrent.futures import ThreadPoolExecutor
-from contextvars import ContextVar, Token
+from functools import partial
 from logging.handlers import TimedRotatingFileHandler
 from multiprocessing import Queue
 from threading import RLock, Thread
@@ -26,7 +26,7 @@ from cognite.extractorutils.unstable.core._dto import TaskUpdate
 from cognite.extractorutils.unstable.core._messaging import RuntimeMessage
 from cognite.extractorutils.unstable.core.errors import Error, ErrorLevel
 from cognite.extractorutils.unstable.core.restart_policy import WHEN_CONTINUOUS_TASKS_CRASHES, RestartPolicy
-from cognite.extractorutils.unstable.core.tasks import ContinuousTask, ScheduledTask, StartupTask, Task
+from cognite.extractorutils.unstable.core.tasks import ContinuousTask, ScheduledTask, StartupTask, Task, TaskContext
 from cognite.extractorutils.unstable.scheduling import TaskScheduler
 from cognite.extractorutils.util import now
 
@@ -81,8 +81,6 @@ class Extractor(Generic[ConfigType]):
         self._errors: dict[str, Error] = {}
 
         self.logger = logging.getLogger(f"{self.EXTERNAL_ID}.main")
-
-        self._current_task: ContextVar[str | None] = ContextVar("current_task", default=None)
 
         self.__init_tasks__()
 
@@ -191,16 +189,14 @@ class Extractor(Generic[ConfigType]):
         description: str,
         *,
         details: str | None = None,
-        force_global: bool = False,
+        task_name: str | None = None,
     ) -> Error:
-        task_name = self._current_task.get()
-
         return Error(
             level=level,
             description=description,
             details=details,
             extractor=self,
-            task_name=None if force_global else task_name,
+            task_name=task_name,
         )
 
     def begin_warning(
@@ -208,13 +204,14 @@ class Extractor(Generic[ConfigType]):
         description: str,
         *,
         details: str | None = None,
-        force_global: bool = False,
         auto_log: bool = True,
     ) -> Error:
         if auto_log:
             self.logger.warning(description)
         return self._error(
-            level=ErrorLevel.warning, description=description, details=details, force_global=force_global
+            level=ErrorLevel.warning,
+            description=description,
+            details=details,
         )
 
     def begin_error(
@@ -222,37 +219,44 @@ class Extractor(Generic[ConfigType]):
         description: str,
         *,
         details: str | None = None,
-        force_global: bool = False,
         auto_log: bool = True,
     ) -> Error:
         if auto_log:
             self.logger.error(description)
-        return self._error(level=ErrorLevel.error, description=description, details=details, force_global=force_global)
+        return self._error(
+            level=ErrorLevel.error,
+            description=description,
+            details=details,
+        )
 
     def begin_fatal(
         self,
         description: str,
         *,
         details: str | None = None,
-        force_global: bool = False,
         auto_log: bool = True,
     ) -> Error:
         if auto_log:
             self.logger.critical(description)
-        return self._error(level=ErrorLevel.fatal, description=description, details=details, force_global=force_global)
+        return self._error(
+            level=ErrorLevel.fatal,
+            description=description,
+            details=details,
+        )
 
     def warning(
         self,
         description: str,
         *,
         details: str | None = None,
-        force_global: bool = False,
         auto_log: bool = True,
     ) -> None:
         if auto_log:
             self.logger.warning(description)
         self._error(
-            level=ErrorLevel.warning, description=description, details=details, force_global=force_global
+            level=ErrorLevel.warning,
+            description=description,
+            details=details,
         ).instant()
 
     def error(
@@ -260,13 +264,14 @@ class Extractor(Generic[ConfigType]):
         description: str,
         *,
         details: str | None = None,
-        force_global: bool = False,
         auto_log: bool = True,
     ) -> None:
         if auto_log:
             self.logger.error(description)
         self._error(
-            level=ErrorLevel.error, description=description, details=details, force_global=force_global
+            level=ErrorLevel.error,
+            description=description,
+            details=details,
         ).instant()
 
     def fatal(
@@ -274,13 +279,14 @@ class Extractor(Generic[ConfigType]):
         description: str,
         *,
         details: str | None = None,
-        force_global: bool = False,
         auto_log: bool = True,
     ) -> None:
         if auto_log:
             self.logger.critical(description)
         self._error(
-            level=ErrorLevel.fatal, description=description, details=details, force_global=force_global
+            level=ErrorLevel.fatal,
+            description=description,
+            details=details,
         ).instant()
 
     def restart(self) -> None:
@@ -297,7 +303,7 @@ class Extractor(Generic[ConfigType]):
         # Store this for later, since we'll override it with the wrapped version
         target = task.target
 
-        def run_task() -> None:
+        def run_task(task_context: TaskContext) -> None:
             """
             A wrapped version of the task's target, with tracking and error handling
             """
@@ -307,33 +313,23 @@ class Extractor(Generic[ConfigType]):
                     TaskUpdate(type="started", name=task.name, timestamp=now()),
                 )
 
-            context_token: Token[str | None] | None = None
-
             try:
-                # Set the current task context var, used to track that we're in a task for error reporting
-                context_token = self._current_task.set(task.name)
-
                 # Run task
-                target()
+                target(task_context)
 
             except Exception as e:
                 self.logger.exception(f"Unexpected error in {task.name}")
 
                 # Task crashed, record it as a fatal error
-                self._error(
-                    ErrorLevel.fatal,
-                    description="Task crashed unexpectedly",
+                task_context.fatal(
+                    "Task crashed unexpectedly",
                     details="".join(format_exception(e)),
-                ).instant()
+                )
 
                 if self.__class__.RESTART_POLICY(task, e):
                     self.restart()
 
             finally:
-                # Unset the current task
-                if context_token is not None:
-                    self._current_task.reset(context_token)
-
                 # Record task end
                 with self._checkin_lock:
                     self._task_updates.append(
@@ -345,7 +341,16 @@ class Extractor(Generic[ConfigType]):
 
         match task:
             case ScheduledTask() as t:
-                self._scheduler.schedule_task(name=t.name, schedule=t.schedule, task=t.target)
+                self._scheduler.schedule_task(
+                    name=t.name,
+                    schedule=t.schedule,
+                    task=lambda: t.target(
+                        TaskContext(
+                            task=task,
+                            extractor=self,
+                        )
+                    ),
+                )
 
     def _report_extractor_info(self) -> None:
         self.cognite_client.post(
@@ -419,11 +424,23 @@ class Extractor(Generic[ConfigType]):
         if startup:
             with ThreadPoolExecutor() as pool:
                 for task in startup:
-                    pool.submit(task.target)
+                    pool.submit(
+                        partial(
+                            task.target,
+                            TaskContext(
+                                task=task,
+                                extractor=self,
+                            ),
+                        )
+                    )
         self.logger.info("Startup done")
 
         for task in continuous:
-            Thread(name=pascalize(task.name), target=task.target).start()
+            Thread(
+                name=pascalize(task.name),
+                target=task.target,
+                args=(TaskContext(task=task, extractor=self),),
+            ).start()
 
         if has_scheduled:
             self._scheduler.run()

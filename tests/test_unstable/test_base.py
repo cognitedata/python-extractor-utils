@@ -30,7 +30,7 @@ def test_simple_task_report(
     extractor.add_task(
         ScheduledTask(
             name="TestTask",
-            target=mock,
+            target=lambda _t: mock(),
             schedule=IntervalConfig(type="interval", expression=TimeIntervalConfig("15m")),
         )
     )

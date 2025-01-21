@@ -1,4 +1,6 @@
+import logging
 from collections.abc import Callable
+from typing import TYPE_CHECKING
 
 from cognite.extractorutils.unstable.configuration.models import (
     CronConfig,
@@ -6,8 +8,125 @@ from cognite.extractorutils.unstable.configuration.models import (
     ScheduleConfig,
     TimeIntervalConfig,
 )
+from cognite.extractorutils.unstable.core.errors import Error, ErrorLevel
 
-__all__ = ["ScheduledTask", "ContinuousTask", "StartupTask", "Task"]
+if TYPE_CHECKING:
+    from cognite.extractorutils.unstable.core.base import Extractor
+
+__all__ = ["ScheduledTask", "ContinuousTask", "StartupTask", "Task", "TaskContext"]
+
+
+class TaskContext:
+    def __init__(self, task: "Task", extractor: "Extractor"):
+        self._task = task
+        self._extractor = extractor
+
+        self._logger = logging.getLogger(f"{self._extractor.EXTERNAL_ID}.{self._task.name.replace(' ', '')}")
+
+    def debug(self, message: str) -> None:
+        self._logger.debug(message)
+
+    def info(self, message: str) -> None:
+        self._logger.info(message)
+
+    def begin_warning(
+        self,
+        message: str,
+        *,
+        details: str | None = None,
+        auto_log: bool = True,
+    ) -> Error:
+        if auto_log:
+            self._logger.warning(message)
+        return self._extractor._error(
+            level=ErrorLevel.warning,
+            description=message,
+            details=details,
+            task_name=self._task.name,
+        )
+
+    def begin_error(
+        self,
+        message: str,
+        *,
+        details: str | None = None,
+        auto_log: bool = True,
+    ) -> Error:
+        if auto_log:
+            self._logger.error(message)
+        return self._extractor._error(
+            level=ErrorLevel.error,
+            description=message,
+            details=details,
+            task_name=self._task.name,
+        )
+
+    def begin_fatal(
+        self,
+        message: str,
+        *,
+        details: str | None = None,
+        auto_log: bool = True,
+    ) -> Error:
+        if auto_log:
+            self._logger.critical(message)
+        return self._extractor._error(
+            level=ErrorLevel.fatal,
+            description=message,
+            details=details,
+            task_name=self._task.name,
+        )
+
+    def warning(
+        self,
+        message: str,
+        *,
+        details: str | None = None,
+        auto_log: bool = True,
+    ) -> None:
+        if auto_log:
+            self._logger.warning(message)
+        self._extractor._error(
+            level=ErrorLevel.warning,
+            description=message,
+            details=details,
+            task_name=self._task.name,
+        ).instant()
+
+    def error(
+        self,
+        message: str,
+        *,
+        details: str | None = None,
+        auto_log: bool = True,
+    ) -> None:
+        if auto_log:
+            self._logger.error(message)
+        self._extractor._error(
+            level=ErrorLevel.error,
+            description=message,
+            details=details,
+            task_name=self._task.name,
+        ).instant()
+
+    def fatal(
+        self,
+        message: str,
+        *,
+        details: str | None = None,
+        auto_log: bool = True,
+    ) -> None:
+        if auto_log:
+            self._logger.critical(message)
+        self._extractor._error(
+            level=ErrorLevel.fatal,
+            description=message,
+            details=details,
+            task_name=self._task.name,
+        ).instant()
+
+
+TaskTarget = Callable[[TaskContext], None]
 
 
 class _Task:
@@ -15,7 +134,7 @@ class _Task:
         self,
         *,
         name: str,
-        target: Callable[[], None],
+        target: TaskTarget,
         description: str | None = None,
     ) -> None:
         self.name = name
@@ -28,7 +147,7 @@ class ScheduledTask(_Task):
         self,
         *,
         name: str,
-        target: Callable[[], None],
+        target: TaskTarget,
         description: str | None = None,
         schedule: ScheduleConfig,
     ):
@@ -37,7 +156,7 @@ class ScheduledTask(_Task):
 
     @classmethod
     def from_interval(
-        cls, *, interval: str, name: str, target: Callable[[], None], description: str | None = None
+        cls, *, interval: str, name: str, target: TaskTarget, description: str | None = None
     ) -> "ScheduledTask":
         return ScheduledTask(
             name=name,
@@ -47,9 +166,7 @@ class ScheduledTask(_Task):
         )
 
     @classmethod
-    def from_cron(
-        cls, *, cron: str, name: str, target: Callable[[], None], description: str | None = None
-    ) -> "ScheduledTask":
+    def from_cron(cls, *, cron: str, name: str, target: TaskTarget, description: str | None = None) -> "ScheduledTask":
         return ScheduledTask(
             name=name,
             target=target,
@@ -63,7 +180,7 @@ class ContinuousTask(_Task):
         self,
         *,
         name: str,
-        target: Callable[[], None],
+        target: TaskTarget,
         description: str | None = None,
     ) -> None:
         super().__init__(name=name, target=target, description=description)
@@ -74,7 +191,7 @@ class StartupTask(_Task):
         self,
         *,
         name: str,
-        target: Callable[[], None],
+        target: TaskTarget,
         description: str | None = None,
     ) -> None:
         super().__init__(name=name, target=target, description=description)

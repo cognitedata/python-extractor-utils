@@ -5,7 +5,7 @@ import pytest
 from cognite.extractorutils.unstable.configuration.models import ConnectionConfig
 from cognite.extractorutils.unstable.core.base import FullConfig
 from cognite.extractorutils.unstable.core.errors import ErrorLevel
-from cognite.extractorutils.unstable.core.tasks import ScheduledTask
+from cognite.extractorutils.unstable.core.tasks import ScheduledTask, TaskContext
 from test_unstable.conftest import TestConfig, TestExtractor
 
 
@@ -78,9 +78,9 @@ def test_task_error(
         )
     )
 
-    def task() -> None:
+    def task(tc: TaskContext) -> None:
         sleep(0.05)
-        extractor.warning(description="Hey now")
+        tc.warning("Hey now")
         sleep(0.05)
 
     extractor.add_task(
@@ -119,7 +119,7 @@ def test_crashing_task(
         )
     )
 
-    def task() -> None:
+    def task(_tc: TaskContext) -> None:
         sleep(0.05)
         raise ValueError("Try catching this!")
 
