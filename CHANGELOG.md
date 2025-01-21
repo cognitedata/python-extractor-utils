@@ -22,6 +22,10 @@ Changes are grouped as follows
 ### Changed
 
 * In the `unstable` package: Don't base tasks on dataclasses
+* In the `unstable` package: Error reporting has changed from a single `error(level=..., description=..., ...)` method
+  to several more specific methods, with the goal of being more convenient to use. E.g. `self.fatal(desc)` or
+  `self.warning(desc)`. As well as separating out `begin_error`, `begin_warning` etc for long-lasting errors, to avoid
+  the `self.warning(...).instant()` workaround.
 
 ### Fixed
 

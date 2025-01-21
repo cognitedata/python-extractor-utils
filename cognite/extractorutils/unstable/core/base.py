@@ -185,12 +185,12 @@ class Extractor(Generic[ConfigType]):
         with self._checkin_lock:
             self._errors[error.external_id] = error
 
-    def error(
+    def _error(
         self,
         level: ErrorLevel,
         description: str,
-        details: str | None = None,
         *,
+        details: str | None = None,
         force_global: bool = False,
     ) -> Error:
         task_name = self._current_task.get()
@@ -202,6 +202,86 @@ class Extractor(Generic[ConfigType]):
             extractor=self,
             task_name=None if force_global else task_name,
         )
+
+    def begin_warning(
+        self,
+        description: str,
+        *,
+        details: str | None = None,
+        force_global: bool = False,
+        auto_log: bool = True,
+    ) -> Error:
+        if auto_log:
+            self.logger.warning(description)
+        return self._error(
+            level=ErrorLevel.warning, description=description, details=details, force_global=force_global
+        )
+
+    def begin_error(
+        self,
+        description: str,
+        *,
+        details: str | None = None,
+        force_global: bool = False,
+        auto_log: bool = True,
+    ) -> Error:
+        if auto_log:
+            self.logger.error(description)
+        return self._error(level=ErrorLevel.error, description=description, details=details, force_global=force_global)
+
+    def begin_fatal(
+        self,
+        description: str,
+        *,
+        details: str | None = None,
+        force_global: bool = False,
+        auto_log: bool = True,
+    ) -> Error:
+        if auto_log:
+            self.logger.critical(description)
+        return self._error(level=ErrorLevel.fatal, description=description, details=details, force_global=force_global)
+
+    def warning(
+        self,
+        description: str,
+        *,
+        details: str | None = None,
+        force_global: bool = False,
+        auto_log: bool = True,
+    ) -> None:
+        if auto_log:
+            self.logger.warning(description)
+        self._error(
+            level=ErrorLevel.warning, description=description, details=details, force_global=force_global
+        ).instant()
+
+    def error(
+        self,
+        description: str,
+        *,
+        details: str | None = None,
+        force_global: bool = False,
+        auto_log: bool = True,
+    ) -> None:
+        if auto_log:
+            self.logger.error(description)
+        self._error(
+            level=ErrorLevel.error, description=description, details=details, force_global=force_global
+        ).instant()
+
+    def fatal(
+        self,
+        description: str,
+        *,
+        details: str | None = None,
+        force_global: bool = False,
+        auto_log: bool = True,
+    ) -> None:
+        if auto_log:
+            self.logger.critical(description)
+        self._error(
+            level=ErrorLevel.fatal, description=description, details=details, force_global=force_global
+        ).instant()
 
     def restart(self) -> None:
         self.logger.info("Restarting extractor")
@@ -240,7 +320,7 @@ class Extractor(Generic[ConfigType]):
                 self.logger.exception(f"Unexpected error in {task.name}")
 
                 # Task crashed, record it as a fatal error
-                self.error(
+                self._error(
                     ErrorLevel.fatal,
                     description="Task crashed unexpectedly",
                     details="".join(format_exception(e)),
