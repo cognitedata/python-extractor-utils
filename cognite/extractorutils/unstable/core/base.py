@@ -6,7 +6,6 @@ from functools import partial
 from logging.handlers import TimedRotatingFileHandler
 from multiprocessing import Queue
 from threading import RLock, Thread
-from traceback import format_exception
 from types import TracebackType
 from typing import Generic, Literal, TypeVar
 
@@ -25,6 +24,7 @@ from cognite.extractorutils.unstable.core._dto import Error as DtoError
 from cognite.extractorutils.unstable.core._dto import TaskUpdate
 from cognite.extractorutils.unstable.core._messaging import RuntimeMessage
 from cognite.extractorutils.unstable.core.errors import Error, ErrorLevel
+from cognite.extractorutils.unstable.core.logger import CogniteLogger
 from cognite.extractorutils.unstable.core.restart_policy import WHEN_CONTINUOUS_TASKS_CRASHES, RestartPolicy
 from cognite.extractorutils.unstable.core.tasks import ContinuousTask, ScheduledTask, StartupTask, Task, TaskContext
 from cognite.extractorutils.unstable.scheduling import TaskScheduler
@@ -51,7 +51,7 @@ class FullConfig(Generic[_T]):
         self.current_config_revision = current_config_revision
 
 
-class Extractor(Generic[ConfigType]):
+class Extractor(Generic[ConfigType], CogniteLogger):
     NAME: str
     EXTERNAL_ID: str
     DESCRIPTION: str
@@ -80,7 +80,7 @@ class Extractor(Generic[ConfigType]):
         self._task_updates: list[TaskUpdate] = []
         self._errors: dict[str, Error] = {}
 
-        self.logger = logging.getLogger(f"{self.EXTERNAL_ID}.main")
+        self._logger = logging.getLogger(f"{self.EXTERNAL_ID}.main")
 
         self.__init_tasks__()
 
@@ -173,17 +173,17 @@ class Extractor(Generic[ConfigType]):
     def _run_checkin(self) -> None:
         while not self.cancellation_token.is_cancelled:
             try:
-                self.logger.debug("Running checkin")
+                self._logger.debug("Running checkin")
                 self._checkin()
             except Exception:
-                self.logger.exception("Error during checkin")
+                self._logger.exception("Error during checkin")
             self.cancellation_token.wait(10)
 
     def _report_error(self, error: Error) -> None:
         with self._checkin_lock:
             self._errors[error.external_id] = error
 
-    def _error(
+    def _new_error(
         self,
         level: ErrorLevel,
         description: str,
@@ -199,98 +199,8 @@ class Extractor(Generic[ConfigType]):
             task_name=task_name,
         )
 
-    def begin_warning(
-        self,
-        description: str,
-        *,
-        details: str | None = None,
-        auto_log: bool = True,
-    ) -> Error:
-        if auto_log:
-            self.logger.warning(description)
-        return self._error(
-            level=ErrorLevel.warning,
-            description=description,
-            details=details,
-        )
-
-    def begin_error(
-        self,
-        description: str,
-        *,
-        details: str | None = None,
-        auto_log: bool = True,
-    ) -> Error:
-        if auto_log:
-            self.logger.error(description)
-        return self._error(
-            level=ErrorLevel.error,
-            description=description,
-            details=details,
-        )
-
-    def begin_fatal(
-        self,
-        description: str,
-        *,
-        details: str | None = None,
-        auto_log: bool = True,
-    ) -> Error:
-        if auto_log:
-            self.logger.critical(description)
-        return self._error(
-            level=ErrorLevel.fatal,
-            description=description,
-            details=details,
-        )
-
-    def warning(
-        self,
-        description: str,
-        *,
-        details: str | None = None,
-        auto_log: bool = True,
-    ) -> None:
-        if auto_log:
-            self.logger.warning(description)
-        self._error(
-            level=ErrorLevel.warning,
-            description=description,
-            details=details,
-        ).instant()
-
-    def error(
-        self,
-        description: str,
-        *,
-        details: str | None = None,
-        auto_log: bool = True,
-    ) -> None:
-        if auto_log:
-            self.logger.error(description)
-        self._error(
-            level=ErrorLevel.error,
-            description=description,
-            details=details,
-        ).instant()
-
-    def fatal(
-        self,
-        description: str,
-        *,
-        details: str | None = None,
-        auto_log: bool = True,
-    ) -> None:
-        if auto_log:
-            self.logger.critical(description)
-        self._error(
-            level=ErrorLevel.fatal,
-            description=description,
-            details=details,
-        ).instant()
-
     def restart(self) -> None:
-        self.logger.info("Restarting extractor")
+        self._logger.info("Restarting extractor")
         if self._runtime_messages:
             self._runtime_messages.put(RuntimeMessage.RESTART)
         self.cancellation_token.cancel()
@@ -318,12 +228,11 @@ class Extractor(Generic[ConfigType]):
                 target(task_context)
 
             except Exception as e:
-                self.logger.exception(f"Unexpected error in {task.name}")
-
                 # Task crashed, record it as a fatal error
-                task_context.fatal(
-                    "Task crashed unexpectedly",
-                    details="".join(format_exception(e)),
+                task_context.exception(
+                    f"Task {task.name} crashed unexpectedly",
+                    e,
+                    level=ErrorLevel.fatal,
                 )
 
                 if self.__class__.RESTART_POLICY(task, e):
@@ -397,7 +306,7 @@ class Extractor(Generic[ConfigType]):
         with self._checkin_lock:
             self._checkin()
 
-        self.logger.info("Shutting down extractor")
+        self._logger.info("Shutting down extractor")
         return exc_val is None
 
     def run(self) -> None:
@@ -420,7 +329,7 @@ class Extractor(Generic[ConfigType]):
                 case _:
                     assert_never(task)
 
-        self.logger.info("Starting extractor")
+        self._logger.info("Starting extractor")
         if startup:
             with ThreadPoolExecutor() as pool:
                 for task in startup:
@@ -433,7 +342,7 @@ class Extractor(Generic[ConfigType]):
                             ),
                         )
                     )
-        self.logger.info("Startup done")
+        self._logger.info("Startup done")
 
         for task in continuous:
             Thread(

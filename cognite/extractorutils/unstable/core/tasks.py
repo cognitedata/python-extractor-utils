@@ -1,9 +1,6 @@
 import logging
 from collections.abc import Callable
-from traceback import format_exception
-from typing import TYPE_CHECKING, Literal
-
-from typing_extensions import assert_never
+from typing import TYPE_CHECKING
 
 from cognite.extractorutils.unstable.configuration.models import (
     CronConfig,
@@ -12,6 +9,7 @@ from cognite.extractorutils.unstable.configuration.models import (
     TimeIntervalConfig,
 )
 from cognite.extractorutils.unstable.core.errors import Error, ErrorLevel
+from cognite.extractorutils.unstable.core.logger import CogniteLogger
 
 if TYPE_CHECKING:
     from cognite.extractorutils.unstable.core.base import Extractor
@@ -19,144 +17,28 @@ if TYPE_CHECKING:
 __all__ = ["ScheduledTask", "ContinuousTask", "StartupTask", "Task", "TaskContext"]
 
 
-class TaskContext:
+class TaskContext(CogniteLogger):
     def __init__(self, task: "Task", extractor: "Extractor"):
+        super().__init__()
         self._task = task
         self._extractor = extractor
 
         self._logger = logging.getLogger(f"{self._extractor.EXTERNAL_ID}.{self._task.name.replace(' ', '')}")
 
-    def debug(self, message: str) -> None:
-        self._logger.debug(message)
-
-    def info(self, message: str) -> None:
-        self._logger.info(message)
-
-    def begin_warning(
+    def _new_error(
         self,
-        message: str,
+        level: ErrorLevel,
+        description: str,
         *,
         details: str | None = None,
-        auto_log: bool = True,
+        task_name: str | None = None,
     ) -> Error:
-        if auto_log:
-            self._logger.warning(message)
-        return self._extractor._error(
-            level=ErrorLevel.warning,
-            description=message,
-            details=details,
-            task_name=self._task.name,
-        )
-
-    def begin_error(
-        self,
-        message: str,
-        *,
-        details: str | None = None,
-        auto_log: bool = True,
-    ) -> Error:
-        if auto_log:
-            self._logger.error(message)
-        return self._extractor._error(
-            level=ErrorLevel.error,
-            description=message,
-            details=details,
-            task_name=self._task.name,
-        )
-
-    def begin_fatal(
-        self,
-        message: str,
-        *,
-        details: str | None = None,
-        auto_log: bool = True,
-    ) -> Error:
-        if auto_log:
-            self._logger.critical(message)
-        return self._extractor._error(
-            level=ErrorLevel.fatal,
-            description=message,
-            details=details,
-            task_name=self._task.name,
-        )
-
-    def warning(
-        self,
-        message: str,
-        *,
-        details: str | None = None,
-        auto_log: bool = True,
-    ) -> None:
-        if auto_log:
-            self._logger.warning(message)
-        self._extractor._error(
-            level=ErrorLevel.warning,
-            description=message,
-            details=details,
-            task_name=self._task.name,
-        ).instant()
-
-    def error(
-        self,
-        message: str,
-        *,
-        details: str | None = None,
-        auto_log: bool = True,
-    ) -> None:
-        if auto_log:
-            self._logger.error(message)
-        self._extractor._error(
-            level=ErrorLevel.error,
-            description=message,
-            details=details,
-            task_name=self._task.name,
-        ).instant()
-
-    def fatal(
-        self,
-        message: str,
-        *,
-        details: str | None = None,
-        auto_log: bool = True,
-    ) -> None:
-        if auto_log:
-            self._logger.critical(message)
-        self._extractor._error(
-            level=ErrorLevel.fatal,
-            description=message,
-            details=details,
-            task_name=self._task.name,
-        ).instant()
-
-    def exception(
-        self,
-        message: str,
-        exception: Exception,
-        *,
-        level: ErrorLevel = ErrorLevel.error,
-        include_details: Literal["stack_trace"] | Literal["exception_message"] | bool = "exception_message",
-        auto_log: bool = True,
-    ) -> None:
-        if auto_log:
-            self._logger.log(level=level.log_level, msg=message, exc_info=exception)
-
-        details: str | None
-        match include_details:
-            case "stack_trace":
-                details = "".join(format_exception(exception))
-            case "exception_message" | True:
-                details = str(exception)
-            case False:
-                details = None
-            case _:
-                assert_never(include_details)
-
-        self._extractor._error(
+        return self._extractor._new_error(
             level=level,
-            description=message,
+            description=description,
             details=details,
             task_name=self._task.name,
-        ).instant()
+        )
 
 
 TaskTarget = Callable[[TaskContext], None]

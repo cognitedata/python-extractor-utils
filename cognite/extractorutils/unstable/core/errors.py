@@ -1,14 +1,14 @@
 import logging
-import typing
 from enum import Enum
 from types import TracebackType
+from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from typing_extensions import assert_never
 
 from cognite.extractorutils.util import now
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from .base import Extractor
 
 __all__ = ["Error", "ErrorLevel"]
