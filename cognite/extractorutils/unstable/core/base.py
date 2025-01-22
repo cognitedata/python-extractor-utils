@@ -62,6 +62,8 @@ class Extractor(Generic[ConfigType], CogniteLogger):
     RESTART_POLICY: RestartPolicy = WHEN_CONTINUOUS_TASKS_CRASHES
 
     def __init__(self, config: FullConfig[ConfigType]) -> None:
+        self._logger = logging.getLogger(f"{self.EXTERNAL_ID}.main")
+
         self.cancellation_token = CancellationToken()
         self.cancellation_token.cancel_on_interrupt()
 
@@ -79,8 +81,6 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self._tasks: list[Task] = []
         self._task_updates: list[TaskUpdate] = []
         self._errors: dict[str, Error] = {}
-
-        self._logger = logging.getLogger(f"{self.EXTERNAL_ID}.main")
 
         self.__init_tasks__()
 
