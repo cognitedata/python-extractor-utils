@@ -140,7 +140,7 @@ def test_crashing_task(
     assert len(extractor._errors) == 1
 
     error = list(extractor._errors.values())[0]
-    assert error.description == "Task crashed unexpectedly"
+    assert error.description == "Task TestTask crashed unexpectedly"
     assert error.level == ErrorLevel.fatal
 
     # Make sure error was recorded as a task error
