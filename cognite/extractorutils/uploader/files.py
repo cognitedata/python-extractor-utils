@@ -489,7 +489,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
                     or "Too little data for declared Content-Length" in error_message
                 ):
                     self.logger.error(
-                        f"LocalProtocolError error while uploading file: {file_meta} error message: {error_message}"
+                        f"Content Length Mismatch while uploading file: {file_meta} error message: {error_message}"
                     )
 
                 self.add_entry_failure_logger(file_name=str(file_meta.name), error=e)
