@@ -161,7 +161,7 @@ def test_reporting_errors(
         )
     )
 
-    err = extractor.begin_error(description="Oh no!", details="There was an error")
+    err = extractor.begin_error("Oh no!", details="There was an error")
 
     assert len(extractor._errors) == 1
     assert err.external_id in extractor._errors
