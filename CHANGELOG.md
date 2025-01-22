@@ -12,6 +12,28 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.5.9
+
+### Added
+
+* In the `unstable` package: Task description
+* In the `unstable` package: Convenience methods to create scheduled tasks (ie, `from_interval`, `from_cron`)
+* In the `unstable` package: A `TaskContext` class, which exposes a logging interface to use for logging and error
+  reporting within a task.
+
+### Changed
+
+* In the `unstable` package: Don't base tasks on dataclasses
+* In the `unstable` package: Error reporting has changed from a single `error(level=..., description=..., ...)` method
+  to several more specific methods, with the goal of being more convenient to use. E.g. `self.fatal(desc)` or
+  `self.warning(desc)`. As well as separating out `begin_error`, `begin_warning` etc for long-lasting errors, to avoid
+  the `self.warning(...).instant()` workaround.
+* In the `unstable` package: Change task signature to take a `TaskContext` as an arg
+
+### Fixed
+
+* In the `unstable` package: Correctly set the `action` attribute on reported tasks
+
 ## 7.5.8
 
 ### Changed

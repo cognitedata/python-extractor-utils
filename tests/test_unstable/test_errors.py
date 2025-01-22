@@ -2,10 +2,10 @@ from time import sleep
 
 import pytest
 
-from cognite.extractorutils.unstable.configuration.models import ConnectionConfig, IntervalConfig, TimeIntervalConfig
+from cognite.extractorutils.unstable.configuration.models import ConnectionConfig
 from cognite.extractorutils.unstable.core.base import FullConfig
 from cognite.extractorutils.unstable.core.errors import ErrorLevel
-from cognite.extractorutils.unstable.core.tasks import ScheduledTask
+from cognite.extractorutils.unstable.core.tasks import ScheduledTask, TaskContext
 from test_unstable.conftest import TestConfig, TestExtractor
 
 
@@ -21,7 +21,7 @@ def test_global_error(
         )
     )
 
-    err = extractor.error(level=ErrorLevel.error, description="Oh no!", details="There was an error")
+    err = extractor.begin_error("Oh no!", details="There was an error")
 
     assert len(extractor._errors) == 1
     assert err.external_id in extractor._errors
@@ -51,7 +51,7 @@ def test_instant_error(
         )
     )
 
-    err = extractor.error(level=ErrorLevel.error, description="Oh no!", details="There was an error")
+    err = extractor.begin_error("Oh no!", details="There was an error")
 
     assert len(extractor._errors) == 1
     assert err.external_id in extractor._errors
@@ -78,19 +78,16 @@ def test_task_error(
         )
     )
 
-    def task() -> None:
+    def task(tc: TaskContext) -> None:
         sleep(0.05)
-        extractor.error(level=ErrorLevel.warning, description="Hey now").instant()
+        tc.warning("Hey now")
         sleep(0.05)
 
     extractor.add_task(
-        ScheduledTask(
-            "TestTask",
+        ScheduledTask.from_interval(
+            interval="15m",
+            name="TestTask",
             target=task,
-            schedule=IntervalConfig(
-                type="interval",
-                expression=TimeIntervalConfig("15m"),
-            ),
         )
     )
 
@@ -122,18 +119,15 @@ def test_crashing_task(
         )
     )
 
-    def task() -> None:
+    def task(_tc: TaskContext) -> None:
         sleep(0.05)
         raise ValueError("Try catching this!")
 
     extractor.add_task(
-        ScheduledTask(
-            "TestTask",
+        ScheduledTask.from_interval(
+            interval="15m",
+            name="TestTask",
             target=task,
-            schedule=IntervalConfig(
-                type="interval",
-                expression=TimeIntervalConfig("15m"),
-            ),
         )
     )
 
@@ -146,7 +140,7 @@ def test_crashing_task(
     assert len(extractor._errors) == 1
 
     error = list(extractor._errors.values())[0]
-    assert error.description == "Task crashed unexpectedly"
+    assert error.description == "Task TestTask crashed unexpectedly"
     assert error.level == ErrorLevel.fatal
 
     # Make sure error was recorded as a task error
@@ -167,7 +161,7 @@ def test_reporting_errors(
         )
     )
 
-    err = extractor.error(level=ErrorLevel.error, description="Oh no!", details="There was an error")
+    err = extractor.begin_error("Oh no!", details="There was an error")
 
     assert len(extractor._errors) == 1
     assert err.external_id in extractor._errors
