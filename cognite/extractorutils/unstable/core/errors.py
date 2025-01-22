@@ -4,6 +4,8 @@ from enum import Enum
 from types import TracebackType
 from uuid import uuid4
 
+from typing_extensions import assert_never
+
 from cognite.extractorutils.util import now
 
 if typing.TYPE_CHECKING:
@@ -27,7 +29,7 @@ class ErrorLevel(Enum):
             case ErrorLevel.fatal:
                 return logging.CRITICAL
             case _:
-                typing.assert_never(self)
+                assert_never(self)
 
 
 class Error:

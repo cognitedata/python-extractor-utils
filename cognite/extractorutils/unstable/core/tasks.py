@@ -1,7 +1,9 @@
 import logging
 from collections.abc import Callable
 from traceback import format_exception
-from typing import TYPE_CHECKING, Literal, assert_never
+from typing import TYPE_CHECKING, Literal
+
+from typing_extensions import assert_never
 
 from cognite.extractorutils.unstable.configuration.models import (
     CronConfig,
