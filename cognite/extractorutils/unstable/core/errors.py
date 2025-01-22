@@ -1,3 +1,4 @@
+import logging
 import typing
 from enum import Enum
 from types import TracebackType
@@ -15,6 +16,18 @@ class ErrorLevel(Enum):
     warning = "warning"
     error = "error"
     fatal = "fatal"
+
+    @property
+    def log_level(self) -> int:
+        match self:
+            case ErrorLevel.warning:
+                return logging.WARNING
+            case ErrorLevel.error:
+                return logging.ERROR
+            case ErrorLevel.fatal:
+                return logging.CRITICAL
+            case _:
+                typing.assert_never(self)
 
 
 class Error:

@@ -1,6 +1,7 @@
 import logging
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from traceback import format_exception
+from typing import TYPE_CHECKING, Literal, assert_never
 
 from cognite.extractorutils.unstable.configuration.models import (
     CronConfig,
@@ -120,6 +121,36 @@ class TaskContext:
             self._logger.critical(message)
         self._extractor._error(
             level=ErrorLevel.fatal,
+            description=message,
+            details=details,
+            task_name=self._task.name,
+        ).instant()
+
+    def exception(
+        self,
+        message: str,
+        exception: Exception,
+        *,
+        level: ErrorLevel = ErrorLevel.error,
+        include_details: Literal["stack_trace"] | Literal["exception_message"] | bool = "exception_message",
+        auto_log: bool = True,
+    ) -> None:
+        if auto_log:
+            self._logger.log(level=level.log_level, msg=message, exc_info=exception)
+
+        details: str | None
+        match include_details:
+            case "stack_trace":
+                details = "".join(format_exception(exception))
+            case "exception_message" | True:
+                details = str(exception)
+            case False:
+                details = None
+            case _:
+                assert_never(include_details)
+
+        self._extractor._error(
+            level=level,
             description=message,
             details=details,
             task_name=self._task.name,
