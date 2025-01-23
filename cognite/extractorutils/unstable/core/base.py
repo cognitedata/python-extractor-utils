@@ -2,11 +2,10 @@ import logging
 import logging.config
 import time
 from concurrent.futures import ThreadPoolExecutor
-from contextvars import ContextVar, Token
+from functools import partial
 from logging.handlers import TimedRotatingFileHandler
 from multiprocessing import Queue
 from threading import RLock, Thread
-from traceback import format_exception
 from types import TracebackType
 from typing import Generic, Literal, TypeVar
 
@@ -25,8 +24,9 @@ from cognite.extractorutils.unstable.core._dto import Error as DtoError
 from cognite.extractorutils.unstable.core._dto import TaskUpdate
 from cognite.extractorutils.unstable.core._messaging import RuntimeMessage
 from cognite.extractorutils.unstable.core.errors import Error, ErrorLevel
+from cognite.extractorutils.unstable.core.logger import CogniteLogger
 from cognite.extractorutils.unstable.core.restart_policy import WHEN_CONTINUOUS_TASKS_CRASHES, RestartPolicy
-from cognite.extractorutils.unstable.core.tasks import ContinuousTask, ScheduledTask, StartupTask, Task
+from cognite.extractorutils.unstable.core.tasks import ContinuousTask, ScheduledTask, StartupTask, Task, TaskContext
 from cognite.extractorutils.unstable.scheduling import TaskScheduler
 from cognite.extractorutils.util import now
 
@@ -51,7 +51,7 @@ class FullConfig(Generic[_T]):
         self.current_config_revision = current_config_revision
 
 
-class Extractor(Generic[ConfigType]):
+class Extractor(Generic[ConfigType], CogniteLogger):
     NAME: str
     EXTERNAL_ID: str
     DESCRIPTION: str
@@ -62,6 +62,8 @@ class Extractor(Generic[ConfigType]):
     RESTART_POLICY: RestartPolicy = WHEN_CONTINUOUS_TASKS_CRASHES
 
     def __init__(self, config: FullConfig[ConfigType]) -> None:
+        self._logger = logging.getLogger(f"{self.EXTERNAL_ID}.main")
+
         self.cancellation_token = CancellationToken()
         self.cancellation_token.cancel_on_interrupt()
 
@@ -79,10 +81,6 @@ class Extractor(Generic[ConfigType]):
         self._tasks: list[Task] = []
         self._task_updates: list[TaskUpdate] = []
         self._errors: dict[str, Error] = {}
-
-        self.logger = logging.getLogger(f"{self.EXTERNAL_ID}.main")
-
-        self._current_task: ContextVar[str | None] = ContextVar("current_task", default=None)
 
         self.__init_tasks__()
 
@@ -175,36 +173,34 @@ class Extractor(Generic[ConfigType]):
     def _run_checkin(self) -> None:
         while not self.cancellation_token.is_cancelled:
             try:
-                self.logger.debug("Running checkin")
+                self._logger.debug("Running checkin")
                 self._checkin()
             except Exception:
-                self.logger.exception("Error during checkin")
+                self._logger.exception("Error during checkin")
             self.cancellation_token.wait(10)
 
     def _report_error(self, error: Error) -> None:
         with self._checkin_lock:
             self._errors[error.external_id] = error
 
-    def error(
+    def _new_error(
         self,
         level: ErrorLevel,
         description: str,
-        details: str | None = None,
         *,
-        force_global: bool = False,
+        details: str | None = None,
+        task_name: str | None = None,
     ) -> Error:
-        task_name = self._current_task.get()
-
         return Error(
             level=level,
             description=description,
             details=details,
             extractor=self,
-            task_name=None if force_global else task_name,
+            task_name=task_name,
         )
 
     def restart(self) -> None:
-        self.logger.info("Restarting extractor")
+        self._logger.info("Restarting extractor")
         if self._runtime_messages:
             self._runtime_messages.put(RuntimeMessage.RESTART)
         self.cancellation_token.cancel()
@@ -217,7 +213,7 @@ class Extractor(Generic[ConfigType]):
         # Store this for later, since we'll override it with the wrapped version
         target = task.target
 
-        def run_task() -> None:
+        def run_task(task_context: TaskContext) -> None:
             """
             A wrapped version of the task's target, with tracking and error handling
             """
@@ -227,33 +223,22 @@ class Extractor(Generic[ConfigType]):
                     TaskUpdate(type="started", name=task.name, timestamp=now()),
                 )
 
-            context_token: Token[str | None] | None = None
-
             try:
-                # Set the current task context var, used to track that we're in a task for error reporting
-                context_token = self._current_task.set(task.name)
-
                 # Run task
-                target()
+                target(task_context)
 
             except Exception as e:
-                self.logger.exception(f"Unexpected error in {task.name}")
-
                 # Task crashed, record it as a fatal error
-                self.error(
-                    ErrorLevel.fatal,
-                    description="Task crashed unexpectedly",
-                    details="".join(format_exception(e)),
-                ).instant()
+                task_context.exception(
+                    f"Task {task.name} crashed unexpectedly",
+                    e,
+                    level=ErrorLevel.fatal,
+                )
 
                 if self.__class__.RESTART_POLICY(task, e):
                     self.restart()
 
             finally:
-                # Unset the current task
-                if context_token is not None:
-                    self._current_task.reset(context_token)
-
                 # Record task end
                 with self._checkin_lock:
                     self._task_updates.append(
@@ -265,7 +250,16 @@ class Extractor(Generic[ConfigType]):
 
         match task:
             case ScheduledTask() as t:
-                self._scheduler.schedule_task(name=t.name, schedule=t.schedule, task=t.target)
+                self._scheduler.schedule_task(
+                    name=t.name,
+                    schedule=t.schedule,
+                    task=lambda: t.target(
+                        TaskContext(
+                            task=task,
+                            extractor=self,
+                        )
+                    ),
+                )
 
     def _report_extractor_info(self) -> None:
         self.cognite_client.post(
@@ -281,6 +275,8 @@ class Extractor(Generic[ConfigType]):
                     {
                         "name": t.name,
                         "type": "continuous" if isinstance(t, ContinuousTask) else "batch",
+                        "action": True if isinstance(t, ScheduledTask) else False,
+                        "description": t.description,
                     }
                     for t in self._tasks
                 ],
@@ -310,7 +306,7 @@ class Extractor(Generic[ConfigType]):
         with self._checkin_lock:
             self._checkin()
 
-        self.logger.info("Shutting down extractor")
+        self._logger.info("Shutting down extractor")
         return exc_val is None
 
     def run(self) -> None:
@@ -333,15 +329,27 @@ class Extractor(Generic[ConfigType]):
                 case _:
                     assert_never(task)
 
-        self.logger.info("Starting extractor")
+        self._logger.info("Starting extractor")
         if startup:
             with ThreadPoolExecutor() as pool:
                 for task in startup:
-                    pool.submit(task.target)
-        self.logger.info("Startup done")
+                    pool.submit(
+                        partial(
+                            task.target,
+                            TaskContext(
+                                task=task,
+                                extractor=self,
+                            ),
+                        )
+                    )
+        self._logger.info("Startup done")
 
         for task in continuous:
-            Thread(name=pascalize(task.name), target=task.target).start()
+            Thread(
+                name=pascalize(task.name),
+                target=task.target,
+                args=(TaskContext(task=task, extractor=self),),
+            ).start()
 
         if has_scheduled:
             self._scheduler.run()

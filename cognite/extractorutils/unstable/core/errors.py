@@ -1,11 +1,14 @@
-import typing
+import logging
 from enum import Enum
 from types import TracebackType
+from typing import TYPE_CHECKING
 from uuid import uuid4
+
+from typing_extensions import assert_never
 
 from cognite.extractorutils.util import now
 
-if typing.TYPE_CHECKING:
+if TYPE_CHECKING:
     from .base import Extractor
 
 __all__ = ["Error", "ErrorLevel"]
@@ -15,6 +18,18 @@ class ErrorLevel(Enum):
     warning = "warning"
     error = "error"
     fatal = "fatal"
+
+    @property
+    def log_level(self) -> int:
+        match self:
+            case ErrorLevel.warning:
+                return logging.WARNING
+            case ErrorLevel.error:
+                return logging.ERROR
+            case ErrorLevel.fatal:
+                return logging.CRITICAL
+            case _:
+                assert_never(self)
 
 
 class Error:
