@@ -25,6 +25,7 @@ from typing import (
 )
 from urllib.parse import ParseResult, urlparse
 
+from h11._util import LocalProtocolError
 from httpx import URL, Client, Headers, Request, StreamConsumed, SyncByteStream
 from requests.utils import super_len
 
@@ -480,6 +481,19 @@ class IOFileUploadQueue(AbstractUploadQueue):
         ) -> None:
             try:
                 upload_file(read_file, file_meta)
+
+            except LocalProtocolError as e:
+                error_message = str(e)
+                if (
+                    "Too much data for declared Content" in error_message
+                    or "Too little data for declared Content-Length" in error_message
+                ):
+                    self.logger.error(
+                        f"Content Length Mismatch while uploading file: {file_meta} error message: {error_message}"
+                    )
+
+                self.add_entry_failure_logger(file_name=str(file_meta.name), error=e)
+                self.errors.append(e)
 
             except Exception as e:
                 self.logger.exception(
