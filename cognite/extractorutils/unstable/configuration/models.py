@@ -1,3 +1,4 @@
+import os
 import re
 from datetime import timedelta
 from enum import Enum
@@ -214,6 +215,36 @@ class ConnectionConfig(ConfigModel):
         )
 
         return CogniteClient(client_config)
+
+    @classmethod
+    def from_environment(cls) -> "ConnectionConfig":
+        auth: AuthenticationConfig
+        if "COGNITE_CLIENT_SECRET" in os.environ:
+            auth = _ClientCredentialsConfig(
+                type="client-credentials",
+                client_id=os.environ["COGNITE_CLIENT_ID"],
+                client_secret=os.environ["COGNITE_CLIENT_SECRET"],
+                token_url=os.environ["COGNITE_TOKEN_URL"],
+                scopes=os.environ["COGNITE_TOKEN_SCOPES"].split(","),
+            )
+        elif "COGNITE_CLIENT_CERTIFICATE_PATH" in os.environ:
+            auth = _ClientCertificateConfig(
+                type="client-certificate",
+                client_id=os.environ["COGNITE_CLIENT_ID"],
+                path=Path(os.environ["COGNITE_CLIENT_CERTIFICATE_PATH"]),
+                password=os.environ.get("COGNITE_CLIENT_CERTIFICATE_PATH"),
+                authority_url=os.environ["COGNITE_AUTHORITY_URL"],
+                scopes=os.environ["COGNITE_TOKEN_SCOPES"].split(","),
+            )
+        else:
+            raise KeyError("Missing auth, either COGNITE_CLIENT_SECRET or COGNITE_CLIENT_CERTIFICATE_PATH must be set")
+
+        return ConnectionConfig(
+            project=os.environ["COGNITE_PROJECT"],
+            base_url=os.environ["COGNITE_BASE_URL"],
+            integration=os.environ["COGNITE_INTEGRATION"],
+            authentication=auth,
+        )
 
 
 class CronConfig(ConfigModel):

@@ -12,6 +12,13 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+
+## 7.5.10
+
+### Added
+
+* In the `unstable` package: Add a `from_environment` method to `ConnectionConfig`
+
 ## 7.5.9
 
 ### Added
