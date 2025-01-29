@@ -12,12 +12,17 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
-
-## 7.5.10
+## 7.5.11
 
 ### Added
 
 * In the `unstable` package: Add a `from_environment` method to `ConnectionConfig`
+
+## 7.5.10
+
+## Fixed
+
+* Locked the `dacite` dependency to `<1.9.0` to avoid issues with the new release.
 
 ## 7.5.9
 
