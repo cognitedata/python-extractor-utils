@@ -19,7 +19,7 @@ dependencies = [
     "prometheus-client>=0.7.0,<=1.0.0",
     "arrow>=1.0.0",
     "pyyaml>=5.3.0,<7",
-    "dacite>=1.6.0,<1.9.0",
+    "dacite>=1.9.1,<1.10.0",
     "psutil>=6.0.0",
     "decorator>=5.1.1",
     "more-itertools>=10.0.0",
