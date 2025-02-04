@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.6.0
+
+### Security
+
+* Removed reliance on `dotenv.find_dotenv` to prevent unintentional loading of environment files. Environment variable management is now more explicit to enhance security and reduce potential misconfigurations.
+
 ## 7.5.11
 
 ### Added
