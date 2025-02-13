@@ -72,7 +72,7 @@ def default_time_series_factory(external_id: str, datapoints: DataPointList) -> 
         A TimeSeries object with external_id set, and the is_string automatically detected
     """
     is_string = (
-        isinstance(datapoints[0].get("value"), str)  # type: ignore  # input might be dict to keep compatibility
+        isinstance(datapoints[0].get("value"), str)
         if isinstance(datapoints[0], dict)
         else isinstance(datapoints[0][1], str)
     )
