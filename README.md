@@ -39,15 +39,6 @@ project, and then set up a poetry environment, git repository, commit hooks with
 template.
 
 
-### Extensions
-
-Some source systems have a lot in common, such as RESTful APIs or systems exposing as MQTT. We therefore have extensions
-to `extractor-utils` tailroed to these protocols. These can be found in separate packages:
-
- * [REST extension](https://github.com/cognitedata/python-extractor-utils-rest)
- * [MQTT extension](https://github.com/cognitedata/python-extractor-utils-mqtt)
-
-
 ## Contributing
 
 The package is open source under the [Apache 2.0 license](./LICENSE), and contribtuions are welcome.
