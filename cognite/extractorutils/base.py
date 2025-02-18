@@ -218,7 +218,7 @@ class Extractor(Generic[CustomConfigClass]):
                 ExtractionPipelineRun(
                     extpipe_external_id=self.extraction_pipeline.external_id,
                     status="success",
-                    message="Successful shutdown",
+                    message="Successfully completed extraction",
                 )
             )
 
