@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.5.12
+
+## Added
+
+- Allow users to override what message to send on shutdown
+
 ## 7.5.11
 
 ### Added
