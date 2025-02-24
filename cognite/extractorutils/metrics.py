@@ -41,10 +41,10 @@ import logging
 import os
 import threading
 from abc import ABC, abstractmethod
-from threading import Event
+from collections.abc import Callable
 from time import sleep
 from types import TracebackType
-from typing import Any, Callable, Dict, List, Optional, Tuple, Type, TypeVar, Union
+from typing import Any, TypeVar
 
 import arrow
 import psutil
@@ -55,6 +55,7 @@ from prometheus_client.exposition import basic_auth_handler, delete_from_gateway
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset, Datapoints, DatapointsArray, TimeSeries
 from cognite.client.exceptions import CogniteDuplicatedError
+from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.util import EitherId
 
 from .util import ensure_time_series
@@ -65,7 +66,7 @@ _metrics_singularities = {}
 T = TypeVar("T")
 
 
-def safe_get(cls: Type[T], *args: Any, **kwargs: Any) -> T:
+def safe_get(cls: type[T], *args: Any, **kwargs: Any) -> T:
     """
     A factory for instances of metrics collections.
 
@@ -177,16 +178,16 @@ class AbstractMetricsPusher(ABC):
 
     def __init__(
         self,
-        push_interval: Optional[int] = None,
-        thread_name: Optional[str] = None,
-        cancellation_token: Event = Event(),
+        push_interval: int | None = None,
+        thread_name: str | None = None,
+        cancellation_token: CancellationToken | None = None,
     ):
         self.push_interval = push_interval
         self.thread_name = thread_name
 
-        self.thread: Optional[threading.Thread] = None
+        self.thread: threading.Thread | None = None
         self.thread_name = thread_name
-        self.cancellation_token = cancellation_token
+        self.cancellation_token = cancellation_token.create_child_token() if cancellation_token else CancellationToken()
 
         self.logger = logging.getLogger(__name__)
 
@@ -201,7 +202,7 @@ class AbstractMetricsPusher(ABC):
         """
         Run push loop.
         """
-        while not self.cancellation_token.is_set():
+        while not self.cancellation_token.is_cancelled:
             self._push_to_server()
             self.cancellation_token.wait(self.push_interval)
 
@@ -210,7 +211,6 @@ class AbstractMetricsPusher(ABC):
         Starts a thread that pushes the default registry to the configured gateway at certain intervals.
 
         """
-        self.cancellation_token.clear()
         self.thread = threading.Thread(target=self._run, daemon=True, name=self.thread_name)
         self.thread.start()
 
@@ -220,7 +220,7 @@ class AbstractMetricsPusher(ABC):
         """
         # Make sure everything is pushed
         self._push_to_server()
-        self.cancellation_token.set()
+        self.cancellation_token.cancel()
 
     def __enter__(self) -> "AbstractMetricsPusher":
         """
@@ -233,7 +233,7 @@ class AbstractMetricsPusher(ABC):
         return self
 
     def __exit__(
-        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         """
         Wraps around stop method, for use as context manager
@@ -265,12 +265,12 @@ class PrometheusPusher(AbstractMetricsPusher):
         job_name: str,
         url: str,
         push_interval: int,
-        username: Optional[str] = None,
-        password: Optional[str] = None,
-        thread_name: Optional[str] = None,
-        cancellation_token: Event = Event(),
+        username: str | None = None,
+        password: str | None = None,
+        thread_name: str | None = None,
+        cancellation_token: CancellationToken | None = None,
     ):
-        super(PrometheusPusher, self).__init__(push_interval, thread_name, cancellation_token)
+        super().__init__(push_interval, thread_name, cancellation_token)
 
         self.username = username
         self.job_name = job_name
@@ -278,7 +278,7 @@ class PrometheusPusher(AbstractMetricsPusher):
 
         self.url = url
 
-    def _auth_handler(self, url: str, method: str, timeout: int, headers: List[Tuple[str, str]], data: Any) -> Callable:
+    def _auth_handler(self, url: str, method: str, timeout: int, headers: list[tuple[str, str]], data: Any) -> Callable:
         """
         Returns a authentication handler against the Prometheus Pushgateway to use in the pushadd_to_gateway method.
 
@@ -341,12 +341,12 @@ class CognitePusher(AbstractMetricsPusher):
         cdf_client: CogniteClient,
         external_id_prefix: str,
         push_interval: int,
-        asset: Optional[Asset] = None,
-        data_set: Optional[EitherId] = None,
-        thread_name: Optional[str] = None,
-        cancellation_token: Event = Event(),
+        asset: Asset | None = None,
+        data_set: EitherId | None = None,
+        thread_name: str | None = None,
+        cancellation_token: CancellationToken | None = None,
     ):
-        super(CognitePusher, self).__init__(push_interval, thread_name, cancellation_token)
+        super().__init__(push_interval, thread_name, cancellation_token)
 
         self.cdf_client = cdf_client
         self.asset = asset
@@ -361,11 +361,11 @@ class CognitePusher(AbstractMetricsPusher):
         """
         Initialize the CDF tenant with the necessary time series and asset.
         """
-        time_series: List[TimeSeries] = []
+        time_series: list[TimeSeries] = []
 
         if self.asset is not None:
             # Ensure that asset exist, and retrieve internal ID
-            asset: Optional[Asset]
+            asset: Asset | None
             try:
                 asset = self.cdf_client.assets.create(self.asset)
             except CogniteDuplicatedError:
@@ -385,7 +385,7 @@ class CognitePusher(AbstractMetricsPusher):
                 data_set_id = dataset.id
 
         for metric in REGISTRY.collect():
-            if type(metric) == Metric and metric.type in ["gauge", "counter"]:
+            if type(metric) is Metric and metric.type in ["gauge", "counter"]:
                 external_id = self.external_id_prefix + metric.name
 
                 time_series.append(
@@ -394,8 +394,8 @@ class CognitePusher(AbstractMetricsPusher):
                         name=metric.name,
                         legacy_name=external_id,
                         description=metric.documentation,
-                        asset_id=asset_id,  # type: ignore  # this is optional. Type hint in SDK is wrong
-                        data_set_id=data_set_id,  # type: ignore  # this is optional. Type hint in SDK is wrong
+                        asset_id=asset_id,
+                        data_set_id=data_set_id,
                     )
                 )
 
@@ -407,10 +407,10 @@ class CognitePusher(AbstractMetricsPusher):
         """
         timestamp = int(arrow.get().float_timestamp * 1000)
 
-        datapoints: List[Dict[str, Union[str, int, List[Any], Datapoints, DatapointsArray]]] = []
+        datapoints: list[dict[str, str | int | list[Any] | Datapoints | DatapointsArray]] = []
 
         for metric in REGISTRY.collect():
-            if type(metric) == Metric and metric.type in ["gauge", "counter"]:
+            if isinstance(metric, Metric) and metric.type in ["gauge", "counter"]:
                 if len(metric.samples) == 0:
                     continue
 

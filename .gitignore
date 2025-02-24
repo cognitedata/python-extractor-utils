@@ -6,6 +6,8 @@ __pycache__/
 # Local test files
 test.py
 test.yaml
+local-test.yaml
+pyrightconfig.json
 
 # Tokens, etc
 token.txt
@@ -101,6 +103,7 @@ ipython_config.py
 #   install all needed dependencies.
 #Pipfile.lock
 
+uv.lock
 poetry.lock
 
 # pyenv

@@ -15,13 +15,15 @@
 import logging
 import threading
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Any, Callable, List, Optional
+from typing import Any
 
 from arrow import Arrow
 
 from cognite.client import CogniteClient
 from cognite.extractorutils._inner_util import _resolve_log_level
+from cognite.extractorutils.threading import CancellationToken
 
 
 class AbstractUploadQueue(ABC):
@@ -42,12 +44,12 @@ class AbstractUploadQueue(ABC):
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[List[Any]], None]] = None,
-        max_queue_size: Optional[int] = None,
-        max_upload_interval: Optional[int] = None,
+        post_upload_function: Callable[[list[Any]], None] | None = None,
+        max_queue_size: int | None = None,
+        max_upload_interval: int | None = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: Optional[str] = None,
-        cancellation_token: threading.Event = threading.Event(),
+        thread_name: str | None = None,
+        cancellation_token: CancellationToken | None = None,
     ):
         self.cdf_client = cdf_client
 
@@ -57,9 +59,11 @@ class AbstractUploadQueue(ABC):
         self.trigger_log_level = _resolve_log_level(trigger_log_level)
         self.logger = logging.getLogger(__name__)
 
-        self.thread = threading.Thread(target=self._run, daemon=True, name=thread_name)
+        self.thread = threading.Thread(target=self._run, daemon=cancellation_token is None, name=thread_name)
         self.lock = threading.RLock()
-        self.cancellation_token: threading.Event = cancellation_token
+        self.cancellation_token: CancellationToken = (
+            cancellation_token.create_child_token() if cancellation_token else CancellationToken()
+        )
 
         self.max_upload_interval = max_upload_interval
 
@@ -78,12 +82,12 @@ class AbstractUploadQueue(ABC):
 
         return None
 
-    def _post_upload(self, uploaded: List[Any]) -> None:
+    def _post_upload(self, uploaded: list[Any]) -> None:
         """
         Perform post_upload_function to uploaded data, if applicable
 
         Args:
-            uploaded: List of uploaded data
+            uploaded: list of uploaded data
         """
         if self.post_upload_function is not None:
             try:
@@ -117,7 +121,6 @@ class AbstractUploadQueue(ABC):
         seconds.
         """
         if self.max_upload_interval is not None:
-            self.cancellation_token.clear()
             self.thread.start()
 
     def stop(self, ensure_upload: bool = True) -> None:
@@ -128,7 +131,7 @@ class AbstractUploadQueue(ABC):
             ensure_upload (bool): (Optional). Call upload one last time after shutting down thread to ensure empty
                 upload queue.
         """
-        self.cancellation_token.set()
+        self.cancellation_token.cancel()
         if ensure_upload:
             self.upload()
 
@@ -148,7 +151,7 @@ class TimestampedObject:
     created: Arrow
 
 
-RETRY_BACKOFF_FACTOR = 1.5
-RETRY_MAX_DELAY = 15
-RETRY_DELAY = 5
+RETRY_BACKOFF_FACTOR = 2
+RETRY_MAX_DELAY = 60
+RETRY_DELAY = 1
 RETRIES = 10

@@ -2,7 +2,8 @@ name: test_and_build
 
 on:
   pull_request:
-    branches: [ master ]
+    branches: [master]
+  workflow_call:
 
 jobs:
   build:
@@ -11,45 +12,53 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: [3.8, 3.9, "3.10", "3.11"]
+        python-version: ["3.10", "3.11", "3.12"]
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Python ${{ matrix.python-version }}
-      uses: actions/setup-python@v5
-      with:
-        python-version: ${{ matrix.python-version }}
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
 
-    - name: Install dependencies
-      run: |
-        python3 -m pip install --upgrade pip poetry
-        poetry config virtualenvs.create false
-        poetry lock
-        poetry install
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
 
-    - name: Check codestyle
-      run: pre-commit run --all
+      - name: Install dependencies
+        run: |
+          uv sync
+          python3 -m pip install pre-commit==3.6.2
 
-    - name: Run tests
-      env:
+      - name: Check codestyle
+        run: pre-commit run --all
+
+      - name: Run tests
+        env:
           COGNITE_CLIENT_ID: ${{ secrets.COGNITE_PROJECT_CLIENT_ID }}
           COGNITE_CLIENT_SECRET: ${{ secrets.COGNITE_PROJECT_CLIENT_SECRET }}
           COGNITE_TOKEN_SCOPES: ${{ secrets.COGNITE_PROJECT_SCOPES }}
           COGNITE_TOKEN_URL: ${{ secrets.COGNITE_PROJECT_TOKEN_URL }}
+          KEYVAULT_CLIENT_ID: ${{ secrets.KEYVAULT_CLIENT_ID }}
+          KEYVAULT_TENANT_ID: ${{ secrets.KEYVAULT_TENANT_ID }}
+          KEYVAULT_CLIENT_SECRET: ${{ secrets.KEYVAULT_CLIENT_SECRET }}
           COGNITE_PROJECT: extractor-tests
           COGNITE_BASE_URL: https://greenfield.cognitedata.com
-      run: |
-        coverage run --source cognite.extractorutils -m pytest -v tests
-        coverage xml
+          COGNITE_DEV_PROJECT: extractor-aws-dub-dev-testing
+          COGNITE_DEV_BASE_URL: https://aws-dub-dev.cognitedata.com/
+          COGNITE_DEV_TOKEN_SCOPES: https://aws-dub-dev.cognitedata.com/.default
+          COGNITE_INTEGRATION: pythonutils-test
+        run: |
+          uv run coverage run --source cognite.extractorutils -m pytest -v tests
+          uv run coverage xml
 
-    - uses: codecov/codecov-action@v3
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        file: ./coverage.xml
+      - uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./coverage.xml
 
-    - name: Build package
-      run: poetry build
+      - name: Build package
+        run: uv build
 
-    - name: Build docs
-      run: cd docs && make html
+      - name: Build docs
+        run: cd docs && make html SPHINXBUILD="uv run sphinx-build"

@@ -1,42 +1,99 @@
-[tool.poetry]
+[project]
 name = "cognite-extractor-utils"
-version = "6.1.2"
+version = "7.5.12"
 description = "Utilities for easier development of extractors for CDF"
-authors = ["Mathias Lohne <mathias.lohne@cognite.com>"]
-license = "Apache-2.0"
+authors = [
+    {name = "Mathias Lohne", email = "mathias.lohne@cognite.com"}
+]
+license = { text = "Apache-2.0" }
 readme = "README.md"
+requires-python = ">=3.10"
+
+classifiers = [
+    "Development Status :: 5 - Production/Stable",
+    "Programming Language :: Python"
+]
+
+dependencies = [
+    "cognite-sdk>=7.59.0",
+    "prometheus-client>=0.7.0,<=1.0.0",
+    "arrow>=1.0.0",
+    "pyyaml>=5.3.0,<7",
+    "dacite>=1.6.0,<1.9.0",
+    "psutil>=6.0.0",
+    "decorator>=5.1.1",
+    "more-itertools>=10.0.0",
+    "typing-extensions>=3.7.4,<5",
+    "python-dotenv>=1.0.0",
+    "azure-identity>=1.14.0",
+    "azure-keyvault-secrets>=4.7.0",
+    "orjson>=3.10.3",
+    "httpx>=0.27.0,<1",
+    "pydantic>=2.8.2",
+    "pyhumps>=3.8.0",
+    "croniter>=6.0.0",
+    "jsonlines>=4.0.0",
+]
+
+[project.urls]
 repository = "https://github.com/cognitedata/python-extractor-utils"
 
-packages = [
-    { include="cognite", from="." },
+[project.optional-dependencies]
+experimental = ["cognite-sdk-experimental"]
+
+[tool.uv]
+dev-dependencies = [
+    "mypy>=1.14.1",
+    "ruff>=0.9.0",
+    "pytest>=8.0.0",
+    "pytest-cov>=6.0.0",
+    "sphinx>=7.0.0",
+    "sphinx-rtd-theme>=3.0.0",
+    "pre-commit>=4.0.0",
+    "SecretStorage>=3.1.2",
+    "twine>=6.0.0",
+    "pytest-order>=1.0.1",
+    "parameterized",
+    "requests>=2.31.0",
+    "types-requests>=2.31.0.20240125",
+    "faker>=33.0.0",
+    "types-croniter>=5.0.1.20241205",
+    "types-pyyaml>=6.0.12.20241230",
+    "types-psutil>=6.1.0.20241221",
+    "types-decorator>=5.1.8.20240310",
 ]
 
 [tool.ruff]
-select = ["E", "F", "I", "T20", "S"]
-ignore = ["S104", "S303", "S311"]
-fixable = ["A", "B", "C", "D", "E", "F", "I"]
-unfixable = []
-
 exclude = [
     ".git",
     ".mypy_cache",
     ".ruff_cache",
 ]
-
 line-length = 120
+target-version = "py310"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "T20", "S", "B", "UP"]
+ignore = ["S104", "S303", "S311"]
+fixable = ["A", "B", "C", "D", "E", "F", "I", "UP"]
+unfixable = []
 
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
-target-version = "py310"
 
-[tool.ruff.per-file-ignores]
-"tests/*" = ["S101", "T201", "S105", "S106", "S608", "E501", "S113", "F841"]
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "T201", "S105", "S106", "S608", "E501", "S113", "F841", "B017"]
 "**/__init__.py" = ["F401"]
 "docs/*" = ["E402"]
 
-[tool.ruff.isort]
+[tool.ruff.lint.isort]
 known-third-party = ["alembic"]
+
+[tool.pytest.ini_options]
+markers = [
+    "unstable: tests for the unstable package (deselect with '-m \"not unstable\"')",
+]
 
 [tool.mypy]
 pretty = true
@@ -47,38 +104,16 @@ follow_imports = "normal"
 namespace_packages = true
 explicit_package_bases = true
 show_error_codes = true
+warn_redundant_casts = true
+warn_unused_ignores = true
 exclude = "tests/*"
 
-[tool.poetry.dependencies]
-python = "^3.8.0"
-cognite-sdk = "^7"
-prometheus-client = ">0.7.0, <=1.0.0"
-arrow = "^1.0.0"
-pyyaml = ">=5.3.0, <7"
-dacite = "^1.6.0"
-psutil = "^5.7.0"
-decorator = "^5.1.1"
-more-itertools = "^10.0.0"
-typing-extensions = ">=3.7.4, <5"
-python-dotenv = "^1.0.0"
-jq = [{version = "^1.3.0", platform = "darwin"}, {version = "^1.3.0", platform = "linux"}]
+[tool.hatch.build.targets.wheel]
+packages = ["cognite"]
 
-[tool.poetry.extras]
-experimental = ["cognite-sdk-experimental"]
-
-[tool.poetry.group.dev.dependencies]
-mypy = "1.7.1"
-ruff = "^0.1.0"
-pytest = "^7.0.0"
-pytest-cov = "^4.0.0"
-sphinx = "^7.0.0"
-sphinx-rtd-theme = "^2.0.0"
-pre-commit = "^3.3.0"
-SecretStorage = "^3.1.2"
-twine = "^4.0.0"
-pytest-order = "^1.0.1"
-parameterized = "*"
+[tool.hatch.build.targets.sdist]
+only-include = ["cognite"]
 
 [build-system]
-requires = ["poetry>=0.12"]
-build-backend = "poetry.masonry.api"
+requires = ["hatchling"]
+build-backend = "hatchling.build"

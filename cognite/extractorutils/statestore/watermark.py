@@ -86,26 +86,22 @@ You can set a state store to automatically update on upload triggers from an upl
 """
 
 import json
-import logging
-import threading
-from abc import ABC, abstractmethod
+from abc import ABC
+from collections.abc import Callable, Iterator
 from types import TracebackType
-from typing import Any, Callable, Dict, Iterator, List, Optional, Tuple, Type, Union
+from typing import Any
 
 from cognite.client import CogniteClient
-from cognite.client.exceptions import CogniteAPIError, CogniteException
+from cognite.client.exceptions import CogniteAPIError
+from cognite.extractorutils._inner_util import _DecimalDecoder, _DecimalEncoder
+from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.uploader import DataPointList
+from cognite.extractorutils.util import cognite_exceptions, retry
 
-from ._inner_util import _DecimalDecoder, _DecimalEncoder, _resolve_log_level
-from .util import retry
-
-RETRY_BACKOFF_FACTOR = 1.5
-RETRY_MAX_DELAY = 15
-RETRY_DELAY = 5
-RETRIES = 10
+from ._base import RETRIES, RETRY_BACKOFF_FACTOR, RETRY_DELAY, RETRY_MAX_DELAY, _BaseStateStore
 
 
-class AbstractStateStore(ABC):
+class AbstractStateStore(_BaseStateStore, ABC):
     """
     Base class for a state store.
 
@@ -119,74 +115,22 @@ class AbstractStateStore(ABC):
 
     def __init__(
         self,
-        save_interval: Optional[int] = None,
+        save_interval: int | None = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: Optional[str] = None,
-        cancellation_token: threading.Event = threading.Event(),
+        thread_name: str | None = None,
+        cancellation_token: CancellationToken | None = None,
     ):
-        self._initialized = False
-        self._local_state: Dict[str, Dict[str, Any]] = {}
-        self.save_interval = save_interval
-        self.trigger_log_level = _resolve_log_level(trigger_log_level)
+        super().__init__(
+            save_interval=save_interval,
+            trigger_log_level=trigger_log_level,
+            thread_name=thread_name,
+            cancellation_token=cancellation_token,
+        )
 
-        self.logger = logging.getLogger(__name__)
+        self._local_state: dict[str, dict[str, Any]] = {}
+        self._deleted: list[str] = []
 
-        self.thread = threading.Thread(target=self._run, daemon=True, name=thread_name)
-        self.lock = threading.RLock()
-        self.cancellation_token: threading.Event = cancellation_token
-
-        self._deleted: List[str] = []
-
-    def start(self) -> None:
-        """
-        Start saving state periodically if save_interval is set.
-        This calls the synchronize method every save_interval seconds.
-        """
-        if self.save_interval is not None:
-            self.cancellation_token.clear()
-            self.thread.start()
-
-    def stop(self, ensure_synchronize: bool = True) -> None:
-        """
-        Stop synchronize thread if running, and ensure state is saved if ensure_synchronize is True.
-
-        Args:
-            ensure_synchronize (bool): (Optional). Call synchronize one last time after shutting down thread.
-        """
-        self.cancellation_token.set()
-        if ensure_synchronize:
-            self.synchronize()
-
-    def _run(self) -> None:
-        """
-        Internal run method for synchronize thread
-        """
-        self.initialize()
-        while not self.cancellation_token.wait(timeout=self.save_interval):
-            try:
-                self.logger.log(self.trigger_log_level, "Triggering scheduled state store synchronization")
-                self.synchronize()
-            except Exception as e:
-                self.logger.error("Unexpected error while synchronizing state store: %s.", str(e))
-
-        # trigger stop event explicitly to drain the queue
-        self.stop(ensure_synchronize=True)
-
-    @abstractmethod
-    def initialize(self, force: bool = False) -> None:
-        """
-        Get states from remote store
-        """
-        pass
-
-    @abstractmethod
-    def synchronize(self) -> None:
-        """
-        Upload states to remote store
-        """
-        pass
-
-    def get_state(self, external_id: Union[str, List[str]]) -> Union[Tuple[Any, Any], List[Tuple[Any, Any]]]:
+    def get_state(self, external_id: str | list[str]) -> tuple[Any, Any] | list[tuple[Any, Any]]:
         """
         Get state(s) for external ID(s)
 
@@ -209,7 +153,7 @@ class AbstractStateStore(ABC):
                 state = self._local_state.get(external_id, {})
                 return state.get("low"), state.get("high")
 
-    def set_state(self, external_id: str, low: Optional[Any] = None, high: Optional[Any] = None) -> None:
+    def set_state(self, external_id: str, low: Any | None = None, high: Any | None = None) -> None:
         """
         Set/update state of a singe external ID.
 
@@ -223,7 +167,7 @@ class AbstractStateStore(ABC):
             state["low"] = low if low is not None else state.get("low")
             state["high"] = high if high is not None else state.get("high")
 
-    def expand_state(self, external_id: str, low: Optional[Any] = None, high: Optional[Any] = None) -> None:
+    def expand_state(self, external_id: str, low: Any | None = None, high: Any | None = None) -> None:
         """
         Like set_state, but only sets state if the proposed state is outside the stored state. That is if e.g. low is
         lower than the stored low.
@@ -249,7 +193,7 @@ class AbstractStateStore(ABC):
             self._local_state.pop(external_id, None)
             self._deleted.append(external_id)
 
-    def post_upload_handler(self) -> Callable[[List[Dict[str, Union[str, DataPointList]]]], None]:
+    def post_upload_handler(self) -> Callable[[list[dict[str, str | DataPointList]]], None]:
         """
         Get a callable suitable for passing to a time series upload queue as post_upload_function, that will
         automatically update the states in this state store when that upload queue is uploading.
@@ -258,7 +202,7 @@ class AbstractStateStore(ABC):
             A function that expands the current states with the values given
         """
 
-        def callback(uploaded_points: List[Dict[str, Union[str, DataPointList]]]) -> None:
+        def callback(uploaded_points: list[dict[str, str | DataPointList]]) -> None:
             for time_series in uploaded_points:
                 # Use CDF timestamps
                 data_points = time_series["datapoints"]
@@ -295,10 +239,10 @@ class AbstractStateStore(ABC):
 
         return False
 
-    def __getitem__(self, external_id: str) -> Tuple[Any, Any]:
+    def __getitem__(self, external_id: str) -> tuple[Any, Any]:
         return self.get_state(external_id)  # type: ignore  # will not be list if input is single str
 
-    def __setitem__(self, key: str, value: Tuple[Any, Any]) -> None:
+    def __setitem__(self, key: str, value: tuple[Any, Any]) -> None:
         self.set_state(external_id=key, low=value[0], high=value[1])
 
     def __contains__(self, external_id: str) -> bool:
@@ -308,8 +252,7 @@ class AbstractStateStore(ABC):
         return len(self._local_state)
 
     def __iter__(self) -> Iterator[str]:
-        for key in self._local_state:
-            yield key
+        yield from self._local_state
 
 
 class RawStateStore(AbstractStateStore):
@@ -332,10 +275,10 @@ class RawStateStore(AbstractStateStore):
         cdf_client: CogniteClient,
         database: str,
         table: str,
-        save_interval: Optional[int] = None,
+        save_interval: int | None = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: Optional[str] = None,
-        cancellation_token: threading.Event = threading.Event(),
+        thread_name: str | None = None,
+        cancellation_token: CancellationToken | None = None,
     ):
         super().__init__(save_interval, trigger_log_level, thread_name, cancellation_token)
 
@@ -345,79 +288,86 @@ class RawStateStore(AbstractStateStore):
 
         self._ensure_table()
 
-    @retry(
-        exceptions=(CogniteException,),
-        tries=RETRIES,
-        delay=RETRY_DELAY,
-        max_delay=RETRY_MAX_DELAY,
-        backoff=RETRY_BACKOFF_FACTOR,
-    )
     def _ensure_table(self) -> None:
-        try:
-            self._cdf_client.raw.databases.create(self.database)
-        except CogniteAPIError as e:
-            if not e.code == 400:
-                raise e
-        try:
-            self._cdf_client.raw.tables.create(self.database, self.table)
-        except CogniteAPIError as e:
-            if not e.code == 400:
-                raise e
+        @retry(
+            exceptions=cognite_exceptions(),
+            cancellation_token=self.cancellation_token,
+            tries=RETRIES,
+            delay=RETRY_DELAY,
+            max_delay=RETRY_MAX_DELAY,
+            backoff=RETRY_BACKOFF_FACTOR,
+        )
+        def impl() -> None:
+            try:
+                self._cdf_client.raw.databases.create(self.database)
+            except CogniteAPIError as e:
+                if not e.code == 400:
+                    raise e
+            try:
+                self._cdf_client.raw.tables.create(self.database, self.table)
+            except CogniteAPIError as e:
+                if not e.code == 400:
+                    raise e
+
+        impl()
 
     def initialize(self, force: bool = False) -> None:
-        self._initialize_implementation(force)
+        @retry(
+            exceptions=cognite_exceptions(),
+            cancellation_token=self.cancellation_token,
+            tries=RETRIES,
+            delay=RETRY_DELAY,
+            max_delay=RETRY_MAX_DELAY,
+            backoff=RETRY_BACKOFF_FACTOR,
+        )
+        def impl() -> None:
+            """
+            Get all known states.
 
-    @retry(
-        exceptions=(CogniteException,),
-        tries=RETRIES,
-        delay=RETRY_DELAY,
-        max_delay=RETRY_MAX_DELAY,
-        backoff=RETRY_BACKOFF_FACTOR,
-    )
-    def _initialize_implementation(self, force: bool = False) -> None:
-        """
-        Get all known states.
+            Args:
+                force: Enable re-initialization, ie overwrite when called multiple times
+            """
+            if self._initialized and not force:
+                return
 
-        Args:
-            force: Enable re-initialization, ie overwrite when called multiple times
-        """
-        if self._initialized and not force:
-            return
+            rows = self._cdf_client.raw.rows.list(db_name=self.database, table_name=self.table, limit=None)
 
-        # ignore type since list _is_ optional, sdk types are wrong
-        rows = self._cdf_client.raw.rows.list(db_name=self.database, table_name=self.table, limit=None)  # type: ignore
+            with self.lock:
+                self._local_state.clear()
+                for row in rows:
+                    if row.key is None or row.columns is None:
+                        self.logger.warning(f"None encountered in row: {str(row)}")
+                        # should never happen, but type from sdk is optional
+                        continue
+                    self._local_state[row.key] = row.columns
 
-        with self.lock:
-            self._local_state.clear()
-            for row in rows:
-                if row.key is None or row.columns is None:
-                    self.logger.warning(f"None encountered in row: {str(row)}")
-                    # should never happen, but type from sdk is optional
-                    continue
-                self._local_state[row.key] = row.columns
+            self._initialized = True
 
-        self._initialized = True
+        impl()
 
     def synchronize(self) -> None:
-        self._synchronize_implementation()
+        @retry(
+            exceptions=cognite_exceptions(),
+            cancellation_token=self.cancellation_token,
+            tries=RETRIES,
+            delay=RETRY_DELAY,
+            max_delay=RETRY_MAX_DELAY,
+            backoff=RETRY_BACKOFF_FACTOR,
+        )
+        def impl() -> None:
+            """
+            Upload local state store to CDF
+            """
+            with self.lock:
+                self._cdf_client.raw.rows.insert(db_name=self.database, table_name=self.table, row=self._local_state)
+                # Create a copy of deleted to facilitate testing (mock library stores list, and as it changes, the
+                # assertions fail)
+                self._cdf_client.raw.rows.delete(
+                    db_name=self.database, table_name=self.table, key=[k for k in self._deleted]
+                )
+                self._deleted.clear()
 
-    @retry(
-        exceptions=(CogniteException,),
-        tries=RETRIES,
-        delay=RETRY_DELAY,
-        max_delay=RETRY_MAX_DELAY,
-        backoff=RETRY_BACKOFF_FACTOR,
-    )
-    def _synchronize_implementation(self) -> None:
-        """
-        Upload local state store to CDF
-        """
-        self._cdf_client.raw.rows.insert(db_name=self.database, table_name=self.table, row=self._local_state)
-        # Create a copy of deleted to facilitate testing (mock library stores list, and as it changes, the assertions
-        # fail)
-        self._cdf_client.raw.rows.delete(db_name=self.database, table_name=self.table, key=[k for k in self._deleted])
-        with self.lock:
-            self._deleted.clear()
+        impl()
 
     def __enter__(self) -> "RawStateStore":
         """
@@ -430,7 +380,7 @@ class RawStateStore(AbstractStateStore):
         return self
 
     def __exit__(
-        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         """
         Wraps around stop method, for use as context manager
@@ -459,10 +409,10 @@ class LocalStateStore(AbstractStateStore):
     def __init__(
         self,
         file_path: str,
-        save_interval: Optional[int] = None,
+        save_interval: int | None = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: Optional[str] = None,
-        cancellation_token: threading.Event = threading.Event(),
+        thread_name: str | None = None,
+        cancellation_token: CancellationToken | None = None,
     ):
         super().__init__(save_interval, trigger_log_level, thread_name, cancellation_token)
 
@@ -480,7 +430,7 @@ class LocalStateStore(AbstractStateStore):
 
         with self.lock:
             try:
-                with open(self._file_path, "r") as f:
+                with open(self._file_path) as f:
                     self._local_state = json.load(f, cls=_DecimalDecoder)
             except FileNotFoundError:
                 pass
@@ -493,10 +443,9 @@ class LocalStateStore(AbstractStateStore):
         """
         Save states to specified JSON file
         """
-        with open(self._file_path, "w") as f:
-            json.dump(self._local_state, f, cls=_DecimalEncoder)
-
         with self.lock:
+            with open(self._file_path, "w") as f:
+                json.dump(self._local_state, f, cls=_DecimalEncoder)
             self._deleted.clear()
 
     def __enter__(self) -> "LocalStateStore":
@@ -510,7 +459,10 @@ class LocalStateStore(AbstractStateStore):
         return self
 
     def __exit__(
-        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> None:
         """
         Wraps around stop method, for use as context manager

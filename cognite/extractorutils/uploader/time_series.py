@@ -13,21 +13,21 @@
 #  limitations under the License.
 
 import math
-import threading
+from collections.abc import Callable
 from datetime import datetime
 from types import TracebackType
-from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
-
-from requests import ConnectionError
+from typing import Any
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import (
     Sequence,
     SequenceData,
     SequenceRows,
+    StatusCode,
     TimeSeries,
 )
-from cognite.client.exceptions import CogniteAPIError, CogniteDuplicatedError, CogniteNotFoundError
+from cognite.client.exceptions import CogniteDuplicatedError, CogniteNotFoundError
+from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.uploader._base import (
     RETRIES,
     RETRY_BACKOFF_FACTOR,
@@ -44,17 +44,20 @@ from cognite.extractorutils.uploader._metrics import (
     TIMESERIES_UPLOADER_POINTS_WRITTEN,
     TIMESERIES_UPLOADER_QUEUE_SIZE,
 )
-from cognite.extractorutils.util import EitherId, retry
+from cognite.extractorutils.util import EitherId, cognite_exceptions, retry
 
 MIN_DATAPOINT_TIMESTAMP = -2208988800000
 MAX_DATAPOINT_STRING_LENGTH = 255
 MAX_DATAPOINT_VALUE = 1e100
 MIN_DATAPOINT_VALUE = -1e100
 
-TimeStamp = Union[int, datetime]
+TimeStamp = int | datetime
 
-DataPoint = Union[Tuple[TimeStamp, float], Tuple[TimeStamp, str]]
-DataPointList = List[DataPoint]
+DataPointWithoutStatus = tuple[TimeStamp, float] | tuple[TimeStamp, str] | tuple[TimeStamp, int]
+FullStatusCode = StatusCode | int
+DataPointWithStatus = tuple[TimeStamp, float, FullStatusCode] | tuple[TimeStamp, str, FullStatusCode]
+DataPoint = DataPointWithoutStatus | DataPointWithStatus
+DataPointList = list[DataPoint]
 
 
 def default_time_series_factory(external_id: str, datapoints: DataPointList) -> TimeSeries:
@@ -69,7 +72,7 @@ def default_time_series_factory(external_id: str, datapoints: DataPointList) -> 
         A TimeSeries object with external_id set, and the is_string automatically detected
     """
     is_string = (
-        isinstance(datapoints[0].get("value"), str)  # type: ignore  # input might be dict to keep compatibility
+        isinstance(datapoints[0].get("value"), str)
         if isinstance(datapoints[0], dict)
         else isinstance(datapoints[0][1], str)
     )
@@ -101,14 +104,14 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[List[Dict[str, Union[str, DataPointList]]]], None]] = None,
-        max_queue_size: Optional[int] = None,
-        max_upload_interval: Optional[int] = None,
+        post_upload_function: Callable[[list[dict[str, str | DataPointList]]], None] | None = None,
+        max_queue_size: int | None = None,
+        max_upload_interval: int | None = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: Optional[str] = None,
-        create_missing: Union[Callable[[str, DataPointList], TimeSeries], bool] = False,
-        data_set_id: Optional[int] = None,
-        cancellation_token: threading.Event = threading.Event(),
+        thread_name: str | None = None,
+        create_missing: Callable[[str, DataPointList], TimeSeries] | bool = False,
+        data_set_id: int | None = None,
+        cancellation_token: CancellationToken | None = None,
     ):
         # Super sets post_upload and threshold
         super().__init__(
@@ -130,14 +133,14 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
             self.create_missing = True
             self.missing_factory = create_missing
 
-        self.upload_queue: Dict[EitherId, DataPointList] = {}
+        self.upload_queue: dict[EitherId, DataPointList] = {}
 
         self.points_queued = TIMESERIES_UPLOADER_POINTS_QUEUED
         self.points_written = TIMESERIES_UPLOADER_POINTS_WRITTEN
         self.queue_size = TIMESERIES_UPLOADER_QUEUE_SIZE
         self.data_set_id = data_set_id
 
-    def _verify_datapoint_time(self, time: Union[int, float, datetime, str]) -> bool:
+    def _verify_datapoint_time(self, time: int | float | datetime | str) -> bool:
         if isinstance(time, int) or isinstance(time, float):
             return not math.isnan(time) and time >= MIN_DATAPOINT_TIMESTAMP
         elif isinstance(time, str):
@@ -145,7 +148,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         else:
             return time.timestamp() * 1000.0 >= MIN_DATAPOINT_TIMESTAMP
 
-    def _verify_datapoint_value(self, value: Union[int, float, datetime, str]) -> bool:
+    def _verify_datapoint_value(self, value: int | float | datetime | str) -> bool:
         if isinstance(value, float):
             return not (
                 math.isnan(value) or math.isinf(value) or value > MAX_DATAPOINT_VALUE or value < MIN_DATAPOINT_VALUE
@@ -169,7 +172,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
             return True
 
     def add_to_upload_queue(
-        self, *, id: Optional[int] = None, external_id: Optional[str] = None, datapoints: DataPointList = []
+        self, *, id: int | None = None, external_id: str | None = None, datapoints: DataPointList | None = None
     ) -> None:
         """
         Add data points to upload queue. The queue will be uploaded if the queue size is larger than the threshold
@@ -178,8 +181,9 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         Args:
             id: Internal ID of time series. Either this or external_id must be set.
             external_id: External ID of time series. Either this or external_id must be set.
-            datapoints: List of data points to add
+            datapoints: list of data points to add
         """
+        datapoints = datapoints or []
         old_len = len(datapoints)
         datapoints = list(filter(self._is_datapoint_valid, datapoints))
 
@@ -207,19 +211,90 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         """
         Trigger an upload of the queue, clears queue afterwards
         """
+
+        @retry(
+            exceptions=cognite_exceptions(),
+            cancellation_token=self.cancellation_token,
+            tries=RETRIES,
+            delay=RETRY_DELAY,
+            max_delay=RETRY_MAX_DELAY,
+            backoff=RETRY_BACKOFF_FACTOR,
+        )
+        def _upload_batch(upload_this: list[dict], retries: int = 5) -> list[dict]:
+            if len(upload_this) == 0:
+                return upload_this
+
+            try:
+                self.cdf_client.time_series.data.insert_multiple(upload_this)
+
+            except CogniteNotFoundError as ex:
+                if not retries:
+                    raise ex
+
+                if not self.create_missing:
+                    self.logger.error("Could not upload data points to %s: %s", str(ex.not_found), str(ex))
+
+                # Get IDs of time series that exists, but failed because of the non-existing time series
+                retry_these = [EitherId(**id_dict) for id_dict in ex.failed if id_dict not in ex.not_found]
+
+                if self.create_missing:
+                    # Get the time series that can be created
+                    create_these_ids = set(
+                        [id_dict["externalId"] for id_dict in ex.not_found if "externalId" in id_dict]
+                    )
+                    datapoints_lists: dict[str, DataPointList] = {
+                        ts_dict["externalId"]: ts_dict["datapoints"]
+                        for ts_dict in upload_this
+                        if ts_dict["externalId"] in create_these_ids
+                    }
+
+                    self.logger.info(f"Creating {len(create_these_ids)} time series")
+                    to_create: list[TimeSeries] = [
+                        self.missing_factory(external_id, datapoints_lists[external_id])
+                        for external_id in create_these_ids
+                    ]
+                    if self.data_set_id is not None:
+                        for ts in to_create:
+                            if ts.data_set_id is None:
+                                ts.data_set_id = self.data_set_id
+                    self.cdf_client.time_series.create(to_create)
+
+                    retry_these.extend([EitherId(external_id=i) for i in create_these_ids])
+
+                    if len(ex.not_found) != len(create_these_ids):
+                        missing = [id_dict for id_dict in ex.not_found if id_dict.get("externalId") not in retry_these]
+                        missing_num = len(ex.not_found) - len(create_these_ids)
+                        self.logger.error(
+                            f"{missing_num} time series not found, and could not be created automatically: "
+                            + str(missing)
+                            + " Data will be dropped"
+                        )
+
+                # Remove entries with non-existing time series from upload queue
+                upload_this = [
+                    entry
+                    for entry in upload_this
+                    if EitherId(id=entry.get("id"), external_id=entry.get("externalId")) in retry_these
+                ]
+
+                # Upload remaining
+                _upload_batch(upload_this, retries - 1)
+
+            return upload_this
+
         if len(self.upload_queue) == 0:
             return
 
         with self.lock:
-            upload_this = self._upload_batch(
+            upload_this = _upload_batch(
                 [
-                    {either_id.type(): either_id.content(), "datapoints": datapoints}
+                    {either_id.type(): either_id.content(), "datapoints": list(datapoints)}
                     for either_id, datapoints in self.upload_queue.items()
                     if len(datapoints) > 0
                 ]
             )
 
-            for either_id, datapoints in self.upload_queue.items():
+            for _either_id, datapoints in self.upload_queue.items():
                 self.points_written.inc(len(datapoints))
 
             try:
@@ -232,72 +307,6 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
             self.upload_queue_size = 0
             self.queue_size.set(self.upload_queue_size)
 
-    @retry(
-        exceptions=(CogniteAPIError, ConnectionError),
-        tries=RETRIES,
-        delay=RETRY_DELAY,
-        max_delay=RETRY_MAX_DELAY,
-        backoff=RETRY_BACKOFF_FACTOR,
-    )
-    def _upload_batch(self, upload_this: List[Dict], retries: int = 5) -> List[Dict]:
-        if len(upload_this) == 0:
-            return upload_this
-
-        try:
-            self.cdf_client.time_series.data.insert_multiple(upload_this)
-
-        except CogniteNotFoundError as ex:
-            if not retries:
-                raise ex
-
-            if not self.create_missing:
-                self.logger.error("Could not upload data points to %s: %s", str(ex.not_found), str(ex))
-
-            # Get IDs of time series that exists, but failed because of the non-existing time series
-            retry_these = [EitherId(**id_dict) for id_dict in ex.failed if id_dict not in ex.not_found]
-
-            if self.create_missing:
-                # Get the time series that can be created
-                create_these_ids = set([id_dict["externalId"] for id_dict in ex.not_found if "externalId" in id_dict])
-                datapoints_lists: Dict[str, DataPointList] = {
-                    ts_dict["externalId"]: ts_dict["datapoints"]
-                    for ts_dict in upload_this
-                    if ts_dict["externalId"] in create_these_ids
-                }
-
-                self.logger.info(f"Creating {len(create_these_ids)} time series")
-                to_create: List[TimeSeries] = [
-                    self.missing_factory(external_id, datapoints_lists[external_id]) for external_id in create_these_ids
-                ]
-                if self.data_set_id is not None:
-                    for ts in to_create:
-                        if ts.data_set_id is None:
-                            ts.data_set_id = self.data_set_id
-                self.cdf_client.time_series.create(to_create)
-
-                retry_these.extend([EitherId(external_id=i) for i in create_these_ids])
-
-                if len(ex.not_found) != len(create_these_ids):
-                    missing = [id_dict for id_dict in ex.not_found if id_dict.get("externalId") not in retry_these]
-                    missing_num = len(ex.not_found) - len(create_these_ids)
-                    self.logger.error(
-                        f"{missing_num} time series not found, and could not be created automatically:\n"
-                        + str(missing)
-                        + "\nData will be dropped"
-                    )
-
-            # Remove entries with non-existing time series from upload queue
-            upload_this = [
-                entry
-                for entry in upload_this
-                if EitherId(id=entry.get("id"), external_id=entry.get("externalId")) in retry_these
-            ]
-
-            # Upload remaining
-            self._upload_batch(upload_this, retries - 1)
-
-        return upload_this
-
     def __enter__(self) -> "TimeSeriesUploadQueue":
         """
         Wraps around start method, for use as context manager
@@ -309,7 +318,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         return self
 
     def __exit__(
-        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         """
         Wraps around stop method, for use as context manager
@@ -335,13 +344,13 @@ class SequenceUploadQueue(AbstractUploadQueue):
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[List[Any]], None]] = None,
-        max_queue_size: Optional[int] = None,
-        max_upload_interval: Optional[int] = None,
+        post_upload_function: Callable[[list[Any]], None] | None = None,
+        max_queue_size: int | None = None,
+        max_upload_interval: int | None = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: Optional[str] = None,
+        thread_name: str | None = None,
         create_missing: bool = False,
-        cancellation_token: threading.Event = threading.Event(),
+        cancellation_token: CancellationToken | None = None,
     ):
         """
         Args:
@@ -366,15 +375,15 @@ class SequenceUploadQueue(AbstractUploadQueue):
             thread_name,
             cancellation_token,
         )
-        self.upload_queue: Dict[EitherId, SequenceRows] = {}
-        self.sequence_metadata: Dict[EitherId, Dict[str, Union[str, int, float]]] = {}
-        self.sequence_asset_external_ids: Dict[EitherId, str] = {}
-        self.sequence_dataset_external_ids: Dict[EitherId, str] = {}
-        self.sequence_names: Dict[EitherId, str] = {}
-        self.sequence_descriptions: Dict[EitherId, str] = {}
-        self.column_definitions: Dict[EitherId, List[Dict[str, str]]] = {}
-        self.asset_ids: Dict[str, int] = {}
-        self.dataset_ids: Dict[str, int] = {}
+        self.upload_queue: dict[EitherId, SequenceRows] = {}
+        self.sequence_metadata: dict[EitherId, dict[str, str | int | float]] = {}
+        self.sequence_asset_external_ids: dict[EitherId, str] = {}
+        self.sequence_dataset_external_ids: dict[EitherId, str] = {}
+        self.sequence_names: dict[EitherId, str] = {}
+        self.sequence_descriptions: dict[EitherId, str] = {}
+        self.column_definitions: dict[EitherId, list[dict[str, str]]] = {}
+        self.asset_ids: dict[str, int] = {}
+        self.dataset_ids: dict[str, int] = {}
         self.create_missing = create_missing
 
         self.points_queued = SEQUENCES_UPLOADER_POINTS_QUEUED
@@ -383,13 +392,13 @@ class SequenceUploadQueue(AbstractUploadQueue):
 
     def set_sequence_metadata(
         self,
-        metadata: Dict[str, Union[str, int, float]],
-        id: Optional[int] = None,
-        external_id: Optional[str] = None,
-        asset_external_id: Optional[str] = None,
-        dataset_external_id: Optional[str] = None,
-        name: Optional[str] = None,
-        description: Optional[str] = None,
+        metadata: dict[str, str | int | float],
+        id: int | None = None,
+        external_id: str | None = None,
+        asset_external_id: str | None = None,
+        dataset_external_id: str | None = None,
+        name: str | None = None,
+        description: str | None = None,
     ) -> None:
         """
         Set sequence metadata. Metadata will be cached until the sequence is created. The metadata will be updated
@@ -418,7 +427,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
             self.sequence_descriptions[either_id] = description
 
     def set_sequence_column_definition(
-        self, col_def: List[Dict[str, str]], id: Optional[int] = None, external_id: Optional[str] = None
+        self, col_def: list[dict[str, str]], id: int | None = None, external_id: str | None = None
     ) -> None:
         """
         Set sequence column definition
@@ -435,16 +444,14 @@ class SequenceUploadQueue(AbstractUploadQueue):
 
     def add_to_upload_queue(
         self,
-        rows: Union[
-            Dict[int, List[Union[int, float, str]]],
-            List[Tuple[int, Union[int, float, str]]],
-            List[Dict[str, Any]],
-            SequenceData,
-            SequenceRows,
-        ],
-        column_external_ids: Optional[List[dict]] = None,
-        id: Optional[int] = None,
-        external_id: Optional[str] = None,
+        rows: dict[int, list[int | float | str]]
+        | list[tuple[int, int | float | str]]
+        | list[dict[str, Any]]
+        | SequenceData
+        | SequenceRows,
+        column_external_ids: list[dict] | None = None,
+        id: int | None = None,
+        external_id: str | None = None,
     ) -> None:
         """
         Add sequence rows to upload queue. Mirrors implementation of SequenceApi.insert. Inserted rows will be
@@ -453,7 +460,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
         Args:
             rows: The rows to be inserted. Can either be a list of tuples, a list of ["rownumber": ..., "values": ...]
                 objects, a dictionary of rowNumber: data, or a SequenceData object.
-            column_external_ids: List of external id for the columns of the sequence
+            column_external_ids: list of external id for the columns of the sequence
             id: Sequence internal ID
                 Use if external_id is None
             external_id: Sequence external ID
@@ -468,11 +475,11 @@ class SequenceUploadQueue(AbstractUploadQueue):
         if isinstance(rows, SequenceRows):
             # Already in the desired format
             pass
-        elif isinstance(rows, (dict, list)):
-            rows_raw: List[Dict[str, Any]]
+        elif isinstance(rows, dict | list):
+            rows_raw: list[dict[str, Any]]
             if isinstance(rows, dict):
                 rows_raw = [{"rowNumber": row_number, "values": values} for row_number, values in rows.items()]
-            elif isinstance(rows, list) and rows and isinstance(rows[0], (tuple, list)):
+            elif isinstance(rows, list) and rows and isinstance(rows[0], tuple | list):
                 rows_raw = [{"rowNumber": row_number, "values": values} for row_number, values in rows]
             else:
                 rows_raw = rows  # type: ignore[assignment]
@@ -485,7 +492,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
                 }
             )
         else:
-            raise TypeError("Unsupported type for sequence rows: {}".format(type(rows)))
+            raise TypeError(f"Unsupported type for sequence rows: {type(rows)}")
 
         with self.lock:
             seq = self.upload_queue.get(either_id)
@@ -504,6 +511,42 @@ class SequenceUploadQueue(AbstractUploadQueue):
         """
         Trigger an upload of the queue, clears queue afterwards
         """
+
+        @retry(
+            exceptions=cognite_exceptions(),
+            cancellation_token=self.cancellation_token,
+            tries=RETRIES,
+            delay=RETRY_DELAY,
+            max_delay=RETRY_MAX_DELAY,
+            backoff=RETRY_BACKOFF_FACTOR,
+        )
+        def _upload_single(either_id: EitherId, upload_this: SequenceData) -> SequenceData:
+            self.logger.debug(f"Writing {len(upload_this.values)} rows to sequence {either_id}")
+
+            try:
+                self.cdf_client.sequences.data.insert(
+                    id=either_id.internal_id,
+                    external_id=either_id.external_id,
+                    rows=upload_this,
+                    column_external_ids=None,
+                )
+            except CogniteNotFoundError as ex:
+                if self.create_missing:
+                    # Create missing sequence
+                    self._create_or_update(either_id)
+
+                    # Retry
+                    self.cdf_client.sequences.data.insert(
+                        id=either_id.internal_id,
+                        external_id=either_id.external_id,
+                        rows=upload_this,
+                        column_external_ids=None,
+                    )
+                else:
+                    raise ex
+
+            return upload_this
+
         if len(self.upload_queue) == 0:
             return
 
@@ -513,8 +556,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
                 self._resolve_dataset_ids()
 
             for either_id, upload_this in self.upload_queue.items():
-                _labels = str(either_id.content())
-                self._upload_single(either_id, upload_this)
+                _upload_single(either_id, upload_this)
                 self.points_written.inc()
 
             try:
@@ -526,40 +568,6 @@ class SequenceUploadQueue(AbstractUploadQueue):
             self.upload_queue.clear()
             self.upload_queue_size = 0
             self.queue_size.set(self.upload_queue_size)
-
-    @retry(
-        exceptions=(CogniteAPIError, ConnectionError),
-        tries=RETRIES,
-        delay=RETRY_DELAY,
-        max_delay=RETRY_MAX_DELAY,
-        backoff=RETRY_BACKOFF_FACTOR,
-    )
-    def _upload_single(self, either_id: EitherId, upload_this: SequenceData) -> SequenceData:
-        self.logger.debug("Writing {} rows to sequence {}".format(len(upload_this.values), either_id))
-
-        try:
-            self.cdf_client.sequences.data.insert(
-                id=either_id.internal_id,  # type: ignore
-                external_id=either_id.external_id,  # type: ignore
-                rows=upload_this,
-                column_external_ids=None,
-            )
-        except CogniteNotFoundError as ex:
-            if self.create_missing:
-                # Create missing sequence
-                self._create_or_update(either_id)
-
-                # Retry
-                self.cdf_client.sequences.data.insert(
-                    id=either_id.internal_id,  # type: ignore
-                    external_id=either_id.external_id,  # type: ignore
-                    rows=upload_this,
-                    column_external_ids=None,
-                )
-            else:
-                raise ex
-
-        return upload_this
 
     def _create_or_update(self, either_id: EitherId) -> None:
         """
@@ -576,11 +584,11 @@ class SequenceUploadQueue(AbstractUploadQueue):
         try:
             seq = self.cdf_client.sequences.create(
                 Sequence(
-                    id=either_id.internal_id,  # type: ignore  # these are optional, the SDK types are wrong
-                    external_id=either_id.external_id,  # type: ignore
-                    name=self.sequence_names.get(either_id, None),  # type: ignore
-                    description=self.sequence_descriptions.get(either_id, None),  # type: ignore
-                    metadata=self.sequence_metadata.get(either_id, None),  # type: ignore
+                    id=either_id.internal_id,
+                    external_id=either_id.external_id,
+                    name=self.sequence_names.get(either_id, None),
+                    description=self.sequence_descriptions.get(either_id, None),
+                    metadata=self.sequence_metadata.get(either_id, None),
                     asset_id=self.asset_ids.get(self.sequence_asset_external_ids.get(either_id, None), None),  # type: ignore
                     data_set_id=self.dataset_ids.get(self.sequence_dataset_external_ids.get(either_id, None), None),  # type: ignore
                     columns=column_def,  # type: ignore  # We already  checked for None, mypy is wrong
@@ -588,10 +596,10 @@ class SequenceUploadQueue(AbstractUploadQueue):
             )
 
         except CogniteDuplicatedError:
-            self.logger.info("Sequnce already exist: {}".format(either_id))
-            seq = self.cdf_client.sequences.retrieve(
-                id=either_id.internal_id,  # type: ignore  # these are optional, the SDK types are wrong
-                external_id=either_id.external_id,  # type: ignore
+            self.logger.info(f"Sequnce already exist: {either_id}")
+            seq = self.cdf_client.sequences.retrieve(  # type: ignore [assignment]
+                id=either_id.internal_id,
+                external_id=either_id.external_id,
             )
 
         # Update definition of cached sequence
@@ -649,7 +657,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
         return self
 
     def __exit__(
-        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         """
         Wraps around stop method, for use as context manager

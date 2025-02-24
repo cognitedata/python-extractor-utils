@@ -16,7 +16,7 @@
 Module containing tools for loading and verifying config files, and a YAML loader to automatically serialize these
 dataclasses from a config file.
 
-Configs are described as ``dataclass``\es, and use the ``BaseConfig`` class as a superclass to get a few things
+Configs are described as ``dataclass`` es, and use the ``BaseConfig`` class as a superclass to get a few things
 built-in: config version, Cognite project and logging. Use type hints to specify types, use the ``Optional`` type to
 specify that a config parameter is optional, and give the attribute a value to give it a default.
 
@@ -85,18 +85,50 @@ Get a state store object as configured:
 However, all of these things will be automatically done for you if you are using the base Extractor class.
 """
 
+from cognite.extractorutils.exceptions import InvalidConfigError
+
 from .elements import (
+    AuthenticatorConfig,
     BaseConfig,
+    CastableInt,
+    CertificateConfig,
     CogniteConfig,
     ConfigType,
+    ConnectionConfig,
     EitherIdConfig,
     FileSizeConfig,
     LocalStateStoreConfig,
     LoggingConfig,
     MetricsConfig,
+    PortNumber,
     RawDestinationConfig,
     RawStateStoreConfig,
     StateStoreConfig,
     TimeIntervalConfig,
 )
-from .loaders import ConfigResolver, load_yaml
+from .loaders import ConfigResolver, KeyVaultAuthenticationMethod, KeyVaultLoader, load_yaml, load_yaml_dict
+
+__all__ = [
+    "AuthenticatorConfig",
+    "BaseConfig",
+    "CastableInt",
+    "CertificateConfig",
+    "CogniteConfig",
+    "ConfigType",
+    "ConnectionConfig",
+    "EitherIdConfig",
+    "FileSizeConfig",
+    "LocalStateStoreConfig",
+    "LoggingConfig",
+    "MetricsConfig",
+    "PortNumber",
+    "RawDestinationConfig",
+    "RawStateStoreConfig",
+    "StateStoreConfig",
+    "TimeIntervalConfig",
+    "ConfigResolver",
+    "KeyVaultAuthenticationMethod",
+    "KeyVaultLoader",
+    "load_yaml",
+    "load_yaml_dict",
+]

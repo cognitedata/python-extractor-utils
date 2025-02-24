@@ -1,0 +1,20 @@
+type: remote
+
+azure-keyvault:
+    authentication-method: client-secret
+    client-id: ${KEYVAULT_CLIENT_ID}
+    tenant-id: ${KEYVAULT_TENANT_ID}
+    secret: ${KEYVAULT_CLIENT_SECRET}
+    keyvault-name: extractor-keyvault
+
+cognite:
+    host: ${COGNITE_BASE_URL}
+    project: ${COGNITE_PROJECT}
+    idp-authentication:
+        client-id: ${COGNITE_CLIENT_ID}
+        secret: ${COGNITE_CLIENT_SECRET}
+        token-url: ${COGNITE_TOKEN_URL}
+        scopes:
+          - ${COGNITE_BASE_URL}/.default
+    extraction-pipeline:
+        external-id: utils-test-keyvault-remote

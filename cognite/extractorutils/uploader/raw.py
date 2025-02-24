@@ -12,17 +12,16 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-import threading
+from collections.abc import Callable
 from types import TracebackType
-from typing import Any, Callable, Dict, List, Optional, Type
+from typing import Any
 
 import arrow
 from arrow import Arrow
-from requests import ConnectionError
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Row
-from cognite.client.exceptions import CogniteAPIError, CogniteReadTimeout
+from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.uploader._base import (
     RETRIES,
     RETRY_BACKOFF_FACTOR,
@@ -37,7 +36,7 @@ from cognite.extractorutils.uploader._metrics import (
     RAW_UPLOADER_ROWS_QUEUED,
     RAW_UPLOADER_ROWS_WRITTEN,
 )
-from cognite.extractorutils.util import retry
+from cognite.extractorutils.util import cognite_exceptions, retry
 
 
 class RawUploadQueue(AbstractUploadQueue):
@@ -58,12 +57,12 @@ class RawUploadQueue(AbstractUploadQueue):
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[List[Any]], None]] = None,
-        max_queue_size: Optional[int] = None,
-        max_upload_interval: Optional[int] = None,
+        post_upload_function: Callable[[list[Any]], None] | None = None,
+        max_queue_size: int | None = None,
+        max_upload_interval: int | None = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: Optional[str] = None,
-        cancellation_token: threading.Event = threading.Event(),
+        thread_name: str | None = None,
+        cancellation_token: CancellationToken | None = None,
     ):
         # Super sets post_upload and thresholds
         super().__init__(
@@ -75,7 +74,7 @@ class RawUploadQueue(AbstractUploadQueue):
             thread_name,
             cancellation_token,
         )
-        self.upload_queue: Dict[str, Dict[str, List[TimestampedObject]]] = {}
+        self.upload_queue: dict[str, dict[str, list[TimestampedObject]]] = {}
 
         # It is a hack since Prometheus client registers metrics on object creation, so object has to be created once
         self.rows_queued = RAW_UPLOADER_ROWS_QUEUED
@@ -112,6 +111,19 @@ class RawUploadQueue(AbstractUploadQueue):
         """
         Trigger an upload of the queue, clears queue afterwards
         """
+
+        @retry(
+            exceptions=cognite_exceptions(),
+            cancellation_token=self.cancellation_token,
+            tries=RETRIES,
+            delay=RETRY_DELAY,
+            max_delay=RETRY_MAX_DELAY,
+            backoff=RETRY_BACKOFF_FACTOR,
+        )
+        def _upload_batch(database: str, table: str, patch: list[Row]) -> None:
+            # Upload
+            self.cdf_client.raw.rows.insert(db_name=database, table_name=table, row=patch, ensure_parent=True)
+
         if len(self.upload_queue) == 0:
             return
 
@@ -122,10 +134,10 @@ class RawUploadQueue(AbstractUploadQueue):
 
                     # Deduplicate
                     # In case of duplicate keys, the first key is preserved, and the last value is preserved.
-                    patch: Dict[str, Row] = {r.payload.key: r.payload for r in rows}
+                    patch: dict[str, Row] = {r.payload.key: r.payload for r in rows}
                     self.rows_duplicates.labels(_labels).inc(len(rows) - len(patch))
 
-                    self._upload_batch(database=database, table=table, patch=list(patch.values()))
+                    _upload_batch(database=database, table=table, patch=list(patch.values()))
                     self.rows_written.labels(_labels).inc(len(patch))
                     _written: Arrow = arrow.utcnow()
 
@@ -140,17 +152,6 @@ class RawUploadQueue(AbstractUploadQueue):
             self.upload_queue_size = 0
             self.queue_size.set(self.upload_queue_size)
 
-    @retry(
-        exceptions=(CogniteAPIError, ConnectionError, CogniteReadTimeout),
-        tries=RETRIES,
-        delay=RETRY_DELAY,
-        max_delay=RETRY_MAX_DELAY,
-        backoff=RETRY_BACKOFF_FACTOR,
-    )
-    def _upload_batch(self, database: str, table: str, patch: List[Row]) -> None:
-        # Upload
-        self.cdf_client.raw.rows.insert(db_name=database, table_name=table, row=patch, ensure_parent=True)
-
     def __enter__(self) -> "RawUploadQueue":
         """
         Wraps around start method, for use as context manager
@@ -162,7 +163,7 @@ class RawUploadQueue(AbstractUploadQueue):
         return self
 
     def __exit__(
-        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         """
         Wraps around stop method, for use as context manager

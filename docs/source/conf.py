@@ -1,5 +1,4 @@
 #!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 #
 # cognite-package-template documentation build configuration file, created by
 # sphinx-quickstart on Mon Jan  8 14:36:34 2018.
@@ -65,7 +64,7 @@ release = version
 #
 # This is also used if you do content translation via gettext catalogs.
 # Usually you set "language" from the command line for these cases.
-language = None
+language = "en"
 
 # List of patterns, relative to source directory, that match files and
 # directories to ignore when looking for source files.
@@ -112,7 +111,7 @@ html_logo = "img/cognite_logo_white.png"
 # -- Options for HTMLHelp output ------------------------------------------
 
 # Output file base name for HTML help builder.
-htmlhelp_basename = "{}doc".format(project)
+htmlhelp_basename = f"{project}doc"
 
 
 # -- Options for LaTeX output ---------------------------------------------
@@ -135,14 +134,14 @@ latex_elements = {
 # Grouping the document tree into LaTeX files. List of tuples
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
-latex_documents = [(master_doc, "{}.tex".format(project), "{} Documentation".format(project), "Cognite", "manual")]
+latex_documents = [(master_doc, f"{project}.tex", f"{project} Documentation", "Cognite", "manual")]
 
 
 # -- Options for manual page output ---------------------------------------
 
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
-man_pages = [(master_doc, project, "{} Documentation".format(project), [author], 1)]
+man_pages = [(master_doc, project, f"{project} Documentation", [author], 1)]
 
 
 # -- Options for Texinfo output -------------------------------------------
@@ -154,7 +153,7 @@ texinfo_documents = [
     (
         master_doc,
         project,
-        "{} Documentation".format(project),
+        f"{project} Documentation",
         author,
         project,
         "One line description of project.",

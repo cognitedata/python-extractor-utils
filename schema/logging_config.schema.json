@@ -2,47 +2,61 @@
     "$id": "logging_config.schema.json",
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
-    "description": "Configuration for logging to file or console",
+    "description": "The optional `logger` section sets up logging to a console and files.",
     "properties": {
         "console": {
             "type": "object",
-            "description": "Configuration for logging to the console",
+            "description": "Include the console section to enable logging to a standard output, such as a terminal window.",
             "unevaluatedProperties": false,
             "properties": {
                 "level": {
                     "type": "string",
-                    "description": "Minimum level of messages sent to console",
-                    "enum": ["NOTSET", "DEBUG", "INFO", "WARNING", "ERROR", "FATAL", "CRITICAL"],
+                    "description": "Select the verbosity level for console logging. To reduce the verbosity levels, use `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`.",
+                    "enum": [
+                        "DEBUG",
+                        "INFO",
+                        "WARNING",
+                        "ERROR",
+                        "CRITICAL"
+                    ],
                     "default": "INFO"
                 }
             }
         },
         "file": {
             "type": "object",
-            "description": "Configuration for logging to a rotating file",
+            "description": "Include the file section to enable logging to a file. The files are rotated daily.",
             "unevaluatedProperties": false,
-            "required": ["path"],
+            "required": [
+                "path"
+            ],
             "properties": {
                 "level": {
                     "type": "string",
-                    "description": "Minimum level of messages sent to file",
-                    "enum": ["NOTSET", "DEBUG", "INFO", "WARNING", "ERROR", "FATAL", "CRITICAL"],
+                    "description": "Select the verbosity level for file logging. To reduce the verbosity levels, use `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`.",
+                    "enum": [
+                        "DEBUG",
+                        "INFO",
+                        "WARNING",
+                        "ERROR",
+                        "CRITICAL"
+                    ],
                     "default": "INFO"
                 },
                 "path": {
                     "type": "string",
-                    "description": "Path to log file"
+                    "description": "Insert the path to the log file."
                 },
                 "retention": {
                     "type": "integer",
-                    "description": "Number of log files to keep. Files are rotated daily",
+                    "description": "Specify the number of days to keep logs.",
                     "default": 7
                 }
             }
         },
         "metrics": {
             "type": "boolean",
-            "description": "Enables metrics on the number of log messages recorded per logger and level. This requires `metrics` to be configured as well"
+            "description": "Enables metrics on the number of log messages recorded per logger and level. Configure `metrics` to retrieve the logs."
         }
     }
 }

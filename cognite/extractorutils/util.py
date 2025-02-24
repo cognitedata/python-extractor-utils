@@ -16,20 +16,24 @@
 The ``util`` package contains miscellaneous functions and classes that can some times be useful while developing
 extractors.
 """
+
+import io
 import logging
 import random
-import signal
-import threading
+from collections.abc import Callable, Generator, Iterable
+from datetime import datetime, timezone
 from functools import partial, wraps
-from threading import Event, Thread
+from io import RawIOBase
+from threading import Thread
 from time import time
-from typing import Any, Callable, Generator, Iterable, Optional, Tuple, Type, TypeVar, Union
+from typing import Any, TypeVar
 
 from decorator import decorator
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset, ExtractionPipelineRun, TimeSeries
-from cognite.client.exceptions import CogniteNotFoundError
+from cognite.client.exceptions import CogniteAPIError, CogniteException, CogniteFileUploadError, CogniteNotFoundError
+from cognite.extractorutils.threading import CancellationToken
 
 
 def _ensure(endpoint: Any, items: Iterable[Any]) -> None:
@@ -73,27 +77,6 @@ def ensure_assets(cdf_client: CogniteClient, assets: Iterable[Asset]) -> None:
     _ensure(cdf_client.assets, assets)
 
 
-def set_event_on_interrupt(stop_event: Event) -> None:
-    """
-    Set given event on SIGINT (Ctrl-C) instead of throwing a KeyboardInterrupt exception.
-
-    Args:
-        stop_event: Event to set
-    """
-
-    def sigint_handler(sig_num: int, frame: Any) -> None:
-        logger = logging.getLogger(__name__)
-        logger.warning("Interrupt signal received, stopping extractor gracefully")
-        stop_event.set()
-        logger.info("Waiting for threads to complete. Send another interrupt to force quit.")
-        signal.signal(signal.SIGINT, signal.default_int_handler)
-
-    try:
-        signal.signal(signal.SIGINT, sigint_handler)
-    except ValueError as e:
-        logging.getLogger(__name__).warning(f"Could not register handler for interrupt signals: {str(e)}")
-
-
 class EitherId:
     """
     Class representing an ID in CDF, which can either be an external or internal ID. An EitherId can only hold one ID
@@ -101,13 +84,13 @@ class EitherId:
 
     Args:
         id: Internal ID
-        externalId or external_id: external ID
+        external_id: external ID. It can be `external_id` or `externalId`
 
     Raises:
         TypeError: If none of both of id types are set.
     """
 
-    def __init__(self, **kwargs: Union[int, str, None]):
+    def __init__(self, **kwargs: int | str | None):
         internal_id = kwargs.get("id")
         external_id = kwargs.get("externalId") or kwargs.get("external_id")
 
@@ -123,8 +106,8 @@ class EitherId:
         if external_id is not None and not isinstance(external_id, str):
             raise TypeError("External IDs must be strings")
 
-        self.internal_id: Optional[int] = internal_id
-        self.external_id: Optional[str] = external_id
+        self.internal_id: int | None = internal_id
+        self.external_id: str | None = external_id
 
     def type(self) -> str:
         """
@@ -135,7 +118,7 @@ class EitherId:
         """
         return "id" if self.internal_id is not None else "externalId"
 
-    def content(self) -> Union[int, str]:
+    def content(self) -> int | str:
         """
         Get the value of the ID
 
@@ -175,7 +158,7 @@ class EitherId:
         Returns:
             A string rep of the EitherId
         """
-        return "{}: {}".format(self.type(), self.content())
+        return f"{self.type()}: {self.content()}"
 
     def __repr__(self) -> str:
         """
@@ -197,30 +180,31 @@ def add_extraction_pipeline(
     added_message: str = "",
 ) -> Callable[[Callable[..., _T1]], Callable[..., _T1]]:
     """
-    This is to be used as a decorator for extractor functions to add extraction pipeline information
+    This is to be used as a decorator for extractor functions to add extraction pipeline information.
 
     Args:
-        extraction_pipeline_ext_id:
-        cognite_client:
-        heartbeat_waiting_time:
-        added_message:
+        extraction_pipeline_ext_id: External ID of the extraction pipeline
+        cognite_client: Client to use when communicating with CDF
+        heartbeat_waiting_time: Target interval between heartbeats, in seconds
 
     Usage:
         If you have a function named "extract_data(*args, **kwargs)" and want to connect it to an extraction
         pipeline, you can use this decorator function as:
-        @add_extraction_pipeline(
-            extraction_pipeline_ext_id=<INSERT EXTERNAL ID>,
-            cognite_client=<INSERT COGNITE CLIENT OBJECT>,
-            logger=<INSERT LOGGER>,
-        )
-        def extract_data(*args, **kwargs):
-            <INSERT FUNCTION BODY>
+
+        .. code-block:: python
+
+            @add_extraction_pipeline(
+                extraction_pipeline_ext_id=<INSERT EXTERNAL ID>,
+                cognite_client=<INSERT COGNITE CLIENT OBJECT>,
+            )
+            def extract_data(*args, **kwargs):
+                <INSERT FUNCTION BODY>
     """
 
     # TODO 1. Consider refactoring this decorator to share methods with the Extractor context manager in .base.py
     # as they serve a similar purpose
 
-    cancellation_token: Event = Event()
+    cancellation_token: CancellationToken = CancellationToken()
 
     _logger = logging.getLogger(__name__)
 
@@ -254,7 +238,7 @@ def add_extraction_pipeline(
                 )
 
             def heartbeat_loop() -> None:
-                while not cancellation_token.is_set():
+                while not cancellation_token.is_cancelled:
                     cognite_client.extraction_pipelines.runs.create(
                         ExtractionPipelineRun(extpipe_external_id=extraction_pipeline_ext_id, status="seen")
                     )
@@ -266,7 +250,7 @@ def add_extraction_pipeline(
             ##############################
             _logger.info(f"Starting to run function: {input_function.__name__}")
 
-            heartbeat_thread: Optional[Thread] = None
+            heartbeat_thread: Thread | None = None
             try:
                 heartbeat_thread = Thread(target=heartbeat_loop, name="HeartbeatLoop", daemon=True)
                 heartbeat_thread.start()
@@ -279,7 +263,7 @@ def add_extraction_pipeline(
                 _report_success()
                 _logger.info("Extraction ran successfully")
             finally:
-                cancellation_token.set()
+                cancellation_token.cancel()
                 if heartbeat_thread:
                     heartbeat_thread.join()
 
@@ -290,7 +274,7 @@ def add_extraction_pipeline(
     return decorator_ext_pip
 
 
-def throttled_loop(target_time: int, cancellation_token: Event) -> Generator[None, None, None]:
+def throttled_loop(target_time: int, cancellation_token: CancellationToken) -> Generator[None, None, None]:
     """
     A loop generator that automatically sleeps until each iteration has taken the desired amount of time. Useful for
     when you want to avoid overloading a source system with requests.
@@ -312,7 +296,7 @@ def throttled_loop(target_time: int, cancellation_token: Event) -> Generator[Non
     """
     logger = logging.getLogger(__name__)
 
-    while not cancellation_token.is_set():
+    while not cancellation_token.is_cancelled:
         start_time = time()
         yield
         iteration_time = time() - start_time
@@ -329,26 +313,44 @@ _T2 = TypeVar("_T2")
 
 def _retry_internal(
     f: Callable[..., _T2],
-    cancellation_token: threading.Event = threading.Event(),
-    exceptions: Tuple[Type[Exception], ...] = (Exception,),
-    tries: int = -1,
-    delay: float = 0,
-    max_delay: Optional[float] = None,
-    backoff: float = 1,
-    jitter: Union[float, Tuple[float, float]] = 0,
+    cancellation_token: CancellationToken,
+    exceptions: tuple[type[Exception], ...] | dict[type[Exception], Callable[[Exception], bool]],
+    tries: int,
+    delay: float,
+    max_delay: float | None,
+    backoff: float,
+    jitter: float | tuple[float, float],
 ) -> _T2:
     logger = logging.getLogger(__name__)
 
-    while tries and not cancellation_token.is_set():
+    while tries:
         try:
             return f()
-        except exceptions as e:
+
+        except Exception as e:
+            if cancellation_token.is_cancelled:
+                break
+
+            if isinstance(exceptions, tuple):
+                for ex_type in exceptions:
+                    if isinstance(e, ex_type):
+                        break
+                else:
+                    raise e
+
+            else:
+                for ex_type in exceptions:
+                    if isinstance(e, ex_type) and exceptions[ex_type](e):
+                        break
+                else:
+                    raise e
+
             tries -= 1
             if not tries:
                 raise e
 
             if logger is not None:
-                logger.warning("%s, retrying in %s seconds...", str(e), delay)
+                logger.warning("%s, retrying in %.1f seconds...", str(e), delay)
 
             cancellation_token.wait(delay)
             delay *= backoff
@@ -365,13 +367,13 @@ def _retry_internal(
 
 
 def retry(
-    cancellation_token: threading.Event = threading.Event(),
-    exceptions: Tuple[Type[Exception], ...] = (Exception,),
-    tries: int = -1,
-    delay: float = 0,
-    max_delay: Optional[float] = None,
-    backoff: float = 1,
-    jitter: Union[float, Tuple[float, float]] = 0,
+    cancellation_token: CancellationToken | None = None,
+    exceptions: tuple[type[Exception], ...] | dict[type[Exception], Callable[[Any], bool]] = (Exception,),
+    tries: int = 10,
+    delay: float = 1,
+    max_delay: float | None = 60,
+    backoff: float = 2,
+    jitter: float | tuple[float, float] = (0, 2),
 ) -> Callable[[Callable[..., _T2]], Callable[..., _T2]]:
     """
     Returns a retry decorator.
@@ -380,7 +382,9 @@ def retry(
 
     Args:
         cancellation_token: a threading token that is waited on.
-        exceptions: an exception or a tuple of exceptions to catch. default: Exception.
+        exceptions: a tuple of exceptions to catch, or a dictionary from exception types to a callback determining
+            whether to retry the exception or not. The callback will be given the exception object as argument.
+            default: retry all exceptions.
         tries: the maximum number of attempts. default: -1 (infinite).
         delay: initial delay between attempts. default: 0.
         max_delay: the maximum value of delay. default: None (no limit).
@@ -398,7 +402,7 @@ def retry(
 
         return _retry_internal(
             partial(f, *args, **kwargs),
-            cancellation_token,
+            cancellation_token or CancellationToken(),
             exceptions,
             tries,
             delay,
@@ -408,3 +412,212 @@ def retry(
         )
 
     return retry_decorator
+
+
+def requests_exceptions(
+    status_codes: list[int] | None = None,
+) -> dict[type[Exception], Callable[[Any], bool]]:
+    """
+    Retry exceptions from using the ``requests`` library. This will retry all connection and HTTP errors matching
+    the given status codes.
+
+    Example:
+
+    .. code-block:: python
+
+        @retry(exceptions = requests_exceptions())
+        def my_function() -> None:
+            ...
+
+    """
+    status_codes = status_codes or [408, 425, 429, 500, 502, 503, 504]
+    # types ignored, since they are not installed as we don't depend on the package
+    from requests.exceptions import HTTPError, RequestException
+
+    def handle_http_errors(exception: RequestException) -> bool:
+        if isinstance(exception, HTTPError):
+            response = exception.response
+            if response is None:
+                return True
+
+            return response.status_code in status_codes
+
+        else:
+            return True
+
+    return {RequestException: handle_http_errors}
+
+
+def httpx_exceptions(
+    status_codes: list[int] | None = None,
+) -> dict[type[Exception], Callable[[Any], bool]]:
+    """
+    Retry exceptions from using the ``httpx`` library. This will retry all connection and HTTP errors matching
+    the given status codes.
+
+    Example:
+
+    .. code-block:: python
+
+        @retry(exceptions = httpx_exceptions())
+        def my_function() -> None:
+            ...
+
+    """
+    status_codes = status_codes or [408, 425, 429, 500, 502, 503, 504]
+    # types ignored, since they are not installed as we don't depend on the package
+    from httpx import HTTPError, HTTPStatusError
+
+    def handle_http_errors(exception: HTTPError) -> bool:
+        if isinstance(exception, HTTPStatusError):
+            response = exception.response
+            if response is None:
+                return True
+
+            return response.status_code in status_codes
+
+        else:
+            return True
+
+    return {HTTPError: handle_http_errors}
+
+
+def cognite_exceptions(
+    status_codes: list[int] | None = None,
+) -> dict[type[Exception], Callable[[Any], bool]]:
+    """
+    Retry exceptions from using the Cognite SDK. This will retry all connection and HTTP errors matching
+    the given status codes.
+
+    Example:
+
+    .. code-block:: python
+
+        @retry(exceptions = cognite_exceptions())
+        def my_function() -> None:
+            ...
+    """
+    status_codes = status_codes or [408, 425, 429, 500, 502, 503, 504]
+
+    def handle_cognite_errors(exception: CogniteException) -> bool:
+        if isinstance(exception, CogniteAPIError | CogniteFileUploadError):
+            return exception.code in status_codes
+        return True
+
+    return {CogniteException: handle_cognite_errors}
+
+
+def datetime_to_timestamp(dt: datetime) -> int:
+    return int(dt.timestamp() * 1000)
+
+
+def timestamp_to_datetime(ts: int) -> datetime:
+    return datetime.fromtimestamp(ts / 1000, tz=timezone.utc)
+
+
+def now() -> int:
+    """
+    Current time in CDF format (milliseonds since 1970-01-01 00:00:00 UTC)
+    """
+    return int(time() * 1000)
+
+
+def truncate_byte_len(item: str, ln: int) -> str:
+    """Safely truncate an arbitrary utf-8 string.
+    Used to sanitize metadata.
+
+    Args:
+        item (str): string to be truncated
+        ln (int): length (bytes)
+
+    Returns:
+        str: truncated string
+    """
+
+    bts = item.encode("utf-8")
+    if len(bts) <= ln:
+        return item
+    bts = bts[:ln]
+    last_codepoint_index = len(bts) - 1
+    # Find the last byte that's the start of an UTF-8 codepoint
+    while last_codepoint_index > 0 and (bts[last_codepoint_index] & 0b11000000) == 0b10000000:
+        last_codepoint_index -= 1
+
+    last_codepoint_start = bts[last_codepoint_index]
+    last_codepoint_len = 0
+    if last_codepoint_start & 0b11111000 == 0b11110000:
+        last_codepoint_len = 4
+    elif last_codepoint_start & 0b11110000 == 0b11100000:
+        last_codepoint_len = 3
+    elif last_codepoint_start & 0b11100000 == 0b11000000:
+        last_codepoint_len = 2
+    elif last_codepoint_start & 0b10000000 == 0:
+        last_codepoint_len = 1
+    else:
+        if last_codepoint_index - 2 <= 0:
+            return ""
+        # Somehow a longer codepoint? In this case just use the previous codepoint.
+        return bts[: (last_codepoint_index - 2)].decode("utf-8")
+
+    last_codepoint_end_index = last_codepoint_index + last_codepoint_len - 1
+    if last_codepoint_end_index > ln - 1:
+        if last_codepoint_index - 2 <= 0:
+            return ""
+        # We're in the middle of a codepoint, cut to the previous one
+        return bts[:last_codepoint_index].decode("utf-8")
+    else:
+        return bts.decode("utf-8")
+
+
+class BufferedReadWithLength(io.BufferedReader):
+    def __init__(self, raw: RawIOBase, buffer_size: int, len: int, on_close: Callable[[], None] | None = None) -> None:
+        super().__init__(raw, buffer_size)
+        # Do not remove even if it appears to be unused. :P
+        # Requests uses this to add the content-length header, which is necessary for writing to files in azure clusters
+        self.len = len
+        self.on_close = on_close
+
+    def close(self) -> None:
+        if self.on_close:
+            self.on_close()
+        return super().close()
+
+
+def iterable_to_stream(
+    iterator: Iterable[bytes],
+    file_size_bytes: int,
+    buffer_size: int = io.DEFAULT_BUFFER_SIZE,
+    on_close: Callable[[], None] | None = None,
+) -> BufferedReadWithLength:
+    class ChunkIteratorStream(io.RawIOBase):
+        def __init__(self) -> None:
+            self.last_chunk = None
+            self.loaded_bytes = 0
+            self.file_size_bytes = file_size_bytes
+
+        def tell(self) -> int:
+            return self.loaded_bytes
+
+        def __len__(self) -> int:
+            return self.file_size_bytes
+
+        def readable(self) -> bool:
+            return True
+
+        def readinto(self, buffer: Any) -> int | None:
+            try:
+                # Bytes to return
+                ln = len(buffer)
+                chunk = self.last_chunk or next(iterator)  # type: ignore
+                output, self.last_chunk = chunk[:ln], chunk[ln:]
+                if len(self.last_chunk) == 0:  # type: ignore
+                    self.last_chunk = None
+                buffer[: len(output)] = output
+                self.loaded_bytes += len(output)
+                return len(output)
+            except StopIteration:
+                return 0
+
+    return BufferedReadWithLength(
+        ChunkIteratorStream(), buffer_size=buffer_size, len=file_size_bytes, on_close=on_close
+    )

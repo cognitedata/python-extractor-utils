@@ -15,16 +15,17 @@
 
 class InvalidConfigError(Exception):
     """
-    Exception thrown from ``load_yaml`` if config file is invalid. This can be due to
+    Exception thrown from ``load_yaml`` and ``load_yaml_dict`` if config file is invalid. This can be due to
 
       * Missing fields
       * Incompatible types
       * Unkown fields
     """
 
-    def __init__(self, message: str):
-        super(InvalidConfigError, self).__init__()
+    def __init__(self, message: str, details: list[str] | None = None):
+        super().__init__()
         self.message = message
+        self.details = details
 
     def __str__(self) -> str:
         return f"Invalid config: {self.message}"

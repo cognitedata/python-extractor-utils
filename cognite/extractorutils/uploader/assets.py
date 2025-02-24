@@ -12,12 +12,14 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-from threading import Event
-from typing import Any, Callable, List, Optional, Type
+from collections.abc import Callable
+from types import TracebackType
+from typing import Any
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes.assets import Asset
-from cognite.client.exceptions import CogniteAPIError, CogniteDuplicatedError
+from cognite.client.exceptions import CogniteDuplicatedError
+from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.uploader._base import (
     RETRIES,
     RETRY_BACKOFF_FACTOR,
@@ -30,7 +32,7 @@ from cognite.extractorutils.uploader._metrics import (
     ASSETS_UPLOADER_QUEUED,
     ASSETS_UPLOADER_WRITTEN,
 )
-from cognite.extractorutils.util import retry
+from cognite.extractorutils.util import cognite_exceptions, retry
 
 
 class AssetUploadQueue(AbstractUploadQueue):
@@ -52,12 +54,12 @@ class AssetUploadQueue(AbstractUploadQueue):
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[List[Any]], None]] = None,
-        max_queue_size: Optional[int] = None,
-        max_upload_interval: Optional[int] = None,
+        post_upload_function: Callable[[list[Any]], None] | None = None,
+        max_queue_size: int | None = None,
+        max_upload_interval: int | None = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: Optional[str] = None,
-        cancellation_token: Event = Event(),
+        thread_name: str | None = None,
+        cancellation_token: CancellationToken | None = None,
     ):
         super().__init__(
             cdf_client,
@@ -68,7 +70,7 @@ class AssetUploadQueue(AbstractUploadQueue):
             thread_name,
             cancellation_token,
         )
-        self.upload_queue: List[Asset] = []
+        self.upload_queue: list[Asset] = []
         self.assets_queued = ASSETS_UPLOADER_QUEUED
         self.assets_written = ASSETS_UPLOADER_WRITTEN
         self.queue_size = ASSETS_UPLOADER_QUEUE_SIZE
@@ -92,9 +94,36 @@ class AssetUploadQueue(AbstractUploadQueue):
         """
         Trigger an upload of the queue, clears queue afterwards
         """
+
+        @retry(
+            exceptions=cognite_exceptions(),
+            cancellation_token=self.cancellation_token,
+            tries=RETRIES,
+            delay=RETRY_DELAY,
+            max_delay=RETRY_MAX_DELAY,
+            backoff=RETRY_BACKOFF_FACTOR,
+        )
+        def _upload_batch() -> None:
+            try:
+                self.cdf_client.assets.create(self.upload_queue)
+            except CogniteDuplicatedError as e:
+                duplicated_ids = set([dup["externalId"] for dup in e.duplicated if "externalId" in dup])
+                failed: list[Asset] = [e for e in e.failed]
+                to_create = []
+                to_update = []
+                for asset in failed:
+                    if asset.external_id is not None and asset.external_id in duplicated_ids:
+                        to_update.append(asset)
+                    else:
+                        to_create.append(asset)
+                if to_create:
+                    self.cdf_client.assets.create(to_create)
+                if to_update:
+                    self.cdf_client.assets.update(to_update)
+
         if len(self.upload_queue) > 0:
             with self.lock:
-                self._upload_batch()
+                _upload_batch()
 
                 try:
                     self._post_upload(self.upload_queue)
@@ -107,31 +136,6 @@ class AssetUploadQueue(AbstractUploadQueue):
                 self.upload_queue.clear()
                 self.queue_size.set(self.upload_queue_size)
 
-    @retry(
-        exceptions=(CogniteAPIError, ConnectionError),
-        tries=RETRIES,
-        delay=RETRY_DELAY,
-        max_delay=RETRY_MAX_DELAY,
-        backoff=RETRY_BACKOFF_FACTOR,
-    )
-    def _upload_batch(self) -> None:
-        try:
-            self.cdf_client.assets.create(self.upload_queue)
-        except CogniteDuplicatedError as e:
-            duplicated_ids = set([dup["externalId"] for dup in e.duplicated if "externalId" in dup])
-            failed: List[Asset] = [e for e in e.failed]
-            to_create = []
-            to_update = []
-            for asset in failed:
-                if asset.external_id is not None and asset.external_id in duplicated_ids:
-                    to_update.append(asset)
-                else:
-                    to_create.append(asset)
-            if to_create:
-                self.cdf_client.assets.create(to_create)
-            if to_update:
-                self.cdf_client.assets.update(to_update)
-
     def __enter__(self) -> "AssetUploadQueue":
         """
         Wraps around start method, for use as context manager
@@ -142,7 +146,12 @@ class AssetUploadQueue(AbstractUploadQueue):
         self.start()
         return self
 
-    def __exit__(self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException]) -> None:
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         """
         Wraps around stop method, for use as context manager
 

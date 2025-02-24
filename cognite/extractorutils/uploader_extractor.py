@@ -15,10 +15,11 @@
 """
 A module containing a slightly more advanced base extractor class, sorting a generic output into upload queues.
 """
-import threading
+
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from types import TracebackType
-from typing import Any, Callable, Iterable, List, Optional, Type, TypeVar
+from typing import Any, TypeVar
 
 from more_itertools import peekable
 
@@ -27,6 +28,7 @@ from cognite.extractorutils.base import Extractor
 from cognite.extractorutils.configtools import BaseConfig, TimeIntervalConfig
 from cognite.extractorutils.metrics import BaseMetrics
 from cognite.extractorutils.statestore import AbstractStateStore
+from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.uploader import EventUploadQueue, RawUploadQueue, TimeSeriesUploadQueue
 from cognite.extractorutils.uploader_types import CdfTypes, Event, InsertDatapoints, RawRow
 
@@ -41,10 +43,11 @@ class QueueConfigClass:
 
 @dataclass
 class UploaderExtractorConfig(BaseConfig):
-    queues: Optional[QueueConfigClass]
+    queues: QueueConfigClass | None
 
 
 UploaderExtractorConfigClass = TypeVar("UploaderExtractorConfigClass", bound=UploaderExtractorConfig)
+RunHandle = Callable[[CogniteClient, AbstractStateStore, UploaderExtractorConfigClass, CancellationToken], None]
 
 
 class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
@@ -76,21 +79,19 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
         *,
         name: str,
         description: str,
-        version: Optional[str] = None,
-        run_handle: Optional[
-            Callable[[CogniteClient, AbstractStateStore, UploaderExtractorConfigClass, threading.Event], None]
-        ] = None,
-        config_class: Type[UploaderExtractorConfigClass],
-        metrics: Optional[BaseMetrics] = None,
+        version: str | None = None,
+        run_handle: RunHandle | None = None,
+        config_class: type[UploaderExtractorConfigClass],
+        metrics: BaseMetrics | None = None,
         use_default_state_store: bool = True,
-        cancellation_token: threading.Event = threading.Event(),
-        config_file_path: Optional[str] = None,
+        cancellation_token: CancellationToken | None = None,
+        config_file_path: str | None = None,
         continuous_extractor: bool = False,
         heartbeat_waiting_time: int = 600,
         handle_interrupts: bool = True,
-        middleware: List[Callable[[dict], dict]] = [],
+        middleware: list[Callable[[dict], dict]] | None = None,
     ):
-        super(UploaderExtractor, self).__init__(
+        super().__init__(
             name=name,
             description=description,
             version=version,
@@ -144,7 +145,7 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
         return item
 
     def __enter__(self) -> "UploaderExtractor":
-        super(UploaderExtractor, self).__enter__()
+        super().__enter__()
 
         queue_config = self.config.queues if self.config.queues else QueueConfigClass()
         self.event_queue = EventUploadQueue(
@@ -170,9 +171,9 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
         return self
 
     def __exit__(
-        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> bool:
         self.event_queue.__exit__(exc_type, exc_val, exc_tb)
         self.raw_queue.__exit__(exc_type, exc_val, exc_tb)
         self.time_series_queue.__exit__(exc_type, exc_val, exc_tb)
-        return super(UploaderExtractor, self).__exit__(exc_type, exc_val, exc_tb)
+        return super().__exit__(exc_type, exc_val, exc_tb)

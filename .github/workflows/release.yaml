@@ -2,55 +2,43 @@ name: release
 
 on:
   push:
-    branches: [ master ]
+    branches: [master]
 
 jobs:
+  test:
+    uses: ./.github/workflows/test_and_build.yml
+    secrets: inherit
+
   build:
     runs-on: ubuntu-latest
+    environment: CD
+
+    needs:
+      - test
 
     steps:
-    - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: 3.8
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
 
-    - name: Install dependencies
-      run: |
-        python3 -m pip install --upgrade pip poetry
-        poetry config virtualenvs.create false
-        poetry lock
-        poetry install
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
 
-    - name: Check codestyle
-      run: pre-commit run --all
+      - name: Install dependencies
+        run: |
+          uv sync
+          python3 -m pip install pre-commit==3.6.2
 
-    - name: Run tests
-      env:
-          COGNITE_CLIENT_ID: ${{ secrets.COGNITE_PROJECT_CLIENT_ID }}
-          COGNITE_CLIENT_SECRET: ${{ secrets.COGNITE_PROJECT_CLIENT_SECRET }}
-          COGNITE_TOKEN_SCOPES: ${{ secrets.COGNITE_PROJECT_SCOPES }}
-          COGNITE_TOKEN_URL: ${{ secrets.COGNITE_PROJECT_TOKEN_URL }}
-          COGNITE_PROJECT: extractor-tests
-          COGNITE_BASE_URL: https://greenfield.cognitedata.com
-      run: |
-        coverage run --source cognite.extractorutils -m pytest -v tests
-        coverage xml
+      - name: Build package
+        run: uv build
 
-    - uses: codecov/codecov-action@v3
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        file: ./coverage.xml
+      - name: Build docs
+        run: cd docs && make html SPHINXBUILD="uv run sphinx-build"
 
-    - name: Build package
-      run: poetry build
-
-    - name: Build docs
-      run: cd docs && make html
-
-    - name: Release to PyPI
-      env:
-        TWINE_USERNAME: __token__
-        TWINE_PASSWORD: ${{ secrets.PYPI_API_TOKEN }}
-      run: twine upload --verbose dist/* || echo 'Version exists'
+      - name: Release to PyPI
+        env:
+          UV_PUBLISH_TOKEN: ${{ secrets.PYPI_API_TOKEN }}
+        run: uv publish || echo 'Version exists'

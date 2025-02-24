@@ -2,63 +2,65 @@
     "$id": "cognite_config.schema.json",
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
-    "description": "Configuration for connecting to Cognite Data Fusion (CDF)",
+    "description": "The cognite section describes which CDF project the extractor will load data into and how to connect to the project.",
     "properties": {
         "project": {
             "type": "string",
-            "description": "CDF project to connect to"
+            "description": "Insert the CDF project name."
         },
         "idp-authentication": {
             "type": "object",
-            "description": "Configure authentication using OIDC tokens",
+            "description": "The `idp-authentication` section enables the extractor to authenticate to CDF using an external identity provider (IdP), such as Microsoft Entra ID (formerly Azure Active Directory).",
             "properties": {
                 "authority": {
                     "type": "string",
                     "default": "https://login.microsoftonline.com/",
-                    "description": "Authority using together with `tenant` to authenticate against azure tenants."
+                    "description": "Insert the authority together with `tenant` to authenticate against Azure tenants."
                 },
                 "client-id": {
                     "type": "string",
-                    "description": "Service principal client id."
+                    "description": "Enter the service principal client ID from the IdP."
                 },
                 "tenant": {
                     "type": "string",
-                    "description": "Azure tenant"
+                    "description": "Enter the Azure tenant."
                 },
                 "token-url": {
                     "type": "string",
-                    "description": "URL used to obtain tokens given client credentials."
+                    "description": "Insert the URL to fetch tokens from."
                 },
                 "secret": {
                     "type": "string",
-                    "description": "Service principal client secret"
+                    "description": "Enter the service principal client secret from the IdP."
                 },
                 "resource": {
                     "type": "string",
-                    "description": "Resource parameter passed along with request"
+                    "description": "Resource parameter passed along with token requests."
                 },
                 "audience": {
                     "type": "string",
-                    "description": "Audience parameter passed along with request"
+                    "description": "Audience parameter passed along with token requests."
                 },
                 "scopes": {
                     "type": "array",
-                    "description": "A list of scopes requested for the token",
+                    "description": "Enter the list of scopes requested for the token.",
                     "items": {
                         "type": "string",
-                        "description": "A scope requested for the token"
+                        "description": "The scope requested for the token"
                     }
                 },
                 "min-ttl": {
                     "type": "integer",
                     "default": 30,
-                    "description": "Requested minimum time-to-live in seconds for the token"
+                    "description": "Insert the minimum time in seconds a token will be valid. If the cached token expires in less than `min-ttl` seconds, the system will refresh the token, even if it's still valid."
                 },
                 "certificate": {
                     "type": "object",
-                    "description": "Authenticate with a client certificate",
+                    "description": "Authenticate with a client certificate.",
                     "unevaluatedProperties": false,
-                    "required": ["path"],
+                    "required": [
+                        "path"
+                    ],
                     "properties": {
                         "authority-url": {
                             "type": "string",
@@ -66,44 +68,60 @@
                         },
                         "path": {
                             "type": "string",
-                            "description": "Path to the .pem or .pfx certificate to be used for authentication"
+                            "description": "Enter the path to the .pem or .pfx certificate to be used for authentication."
                         },
                         "password": {
                             "type": "string",
-                            "description": "Certificate password"
+                            "description": "Enter the password for the key file, if it is encrypted."
                         }
                     }
                 }
             },
             "oneOf": [
-                { "required": ["tenant", "secret"] },
-                { "required": ["token-url", "secret"] },
-                { "required": ["certificate"] }
+                {
+                    "required": [
+                        "tenant",
+                        "secret"
+                    ]
+                },
+                {
+                    "required": [
+                        "token-url",
+                        "secret"
+                    ]
+                },
+                {
+                    "required": [
+                        "certificate"
+                    ]
+                }
             ],
             "unevaluatedProperties": false,
-            "required": ["client-id"]
+            "required": [
+                "client-id"
+            ]
         },
         "data-set": {
-            "description": "Data set the extractor writes to",
+            "description": "Enter a data set the extractor should write data into.",
             "$ref": "either_id.schema.json"
         },
         "extraction-pipeline": {
-            "description": "Extraction pipeline used for remote config and reporting status",
+            "description": "Enter the extraction pipeline used for remote config and reporting statuses.",
             "$ref": "either_id.schema.json"
         },
         "host": {
             "type": "string",
             "default": "https://api.cognitedata.com",
-            "description": "Cognite service URL."
+            "description": "Insert the base URL of the CDF project."
         },
         "timeout": {
             "type": "integer",
-            "description": "Timeout on requests to CDF, in seconds",
+            "description": "Enter the timeout on requests to CDF in seconds.",
             "default": 30
         },
         "external-id-prefix": {
             "type": "string",
-            "description": "Prefix on externalId used when creating CDF resources"
+            "description": "Prefix on external ID used when creating CDF resources."
         },
         "connection": {
             "type": "object",
@@ -112,43 +130,43 @@
                 "disable-gzip": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Whether or not to disable gzipping of json bodies."
+                    "description": "Set to `true` to disable gzipping of json bodies."
                 },
                 "status-forcelist": {
                     "type": "string",
-                    "description": "HTTP status codes to retry. Defaults to {429, 502, 503, 504}"
+                    "description": "HTTP status codes to retry. Defaults to 429, 502, 503 and 504"
                 },
                 "max-retries": {
                     "type": "integer",
                     "default": 10,
-                    "description": "Max number of retries on a given http request."
+                    "description": "Maximum number of retries on a given HTTP request."
                 },
                 "max-retries-connect": {
                     "type": "integer",
                     "default": 3,
-                    "description": "Max number of retries on connection errors."
+                    "description": "Maximum number of retries on connection errors."
                 },
                 "max-retry-backoff": {
                     "type": "integer",
                     "default": 30,
-                    "description": "Retry strategy employs exponential backoff. This parameter sets a max on the amount of backoff after any request failure."
+                    "description": "Retry strategy employs exponential backoff. This parameter sets a maximum amount of backoff after any request failure."
                 },
                 "max-connection-pool-size": {
                     "type": "integer",
                     "default": 50,
-                    "description": "The maximum number of connections which will be kept in the SDKs connection pool."
+                    "description": "The maximum number of connections in the SDKs connection pool."
                 },
-                "disable_ssl": {
+                "disable-ssl": {
                     "type": "boolean",
                     "default": false,
-                    "description": "Whether or not to disable SSL."
+                    "description": "Set to `true` to disable SSL verification."
                 },
                 "proxies": {
                     "type": "object",
-                    "description": "Dictionary mapping from protocol to url.",
+                    "description": "Dictionary mapping from protocol to URL.",
                     "items": {
                         "type": "string",
-                        "description": "Provide protocol as key and value as the corresponding url"
+                        "description": "Provide protocol as key and value as the corresponding URL."
                     }
                 }
             }

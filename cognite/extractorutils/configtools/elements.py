@@ -18,10 +18,9 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import Enum
 from logging.handlers import TimedRotatingFileHandler
-from threading import Event
 from time import sleep
-from typing import Any, Dict, List, Optional, Tuple, Union
-from urllib.parse import urljoin
+from typing import Any
+from urllib.parse import urljoin, urlparse
 
 import yaml
 from prometheus_client import REGISTRY, start_http_server
@@ -33,6 +32,7 @@ from cognite.client.credentials import (
     OAuthClientCredentials,
 )
 from cognite.client.data_classes import Asset, DataSet, ExtractionPipeline
+from cognite.extractorutils._inner_util import resolve_log_level_for_httpx
 from cognite.extractorutils.configtools._util import _load_certificate_data
 from cognite.extractorutils.exceptions import InvalidConfigError
 from cognite.extractorutils.metrics import (
@@ -46,6 +46,7 @@ from cognite.extractorutils.statestore import (
     NoStateStore,
     RawStateStore,
 )
+from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.util import EitherId
 
 _logger = logging.getLogger(__name__)
@@ -53,9 +54,13 @@ _logger = logging.getLogger(__name__)
 
 @dataclass
 class CertificateConfig:
+    """
+    Configuration parameters for certificates
+    """
+
     path: str
-    password: Optional[str]
-    authority_url: Optional[str] = None
+    password: str | None
+    authority_url: str | None = None
 
 
 @dataclass
@@ -65,15 +70,15 @@ class AuthenticatorConfig:
     """
 
     client_id: str
-    scopes: List[str]
-    secret: Optional[str]
-    tenant: Optional[str] = None
-    token_url: Optional[str] = None
-    resource: Optional[str] = None
-    audience: Optional[str] = None
+    scopes: list[str]
+    secret: str | None = None
+    tenant: str | None = None
+    token_url: str | None = None
+    resource: str | None = None
+    audience: str | None = None
     authority: str = "https://login.microsoftonline.com/"
     min_ttl: float = 30  # minimum time to live: refresh token ahead of expiration
-    certificate: Optional[CertificateConfig] = None
+    certificate: CertificateConfig | None = None
 
 
 @dataclass
@@ -83,19 +88,24 @@ class ConnectionConfig:
     """
 
     disable_gzip: bool = False
-    status_forcelist: List[int] = field(default_factory=lambda: [429, 502, 503, 504])
+    status_forcelist: list[int] = field(default_factory=lambda: [429, 502, 503, 504])
     max_retries: int = 10
     max_retries_connect: int = 3
     max_retry_backoff: int = 30
     max_connection_pool_size: int = 50
     disable_ssl: bool = False
-    proxies: Dict[str, str] = field(default_factory=dict)
+    proxies: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
 class EitherIdConfig:
-    id: Optional[int]
-    external_id: Optional[str]
+    """
+    Configuration parameter representing an ID in CDF, which can either be an external or internal ID.
+    An EitherId can only hold one ID type, not both.
+    """
+
+    id: int | None
+    external_id: str | None
 
     @property
     def either_id(self) -> EitherId:
@@ -103,6 +113,10 @@ class EitherIdConfig:
 
 
 class TimeIntervalConfig(yaml.YAMLObject):
+    """
+    Configuration parameter for setting a time interval
+    """
+
     def __init__(self, expression: str) -> None:
         self._interval, self._expression = TimeIntervalConfig._parse_expression(expression)
 
@@ -115,7 +129,7 @@ class TimeIntervalConfig(yaml.YAMLObject):
         return hash(self._interval)
 
     @classmethod
-    def _parse_expression(cls, expression: str) -> Tuple[int, str]:
+    def _parse_expression(cls, expression: str) -> tuple[int, str]:
         # First, try to parse pure number and assume seconds (for backwards compatibility)
         try:
             return int(expression), f"{expression}s"
@@ -167,11 +181,15 @@ class TimeIntervalConfig(yaml.YAMLObject):
 
 
 class FileSizeConfig(yaml.YAMLObject):
+    """
+    Configuration parameter for setting a file size
+    """
+
     def __init__(self, expression: str) -> None:
         self._bytes, self._expression = FileSizeConfig._parse_expression(expression)
 
     @classmethod
-    def _parse_expression(cls, expression: str) -> Tuple[int, str]:
+    def _parse_expression(cls, expression: str) -> tuple[int, str]:
         # First, try to parse pure number and assume bytes
         try:
             return int(expression), f"{expression}s"
@@ -247,6 +265,18 @@ class FileSizeConfig(yaml.YAMLObject):
         return self._expression
 
 
+path_elem_regex = re.compile(r"^([a-zA-Z0-9.\-_~!$&'()*+,;=:@]|%[A-F0-9]{2})*$")
+
+
+def _validate_https_url(value: str, name: str) -> None:
+    try:
+        url = urlparse(value)
+    except Exception as e:
+        raise InvalidConfigError(f"{name} ({value}) is not a valid URL") from e
+    if url.scheme != "https":
+        raise InvalidConfigError(f"{name} ({value}) must be HTTPS")
+
+
 @dataclass
 class CogniteConfig:
     """
@@ -255,19 +285,20 @@ class CogniteConfig:
 
     project: str
     idp_authentication: AuthenticatorConfig
-    data_set: Optional[EitherIdConfig]
-    data_set_id: Optional[int]
-    data_set_external_id: Optional[str]
-    extraction_pipeline: Optional[EitherIdConfig]
+    data_set: EitherIdConfig | None = None
+    data_set_id: int | None = None
+    data_set_external_id: str | None = None
+    extraction_pipeline: EitherIdConfig | None = None
     timeout: TimeIntervalConfig = TimeIntervalConfig("30s")
     connection: ConnectionConfig = field(default_factory=ConnectionConfig)
+    security_categories: list[int] | None = None
     external_id_prefix: str = ""
     host: str = "https://api.cognitedata.com"
 
     def get_cognite_client(
         self,
         client_name: str,
-        token_custom_args: Optional[Dict[str, str]] = None,
+        token_custom_args: dict[str, str] | None = None,
         use_experimental_sdk: bool = False,
     ) -> CogniteClient:
         from cognite.client.config import global_config
@@ -282,11 +313,20 @@ class CogniteConfig:
         global_config.disable_ssl = self.connection.disable_ssl
         global_config.proxies = self.connection.proxies
 
+        if not self.project:
+            raise InvalidConfigError("Project is not set")
+        if not path_elem_regex.match(self.project):
+            raise InvalidConfigError(f"Project ({self.project}) is not valid")
+
         credential_provider: CredentialProvider
         if self.idp_authentication.certificate:
             if self.idp_authentication.certificate.authority_url:
                 authority_url = self.idp_authentication.certificate.authority_url
+                _validate_https_url(self.idp_authentication.certificate.authority_url, "Authority URL")
             elif self.idp_authentication.tenant:
+                _validate_https_url(self.idp_authentication.authority, "Authority")
+                if not path_elem_regex.match(self.idp_authentication.tenant):
+                    raise InvalidConfigError(f"Tenant {self.idp_authentication.tenant} is not valid")
                 authority_url = urljoin(self.idp_authentication.authority, self.idp_authentication.tenant)
             else:
                 raise InvalidConfigError("Either authority-url or tenant is required for certificate authentication")
@@ -294,6 +334,8 @@ class CogniteConfig:
                 self.idp_authentication.certificate.path,
                 self.idp_authentication.certificate.password,
             )
+            if not self.idp_authentication.scopes:
+                _logger.warning("No scopes configured. Authenticating with CDF is unlikely to work correctly")
             credential_provider = OAuthClientCertificate(
                 authority_url=authority_url,
                 client_id=self.idp_authentication.client_id,
@@ -303,14 +345,22 @@ class CogniteConfig:
             )
 
         elif self.idp_authentication.secret:
-            kwargs: Dict[str, Any] = {}
+            kwargs: dict[str, Any] = {}
             if self.idp_authentication.token_url:
+                _validate_https_url(self.idp_authentication.token_url, "Token URL")
                 kwargs["token_url"] = self.idp_authentication.token_url
             elif self.idp_authentication.tenant:
+                _validate_https_url(self.idp_authentication.authority, "Authority")
+                if not path_elem_regex.match(self.idp_authentication.tenant):
+                    raise InvalidConfigError(f"Tenant ({self.idp_authentication.tenant}) is not valid")
                 base_url = urljoin(self.idp_authentication.authority, self.idp_authentication.tenant)
                 kwargs["token_url"] = f"{base_url}/oauth2/v2.0/token"
+            else:
+                raise InvalidConfigError("Either token-url or tenant is required for client credentials authentication")
             kwargs["client_id"] = self.idp_authentication.client_id
             kwargs["client_secret"] = self.idp_authentication.secret
+            if not self.idp_authentication.scopes:
+                _logger.warning("No scopes configured. Authenticating with CDF is unlikely to work correctly")
             kwargs["scopes"] = self.idp_authentication.scopes
             if token_custom_args is None:
                 token_custom_args = {}
@@ -338,7 +388,7 @@ class CogniteConfig:
 
         return CogniteClient(client_config)
 
-    def get_data_set(self, cdf_client: CogniteClient) -> Optional[DataSet]:
+    def get_data_set(self, cdf_client: CogniteClient) -> DataSet | None:
         if self.data_set_external_id:
             logging.getLogger(__name__).warning(
                 "Using data-set-external-id is deprecated, please use data-set/external-id instead"
@@ -354,17 +404,17 @@ class CogniteConfig:
 
         return cdf_client.data_sets.retrieve(
             id=self.data_set.either_id.internal_id,
-            external_id=self.data_set.either_id.external_id,  # type: ignore
+            external_id=self.data_set.either_id.external_id,
         )
 
-    def get_extraction_pipeline(self, cdf_client: CogniteClient) -> Optional[ExtractionPipeline]:
+    def get_extraction_pipeline(self, cdf_client: CogniteClient) -> ExtractionPipeline | None:
         if not self.extraction_pipeline:
             return None
 
         either_id = self.extraction_pipeline.either_id
         extraction_pipeline = cdf_client.extraction_pipelines.retrieve(
-            id=either_id.internal_id,  # type: ignore
-            external_id=either_id.external_id,  # type: ignore
+            id=either_id.internal_id,
+            external_id=either_id.external_id,
         )
         if extraction_pipeline is None:
             raise ValueError(f"Extraction pipeline with {either_id.type()} {either_id.content()} not found")
@@ -389,12 +439,12 @@ class LoggingConfig:
     Logging settings, such as log levels and path to log file
     """
 
-    console: Optional[_ConsoleLoggingConfig]
-    file: Optional[_FileLoggingConfig]
+    console: _ConsoleLoggingConfig | None
+    file: _FileLoggingConfig | None
     # enables metrics on the number of log messages recorded (per logger and level)
     # In order to collect/see result MetricsConfig should be set as well, so metrics are propagated to
     # Prometheus and/or Cognite
-    metrics: Optional[bool] = False
+    metrics: bool | None = False
 
     def setup_logging(self, suppress_console: bool = False) -> None:
         """
@@ -442,15 +492,23 @@ class LoggingConfig:
             if root.getEffectiveLevel() > file_handler.level:
                 root.setLevel(file_handler.level)
 
+            log_level = logging.getLevelName(root.getEffectiveLevel())
+            httpx_log_level = resolve_log_level_for_httpx(log_level)
+            httpx_logger = logging.getLogger("httpx")
+            httpx_logger.setLevel(httpx_log_level)
+
+            http_core_logger = logging.getLogger("httpcore")
+            http_core_logger.setLevel(httpx_log_level)
+
 
 @dataclass
 class _PushGatewayConfig:
     host: str
     job_name: str
-    username: Optional[str]
-    password: Optional[str]
+    username: str | None
+    password: str | None
 
-    clear_after: Optional[TimeIntervalConfig]
+    clear_after: TimeIntervalConfig | None
     push_interval: TimeIntervalConfig = TimeIntervalConfig("30s")
 
 
@@ -462,9 +520,9 @@ class _PromServerConfig:
 @dataclass
 class _CogniteMetricsConfig:
     external_id_prefix: str
-    asset_name: Optional[str]
-    asset_external_id: Optional[str]
-    data_set: Optional[EitherIdConfig] = None
+    asset_name: str | None
+    asset_external_id: str | None
+    data_set: EitherIdConfig | None = None
 
     push_interval: TimeIntervalConfig = TimeIntervalConfig("30s")
 
@@ -476,13 +534,13 @@ class MetricsConfig:
     Series.
     """
 
-    push_gateways: Optional[List[_PushGatewayConfig]]
-    cognite: Optional[_CogniteMetricsConfig]
-    server: Optional[_PromServerConfig]
+    push_gateways: list[_PushGatewayConfig] | None
+    cognite: _CogniteMetricsConfig | None
+    server: _PromServerConfig | None
 
-    def start_pushers(self, cdf_client: CogniteClient, cancellation_token: Event = Event()) -> None:
-        self._pushers: List[AbstractMetricsPusher] = []
-        self._clear_on_stop: Dict[PrometheusPusher, int] = {}
+    def start_pushers(self, cdf_client: CogniteClient, cancellation_token: CancellationToken | None = None) -> None:
+        self._pushers: list[AbstractMetricsPusher] = []
+        self._clear_on_stop: dict[PrometheusPusher, int] = {}
 
         push_gateways = self.push_gateways or []
 
@@ -550,9 +608,9 @@ class ConfigType(Enum):
 
 @dataclass
 class _BaseConfig:
-    _file_hash: Optional[str] = field(init=False, repr=False, default=None)
+    _file_hash: str | None = field(init=False, repr=False, default=None)
 
-    type: Optional[ConfigType]
+    type: ConfigType | None
     cognite: CogniteConfig
 
 
@@ -562,34 +620,53 @@ class BaseConfig(_BaseConfig):
     Basis for an extractor config, containing config version, ``CogniteConfig`` and ``LoggingConfig``
     """
 
-    version: Optional[Union[str, int]]
+    version: str | int | None
     logger: LoggingConfig
 
 
 @dataclass
 class RawDestinationConfig:
+    """
+    Configuration parameters for using Raw
+    """
+
     database: str
     table: str
 
 
 @dataclass
 class RawStateStoreConfig(RawDestinationConfig):
+    """
+    Configuration of a state store based on CDF RAW
+    """
+
     upload_interval: TimeIntervalConfig = TimeIntervalConfig("30s")
 
 
 @dataclass
 class LocalStateStoreConfig:
+    """
+    Configuration of a state store using a local JSON file
+    """
+
     path: str
     save_interval: TimeIntervalConfig = TimeIntervalConfig("30s")
 
 
 @dataclass
 class StateStoreConfig:
-    raw: Optional[RawStateStoreConfig] = None
-    local: Optional[LocalStateStoreConfig] = None
+    """
+    Configuration of the State Store, containing ``LocalStateStoreConfig`` or ``RawStateStoreConfig``
+    """
+
+    raw: RawStateStoreConfig | None = None
+    local: LocalStateStoreConfig | None = None
 
     def create_state_store(
-        self, cdf_client: Optional[CogniteClient] = None, default_to_local: bool = True
+        self,
+        cdf_client: CogniteClient | None = None,
+        default_to_local: bool = True,
+        cancellation_token: CancellationToken | None = None,
     ) -> AbstractStateStore:
         """
         Create a state store object based on the config.
@@ -614,15 +691,105 @@ class StateStoreConfig:
                 database=self.raw.database,
                 table=self.raw.table,
                 save_interval=self.raw.upload_interval.seconds,
+                cancellation_token=cancellation_token,
             )
 
         if self.local:
             return LocalStateStore(
                 file_path=self.local.path,
                 save_interval=self.local.save_interval.seconds,
+                cancellation_token=cancellation_token,
             )
 
         if default_to_local:
-            return LocalStateStore(file_path="states.json")
+            return LocalStateStore(file_path="states.json", cancellation_token=cancellation_token)
         else:
             return NoStateStore()
+
+
+class RegExpFlag(Enum):
+    IGNORECASE = "ignore-case"
+    IC = "i"
+    ASCII = "ascii-only"
+    A = "a"
+
+    def get_regex_flag(self) -> int:
+        if self in (RegExpFlag.IGNORECASE, RegExpFlag.IC):
+            return re.IGNORECASE
+        elif self.value in (RegExpFlag.ASCII, RegExpFlag.A):
+            return re.ASCII
+        return 0
+
+
+@dataclass
+class IgnorePattern:
+    """
+    Configuration for regexp for ignore pattern
+    """
+
+    pattern: str
+    options: list[RegExpFlag] | None = None
+    flags: list[RegExpFlag] | None = None
+
+    def compile(self) -> re.Pattern[str]:
+        """
+        Compile RegExp pattern.
+
+        Returns:
+            Compiled pattern.
+        """
+        flag = 0
+        for f in self.options or []:
+            flag |= f.get_regex_flag()
+        return re.compile(self.pattern, flag)
+
+    def __post_init__(self) -> None:
+        if self.options is not None and self.flags is not None:
+            raise ValueError("Only one of either 'options' or 'flags' can be specified.")
+        if self.options is None and self.flags is None:
+            raise ValueError("'options' is required.")
+
+        if self.flags is not None:
+            _logger.warning("'options' is preferred over 'flags' as this may be removed in a future release")
+            self.options = self.flags
+            self.flags = None
+
+
+class CastableInt(int):
+    """
+    Represents an integer in a config schema. Difference from regular int is that the
+    value if this type can be  either a string or an integer in the yaml file.
+    """
+
+    def __new__(cls, value: Any) -> "CastableInt":
+        """
+        Returns value as is if it's int. If it's str or bytes try to convert to int.
+        Raises ValueError if conversion is unsuccessful or value is of not supported type.
+
+        Type check is required to avoid unexpected behaviour, such as implictly casting booleans,
+        floats and other types supported by standard int.
+        """
+
+        if not isinstance(value, int | str | bytes):
+            raise ValueError(f"CastableInt cannot be created form value {value!r} of type {type(value)!r}.")
+
+        return super().__new__(cls, value)
+
+
+class PortNumber(CastableInt):
+    """
+    A subclass of int to be used in config schemas. It represents a valid port number (0 to 65535) and allows the value
+    to be of either str or int type. If the value is not a valid port number raises a ValueError at instantiation.
+    """
+
+    def __new__(cls, value: Any) -> "PortNumber":
+        """
+        Try to convert the `value` to int. If successful, check if it's within a valid range for a port number.
+        Raises ValueError if conversion to int or validation is unsuccessful.
+        """
+        value = super().__new__(cls, value)
+
+        if not (0 <= value <= 65535):
+            raise ValueError(f"Port number must be between 0 and 65535. Got: {value}.")
+
+        return value

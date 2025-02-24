@@ -66,7 +66,7 @@ instead. If both are used, the condition being met first will trigger the upload
 
 from .assets import AssetUploadQueue
 from .events import EventUploadQueue
-from .files import BytesUploadQueue, FileUploadQueue
+from .files import BytesUploadQueue, FileUploadQueue, IOFileUploadQueue
 from .raw import RawUploadQueue
 from .time_series import (
     DataPoint,
@@ -75,3 +75,17 @@ from .time_series import (
     TimeSeriesUploadQueue,
     default_time_series_factory,
 )
+
+__all__ = [
+    "AssetUploadQueue",
+    "EventUploadQueue",
+    "BytesUploadQueue",
+    "FileUploadQueue",
+    "IOFileUploadQueue",
+    "RawUploadQueue",
+    "DataPoint",
+    "DataPointList",
+    "SequenceUploadQueue",
+    "TimeSeriesUploadQueue",
+    "default_time_series_factory",
+]

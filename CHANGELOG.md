@@ -12,6 +12,424 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.5.11
+
+### Added
+
+* In the `unstable` package: Add a `from_environment` method to `ConnectionConfig`
+
+## 7.5.10
+
+## Fixed
+
+* Locked the `dacite` dependency to `<1.9.0` to avoid issues with the new release.
+
+## 7.5.9
+
+### Added
+
+* In the `unstable` package: Task description
+* In the `unstable` package: Convenience methods to create scheduled tasks (ie, `from_interval`, `from_cron`)
+* In the `unstable` package: A `TaskContext` class, which exposes a logging interface to use for logging and error
+  reporting within a task.
+
+### Changed
+
+* In the `unstable` package: Don't base tasks on dataclasses
+* In the `unstable` package: Error reporting has changed from a single `error(level=..., description=..., ...)` method
+  to several more specific methods, with the goal of being more convenient to use. E.g. `self.fatal(desc)` or
+  `self.warning(desc)`. As well as separating out `begin_error`, `begin_warning` etc for long-lasting errors, to avoid
+  the `self.warning(...).instant()` workaround.
+* In the `unstable` package: Change task signature to take a `TaskContext` as an arg
+
+### Fixed
+
+* In the `unstable` package: Correctly set the `action` attribute on reported tasks
+
+## 7.5.8
+
+### Changed
+
+* In the `unstable` package: update path and query params to adapt to changes in the unstable API
+* In the `unstable` package: remove logic to attempt older config revisions, just fail if current config is invalid
+
+## 7.5.7
+
+### Changed
+
+* Loosened dependency restrictions on `0.*` packages
+
+## 7.5.6
+
+### Added
+
+* Added a `ssl_verify` argument to file uploaders to either use custom CA bundles or to diable SSL verification completely.
+
+## 7.5.5
+
+### Added
+
+* Added a feature to report file upload errors
+
+### Changed
+
+* Improved logging when uploading files
+
+### Fixed
+
+* Handling of files with size 0
+
+
+## 7.5.4
+
+### Fixed
+
+ * Fix issue caused by attempting to update file mimeType on AWS clusters.
+
+## 7.5.3
+
+### Fixed
+
+ * Revert change in 7.5.2, the root cause is a different issue.
+
+## 7.5.2
+
+### Fixed
+
+ * Avoid trying to update mime type when updating empty files.
+
+## 7.5.1
+
+### Changed
+
+ * The file upload queue will now use `file_transfer_timeout` from the passed `CogniteClient`.
+
+## 7.5.0
+
+### Added
+
+ * File processing utils
+
+## 7.4.9
+
+### Added
+
+ * `CastableInt` class the represents an interger to be used in config schema definitions. The difference from using `int` is that the field of this type in the yaml file can be either a string or a number, while a field of type `int` must be a number in yaml.
+ * `PortNumber` class that represents a valid port number to be used in config schema definitions. Just like `CastableInt` it can be a string or a number in the yaml file. This allows for example setting a port number using an environment variable.
+
+## 7.4.8
+
+### Fixed
+
+ * Fix file upload when private link is used
+
+## 7.4.7
+
+### Added
+
+ * Configuration for ignore regexp pattern
+
+## 7.4.6
+
+### Fixed
+
+ * Fix file metadata update
+
+## 7.4.5
+
+### Removed
+
+ * Remove warnings from data models file uploads
+
+## 7.4.4
+
+### Changed
+
+ * Updated cognite SDK version.
+
+## 7.4.3
+
+### Fixed:
+
+ * Regression: Reverting change related to file_meta parameter in IOUploadQueue
+
+## 7.4.2
+
+### Added
+
+ * Added support for AWS file upload
+
+## 7.4.1
+
+### Changed
+
+ * Updated cognite sdk version
+
+## 7.4.0
+
+### Added
+
+ * Upload to Core DM/Classic file.
+
+## 7.3.0
+
+### Changed
+
+ * Use httpx to upload files to CDF instead of the python SDK.
+   May improve performance on windows.
+
+## 7.2.3
+
+### Added
+
+ * Add additional validation to cognite config before creating a cognite client,
+   to provide better error messages when configuration is obviously wrong.
+
+## 7.2.2
+
+### Fixed
+
+ * Produce a config error when missing token-url and tenant, instead of eventually
+   producing an `OAuth 2 MUST utilize https` error when getting the token.
+
+## 7.2.1
+
+### Changed
+
+ * Reformat log messages to not have newlines
+
+### Fixed
+
+ * Fixed using the keyvault tag in remote config.
+
+## 7.2.0
+
+### Fixed
+
+ * Fixed an issue with the `retry` decorator where functions would not be
+   called at all if the cancellation token was set. This resulted in errors
+   with for example upload queues.
+
+### Added
+
+ * An upload queue for data model instances.
+ * A new type of state store that stores hashes of ingested items. This can be
+   used to detect changed RAW rows or data model instances.
+
+## 7.1.6
+
+### Changed
+
+ * Update cognite-sdk version to 7.43.3
+
+## 7.1.5
+
+### Fixed
+
+ * Fixed an issue preventing retries in file uploads from working properly
+
+### Added
+
+ * File external ID when logging failed file uploads
+
+## 7.1.4
+
+### Fixed
+
+ * Fixed a race condition in state stores and uploaders where a shutdown could result in corrupted state stores.
+
+## 7.1.3
+
+### Fixed
+
+ * Update type hints for the time series upload queue to allow status codes
+
+## 7.1.2
+
+### Fixed
+
+ * `cognite_exceptions()` did not properly retry file uploads
+
+## 7.1.1
+
+### Fixed
+
+  * Enhancement of `7.0.5`: more use cases covered (to avoid repeatedly fetching a new token).
+  * When using remote config, the full local `idp-authentication` is now injected (some fields were missing).
+
+## 7.1.0
+
+### Added
+
+  * The file upload queue is now able to stream files larger than 5GiB.
+
+## 7.0.5
+
+### Fixed
+
+  * The background thread `ConfigReloader` now caches the `CogniteClient` to avoid repeatedly fetching a new token.
+
+## 7.0.4
+
+### Fixed
+
+  * Max parallelism in file upload queue properly can set larger values than the `max_workers` in the `ClientConfig` object.
+  * Storing states with the state store will lock the state store. This fixes an issue where iterating through a changing dict could cause issues.
+
+## 7.0.3
+
+### Fixed
+
+  * Fix file size upper limit.
+
+## 7.0.2
+
+### Added
+
+  * Support for files without content.
+
+## 7.0.1
+
+### Fixed
+
+ * Ensure that `CancellationToken.wait(timeout)` only waits for at most `timeout`, even if it is notified in that time.
+
+## 7.0.0
+
+### Changed
+
+ * The file upload queues have changed behaviour.
+     - Instead of waiting to upload until a set of conditions, it starts
+       uploading immedeately.
+     - The `upload()` method now acts more like a `join`, wating on all the
+       uploads in the queue to complete before returning.
+     - A call to `add_to_upload_queue` when the queue is full will hang until
+       the queue is no longer full before returning, instead of triggering and
+       upload and hanging until everything is uploaded.
+     - The queues now require to be set up with a max size. The max upload
+       latencey is removed. As long as you use the queue in as a context (ie,
+       using `with FileUploadQueue(...) as queue:`) you should not have to
+       change anything in your code. The behaviour of the queue will change, it
+       will most likely be much faster, but it will not require any changes from
+       you as a user of the queue.
+
+ * `threading.Event` has been replaced globally with `CancellationToken`. The
+   interfaces are mostly compatible, though `CancellationToken` does not have a
+   `clear` method. The compatibility layer is deprecated.
+     - Replace calls to `is_set` with the property `is_cancelled`.
+     - Replace calls to `set` with the method `cancel`.
+     - All methods which took `threading.Event` now take `CancellationToken`.
+       You can use `create_child_token` to create a token that can be canceled
+       without affecting its parent token, this is useful for creating stoppable
+       sub-modules that are stopped if a parent module is stopped. Notably,
+       calling `stop` on an upload queue no longer stops the parent extractor,
+       this was never intended behavior.
+
+### Removed
+
+ * The deprecated `middleware` module has been removed.
+ * `set_event_on_interrupt` has been replaced with
+   `CancellationToken.cancel_on_interrupt`.
+
+### Added
+
+ * You can now use `Path` as a type in your config files.
+ * `CancellationToken` as a better abstraction for cancellation than
+   `threading.Event`.
+
+### Migration guide
+
+To migrate from version `6.*` to `7`, you need to update how you interract with
+cancellation tokens. The type has now changed from `Event` to
+`CancellationToken`, so make sure to update all of your type hints etc. There is
+a compatability layer for the `CancellationToken` class, so that it has the same
+methods as an `Event` (except for `clear()`) which means it should act as a
+drop-in replacement for now. This compatability layer is deprected, and will be
+removed in version `8`.
+
+If you are using file upload queues, read the entry in the _Changed_ section.
+You will most likely not need to change your code, but how the queue behaves has
+changed for this version.
+
+## [6.4.1]
+
+### Changed
+
+ * File upload queues now reuse a single thread pool across runs instead of
+   creating a new one each time `upload()` is called.
+
+## [6.4.0]
+
+### Added
+
+ * Option to specify retry exceptions as a dictionary instead of a tuple. Values
+   should be a callable determining whether a specific exception object should
+   be retied or not. Example:
+
+   ``` python
+   @retry(
+       exceptions = {ValueError: lambda x: "Invalid" not in str(x)}
+   )
+   def func() -> None:
+       value = some_function()
+
+       if value is None:
+           raise ValueError("Could not retrieve value")
+
+       if not_valid(value):
+           raise ValueError(f"Invalid value: {value}")
+   ```
+
+  * Templates for common retry scenarios. For example, if you're using the
+    `requests` library, you can do
+
+    ``` python
+    retry(exceptions = request_exceptions())
+    ```
+
+### Changed
+
+ * Default parameters in `retry` has changed to be less agressive. Retries will
+   apply backoff by default, and give up after 10 retries.
+
+## [6.3.2]
+
+### Added
+
+ * Aliases for keyvault config to align with dotnet utils
+
+## [6.3.1]
+
+### Fixed
+
+ * Improved the state store retry behavior to handle both fundamental
+   and wrapped network connection errors.
+
+## [6.3.0]
+
+### Added
+
+ * Added support to retrieve secrets from Azure Keyvault.
+
+## [6.2.2]
+
+### Added
+
+ * Added an optional `security-categories` attribute to the `cognite` config
+   section.
+
+## [6.2.1]
+
+### Fixed
+
+ * Fixed a type hint in the `post_upload_function` for upload queues.
+
+## [6.2.0]
+
+### Added
+
+ * Added `IOFileUploadQueue` as a base class of both `FileUploadQueue` and `BytesUploadQueue`.
+   This is an upload queue for functions that produce `BinaryIO` to CDF Files.
 
 ## [6.1.1]
 

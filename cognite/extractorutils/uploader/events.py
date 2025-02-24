@@ -12,13 +12,13 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-import threading
+from collections.abc import Callable
 from types import TracebackType
-from typing import Callable, List, Optional, Type
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Event
-from cognite.client.exceptions import CogniteAPIError, CogniteDuplicatedError
+from cognite.client.exceptions import CogniteDuplicatedError
+from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.uploader._base import (
     RETRIES,
     RETRY_BACKOFF_FACTOR,
@@ -31,7 +31,7 @@ from cognite.extractorutils.uploader._metrics import (
     EVENTS_UPLOADER_QUEUED,
     EVENTS_UPLOADER_WRITTEN,
 )
-from cognite.extractorutils.util import retry
+from cognite.extractorutils.util import cognite_exceptions, retry
 
 
 class EventUploadQueue(AbstractUploadQueue):
@@ -52,12 +52,12 @@ class EventUploadQueue(AbstractUploadQueue):
     def __init__(
         self,
         cdf_client: CogniteClient,
-        post_upload_function: Optional[Callable[[List[Event]], None]] = None,
-        max_queue_size: Optional[int] = None,
-        max_upload_interval: Optional[int] = None,
+        post_upload_function: Callable[[list[Event]], None] | None = None,
+        max_queue_size: int | None = None,
+        max_upload_interval: int | None = None,
         trigger_log_level: str = "DEBUG",
-        thread_name: Optional[str] = None,
-        cancellation_token: threading.Event = threading.Event(),
+        thread_name: str | None = None,
+        cancellation_token: CancellationToken | None = None,
     ):
         # Super sets post_upload and threshold
         super().__init__(
@@ -70,7 +70,7 @@ class EventUploadQueue(AbstractUploadQueue):
             cancellation_token,
         )
 
-        self.upload_queue: List[Event] = []
+        self.upload_queue: list[Event] = []
 
         self.events_queued = EVENTS_UPLOADER_QUEUED
         self.events_written = EVENTS_UPLOADER_WRITTEN
@@ -96,11 +96,38 @@ class EventUploadQueue(AbstractUploadQueue):
         """
         Trigger an upload of the queue, clears queue afterwards
         """
+
+        @retry(
+            exceptions=cognite_exceptions(),
+            cancellation_token=self.cancellation_token,
+            tries=RETRIES,
+            delay=RETRY_DELAY,
+            max_delay=RETRY_MAX_DELAY,
+            backoff=RETRY_BACKOFF_FACTOR,
+        )
+        def _upload_batch() -> None:
+            try:
+                self.cdf_client.events.create([e for e in self.upload_queue])
+            except CogniteDuplicatedError as e:
+                duplicated_ids = set([dup["externalId"] for dup in e.duplicated if "externalId" in dup])
+                failed: list[Event] = [e for e in e.failed]
+                to_create = []
+                to_update = []
+                for evt in failed:
+                    if evt.external_id is not None and evt.external_id in duplicated_ids:
+                        to_update.append(evt)
+                    else:
+                        to_create.append(evt)
+                if to_create:
+                    self.cdf_client.events.create(to_create)
+                if to_update:
+                    self.cdf_client.events.update(to_update)
+
         if len(self.upload_queue) == 0:
             return
 
         with self.lock:
-            self._upload_batch()
+            _upload_batch()
 
             self.events_written.inc(self.upload_queue_size)
 
@@ -113,31 +140,6 @@ class EventUploadQueue(AbstractUploadQueue):
             self.upload_queue_size = 0
             self.queue_size.set(self.upload_queue_size)
 
-    @retry(
-        exceptions=(CogniteAPIError, ConnectionError),
-        tries=RETRIES,
-        delay=RETRY_DELAY,
-        max_delay=RETRY_MAX_DELAY,
-        backoff=RETRY_BACKOFF_FACTOR,
-    )
-    def _upload_batch(self) -> None:
-        try:
-            self.cdf_client.events.create([e for e in self.upload_queue])
-        except CogniteDuplicatedError as e:
-            duplicated_ids = set([dup["externalId"] for dup in e.duplicated if "externalId" in dup])
-            failed: List[Event] = [e for e in e.failed]
-            to_create = []
-            to_update = []
-            for evt in failed:
-                if evt.external_id is not None and evt.external_id in duplicated_ids:
-                    to_update.append(evt)
-                else:
-                    to_create.append(evt)
-            if to_create:
-                self.cdf_client.events.create(to_create)
-            if to_update:
-                self.cdf_client.events.update(to_update)
-
     def __enter__(self) -> "EventUploadQueue":
         """
         Wraps around start method, for use as context manager
@@ -149,7 +151,7 @@ class EventUploadQueue(AbstractUploadQueue):
         return self
 
     def __exit__(
-        self, exc_type: Optional[Type[BaseException]], exc_val: Optional[BaseException], exc_tb: Optional[TracebackType]
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         """
         Wraps around stop method, for use as context manager

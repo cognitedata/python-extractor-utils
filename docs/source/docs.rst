@@ -19,12 +19,15 @@ Base class for extractors
 
 The ``configtools`` module exists of tools for loading and verifying config files for extractors.
 
-Extractor configurasions are conventionally written in *hyphen-cased YAML*. These are typically loaded and serialized as *dataclasses* in Python.
+Extractor configurations are conventionally written in *hyphen-cased YAML*. These are typically loaded and serialized as *dataclasses* in Python.
 
 
 Config loader
 ^^^^^^^^^^^^^
 .. autofunction:: cognite.extractorutils.configtools.load_yaml
+.. autofunction:: cognite.extractorutils.configtools.load_yaml_dict
+.. autoclass:: cognite.extractorutils.configtools.KeyVaultAuthenticationMethod
+.. autoclass:: cognite.extractorutils.configtools.KeyVaultLoader
 
 
 Base classes
@@ -55,6 +58,14 @@ The ``configtools`` module contains several prebuilt config classes for many com
     :undoc-members:
 .. autoclass:: cognite.extractorutils.configtools.CogniteConfig
     :undoc-members:
+.. autoclass:: cognite.extractorutils.configtools.EitherIdConfig
+    :undoc-members:
+.. autoclass:: cognite.extractorutils.configtools.ConnectionConfig
+    :undoc-members:
+.. autoclass:: cognite.extractorutils.configtools.AuthenticatorConfig
+    :undoc-members:
+.. autoclass:: cognite.extractorutils.configtools.CertificateConfig
+    :undoc-members:
 .. autoclass:: cognite.extractorutils.configtools.LoggingConfig
     :undoc-members:
 .. autoclass:: cognite.extractorutils.configtools.MetricsConfig
@@ -67,23 +78,18 @@ The ``configtools`` module contains several prebuilt config classes for many com
     :undoc-members:
 .. autoclass:: cognite.extractorutils.configtools.LocalStateStoreConfig
     :undoc-members:
+.. autoclass:: cognite.extractorutils.configtools.TimeIntervalConfig
+    :undoc-members:
+.. autoclass:: cognite.extractorutils.configtools.FileSizeConfig
+    :undoc-members:
+.. autoclass:: cognite.extractorutils.configtools.ConfigType
+    :undoc-members:
 
 
 Exceptions
 ^^^^^^^^^^
 
 .. autoexception:: cognite.extractorutils.configtools.InvalidConfigError
-
-
-``throttle`` - Tools for throttling
------------------------------------
-
-.. automodule:: cognite.extractorutils.throttle
-    :members:
-    :undoc-members:
-    :inherited-members:
-    :show-inheritance:
-
 
 
 ``metrics`` - Automatic pushers of performance metrics
@@ -113,6 +119,32 @@ Exceptions
     :members:
     :undoc-members:
     :inherited-members:
+    :show-inheritance:
+
+.. automodule:: cognite.extractorutils.uploader._base
+    :members:
+    :undoc-members:
+    :inherited-members:
+    :show-inheritance:
+
+.. automodule:: cognite.extractorutils.uploader.assets
+    :members:
+    :show-inheritance:
+
+.. automodule:: cognite.extractorutils.uploader.events
+    :members:
+    :show-inheritance:
+
+.. automodule:: cognite.extractorutils.uploader.files
+    :members:
+    :show-inheritance:
+
+.. automodule:: cognite.extractorutils.uploader.raw
+    :members:
+    :show-inheritance:
+
+.. automodule:: cognite.extractorutils.uploader.time_series
+    :members:
     :show-inheritance:
 
 
