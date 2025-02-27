@@ -22,7 +22,7 @@ from threading import Thread
 from types import TracebackType
 from typing import Any, Generic, TypeVar
 
-from dotenv import find_dotenv, load_dotenv
+from dotenv import load_dotenv
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import ExtractionPipeline, ExtractionPipelineRun
@@ -252,12 +252,11 @@ class Extractor(Generic[CustomConfigClass]):
 
         if str(os.getenv("COGNITE_FUNCTION_RUNTIME", False)).lower() != "true":
             # Environment Variables
-            env_file_path = find_dotenv(usecwd=True)
-            if env_file_path:
-                load_dotenv(dotenv_path=env_file_path, override=True)
-                dotenv_message = f"Successfully ingested environment variables from {env_file_path}"
+            env_file_found = load_dotenv(dotenv_path="./.env", override=True)
+            if env_file_found:
+                dotenv_message = "Successfully ingested environment variables from './.env'"
             else:
-                dotenv_message = "No .env file found"
+                dotenv_message = "No .env file found at {Path.cwd() / '.env'}"
         else:
             dotenv_message = "No .env file imported when using Cognite Functions"
 

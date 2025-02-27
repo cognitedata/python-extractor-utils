@@ -69,7 +69,7 @@ class KeyVaultLoader:
         self.client: SecretClient | None = None
 
     def _init_client(self) -> None:
-        from dotenv import find_dotenv, load_dotenv
+        from dotenv import load_dotenv
 
         if not self.config:
             raise InvalidConfigError(
@@ -98,8 +98,10 @@ class KeyVaultLoader:
 
             _logger.info("Using Azure ClientSecret credentials to access KeyVault")
 
-            dotenv_path = find_dotenv(usecwd=True)
-            load_dotenv(dotenv_path=dotenv_path, override=True)
+            env_file_found = load_dotenv("./.env", override=True)
+
+            if not env_file_found:
+                _logger.info(f"Local environment file not found at {Path.cwd() / '.env'}")
 
             if all(param in self.config for param in auth_parameters):
                 tenant_id = os.path.expandvars(self.config.get("tenant-id", None))

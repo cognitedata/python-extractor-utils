@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.5.13
+
+### Security
+
+* Disabled recursive search for .env file. The change will prevent loading environment variables hosted in directories other than the current working directory. Environment variable management is now more explicit to enhance security, and reduce potential misconfigurations.
+
 ## 7.5.12
 
 ## Added
