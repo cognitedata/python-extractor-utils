@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import Enum
 from logging.handlers import TimedRotatingFileHandler
+from pathlib import Path
 from time import sleep
 from typing import Any
 from urllib.parse import urljoin, urlparse
@@ -649,7 +650,7 @@ class LocalStateStoreConfig:
     Configuration of a state store using a local JSON file
     """
 
-    path: str
+    path: Path
     save_interval: TimeIntervalConfig = TimeIntervalConfig("30s")
 
 
@@ -695,8 +696,11 @@ class StateStoreConfig:
             )
 
         if self.local:
+            if self.local.path.is_dir():
+                raise ValueError(f"{self.local.path} is a directory, and not a file")
+
             return LocalStateStore(
-                file_path=self.local.path,
+                file_path=str(self.local.path),
                 save_interval=self.local.save_interval.seconds,
                 cancellation_token=cancellation_token,
             )
