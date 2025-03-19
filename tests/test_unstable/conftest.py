@@ -1,5 +1,6 @@
 import os
 from collections.abc import Generator
+from threading import RLock
 from time import sleep, time
 from uuid import uuid4
 
@@ -38,11 +39,12 @@ def set_client() -> CogniteClient:
 class MockFunction:
     def __init__(self, sleep_time: int) -> None:
         self.called_times: list[float] = []
-
         self.sleep_time = sleep_time
+        self.lock = RLock()
 
     def __call__(self) -> None:
-        self.called_times.append(time())
+        with self.lock:
+            self.called_times.append(time())
         sleep(self.sleep_time)
 
 
