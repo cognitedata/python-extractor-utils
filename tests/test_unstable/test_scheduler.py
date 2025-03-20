@@ -78,6 +78,7 @@ def test_manual() -> None:
 
     Thread(target=scheduler.run).start()
 
+    sleep(0.1)
     scheduler.trigger("test")
     sleep(0.1)
     scheduler.trigger("test")
