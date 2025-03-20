@@ -16,11 +16,13 @@ import dataclasses
 import logging
 import os
 import re
+from collections.abc import Generator
 from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 import yaml
+from faker import Faker
 
 from cognite.client import CogniteClient
 from cognite.client.credentials import OAuthClientCredentials
@@ -37,8 +39,10 @@ from cognite.extractorutils.configtools.elements import (
     AuthenticatorConfig,
     CastableInt,
     IgnorePattern,
+    LocalStateStoreConfig,
     PortNumber,
     RegExpFlag,
+    StateStoreConfig,
 )
 from cognite.extractorutils.configtools.loaders import (
     ConfigResolver,
@@ -46,6 +50,7 @@ from cognite.extractorutils.configtools.loaders import (
 )
 from cognite.extractorutils.configtools.validators import matches_pattern, matches_patterns
 from cognite.extractorutils.exceptions import InvalidConfigError
+from cognite.extractorutils.statestore.watermark import LocalStateStore
 
 
 @dataclass
@@ -610,3 +615,42 @@ def test_castable_int_parsing(monkeypatch: pytest.MonkeyPatch) -> None:
     assert parsed.port == 8080
     assert parsed.connections == 4
     assert parsed.batch_size == 1000
+
+
+@pytest.fixture
+def file_name() -> Generator[str, None, None]:
+    name = f"{Faker().word()}.json"
+    yield name
+    if Path(name).exists():
+        os.remove(name)
+
+
+def test_load_local_statestore(file_name: str) -> None:
+    raw_config = f"""
+    local:
+        path: {file_name}
+    """
+
+    config = load_yaml(raw_config, StateStoreConfig)
+
+    assert isinstance(config.local, LocalStateStoreConfig)
+    assert str(config.local.path) == file_name
+
+    state_store = config.create_state_store()
+    assert isinstance(state_store, LocalStateStore)
+
+
+def test_load_local_directory_fails() -> None:
+    raw_config = """
+    local:
+        path: cognite
+    """
+
+    config = load_yaml(raw_config, StateStoreConfig)
+
+    assert isinstance(config.local, LocalStateStoreConfig)
+
+    with pytest.raises(ValueError) as e:
+        config.create_state_store()
+
+    assert "is a directory, and not a file" in str(e.value)
