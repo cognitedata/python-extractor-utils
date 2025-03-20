@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## Next
+
+### Added
+
+* In the `unstable` package: Proper retries when fetching configs from CDF
+
 ## 7.5.13
 
 ### Security

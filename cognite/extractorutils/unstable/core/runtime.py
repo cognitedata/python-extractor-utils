@@ -5,17 +5,29 @@ import time
 from argparse import ArgumentParser, Namespace
 from multiprocessing import Process, Queue
 from pathlib import Path
+from random import randint
 from typing import Any, Generic, TypeVar
+from uuid import uuid4
 
 from requests.exceptions import ConnectionError
 from typing_extensions import assert_never
 
-from cognite.client.exceptions import CogniteAPIError, CogniteAuthError, CogniteConnectionError
+from cognite.client import CogniteClient
+from cognite.client.exceptions import (
+    CogniteAPIError,
+    CogniteAuthError,
+    CogniteConnectionError,
+)
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.unstable.configuration.exceptions import InvalidConfigError
-from cognite.extractorutils.unstable.configuration.loaders import load_file, load_from_cdf
+from cognite.extractorutils.unstable.configuration.loaders import (
+    load_file,
+    load_from_cdf,
+)
 from cognite.extractorutils.unstable.configuration.models import ConnectionConfig
 from cognite.extractorutils.unstable.core._dto import Error
+from cognite.extractorutils.unstable.core.errors import ErrorLevel
+from cognite.extractorutils.util import now
 
 from ._messaging import RuntimeMessage
 from .base import ConfigRevision, ConfigType, Extractor, FullConfig
@@ -26,6 +38,8 @@ ExtractorType = TypeVar("ExtractorType", bound=Extractor)
 
 
 class Runtime(Generic[ExtractorType]):
+    RETRY_CONFIG_INTERVAL = 30
+
     def __init__(
         self,
         extractor: type[ExtractorType],
@@ -36,6 +50,8 @@ class Runtime(Generic[ExtractorType]):
         self._message_queue: Queue[RuntimeMessage] = Queue()
         self.logger = logging.getLogger(f"{self._extractor_class.EXTERNAL_ID}.runtime")
         self._setup_logging()
+
+        self._cognite_client: CogniteClient
 
     def _create_argparser(self) -> ArgumentParser:
         argparser = ArgumentParser(
@@ -121,7 +137,7 @@ class Runtime(Generic[ExtractorType]):
         self.logger.info(f"Started extractor with PID {process.pid}")
         return process
 
-    def _get_application_config(
+    def _try_get_application_config(
         self,
         args: Namespace,
         connection_config: ConnectionConfig,
@@ -143,39 +159,65 @@ class Runtime(Generic[ExtractorType]):
 
         else:
             self.logger.info("Loading application config from CDF")
-            client = connection_config.get_cognite_client(
-                f"{self._extractor_class.EXTERNAL_ID}-{self._extractor_class.VERSION}"
+
+            application_config, current_config_revision = load_from_cdf(
+                self._cognite_client,
+                connection_config.integration,
+                self._extractor_class.CONFIG_TYPE,
             )
-
-            errors: list[Error] = []
-
-            try:
-                application_config, current_config_revision = load_from_cdf(
-                    client,
-                    connection_config.integration,
-                    self._extractor_class.CONFIG_TYPE,
-                )
-
-            finally:
-                if errors:
-                    client.post(
-                        f"/api/v1/projects/{client.config.project}/odin/checkin",
-                        json={
-                            "externalId": connection_config.integration,
-                            "errors": [e.model_dump() for e in errors],
-                        },
-                        headers={"cdf-version": "alpha"},
-                    )
 
         return application_config, current_config_revision
 
+    def _safe_get_application_config(
+        self,
+        args: Namespace,
+        connection_config: ConnectionConfig,
+    ) -> tuple[ConfigType, ConfigRevision] | None:
+        prev_error: str | None = None
+
+        while not self._cancellation_token.is_cancelled:
+            try:
+                return self._try_get_application_config(args, connection_config)
+
+            except Exception as e:
+                error_message = str(e)
+                if error_message == prev_error:
+                    # Same error as before, no need to log it again
+                    self._cancellation_token.wait(randint(1, self.RETRY_CONFIG_INTERVAL))
+                    continue
+                prev_error = error_message
+
+                ts = now()
+                error = Error(
+                    external_id=str(uuid4()),
+                    level=ErrorLevel.fatal.value,
+                    start_time=ts,
+                    end_time=ts,
+                    description=error_message,
+                    details=None,
+                    task=None,
+                )
+
+                self._cognite_client.post(
+                    f"/api/v1/projects/{self._cognite_client.config.project}/odin/checkin",
+                    json={
+                        "externalId": connection_config.integration,
+                        "errors": [error.model_dump()],
+                    },
+                    headers={"cdf-version": "alpha"},
+                )
+
+                self._cancellation_token.wait(randint(1, self.RETRY_CONFIG_INTERVAL))
+
+        return None
+
     def _verify_connection_config(self, connection_config: ConnectionConfig) -> bool:
-        client = connection_config.get_cognite_client(
+        self._cognite_client = connection_config.get_cognite_client(
             f"{self._extractor_class.EXTERNAL_ID}-{self._extractor_class.VERSION}"
         )
         try:
-            client.post(
-                f"/api/v1/projects/{client.config.project}/odin/checkin",
+            self._cognite_client.post(
+                f"/api/v1/projects/{self._cognite_client.config.project}/odin/checkin",
                 json={
                     "externalId": connection_config.integration,
                 },
@@ -234,16 +276,19 @@ class Runtime(Generic[ExtractorType]):
         if not args.skip_init_checks and not self._verify_connection_config(connection_config):
             sys.exit(1)
 
-        # This has to be Any. We don't know the type of the extractors' config at type checking since the sel doesn't
+        # This has to be Any. We don't know the type of the extractors' config at type checking since the self doesn't
         # exist yet, and I have not found a way to represent it in a generic way that isn't just an Any in disguise.
         application_config: Any
-        while not self._cancellation_token.is_cancelled:
-            try:
-                application_config, current_config_revision = self._get_application_config(args, connection_config)
+        config: tuple[Any, ConfigRevision] | None
 
-            except InvalidConfigError:
-                self.logger.critical("Could not get a valid application config file. Shutting down")
-                sys.exit(1)
+        while not self._cancellation_token.is_cancelled:
+            config = self._safe_get_application_config(args, connection_config)
+            if config is None:
+                if self._cancellation_token.is_cancelled:
+                    break
+                continue
+
+            application_config, current_config_revision = config
 
             # Start extractor in separate process, and wait for it to end
             process = self._spawn_extractor(

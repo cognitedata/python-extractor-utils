@@ -7,6 +7,7 @@ from typing import TextIO, TypeVar
 from pydantic import ValidationError
 
 from cognite.client import CogniteClient
+from cognite.client.exceptions import CogniteAPIError
 from cognite.extractorutils.configtools.loaders import _load_yaml_dict_raw
 from cognite.extractorutils.exceptions import InvalidConfigError as OldInvalidConfigError
 from cognite.extractorutils.unstable.configuration.exceptions import InvalidConfigError
@@ -41,12 +42,17 @@ def load_from_cdf(
     params: dict[str, str | int] = {"integration": external_id}
     if revision:
         params["revision"] = revision
-    response = cognite_client.get(
-        f"/api/v1/projects/{cognite_client.config.project}/odin/config",
-        params=params,
-        headers={"cdf-version": "alpha"},
-    )
-    response.raise_for_status()
+    try:
+        response = cognite_client.get(
+            f"/api/v1/projects/{cognite_client.config.project}/odin/config",
+            params=params,
+            headers={"cdf-version": "alpha"},
+        )
+    except CogniteAPIError as e:
+        if e.code == 404:
+            raise InvalidConfigError("No configuration found for the given integration") from e
+        raise e
+
     data = response.json()
 
     try:
