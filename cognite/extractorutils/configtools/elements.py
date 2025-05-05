@@ -513,6 +513,7 @@ class _PushGatewayConfig:
     push_interval: TimeIntervalConfig = TimeIntervalConfig("30s")
 
 
+@dataclass
 class _PromServerConfig:
     port: int = 9000
     host: str = "0.0.0.0"
