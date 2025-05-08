@@ -44,6 +44,8 @@ from cognite.extractorutils.uploader._metrics import (
     TIMESERIES_UPLOADER_POINTS_WRITTEN,
     TIMESERIES_UPLOADER_QUEUE_SIZE,
 )
+from cognite.client.data_classes.data_modeling.extractor_extensions.v1 import CogniteExtractorTimeSeriesApply
+from cognite.client.data_classes.data_modeling import NodeId
 from cognite.extractorutils.util import EitherId, cognite_exceptions, retry
 
 MIN_DATAPOINT_TIMESTAMP = -2208988800000
@@ -338,6 +340,131 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
             Number of data points in queue
         """
         return self.upload_queue_size
+
+class CDMTimeSeriesUploadQueue(TimeSeriesUploadQueue):
+    """
+    Upload queue for time series
+
+    Args:
+        cdf_client: Cognite Data Fusion client to use
+        post_upload_function: A function that will be called after each upload. The function will be given one argument:
+            A list of dicts containing the datapoints that were uploaded (on the same format as the kwargs in
+            datapoints upload in the Cognite SDK).
+        max_queue_size: Maximum size of upload queue. Defaults to no max size.
+        max_upload_interval: Automatically trigger an upload each m seconds when run as a thread (use start/stop
+            methods).
+        trigger_log_level: Log level to log upload triggers to.
+        thread_name: Thread name of uploader thread.
+    """
+
+    def __init__(
+        self,
+        cdf_client: CogniteClient,
+        post_upload_function: Callable[[list[dict[str, str | DataPointList]]], None] | None = None,
+        max_queue_size: int | None = None,
+        max_upload_interval: int | None = None,
+        trigger_log_level: str = "DEBUG",
+        thread_name: str | None = None,
+        cancellation_token: CancellationToken | None = None,
+    ):
+        super().__init__(
+            cdf_client,
+            post_upload_function,
+            max_queue_size,
+            max_upload_interval,
+            trigger_log_level,
+            thread_name,
+            cancellation_token,
+        )
+
+    def _apply_cognite_timeseries(self, timeseries_apply: CogniteExtractorTimeSeriesApply) -> NodeId:
+        instance_result = self.cdf_client.data_modeling.instances.apply(timeseries_apply)
+        node = instance_result.nodes[0]
+        return node.as_id()
+    
+    def add_apply_to_upload_queue(
+        self, *, timeseries_apply: CogniteExtractorTimeSeriesApply | None = None, datapoints: DataPointList | None = None
+    ) -> None:
+        """
+        Add data points to upload queue. The queue will be uploaded if the queue size is larger than the threshold
+        specified in the __init__.
+
+        Args:
+            timeseries_apply: CogniteExtractorTimeSeriesApply object for which the node is to be created.
+            datapoints: list of data points to add
+        """
+        datapoints = datapoints or []
+        old_len = len(datapoints)
+        datapoints = list(filter(self._is_datapoint_valid, datapoints))
+
+        new_len = len(datapoints)
+
+        if old_len > new_len:
+            diff = old_len - new_len
+            self.logger.warning(f"Discarding {diff} datapoints due to bad timestamp or value")
+            TIMESERIES_UPLOADER_POINTS_DISCARDED.inc(diff)
+
+        instance_id = self._apply_cognite_timeseries(timeseries_apply)
+        either_id = EitherId(instance_id=instance_id)
+
+        with self.lock:
+            if either_id not in self.upload_queue:
+                self.upload_queue[either_id] = []
+
+            self.upload_queue[either_id].extend(datapoints)
+            self.points_queued.inc(len(datapoints))
+            self.upload_queue_size += len(datapoints)
+            self.queue_size.set(self.upload_queue_size)
+
+            self._check_triggers()
+        
+
+    def upload(self) -> None:
+        """
+        Trigger an upload of the queue, clears queue afterwards
+        """
+
+        @retry(
+            exceptions=cognite_exceptions(),
+            cancellation_token=self.cancellation_token,
+            tries=RETRIES,
+            delay=RETRY_DELAY,
+            max_delay=RETRY_MAX_DELAY,
+            backoff=RETRY_BACKOFF_FACTOR,
+        )
+        def _upload_batch(upload_this: list[dict]) -> list[dict]:
+
+            if len(upload_this) == 0:
+                return upload_this
+            
+            self.cdf_client.time_series.data.insert_multiple(upload_this)
+
+            return upload_this
+
+        if len(self.upload_queue) == 0:
+            return
+
+        with self.lock:
+            upload_this = _upload_batch(
+                [
+                    {either_id.type(): either_id.content(), "datapoints": list(datapoints)}
+                    for either_id, datapoints in self.upload_queue.items()
+                    if len(datapoints) > 0
+                ]
+            )
+
+            for _either_id, datapoints in self.upload_queue.items():
+                self.points_written.inc(len(datapoints))
+
+            try:
+                self._post_upload(upload_this)
+            except Exception as e:
+                self.logger.error("Error in upload callback: %s", str(e))
+
+            self.upload_queue.clear()
+            self.logger.info(f"Uploaded {self.upload_queue_size} datapoints")
+            self.upload_queue_size = 0
+            self.queue_size.set(self.upload_queue_size)
 
 
 class SequenceUploadQueue(AbstractUploadQueue):
