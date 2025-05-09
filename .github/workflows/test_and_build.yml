@@ -49,7 +49,7 @@ jobs:
           COGNITE_DEV_TOKEN_SCOPES: https://aws-dub-dev.cognitedata.com/.default
           COGNITE_INTEGRATION: pythonutils-test
         run: |
-          uv run coverage run --source cognite.extractorutils -m pytest -v tests -s
+          uv run coverage run --source cognite.extractorutils -m pytest -v tests
           uv run coverage xml
 
       - uses: codecov/codecov-action@v5
