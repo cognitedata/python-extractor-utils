@@ -32,9 +32,9 @@ from decorator import decorator
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset, ExtractionPipelineRun, TimeSeries
+from cognite.client.data_classes.data_modeling import NodeId
 from cognite.client.exceptions import CogniteAPIError, CogniteException, CogniteFileUploadError, CogniteNotFoundError
 from cognite.extractorutils.threading import CancellationToken
-from cognite.client.data_classes.data_modeling import NodeId
 
 
 def _ensure(endpoint: Any, items: Iterable[Any]) -> None:
@@ -80,8 +80,8 @@ def ensure_assets(cdf_client: CogniteClient, assets: Iterable[Asset]) -> None:
 
 class EitherId:
     """
-    Class representing an ID in CDF, which can either be an external ID, internal ID or instance ID. An EitherId can only hold one ID
-    type, not more than one.
+    Class representing an ID in CDF, which can either be an external ID, internal ID or instance ID.
+    An EitherId can only hold one ID type, not more than one.
 
     Args:
         id: Internal ID
@@ -137,12 +137,7 @@ class EitherId:
         Returns:
             The ID
         """
-        if self.internal_id is not None:
-            return self.internal_id
-        elif self.instance_id is not None:
-            return self.instance_id
-        else:
-            return self.external_id
+        return self.internal_id or self.external_id or self.instance_id  # type: ignore
 
     def __eq__(self, other: Any) -> bool:
         """
@@ -157,7 +152,11 @@ class EitherId:
         if not isinstance(other, EitherId):
             return False
 
-        return self.internal_id == other.internal_id and self.external_id == other.external_id and self.instance_id == other.instance_id
+        return (
+            self.internal_id == other.internal_id
+            and self.external_id == other.external_id
+            and self.instance_id == other.instance_id
+        )
 
     def __hash__(self) -> int:
         """
