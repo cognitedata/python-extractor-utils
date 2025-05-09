@@ -72,6 +72,7 @@ def extraction_pipeline(set_client: CogniteClient) -> Generator[str, None, None]
 
 @pytest.fixture
 def connection_config(extraction_pipeline: str) -> ConnectionConfig:
+    print("This is a client id", os.environ["COGNITE_CLIENT_ID"])
     return ConnectionConfig(
         project=os.environ["COGNITE_DEV_PROJECT"],
         base_url=os.environ["COGNITE_DEV_BASE_URL"],
