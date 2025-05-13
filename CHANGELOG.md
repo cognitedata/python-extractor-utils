@@ -12,11 +12,15 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
-## Next
+## 7.5.14
 
 ### Added
 
 * In the `unstable` package: Proper retries when fetching configs from CDF
+
+### Fixed
+
+* Fixed loading of prometheus server config
 
 ## 7.5.13
 
