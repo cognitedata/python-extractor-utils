@@ -173,6 +173,20 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         else:
             return True
 
+    def _sanitize_datapoints(self, datapoints: DataPointList | None) -> DataPointList:
+        datapoints = datapoints or []
+        old_len = len(datapoints)
+        datapoints = list(filter(self._is_datapoint_valid, datapoints))
+
+        new_len = len(datapoints)
+
+        if old_len > new_len:
+            diff = old_len - new_len
+            self.logger.warning(f"Discarding {diff} datapoints due to bad timestamp or value")
+            TIMESERIES_UPLOADER_POINTS_DISCARDED.inc(diff)
+
+        return datapoints
+
     def add_to_upload_queue(
         self, *, id: int | None = None, external_id: str | None = None, datapoints: DataPointList | None = None
     ) -> None:
@@ -185,16 +199,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
             external_id: External ID of time series. Either this or external_id must be set.
             datapoints: list of data points to add
         """
-        datapoints = datapoints or []
-        old_len = len(datapoints)
-        datapoints = list(filter(self._is_datapoint_valid, datapoints))
-
-        new_len = len(datapoints)
-
-        if old_len > new_len:
-            diff = old_len - new_len
-            self.logger.warning(f"Discarding {diff} datapoints due to bad timestamp or value")
-            TIMESERIES_UPLOADER_POINTS_DISCARDED.inc(diff)
+        datapoints = self._sanitize_datapoints(datapoints)
 
         either_id = EitherId(id=id, external_id=external_id)
 
@@ -398,16 +403,7 @@ class CDMTimeSeriesUploadQueue(TimeSeriesUploadQueue):
             timeseries_apply: CogniteExtractorTimeSeriesApply object for which the node is to be created.
             datapoints: list of data points to add
         """
-        datapoints = datapoints or []
-        old_len = len(datapoints)
-        datapoints = list(filter(self._is_datapoint_valid, datapoints))
-
-        new_len = len(datapoints)
-
-        if old_len > new_len:
-            diff = old_len - new_len
-            self.logger.warning(f"Discarding {diff} datapoints due to bad timestamp or value")
-            TIMESERIES_UPLOADER_POINTS_DISCARDED.inc(diff)
+        datapoints = self._sanitize_datapoints(datapoints)
 
         instance_id = self._apply_cognite_timeseries(timeseries_apply)
         either_id = EitherId(instance_id=instance_id)
