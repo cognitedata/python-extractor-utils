@@ -89,7 +89,7 @@ class EitherId:
         instance_id: Instance ID. It can be `instance_id` or `instanceId`
 
     Raises:
-        TypeError: If none of more than one of the id types are set.
+        TypeError: If none or more than one of the id types are set.
     """
 
     def __init__(self, **kwargs: int | str | NodeId | None):

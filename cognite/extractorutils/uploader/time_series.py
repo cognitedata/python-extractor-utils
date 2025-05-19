@@ -433,10 +433,8 @@ class CDMTimeSeriesUploadQueue(TimeSeriesUploadQueue):
             backoff=RETRY_BACKOFF_FACTOR,
         )
         def _upload_batch(upload_this: list[dict]) -> list[dict]:
-            if len(upload_this) == 0:
-                return upload_this
-
-            self.cdf_client.time_series.data.insert_multiple(upload_this)
+            if len(upload_this) > 0:
+                self.cdf_client.time_series.data.insert_multiple(upload_this)
 
             return upload_this
 
