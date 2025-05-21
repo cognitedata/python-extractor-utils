@@ -21,7 +21,7 @@ from enum import Enum
 from textwrap import shorten
 from threading import Thread
 from types import TracebackType
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Literal, TypeVar
 
 from dotenv import load_dotenv
 
@@ -33,6 +33,8 @@ from cognite.extractorutils.exceptions import InvalidConfigError
 from cognite.extractorutils.metrics import BaseMetrics
 from cognite.extractorutils.statestore import AbstractStateStore, LocalStateStore, NoStateStore
 from cognite.extractorutils.threading import CancellationToken
+
+ReportStatus = Literal["success", "failure", "seen"]
 
 
 class ReloadConfigAction(Enum):
@@ -212,7 +214,14 @@ class Extractor(Generic[CustomConfigClass]):
 
         Extractor._statestore_singleton = self.state_store
 
-    def _report_run(self, status: str, message: str) -> None:
+    def _report_run(self, status: ReportStatus, message: str) -> None:
+        """
+        Report the status of the extractor run to the extraction pipeline.
+        Args:
+            status: Status of the run, either success or failure or seen
+            message: Message to report to the extraction pipeline
+        """
+
         MAX_MESSAGE_LENGTH_FOR_EXTRACTION_PIPELINE_RUN = 1000
         if self.extraction_pipeline:
             try:
@@ -233,31 +242,36 @@ class Extractor(Generic[CustomConfigClass]):
                 self.cognite_client.extraction_pipelines.runs.create(run)
             except CogniteAPIError as e:
                 self.logger.exception(
-                    f"error while reporting run - status {status} - message {message} . Error: {str(e)}"
+                    f"Error while reporting run - status {status} - message {message} . Error: {str(e)}"
                 )
 
     def _report_success(self, message: str | None = None) -> None:
         """
         Called on a successful exit of the extractor
+
+        Args:
+            message: Message to report to the extraction pipeline. If not provided, Extractor.success_message is taken.
         """
         message = message or self.success_message
         self._report_run("success", message)
 
-    def _report_error(self, exception: BaseException, message: str | None = None) -> None:
+    def _report_failure(self, message: str) -> None:
+        """
+        Called on an unsuccessful exit of the extractor
+
+        Args:
+            message: Message to report to the extraction pipeline
+        """
+        self._report_run("failure", message)
+
+    def _report_error(self, exception: BaseException) -> None:
         """
         Called on an unsuccessful exit of the extractor
 
         Args:
             exception: Exception object that caused the extractor to fail
         """
-
-        if message is None and exception is None:
-            self.logger.exception("Failed to report error to Extraction Pipelines. No message or exception provided.")
-            return None
-
-        if message is None and exception is not None:
-            message = f"{type(exception).__name__}: {str(exception)}"
-
+        message = f"{type(exception).__name__}: {str(exception)}"
         self._report_run("failure", message)
 
     def __enter__(self) -> "Extractor":
