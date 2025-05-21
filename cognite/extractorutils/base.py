@@ -27,6 +27,7 @@ from dotenv import load_dotenv
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import ExtractionPipeline, ExtractionPipelineRun
+from cognite.client.exceptions import CogniteAPIError
 from cognite.extractorutils.configtools import BaseConfig, ConfigResolver, StateStoreConfig
 from cognite.extractorutils.exceptions import InvalidConfigError
 from cognite.extractorutils.metrics import BaseMetrics
@@ -230,7 +231,7 @@ class Extractor(Generic[CustomConfigClass]):
 
                 self.logger.info(f"Reporting new {status} run: {message}")
                 self.cognite_client.extraction_pipelines.runs.create(run)
-            except Exception as e:
+            except CogniteAPIError as e:
                 self.logger.exception(
                     f"error while reporting run - status {status} - message {message} . Error: {str(e)}"
                 )
