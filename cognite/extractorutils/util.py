@@ -81,7 +81,7 @@ def ensure_assets(cdf_client: CogniteClient, assets: Iterable[Asset]) -> None:
 class EitherId:
     """
     Class representing an ID in CDF, which can either be an external ID, internal ID or instance ID.
-    An EitherId can only hold one ID type, not more than one.
+    An EitherId can only hold one ID type.
 
     Args:
         id: Internal ID

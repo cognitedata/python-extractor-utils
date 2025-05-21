@@ -13,6 +13,7 @@
 #  limitations under the License.
 
 import math
+from abc import ABC, abstractmethod
 from collections.abc import Callable
 from datetime import datetime
 from types import TracebackType
@@ -81,7 +82,134 @@ def default_time_series_factory(external_id: str, datapoints: DataPointList) -> 
     return TimeSeries(external_id=external_id, is_string=is_string)
 
 
-class TimeSeriesUploadQueue(AbstractUploadQueue):
+class BaseTimeSeriesUploadQueue(AbstractUploadQueue, ABC):
+    """
+    Abstract base upload queue for time series
+
+    Args:
+        cdf_client: Cognite Data Fusion client to use
+        post_upload_function: A function that will be called after each upload. The function will be given one argument:
+            A list of dicts containing the datapoints that were uploaded (on the same format as the kwargs in
+            datapoints upload in the Cognite SDK).
+        max_queue_size: Maximum size of upload queue. Defaults to no max size.
+        max_upload_interval: Automatically trigger an upload each m seconds when run as a thread (use start/stop
+            methods).
+        trigger_log_level: Log level to log upload triggers to.
+        thread_name: Thread name of uploader thread.
+    """
+
+    def __init__(
+        self,
+        cdf_client: CogniteClient,
+        post_upload_function: Callable[[list[dict[str, str | DataPointList]]], None] | None = None,
+        max_queue_size: int | None = None,
+        max_upload_interval: int | None = None,
+        trigger_log_level: str = "DEBUG",
+        thread_name: str | None = None,
+        cancellation_token: CancellationToken | None = None,
+    ):
+        # Super sets post_upload and threshold
+        super().__init__(
+            cdf_client,
+            post_upload_function,
+            max_queue_size,
+            max_upload_interval,
+            trigger_log_level,
+            thread_name,
+            cancellation_token,
+        )
+
+        self.upload_queue: dict[EitherId, DataPointList] = {}
+
+        self.points_queued = TIMESERIES_UPLOADER_POINTS_QUEUED
+        self.points_written = TIMESERIES_UPLOADER_POINTS_WRITTEN
+        self.queue_size = TIMESERIES_UPLOADER_QUEUE_SIZE
+
+    def _verify_datapoint_time(self, time: int | float | datetime | str) -> bool:
+        if isinstance(time, int) or isinstance(time, float):
+            return not math.isnan(time) and time >= MIN_DATAPOINT_TIMESTAMP
+        elif isinstance(time, str):
+            return False
+        else:
+            return time.timestamp() * 1000.0 >= MIN_DATAPOINT_TIMESTAMP
+
+    def _verify_datapoint_value(self, value: int | float | datetime | str) -> bool:
+        if isinstance(value, float):
+            return not (
+                math.isnan(value) or math.isinf(value) or value > MAX_DATAPOINT_VALUE or value < MIN_DATAPOINT_VALUE
+            )
+        elif isinstance(value, str):
+            return len(value) <= MAX_DATAPOINT_STRING_LENGTH
+        elif isinstance(value, datetime):
+            return False
+        else:
+            return True
+
+    def _is_datapoint_valid(
+        self,
+        dp: DataPoint,
+    ) -> bool:
+        if isinstance(dp, dict):
+            return self._verify_datapoint_time(dp["timestamp"]) and self._verify_datapoint_value(dp["value"])
+        elif isinstance(dp, tuple):
+            return self._verify_datapoint_time(dp[0]) and self._verify_datapoint_value(dp[1])
+        else:
+            return True
+
+    def _sanitize_datapoints(self, datapoints: DataPointList | None) -> DataPointList:
+        datapoints = datapoints or []
+        old_len = len(datapoints)
+        datapoints = list(filter(self._is_datapoint_valid, datapoints))
+
+        new_len = len(datapoints)
+
+        if old_len > new_len:
+            diff = old_len - new_len
+            self.logger.warning(f"Discarding {diff} datapoints due to bad timestamp or value")
+            TIMESERIES_UPLOADER_POINTS_DISCARDED.inc(diff)
+
+        return datapoints
+
+    def __enter__(self) -> "BaseTimeSeriesUploadQueue":
+        """
+        Wraps around start method, for use as context manager
+
+        Returns:
+            self
+        """
+        self.start()
+        return self
+
+    def __exit__(
+        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
+    ) -> None:
+        """
+        Wraps around stop method, for use as context manager
+
+        Args:
+            exc_type: Exception type
+            exc_val: Exception value
+            exc_tb: Traceback
+        """
+        self.stop()
+
+    def __len__(self) -> int:
+        """
+        The size of the upload queue
+
+        Returns:
+            Number of data points in queue
+        """
+        return self.upload_queue_size
+
+    @abstractmethod
+    def add_to_upload_queue(self, *args: Any, **kwargs: Any) -> None:
+        """
+        Add data points to upload queue.
+        """
+
+
+class TimeSeriesUploadQueue(BaseTimeSeriesUploadQueue):
     """
     Upload queue for time series
 
@@ -135,57 +263,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
             self.create_missing = True
             self.missing_factory = create_missing
 
-        self.upload_queue: dict[EitherId, DataPointList] = {}
-
-        self.points_queued = TIMESERIES_UPLOADER_POINTS_QUEUED
-        self.points_written = TIMESERIES_UPLOADER_POINTS_WRITTEN
-        self.queue_size = TIMESERIES_UPLOADER_QUEUE_SIZE
         self.data_set_id = data_set_id
-
-    def _verify_datapoint_time(self, time: int | float | datetime | str) -> bool:
-        if isinstance(time, int) or isinstance(time, float):
-            return not math.isnan(time) and time >= MIN_DATAPOINT_TIMESTAMP
-        elif isinstance(time, str):
-            return False
-        else:
-            return time.timestamp() * 1000.0 >= MIN_DATAPOINT_TIMESTAMP
-
-    def _verify_datapoint_value(self, value: int | float | datetime | str) -> bool:
-        if isinstance(value, float):
-            return not (
-                math.isnan(value) or math.isinf(value) or value > MAX_DATAPOINT_VALUE or value < MIN_DATAPOINT_VALUE
-            )
-        elif isinstance(value, str):
-            return len(value) <= MAX_DATAPOINT_STRING_LENGTH
-        elif isinstance(value, datetime):
-            return False
-        else:
-            return True
-
-    def _is_datapoint_valid(
-        self,
-        dp: DataPoint,
-    ) -> bool:
-        if isinstance(dp, dict):
-            return self._verify_datapoint_time(dp["timestamp"]) and self._verify_datapoint_value(dp["value"])
-        elif isinstance(dp, tuple):
-            return self._verify_datapoint_time(dp[0]) and self._verify_datapoint_value(dp[1])
-        else:
-            return True
-
-    def _sanitize_datapoints(self, datapoints: DataPointList | None) -> DataPointList:
-        datapoints = datapoints or []
-        old_len = len(datapoints)
-        datapoints = list(filter(self._is_datapoint_valid, datapoints))
-
-        new_len = len(datapoints)
-
-        if old_len > new_len:
-            diff = old_len - new_len
-            self.logger.warning(f"Discarding {diff} datapoints due to bad timestamp or value")
-            TIMESERIES_UPLOADER_POINTS_DISCARDED.inc(diff)
-
-        return datapoints
 
     def add_to_upload_queue(
         self, *, id: int | None = None, external_id: str | None = None, datapoints: DataPointList | None = None
@@ -314,42 +392,10 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
             self.upload_queue_size = 0
             self.queue_size.set(self.upload_queue_size)
 
-    def __enter__(self) -> "TimeSeriesUploadQueue":
-        """
-        Wraps around start method, for use as context manager
 
-        Returns:
-            self
-        """
-        self.start()
-        return self
-
-    def __exit__(
-        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
-    ) -> None:
-        """
-        Wraps around stop method, for use as context manager
-
-        Args:
-            exc_type: Exception type
-            exc_val: Exception value
-            exc_tb: Traceback
-        """
-        self.stop()
-
-    def __len__(self) -> int:
-        """
-        The size of the upload queue
-
-        Returns:
-            Number of data points in queue
-        """
-        return self.upload_queue_size
-
-
-class CDMTimeSeriesUploadQueue(TimeSeriesUploadQueue):
+class CDMTimeSeriesUploadQueue(BaseTimeSeriesUploadQueue):
     """
-    Upload queue for time series
+    Upload queue for CDM time series
 
     Args:
         cdf_client: Cognite Data Fusion client to use
@@ -371,8 +417,6 @@ class CDMTimeSeriesUploadQueue(TimeSeriesUploadQueue):
         max_upload_interval: int | None = None,
         trigger_log_level: str = "DEBUG",
         thread_name: str | None = None,
-        create_missing: Callable[[str, DataPointList], TimeSeries] | bool = False,
-        data_set_id: int | None = None,
         cancellation_token: CancellationToken | None = None,
     ):
         super().__init__(
@@ -382,8 +426,6 @@ class CDMTimeSeriesUploadQueue(TimeSeriesUploadQueue):
             max_upload_interval,
             trigger_log_level,
             thread_name,
-            create_missing,
-            data_set_id,
             cancellation_token,
         )
 
@@ -392,7 +434,7 @@ class CDMTimeSeriesUploadQueue(TimeSeriesUploadQueue):
         node = instance_result.nodes[0]
         return node.as_id()
 
-    def add_apply_to_upload_queue(
+    def add_to_upload_queue(
         self, *, timeseries_apply: CogniteExtractorTimeSeriesApply, datapoints: DataPointList | None = None
     ) -> None:
         """

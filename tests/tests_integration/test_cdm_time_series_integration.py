@@ -70,8 +70,8 @@ def test_cdm_queue_single_series_numeric(set_upload_test: tuple[CogniteClient, P
     datapoints_1 = _rand_numeric_points(5, now)
     datapoints_2 = _rand_numeric_points(5, now + 1000)
 
-    queue.add_apply_to_upload_queue(timeseries_apply=ts_apply, datapoints=datapoints_1)
-    queue.add_apply_to_upload_queue(timeseries_apply=ts_apply, datapoints=datapoints_2)
+    queue.add_to_upload_queue(timeseries_apply=ts_apply, datapoints=datapoints_1)
+    queue.add_to_upload_queue(timeseries_apply=ts_apply, datapoints=datapoints_2)
     queue.upload()
 
     time.sleep(5)
@@ -99,7 +99,7 @@ def test_cdm_queue_single_series_string(set_upload_test: tuple[CogniteClient, Pa
     now = int(datetime.now(tz=timezone.utc).timestamp() * 1_000)
     datapoints = _rand_string_points(6, now)
 
-    queue.add_apply_to_upload_queue(timeseries_apply=ts_apply, datapoints=datapoints)
+    queue.add_to_upload_queue(timeseries_apply=ts_apply, datapoints=datapoints)
     queue.upload()
     time.sleep(5)
 
@@ -125,8 +125,8 @@ def test_cdm_queue_multiple_series_batched(set_upload_test: tuple[CogniteClient,
     dp_a = _rand_numeric_points(4, now)
     dp_b = _rand_string_points(3, now)
 
-    queue.add_apply_to_upload_queue(timeseries_apply=_apply_node(params.space, ext_a, "numeric"), datapoints=dp_a)
-    queue.add_apply_to_upload_queue(timeseries_apply=_apply_node(params.space, ext_b, "string"), datapoints=dp_b)
+    queue.add_to_upload_queue(timeseries_apply=_apply_node(params.space, ext_a, "numeric"), datapoints=dp_a)
+    queue.add_to_upload_queue(timeseries_apply=_apply_node(params.space, ext_b, "string"), datapoints=dp_b)
     queue.upload()
     time.sleep(5)
 
@@ -163,10 +163,10 @@ def test_cdm_queue_discards_invalid_values(set_upload_test: tuple[CogniteClient,
     bad_val_min = (now + 1_000, MIN_DATAPOINT_VALUE * 10)
     too_long_str = (now + 2_000, "x" * (MAX_DATAPOINT_STRING_LENGTH + 1))
 
-    queue.add_apply_to_upload_queue(
+    queue.add_to_upload_queue(
         timeseries_apply=ts_apply_numeric, datapoints=[good, bad_time, bad_val_inf, bad_val_max, bad_val_min]
     )
-    queue.add_apply_to_upload_queue(timeseries_apply=ts_apply_string, datapoints=[too_long_str])
+    queue.add_to_upload_queue(timeseries_apply=ts_apply_string, datapoints=[too_long_str])
     queue.upload()
     time.sleep(5)
 
