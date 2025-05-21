@@ -12,6 +12,16 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.5.15
+
+### Added
+
+* Added a common method `_report_run` that can be called from any extractors using this library to report a extractor run into Extractor Pipelines. This automatically handles truncating the message to less than 1000 characters if required.
+
+### Fixed
+
+* Fixed `_report_success` calls failing if the `success_message` was longer than 1000 characters
+
 ## 7.5.14
 
 ### Added
