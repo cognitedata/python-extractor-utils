@@ -18,6 +18,7 @@ import sys
 from collections.abc import Callable
 from dataclasses import is_dataclass
 from enum import Enum
+from textwrap import shorten
 from threading import Thread
 from types import TracebackType
 from typing import Any, Generic, TypeVar
@@ -210,37 +211,53 @@ class Extractor(Generic[CustomConfigClass]):
 
         Extractor._statestore_singleton = self.state_store
 
-    def _report_success(self) -> None:
+    def _report_run(self, status: str, message: str) -> None:
+        MAX_MESSAGE_LENGTH_FOR_EXTRACTION_PIPELINE_RUN = 1000
+        if self.extraction_pipeline:
+            try:
+                message = message or ""
+                shortened_message = shorten(
+                    message,
+                    width=MAX_MESSAGE_LENGTH_FOR_EXTRACTION_PIPELINE_RUN,
+                    placeholder="...",
+                )
+
+                run = ExtractionPipelineRun(
+                    extpipe_external_id=self.extraction_pipeline.external_id,
+                    status=status,
+                    message=shortened_message,
+                )
+
+                self.logger.info(f"Reporting new {status} run: {message}")
+                self.cognite_client.extraction_pipelines.runs.create(run)
+            except Exception as e:
+                self.logger.exception(
+                    f"error while reporting run - status {status} - message {message} . Error: {str(e)}"
+                )
+
+    def _report_success(self, message: str | None = None) -> None:
         """
         Called on a successful exit of the extractor
         """
-        if self.extraction_pipeline:
-            self.logger.info("Reporting new successful run")
-            self.cognite_client.extraction_pipelines.runs.create(
-                ExtractionPipelineRun(
-                    extpipe_external_id=self.extraction_pipeline.external_id,
-                    status="success",
-                    message=self.success_message,
-                )
-            )
+        message = message or self.success_message
+        self._report_run("success", message)
 
-    def _report_error(self, exception: BaseException) -> None:
+    def _report_error(self, exception: BaseException, message: str | None = None) -> None:
         """
         Called on an unsuccessful exit of the extractor
 
         Args:
             exception: Exception object that caused the extractor to fail
         """
-        self.logger.error("Unexpected error during extraction", exc_info=exception)
-        if self.extraction_pipeline:
-            message = f"{type(exception).__name__}: {str(exception)}"[:1000]
 
-            self.logger.info(f"Reporting new failed run: {message}")
-            self.cognite_client.extraction_pipelines.runs.create(
-                ExtractionPipelineRun(
-                    extpipe_external_id=self.extraction_pipeline.external_id, status="failure", message=message
-                )
-            )
+        if message is None and exception is None:
+            self.logger.exception("Failed to report error to Extraction Pipelines. No message or exception provided.")
+            return None
+
+        if message is None and exception is not None:
+            message = f"{type(exception).__name__}: {str(exception)}"
+
+        self._report_run("failure", message)
 
     def __enter__(self) -> "Extractor":
         """
