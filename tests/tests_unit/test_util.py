@@ -21,6 +21,7 @@ import pytest
 import requests
 
 from cognite.client.data_classes import Asset, TimeSeries
+from cognite.client.data_classes.data_modeling import NodeId
 from cognite.client.exceptions import CogniteAPIError, CogniteFileUploadError, CogniteNotFoundError
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.util import (
@@ -116,10 +117,31 @@ def test_assets_all_in_cdf(MockCogniteClient: Mock) -> None:
 
 
 def test_init() -> None:
+    instance_id = NodeId("space", "externalId")
+
+    with pytest.raises(TypeError):
+        EitherId(id=123, external_id="extId", instance_id=instance_id)
+
     with pytest.raises(TypeError):
         EitherId(id=123, external_id="extId")
+
+    with pytest.raises(TypeError):
+        EitherId(id=123, instance_id=instance_id)
+
+    with pytest.raises(TypeError):
+        EitherId(external_id="extId", instance_id=instance_id)
+
     with pytest.raises(TypeError):
         EitherId()
+
+    with pytest.raises(TypeError):
+        EitherId(id="123")
+
+    with pytest.raises(TypeError):
+        EitherId(external_id=123)
+
+    with pytest.raises(TypeError):
+        EitherId(instance_id=123)
 
 
 def test_getters() -> None:
@@ -129,6 +151,12 @@ def test_getters() -> None:
     assert EitherId(external_id="abc").type() == "externalId"
     assert EitherId(externalId="abc").content() == "abc"
     assert EitherId(externalId="abc").type() == "externalId"
+
+    instance_id = NodeId("space", "externalId")
+    assert EitherId(instance_id=instance_id).content() == instance_id
+    assert EitherId(instance_id=instance_id).type() == "instanceId"
+    assert EitherId(instanceId=instance_id).content() == instance_id
+    assert EitherId(instanceId=instance_id).type() == "instanceId"
 
 
 def test_eq() -> None:
@@ -144,6 +172,21 @@ def test_eq() -> None:
     assert id1 is not id2
     assert id1 == id2
 
+    id1 = EitherId(instance_id=NodeId("space", "externalId"))
+    id2 = EitherId(instance_id=NodeId("space", "externalId"))
+
+    assert id1 is not id2
+    assert id1 == id2
+
+    class OtherId:
+        def __init__(self) -> None:
+            self.id = 123
+
+        pass
+
+    other = OtherId()
+    assert id1 != other
+
 
 def test_hash() -> None:
     id1 = EitherId(id=123)
@@ -153,6 +196,11 @@ def test_hash() -> None:
 
     id1 = EitherId(external_id="abc")
     id2 = EitherId(external_id="abc")
+
+    assert hash(id1) == hash(id2)
+
+    id1 = EitherId(instance_id=NodeId("space", "externalId"))
+    id2 = EitherId(instance_id=NodeId("space", "externalId"))
 
     assert hash(id1) == hash(id2)
 
