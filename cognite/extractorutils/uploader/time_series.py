@@ -13,7 +13,6 @@
 #  limitations under the License.
 
 import math
-from abc import ABC, abstractmethod
 from collections.abc import Callable
 from datetime import datetime
 from types import TracebackType
@@ -82,7 +81,7 @@ def default_time_series_factory(external_id: str, datapoints: DataPointList) -> 
     return TimeSeries(external_id=external_id, is_string=is_string)
 
 
-class BaseTimeSeriesUploadQueue(AbstractUploadQueue, ABC):
+class BaseTimeSeriesUploadQueue(AbstractUploadQueue):
     """
     Abstract base upload queue for time series
 
@@ -170,16 +169,6 @@ class BaseTimeSeriesUploadQueue(AbstractUploadQueue, ABC):
 
         return datapoints
 
-    def __enter__(self) -> "BaseTimeSeriesUploadQueue":
-        """
-        Wraps around start method, for use as context manager
-
-        Returns:
-            self
-        """
-        self.start()
-        return self
-
     def __exit__(
         self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
@@ -201,12 +190,6 @@ class BaseTimeSeriesUploadQueue(AbstractUploadQueue, ABC):
             Number of data points in queue
         """
         return self.upload_queue_size
-
-    @abstractmethod
-    def add_to_upload_queue(self, *args: Any, **kwargs: Any) -> None:
-        """
-        Add data points to upload queue.
-        """
 
 
 class TimeSeriesUploadQueue(BaseTimeSeriesUploadQueue):
@@ -392,6 +375,16 @@ class TimeSeriesUploadQueue(BaseTimeSeriesUploadQueue):
             self.upload_queue_size = 0
             self.queue_size.set(self.upload_queue_size)
 
+    def __enter__(self) -> "TimeSeriesUploadQueue":
+        """
+        Wraps around start method, for use as context manager
+
+        Returns:
+            self
+        """
+        self.start()
+        return self
+
 
 class CDMTimeSeriesUploadQueue(BaseTimeSeriesUploadQueue):
     """
@@ -504,6 +497,16 @@ class CDMTimeSeriesUploadQueue(BaseTimeSeriesUploadQueue):
             self.logger.info(f"Uploaded {self.upload_queue_size} datapoints")
             self.upload_queue_size = 0
             self.queue_size.set(self.upload_queue_size)
+
+    def __enter__(self) -> "CDMTimeSeriesUploadQueue":
+        """
+        Wraps around start method, for use as context manager
+
+        Returns:
+            self
+        """
+        self.start()
+        return self
 
 
 class SequenceUploadQueue(AbstractUploadQueue):
