@@ -69,6 +69,7 @@ from .events import EventUploadQueue
 from .files import BytesUploadQueue, FileUploadQueue, IOFileUploadQueue
 from .raw import RawUploadQueue
 from .time_series import (
+    CDMTimeSeriesUploadQueue,
     DataPoint,
     DataPointList,
     SequenceUploadQueue,
@@ -87,5 +88,6 @@ __all__ = [
     "DataPointList",
     "SequenceUploadQueue",
     "TimeSeriesUploadQueue",
+    "CDMTimeSeriesUploadQueue",
     "default_time_series_factory",
 ]

@@ -29,8 +29,13 @@ from cognite.extractorutils.configtools import BaseConfig, TimeIntervalConfig
 from cognite.extractorutils.metrics import BaseMetrics
 from cognite.extractorutils.statestore import AbstractStateStore
 from cognite.extractorutils.threading import CancellationToken
-from cognite.extractorutils.uploader import EventUploadQueue, RawUploadQueue, TimeSeriesUploadQueue
-from cognite.extractorutils.uploader_types import CdfTypes, Event, InsertDatapoints, RawRow
+from cognite.extractorutils.uploader import (
+    CDMTimeSeriesUploadQueue,
+    EventUploadQueue,
+    RawUploadQueue,
+    TimeSeriesUploadQueue,
+)
+from cognite.extractorutils.uploader_types import CdfTypes, Event, InsertCDMDatapoints, InsertDatapoints, RawRow
 
 
 @dataclass
@@ -136,6 +141,12 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
                     self.time_series_queue.add_to_upload_queue(
                         id=dp.id, external_id=dp.external_id, datapoints=dp.datapoints
                     )
+        elif isinstance(peek, InsertCDMDatapoints):
+            for dp in peekable_output:
+                if isinstance(dp, InsertCDMDatapoints):
+                    self.cdm_time_series_queue.add_to_upload_queue(
+                        timeseries_apply=dp.timeseries_apply, datapoints=dp.datapoints
+                    )
         else:
             raise ValueError(f"Unexpected type: {type(peek)}")
 
@@ -167,7 +178,12 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
             trigger_log_level="INFO",
             create_missing=True,
         ).__enter__()
-
+        self.cdm_time_series_queue = CDMTimeSeriesUploadQueue(
+            self.cognite_client,
+            max_queue_size=queue_config.timeseries_size,
+            max_upload_interval=queue_config.upload_interval.seconds,
+            trigger_log_level="INFO",
+        ).__enter__()
         return self
 
     def __exit__(
@@ -176,4 +192,5 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
         self.event_queue.__exit__(exc_type, exc_val, exc_tb)
         self.raw_queue.__exit__(exc_type, exc_val, exc_tb)
         self.time_series_queue.__exit__(exc_type, exc_val, exc_tb)
+        self.cdm_time_series_queue.__exit__(exc_type, exc_val, exc_tb)
         return super().__exit__(exc_type, exc_val, exc_tb)
