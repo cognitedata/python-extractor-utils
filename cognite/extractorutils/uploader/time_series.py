@@ -16,7 +16,7 @@ import math
 from collections.abc import Callable
 from datetime import datetime
 from types import TracebackType
-from typing import Any
+from typing import Any, TypeVar
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import (
@@ -60,6 +60,8 @@ FullStatusCode = StatusCode | int
 DataPointWithStatus = tuple[TimeStamp, float, FullStatusCode] | tuple[TimeStamp, str, FullStatusCode]
 DataPoint = DataPointWithoutStatus | DataPointWithStatus
 DataPointList = list[DataPoint]
+
+TQueue = TypeVar("TQueue", bound="BaseTimeSeriesUploadQueue")
 
 
 def default_time_series_factory(external_id: str, datapoints: DataPointList) -> TimeSeries:
@@ -190,6 +192,16 @@ class BaseTimeSeriesUploadQueue(AbstractUploadQueue):
             Number of data points in queue
         """
         return self.upload_queue_size
+
+    def __enter__(self: TQueue) -> TQueue:
+        """
+        Wraps around start method, for use as context manager
+
+        Returns:
+            self
+        """
+        self.start()
+        return self
 
 
 class TimeSeriesUploadQueue(BaseTimeSeriesUploadQueue):
@@ -375,16 +387,6 @@ class TimeSeriesUploadQueue(BaseTimeSeriesUploadQueue):
             self.upload_queue_size = 0
             self.queue_size.set(self.upload_queue_size)
 
-    def __enter__(self) -> "TimeSeriesUploadQueue":
-        """
-        Wraps around start method, for use as context manager
-
-        Returns:
-            self
-        """
-        self.start()
-        return self
-
 
 class CDMTimeSeriesUploadQueue(BaseTimeSeriesUploadQueue):
     """
@@ -497,16 +499,6 @@ class CDMTimeSeriesUploadQueue(BaseTimeSeriesUploadQueue):
             self.logger.info(f"Uploaded {self.upload_queue_size} datapoints")
             self.upload_queue_size = 0
             self.queue_size.set(self.upload_queue_size)
-
-    def __enter__(self) -> "CDMTimeSeriesUploadQueue":
-        """
-        Wraps around start method, for use as context manager
-
-        Returns:
-            self
-        """
-        self.start()
-        return self
 
 
 class SequenceUploadQueue(AbstractUploadQueue):
