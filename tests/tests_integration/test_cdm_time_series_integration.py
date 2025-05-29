@@ -7,11 +7,13 @@ from datetime import datetime, timezone
 from typing import Literal
 
 import pytest
+from _pytest.logging import LogCaptureFixture
 from conftest import ETestType, ParamTest
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes.data_modeling import NodeApply, NodeId
 from cognite.client.data_classes.data_modeling.extractor_extensions.v1 import CogniteExtractorTimeSeriesApply
+from cognite.client.exceptions import CogniteNotFoundError
 from cognite.extractorutils.uploader.time_series import CDMTimeSeriesUploadQueue
 
 MIN_DATAPOINT_TIMESTAMP = -2208988800000
@@ -61,7 +63,7 @@ def test_cdm_queue_single_series_numeric(set_upload_test: tuple[CogniteClient, P
     client, params = set_upload_test
     ext_id = params.external_ids[0]
 
-    queue = CDMTimeSeriesUploadQueue(cdf_client=client)
+    queue = CDMTimeSeriesUploadQueue(cdf_client=client, create_missing=True)
     queue.start()
 
     ts_apply = _apply_node(params.space, ext_id, time_series_type="numeric")
@@ -84,6 +86,41 @@ def test_cdm_queue_single_series_numeric(set_upload_test: tuple[CogniteClient, P
     queue.stop()
 
 
+def test_create_missing_false_failure(
+    set_upload_test: tuple[CogniteClient, ParamTest], caplog: LogCaptureFixture
+) -> None:
+    """
+    Tests that if create_missing=False and TS doesn't exist, it's not created,
+    an error is logged, and data is not uploaded.
+    """
+    client, params = set_upload_test
+    ext_id = params.external_ids[0]
+
+    queue = CDMTimeSeriesUploadQueue(cdf_client=client)
+    queue.start()
+
+    ts_apply = _apply_node(params.space, ext_id, time_series_type="numeric")
+
+    now = int(datetime.now(tz=timezone.utc).timestamp() * 1_000)
+    datapoints_1 = _rand_numeric_points(5, now)
+    datapoints_2 = _rand_numeric_points(5, now + 1000)
+
+    queue.add_to_upload_queue(timeseries_apply=ts_apply, datapoints=datapoints_1)
+    queue.add_to_upload_queue(timeseries_apply=ts_apply, datapoints=datapoints_2)
+    queue.upload()
+
+    time.sleep(5)
+    queue.stop()
+
+    assert "Could not upload data points to" in caplog.text
+    assert f"'space': '{params.space}', 'externalId': '{ext_id}'" in caplog.text
+
+    with pytest.raises(CogniteNotFoundError):
+        client.time_series.data.retrieve(
+            instance_id=NodeId(space=params.space, external_id=ext_id), start="1w-ago", end="now"
+        )
+
+
 def test_cdm_queue_single_series_string(set_upload_test: tuple[CogniteClient, ParamTest]) -> None:
     """
     Create one string CDM time-series, push datapoints, upload, and verify.
@@ -91,7 +128,7 @@ def test_cdm_queue_single_series_string(set_upload_test: tuple[CogniteClient, Pa
     client, params = set_upload_test
     ext_id = params.external_ids[1]
 
-    queue = CDMTimeSeriesUploadQueue(cdf_client=client)
+    queue = CDMTimeSeriesUploadQueue(cdf_client=client, create_missing=True)
     queue.start()
 
     ts_apply = _apply_node(params.space, ext_id, time_series_type="string")
@@ -118,7 +155,7 @@ def test_cdm_queue_multiple_series_batched(set_upload_test: tuple[CogniteClient,
     client, params = set_upload_test
     ext_a, ext_b = params.external_ids[:2]
 
-    queue = CDMTimeSeriesUploadQueue(cdf_client=client)
+    queue = CDMTimeSeriesUploadQueue(cdf_client=client, create_missing=True)
 
     now = int(datetime.now(tz=timezone.utc).timestamp() * 1_000)
 
@@ -150,7 +187,7 @@ def test_cdm_queue_discards_invalid_values(set_upload_test: tuple[CogniteClient,
     ext_id_1 = params.external_ids[1]
     ext_id_2 = params.external_ids[2]
 
-    queue = CDMTimeSeriesUploadQueue(cdf_client=client)
+    queue = CDMTimeSeriesUploadQueue(cdf_client=client, create_missing=True)
     queue.start()
 
     ts_apply_numeric = _apply_node(params.space, ext_id_1, "numeric")
@@ -162,11 +199,12 @@ def test_cdm_queue_discards_invalid_values(set_upload_test: tuple[CogniteClient,
     bad_val_max = (now + 1_000, MAX_DATAPOINT_VALUE * 10)
     bad_val_min = (now + 1_000, MIN_DATAPOINT_VALUE * 10)
     too_long_str = (now + 2_000, "x" * (MAX_DATAPOINT_STRING_LENGTH + 1))
+    valid_temp_str_dp = (now + 3_000, "valid_short_string")
 
     queue.add_to_upload_queue(
         timeseries_apply=ts_apply_numeric, datapoints=[good, bad_time, bad_val_inf, bad_val_max, bad_val_min]
     )
-    queue.add_to_upload_queue(timeseries_apply=ts_apply_string, datapoints=[too_long_str])
+    queue.add_to_upload_queue(timeseries_apply=ts_apply_string, datapoints=[too_long_str, valid_temp_str_dp])
     queue.upload()
     time.sleep(5)
 
@@ -175,5 +213,6 @@ def test_cdm_queue_discards_invalid_values(set_upload_test: tuple[CogniteClient,
     recv_points_2 = client.time_series.data.retrieve(instance_id=NodeId(params.space, ext_id_2))
 
     assert [int(v) for v in recv_points_1.value] == [good[1]]
-    assert [int(v) for v in recv_points_2.value] == []
+    assert [str(v) for v in recv_points_2.value] == [valid_temp_str_dp[1]]
+    assert too_long_str[1] not in recv_points_2.value
     queue.stop()

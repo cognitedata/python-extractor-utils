@@ -16,7 +16,7 @@ import math
 from collections.abc import Callable
 from datetime import datetime
 from types import TracebackType
-from typing import Any, TypeVar
+from typing import Any, Generic, TypeVar
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import (
@@ -62,6 +62,7 @@ DataPoint = DataPointWithoutStatus | DataPointWithStatus
 DataPointList = list[DataPoint]
 
 TQueue = TypeVar("TQueue", bound="BaseTimeSeriesUploadQueue")
+IdType = TypeVar("IdType", EitherId, NodeId)
 
 
 def default_time_series_factory(external_id: str, datapoints: DataPointList) -> TimeSeries:
@@ -83,7 +84,13 @@ def default_time_series_factory(external_id: str, datapoints: DataPointList) -> 
     return TimeSeries(external_id=external_id, is_string=is_string)
 
 
-class BaseTimeSeriesUploadQueue(AbstractUploadQueue):
+def _apply_cognite_timeseries(cdf_client: CogniteClient, timeseries_apply: CogniteExtractorTimeSeriesApply) -> NodeId:
+    instance_result = cdf_client.data_modeling.instances.apply(timeseries_apply)
+    node = instance_result.nodes[0]
+    return node.as_id()
+
+
+class BaseTimeSeriesUploadQueue(AbstractUploadQueue, Generic[IdType]):
     """
     Abstract base upload queue for time series
 
@@ -120,7 +127,7 @@ class BaseTimeSeriesUploadQueue(AbstractUploadQueue):
             cancellation_token,
         )
 
-        self.upload_queue: dict[EitherId, DataPointList] = {}
+        self.upload_queue: dict[IdType, DataPointList] = {}
 
         self.points_queued = TIMESERIES_UPLOADER_POINTS_QUEUED
         self.points_written = TIMESERIES_UPLOADER_POINTS_WRITTEN
@@ -204,7 +211,7 @@ class BaseTimeSeriesUploadQueue(AbstractUploadQueue):
         return self
 
 
-class TimeSeriesUploadQueue(BaseTimeSeriesUploadQueue):
+class TimeSeriesUploadQueue(BaseTimeSeriesUploadQueue[EitherId]):
     """
     Upload queue for time series
 
@@ -388,7 +395,7 @@ class TimeSeriesUploadQueue(BaseTimeSeriesUploadQueue):
             self.queue_size.set(self.upload_queue_size)
 
 
-class CDMTimeSeriesUploadQueue(BaseTimeSeriesUploadQueue):
+class CDMTimeSeriesUploadQueue(BaseTimeSeriesUploadQueue[NodeId]):
     """
     Upload queue for CDM time series
 
@@ -412,6 +419,7 @@ class CDMTimeSeriesUploadQueue(BaseTimeSeriesUploadQueue):
         max_upload_interval: int | None = None,
         trigger_log_level: str = "DEBUG",
         thread_name: str | None = None,
+        create_missing: Callable[[CogniteClient, CogniteExtractorTimeSeriesApply], NodeId] | bool = False,
         cancellation_token: CancellationToken | None = None,
     ):
         super().__init__(
@@ -424,10 +432,15 @@ class CDMTimeSeriesUploadQueue(BaseTimeSeriesUploadQueue):
             cancellation_token,
         )
 
-    def _apply_cognite_timeseries(self, timeseries_apply: CogniteExtractorTimeSeriesApply) -> NodeId:
-        instance_result = self.cdf_client.data_modeling.instances.apply(timeseries_apply)
-        node = instance_result.nodes[0]
-        return node.as_id()
+        self.missing_factory: Callable[[CogniteClient, CogniteExtractorTimeSeriesApply], NodeId]
+        self.timeseries_apply_dict: dict[NodeId, CogniteExtractorTimeSeriesApply] = {}
+
+        if isinstance(create_missing, bool):
+            self.create_missing = create_missing
+            self.missing_factory = _apply_cognite_timeseries
+        else:
+            self.create_missing = True
+            self.missing_factory = create_missing
 
     def add_to_upload_queue(
         self, *, timeseries_apply: CogniteExtractorTimeSeriesApply, datapoints: DataPointList | None = None
@@ -442,14 +455,18 @@ class CDMTimeSeriesUploadQueue(BaseTimeSeriesUploadQueue):
         """
         datapoints = self._sanitize_datapoints(datapoints)
 
-        instance_id = self._apply_cognite_timeseries(timeseries_apply)
-        either_id = EitherId(instance_id=instance_id)
+        # instance_id = self._apply_cognite_timeseries(timeseries_apply)
+
+        instance_id = NodeId(timeseries_apply.space, timeseries_apply.external_id)
 
         with self.lock:
-            if either_id not in self.upload_queue:
-                self.upload_queue[either_id] = []
+            if instance_id not in self.upload_queue:
+                self.upload_queue[instance_id] = []
 
-            self.upload_queue[either_id].extend(datapoints)
+            if instance_id not in self.timeseries_apply_dict:
+                self.timeseries_apply_dict[instance_id] = timeseries_apply
+
+            self.upload_queue[instance_id].extend(datapoints)
             self.points_queued.inc(len(datapoints))
             self.upload_queue_size += len(datapoints)
             self.queue_size.set(self.upload_queue_size)
@@ -469,9 +486,61 @@ class CDMTimeSeriesUploadQueue(BaseTimeSeriesUploadQueue):
             max_delay=RETRY_MAX_DELAY,
             backoff=RETRY_BACKOFF_FACTOR,
         )
-        def _upload_batch(upload_this: list[dict]) -> list[dict]:
-            if len(upload_this) > 0:
+        def _upload_batch(upload_this: list[dict], retries: int = 5) -> list[dict]:
+            if len(upload_this) == 0:
+                return upload_this
+
+            try:
                 self.cdf_client.time_series.data.insert_multiple(upload_this)
+            except CogniteNotFoundError as ex:
+                if not retries:
+                    raise ex
+
+                if not self.create_missing:
+                    self.logger.error("Could not upload data points to %s: %s", str(ex.not_found), str(ex))
+
+                # Get IDs of time series that exists, but failed because of the non-existing time series
+                retry_these = [
+                    NodeId(id_dict["instanceId"]["space"], id_dict["instanceId"]["externalId"])
+                    for id_dict in ex.failed
+                    if id_dict not in ex.not_found
+                ]
+
+                if self.create_missing:
+                    # Get the time series that can be created
+                    create_these_ids = set(
+                        [
+                            NodeId(id_dict["instanceId"]["space"], id_dict["instanceId"]["externalId"])
+                            for id_dict in ex.not_found
+                        ]
+                    )
+                    self.logger.info(f"Creating {len(create_these_ids)} time series")
+                    to_create: list[NodeId] = [
+                        self.missing_factory(self.cdf_client, self.timeseries_apply_dict[nodeId])
+                        for nodeId in create_these_ids
+                    ]
+
+                    retry_these.extend([nodeId for nodeId in to_create])
+
+                    if len(ex.not_found) != len(create_these_ids):
+                        missing = [
+                            id_dict
+                            for id_dict in ex.not_found
+                            if NodeId(id_dict["instanceId"]["space"], id_dict["instanceId"]["externalId"])
+                            not in retry_these
+                        ]
+                        missing_num = len(ex.not_found) - len(create_these_ids)
+                        self.logger.error(
+                            f"{missing_num} time series not found, and could not be created automatically: "
+                            + str(missing)
+                            + " Data will be dropped"
+                        )
+
+                # Remove entries with non-existing time series from upload queue
+                upload_this = [entry for entry in upload_this if entry["instanceId"] in retry_these]
+
+                # Upload remaining
+                _upload_batch(upload_this, retries - 1)
 
             return upload_this
 
@@ -481,13 +550,13 @@ class CDMTimeSeriesUploadQueue(BaseTimeSeriesUploadQueue):
         with self.lock:
             upload_this = _upload_batch(
                 [
-                    {either_id.type(): either_id.content(), "datapoints": list(datapoints)}
-                    for either_id, datapoints in self.upload_queue.items()
+                    {"instanceId": instance_id, "datapoints": list(datapoints)}
+                    for instance_id, datapoints in self.upload_queue.items()
                     if len(datapoints) > 0
                 ]
             )
 
-            for _either_id, datapoints in self.upload_queue.items():
+            for _instance_id, datapoints in self.upload_queue.items():
                 self.points_written.inc(len(datapoints))
 
             try:

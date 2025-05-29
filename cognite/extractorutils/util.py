@@ -32,7 +32,6 @@ from decorator import decorator
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset, ExtractionPipelineRun, TimeSeries
-from cognite.client.data_classes.data_modeling import NodeId
 from cognite.client.exceptions import CogniteAPIError, CogniteException, CogniteFileUploadError, CogniteNotFoundError
 from cognite.extractorutils.threading import CancellationToken
 
@@ -80,41 +79,35 @@ def ensure_assets(cdf_client: CogniteClient, assets: Iterable[Asset]) -> None:
 
 class EitherId:
     """
-    Class representing an ID in CDF, which can either be an external ID, internal ID or instance ID.
-    An EitherId can only hold one ID type.
+    Class representing an ID in CDF, which can either be an external or internal ID. An EitherId can only hold one ID
+    type, not both.
 
     Args:
         id: Internal ID
         external_id: external ID. It can be `external_id` or `externalId`
-        instance_id: Instance ID. It can be `instance_id` or `instanceId`
 
     Raises:
-        TypeError: If none or more than one of the id types are set.
+        TypeError: If none of both of id types are set.
     """
 
-    def __init__(self, **kwargs: int | str | NodeId | None):
+    def __init__(self, **kwargs: int | str | None):
         internal_id = kwargs.get("id")
         external_id = kwargs.get("externalId") or kwargs.get("external_id")
-        instance_id = kwargs.get("instanceId") or kwargs.get("instance_id")
 
-        identifiers = [internal_id, external_id, instance_id]
-        provided_ids = [id_val for id_val in identifiers if id_val is not None]
+        if internal_id is None and external_id is None:
+            raise TypeError("Either id or external_id must be set")
 
-        if not provided_ids:
-            raise TypeError("Either id, external_id, or instance_id must be set")
-        if len(provided_ids) > 1:
-            raise TypeError("Only one of id, external_id, or instance_id can be set")
+        if internal_id is not None and external_id is not None:
+            raise TypeError("Only one of id and external_id can be set")
 
         if internal_id is not None and not isinstance(internal_id, int):
             raise TypeError("Internal IDs must be integers")
+
         if external_id is not None and not isinstance(external_id, str):
             raise TypeError("External IDs must be strings")
-        if instance_id is not None and not isinstance(instance_id, NodeId):
-            raise TypeError("Instance IDs must be NodeId objects")
 
         self.internal_id: int | None = internal_id
         self.external_id: str | None = external_id
-        self.instance_id: NodeId | None = instance_id
 
     def type(self) -> str:
         """
@@ -123,21 +116,16 @@ class EitherId:
         Returns:
             'id' if the EitherId represents an internal ID, 'externalId' if the EitherId represents an external ID
         """
-        if self.internal_id is not None:
-            return "id"
-        elif self.instance_id is not None:
-            return "instanceId"
-        else:
-            return "externalId"
+        return "id" if self.internal_id is not None else "externalId"
 
-    def content(self) -> int | str | NodeId:
+    def content(self) -> int | str:
         """
         Get the value of the ID
 
         Returns:
             The ID
         """
-        return self.internal_id or self.external_id or self.instance_id  # type: ignore
+        return self.internal_id or self.external_id  # type: ignore  # checked to be not None in init
 
     def __eq__(self, other: Any) -> bool:
         """
@@ -152,11 +140,7 @@ class EitherId:
         if not isinstance(other, EitherId):
             return False
 
-        return (
-            self.internal_id == other.internal_id
-            and self.external_id == other.external_id
-            and self.instance_id == other.instance_id
-        )
+        return self.internal_id == other.internal_id and self.external_id == other.external_id
 
     def __hash__(self) -> int:
         """
@@ -165,7 +149,7 @@ class EitherId:
         Returns:
             Hash code of ID
         """
-        return hash((self.internal_id, self.external_id, self.instance_id))
+        return hash((self.internal_id, self.external_id))
 
     def __str__(self) -> str:
         """
