@@ -12,12 +12,20 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 import datetime
+from typing import Literal
 from unittest.mock import Mock, patch
 
 from cognite.client.data_classes import Row
-from cognite.extractorutils.uploader import EventUploadQueue, RawUploadQueue, TimeSeriesUploadQueue
+from cognite.client.data_classes.data_modeling import NodeApply, NodeId
+from cognite.client.data_classes.data_modeling.extractor_extensions.v1 import CogniteExtractorTimeSeriesApply
+from cognite.extractorutils.uploader import (
+    CDMTimeSeriesUploadQueue,
+    EventUploadQueue,
+    RawUploadQueue,
+    TimeSeriesUploadQueue,
+)
 from cognite.extractorutils.uploader_extractor import UploaderExtractor, UploaderExtractorConfig
-from cognite.extractorutils.uploader_types import Event, InsertDatapoints, RawRow
+from cognite.extractorutils.uploader_types import Event, InsertCDMDatapoints, InsertDatapoints, RawRow
 
 
 @patch("cognite.client.CogniteClient")
@@ -107,5 +115,78 @@ def test_handle_timeseries(MockCogniteClient: Mock) -> None:
         [
             {"externalId": "some-id", "datapoints": tss[0].datapoints},
             {"externalId": "some-other-id", "datapoints": tss[1].datapoints},
+        ]
+    )
+
+
+def _apply_node(space: str, external_id: str, time_series_type: Literal["numeric", "string"]) -> NodeApply:
+    """
+    Create a minimal CogniteExtractorTimeSeriesApply that results in a real time-series in CDF.
+    """
+    return CogniteExtractorTimeSeriesApply(
+        space=space,
+        external_id=external_id,
+        time_series_type=time_series_type,
+        is_step=False,
+    )
+
+
+def _make_apply_result(node_id: NodeId) -> Mock:
+    fake_node = Mock()
+    fake_node.as_id.return_value = node_id  # .nodes[0].as_id()
+    result = Mock()
+    result.nodes = [fake_node]  # .nodes[0]
+    return result
+
+
+@patch("cognite.client.CogniteClient")
+def test_handle_cdm_timeseries(MockCogniteClient: Mock) -> None:
+    client = MockCogniteClient()
+    ex = UploaderExtractor[UploaderExtractorConfig](
+        name="ext_extractor4",
+        description="description",
+        config_class=UploaderExtractorConfig,
+    )
+    ex.cdm_time_series_queue = CDMTimeSeriesUploadQueue(client)
+    start: float = datetime.datetime.now().timestamp() * 1000.0
+
+    # single
+    node_single = NodeId("some-space", "some-id")
+    client.data_modeling.instances.apply.return_value = _make_apply_result(node_single)
+
+    ts_apply_single = _apply_node("some-space", "some-id", time_series_type="numeric")
+    item_single = InsertCDMDatapoints(timeseries_apply=ts_apply_single, datapoints=[(start, 100)])
+
+    ex.handle_output(item_single)
+    ex.cdm_time_series_queue.upload()
+
+    client.time_series.data.insert_multiple.assert_called_with(
+        [{"instanceId": node_single, "datapoints": item_single.datapoints}]
+    )
+
+    # iterable
+    node_iter1 = NodeId("some-space", "some-id")
+    node_iter2 = NodeId("some-space", "some-other-id")
+
+    client.data_modeling.instances.apply.side_effect = [
+        _make_apply_result(node_iter1),
+        _make_apply_result(node_iter2),
+    ]
+
+    ts_apply_1 = _apply_node("some-space", "some-id", time_series_type="numeric")
+    ts_apply_2 = _apply_node("some-space", "some-other-id", time_series_type="numeric")
+
+    item1 = InsertCDMDatapoints(timeseries_apply=ts_apply_1, datapoints=[(start, 100), (start + 1, 101)])
+    item2 = InsertCDMDatapoints(timeseries_apply=ts_apply_2, datapoints=[(start + 2, 102), (start + 3, 103)])
+
+    iterable_items = [item1, item2]
+    ex.handle_output(iterable_items)
+
+    ex.cdm_time_series_queue.upload()
+
+    client.time_series.data.insert_multiple.assert_called_with(
+        [
+            {"instanceId": node_iter1, "datapoints": item1.datapoints},
+            {"instanceId": node_iter2, "datapoints": item2.datapoints},
         ]
     )
