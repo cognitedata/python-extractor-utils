@@ -455,8 +455,6 @@ class CDMTimeSeriesUploadQueue(BaseTimeSeriesUploadQueue[NodeId]):
         """
         datapoints = self._sanitize_datapoints(datapoints)
 
-        # instance_id = self._apply_cognite_timeseries(timeseries_apply)
-
         instance_id = NodeId(timeseries_apply.space, timeseries_apply.external_id)
 
         with self.lock:
