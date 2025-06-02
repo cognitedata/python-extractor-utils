@@ -30,7 +30,7 @@ jobs:
           uv sync
 
       - name: Check codestyle
-        run: pre-commit run --all
+        run: uv run pre-commit run --all
 
       - name: Run tests
         env:
