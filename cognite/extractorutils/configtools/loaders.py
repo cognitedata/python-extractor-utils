@@ -110,8 +110,8 @@ class KeyVaultLoader:
                 )  # When fetching from Azure KeyVault, the values for these are expected to be strings
                 for param in auth_parameters
             ):
-                # Since we are already checking that the keys are present in the config,
-                # we can safely expand them
+                # Since we are already checking that the keys are present in the config, and
+                # are of type string, we can safely expand them
                 tenant_id = os.path.expandvars(self.config["tenant-id"])
                 client_id = os.path.expandvars(self.config["client-id"])
                 secret = os.path.expandvars(self.config["secret"])
