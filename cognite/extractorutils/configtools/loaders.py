@@ -103,10 +103,18 @@ class KeyVaultLoader:
             if not env_file_found:
                 _logger.info(f"Local environment file not found at {Path.cwd() / '.env'}")
 
-            if all(param in self.config for param in auth_parameters):
-                tenant_id = os.path.expandvars(self.config.get("tenant-id", None))
-                client_id = os.path.expandvars(self.config.get("client-id", None))
-                secret = os.path.expandvars(self.config.get("secret", None))
+            if all(
+                param in self.config
+                and isinstance(
+                    self.config[param], str
+                )  # When fetching from Azure KeyVault, the values for these are expected to be strings
+                for param in auth_parameters
+            ):
+                # Since we are already checking that the keys are present in the config,
+                # we can safely expand them
+                tenant_id = os.path.expandvars(self.config["tenant-id"])
+                client_id = os.path.expandvars(self.config["client-id"])
+                secret = os.path.expandvars(self.config["secret"])
 
                 self.credentials = ClientSecretCredential(
                     tenant_id=tenant_id,
