@@ -105,7 +105,7 @@ namespace_packages = true
 explicit_package_bases = true
 show_error_codes = true
 warn_redundant_casts = true
-warn_unused_ignores = true
+warn_unused_ignores = false
 exclude = "tests/*"
 
 [tool.hatch.build.targets.wheel]

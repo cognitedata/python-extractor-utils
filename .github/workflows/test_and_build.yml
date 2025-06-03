@@ -28,6 +28,7 @@ jobs:
       - name: Install dependencies
         run: |
           uv sync
+          python3 -m pip install pre-commit==3.6.2
 
       - name: Check codestyle
         run: uv run pre-commit run --all
