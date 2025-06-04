@@ -84,10 +84,10 @@ def default_time_series_factory(external_id: str, datapoints: DataPointList) -> 
     return TimeSeries(external_id=external_id, is_string=is_string)
 
 
-def _apply_cognite_timeseries(cdf_client: CogniteClient, timeseries_apply: CogniteExtractorTimeSeriesApply) -> NodeId:
-    instance_result = cdf_client.data_modeling.instances.apply(timeseries_apply)
-    node = instance_result.nodes[0]
-    return node.as_id()
+def default_cdm_time_series_factory(
+    create_these_ids: set[NodeId], timeseries_apply_dict: dict[NodeId, CogniteExtractorTimeSeriesApply]
+) -> list[CogniteExtractorTimeSeriesApply]:
+    return [timeseries_apply_dict[nodeId] for nodeId in create_these_ids]
 
 
 class BaseTimeSeriesUploadQueue(AbstractUploadQueue, Generic[IdType]):
@@ -419,7 +419,10 @@ class CDMTimeSeriesUploadQueue(BaseTimeSeriesUploadQueue[NodeId]):
         max_upload_interval: int | None = None,
         trigger_log_level: str = "DEBUG",
         thread_name: str | None = None,
-        create_missing: Callable[[CogniteClient, CogniteExtractorTimeSeriesApply], NodeId] | bool = False,
+        create_missing: Callable[
+            [set[NodeId], dict[NodeId, CogniteExtractorTimeSeriesApply]], list[CogniteExtractorTimeSeriesApply]
+        ]
+        | bool = False,
         cancellation_token: CancellationToken | None = None,
     ):
         super().__init__(
@@ -432,12 +435,14 @@ class CDMTimeSeriesUploadQueue(BaseTimeSeriesUploadQueue[NodeId]):
             cancellation_token,
         )
 
-        self.missing_factory: Callable[[CogniteClient, CogniteExtractorTimeSeriesApply], NodeId]
+        self.missing_factory: Callable[
+            [set[NodeId], dict[NodeId, CogniteExtractorTimeSeriesApply]], list[CogniteExtractorTimeSeriesApply]
+        ]
         self.timeseries_apply_dict: dict[NodeId, CogniteExtractorTimeSeriesApply] = {}
 
         if isinstance(create_missing, bool):
             self.create_missing = create_missing
-            self.missing_factory = _apply_cognite_timeseries
+            self.missing_factory = default_cdm_time_series_factory
         else:
             self.create_missing = True
             self.missing_factory = create_missing
@@ -513,12 +518,15 @@ class CDMTimeSeriesUploadQueue(BaseTimeSeriesUploadQueue[NodeId]):
                         ]
                     )
                     self.logger.info(f"Creating {len(create_these_ids)} time series")
-                    to_create: list[NodeId] = [
-                        self.missing_factory(self.cdf_client, self.timeseries_apply_dict[nodeId])
-                        for nodeId in create_these_ids
-                    ]
 
-                    retry_these.extend([nodeId for nodeId in to_create])
+                    to_create: list[CogniteExtractorTimeSeriesApply] = self.missing_factory(
+                        create_these_ids, self.timeseries_apply_dict
+                    )
+
+                    instance_result = self.cdf_client.data_modeling.instances.apply(to_create)
+                    retry_these.extend([node.as_id() for node in instance_result.nodes])
+
+                    # retry_these.extend([nodeId for nodeId in self.missing_factory(self.cdf_client, to_create)])
 
                     if len(ex.not_found) != len(create_these_ids):
                         missing = [
