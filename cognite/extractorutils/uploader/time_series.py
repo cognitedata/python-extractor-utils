@@ -293,7 +293,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
                 ]
             )
 
-            for _either_id, datapoints in self.upload_queue.items():
+            for datapoints in self.upload_queue.values():
                 self.points_written.inc(len(datapoints))
 
             try:
