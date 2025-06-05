@@ -359,9 +359,7 @@ class RawStateStore(AbstractStateStore):
                 self._cdf_client.raw.rows.insert(db_name=self.database, table_name=self.table, row=self._local_state)
                 # Create a copy of deleted to facilitate testing (mock library stores list, and as it changes, the
                 # assertions fail)
-                self._cdf_client.raw.rows.delete(
-                    db_name=self.database, table_name=self.table, key=[k for k in self._deleted]
-                )
+                self._cdf_client.raw.rows.delete(db_name=self.database, table_name=self.table, key=list(self._deleted))
                 self._deleted.clear()
 
         impl()

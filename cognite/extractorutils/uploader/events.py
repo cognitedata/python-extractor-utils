@@ -107,10 +107,10 @@ class EventUploadQueue(AbstractUploadQueue):
         )
         def _upload_batch() -> None:
             try:
-                self.cdf_client.events.create([e for e in self.upload_queue])
+                self.cdf_client.events.create(list(self.upload_queue))
             except CogniteDuplicatedError as e:
-                duplicated_ids = set([dup["externalId"] for dup in e.duplicated if "externalId" in dup])
-                failed: list[Event] = [e for e in e.failed]
+                duplicated_ids = {dup["externalId"] for dup in e.duplicated if "externalId" in dup}
+                failed: list[Event] = list(e.failed)
                 to_create = []
                 to_update = []
                 for evt in failed:
