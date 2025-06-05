@@ -46,7 +46,7 @@ def test_load_cdf_config(connection_config: ConnectionConfig) -> None:
     cognite_client.post(
         url=f"/api/v1/projects/{cognite_client.config.project}/odin/config",
         json={
-            "externalId": connection_config.integration,
+            "externalId": connection_config.integration.external_id,
             "config": "parameter-one: 123\nparameter-two: abc\n",
         },
         headers={"cdf-version": "alpha"},
@@ -81,7 +81,7 @@ def test_load_cdf_config_initial_empty(connection_config: ConnectionConfig) -> N
         cognite_client.post(
             url=f"/api/v1/projects/{cognite_client.config.project}/odin/config",
             json={
-                "externalId": connection_config.integration,
+                "externalId": connection_config.integration.external_id,
                 "config": "parameter-one: 123\nparameter-two: abc\n",
             },
             headers={"cdf-version": "alpha"},

@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from humps import kebabize
-from pydantic import BaseModel, ConfigDict, Field, GetCoreSchemaHandler
+from pydantic import BaseModel, ConfigDict, Field, GetCoreSchemaHandler, field_validator
 from pydantic_core import CoreSchema, core_schema
 from typing_extensions import assert_never
 
@@ -45,23 +45,31 @@ class ConfigModel(BaseModel):
     )
 
 
-class _ClientCredentialsConfig(ConfigModel):
-    type: Literal["client-credentials"]
+class BaseAuthConfig(ConfigModel):
     client_id: str
+    scopes: list[str]
+
+    @field_validator("scopes", mode="before", json_schema_input_type=str | list[str])
+    @classmethod
+    def cast_scopes(cls, scopes: str | list[str]) -> list[str]:
+        if isinstance(scopes, str):
+            return [scope.strip() for scope in scopes.split(",")]
+        return scopes
+
+
+class _ClientCredentialsConfig(BaseAuthConfig):
+    type: Literal["client-credentials"]
     client_secret: str
     token_url: str
-    scopes: list[str]
     resource: str | None = None
     audience: str | None = None
 
 
-class _ClientCertificateConfig(ConfigModel):
+class _ClientCertificateConfig(BaseAuthConfig):
     type: Literal["client-certificate"]
-    client_id: str
     path: Path
     password: str | None = None
     authority_url: str
-    scopes: list[str]
 
 
 AuthenticationConfig = Annotated[_ClientCredentialsConfig | _ClientCertificateConfig, Field(discriminator="type")]
@@ -139,23 +147,40 @@ class TimeIntervalConfig:
         return self._expression
 
 
-class _ConnectionParameters(ConfigModel):
-    gzip_compression: bool = False
-    status_forcelist: list[int] = Field(default_factory=lambda: [429, 502, 503, 504])
+class RetriesConfig(ConfigModel):
     max_retries: int = 10
-    max_retries_connect: int = 3
-    max_retry_backoff: TimeIntervalConfig = Field(default_factory=lambda: TimeIntervalConfig("30s"))
-    max_connection_pool_size: int = 50
-    ssl_verify: bool = True
-    proxies: dict[str, str] = Field(default_factory=dict)
+    max_backoff: TimeIntervalConfig = Field(default_factory=lambda: TimeIntervalConfig("30s"))
     timeout: TimeIntervalConfig = Field(default_factory=lambda: TimeIntervalConfig("30s"))
+
+
+class SslCertificatesConfig(ConfigModel):
+    verify: bool = True
+    allowed_thumbprints: list[str] | None = None
+
+    @field_validator("allowed_thumbprints", mode="before", json_schema_input_type=str | list[str] | None)
+    @classmethod
+    def cast_scopes(cls, scopes: str | list[str] | None) -> list[str] | None:
+        if scopes is None:
+            return None
+        if isinstance(scopes, str):
+            return [scope.strip() for scope in scopes.split(",")]
+        return scopes
+
+
+class _ConnectionParameters(ConfigModel):
+    retries: RetriesConfig = Field(default_factory=RetriesConfig)
+    ssl_certificates: SslCertificatesConfig = Field(default_factory=SslCertificatesConfig)
+
+
+class IntegrationConfig(ConfigModel):
+    external_id: str
 
 
 class ConnectionConfig(ConfigModel):
     project: str
     base_url: str
 
-    integration: str
+    integration: IntegrationConfig
 
     authentication: AuthenticationConfig
 
@@ -165,14 +190,9 @@ class ConnectionConfig(ConfigModel):
         from cognite.client.config import global_config
 
         global_config.disable_pypi_version_check = True
-        global_config.disable_gzip = not self.connection.gzip_compression
-        global_config.status_forcelist = set(self.connection.status_forcelist)
-        global_config.max_retries = self.connection.max_retries
-        global_config.max_retries_connect = self.connection.max_retries_connect
-        global_config.max_retry_backoff = self.connection.max_retry_backoff.seconds
-        global_config.max_connection_pool_size = self.connection.max_connection_pool_size
-        global_config.disable_ssl = not self.connection.ssl_verify
-        global_config.proxies = self.connection.proxies
+        global_config.max_retries = self.connection.retries.max_retries
+        global_config.max_retry_backoff = self.connection.retries.max_backoff.seconds
+        global_config.disable_ssl = not self.connection.ssl_certificates.verify
 
         credential_provider: CredentialProvider
         match self.authentication:
@@ -210,7 +230,7 @@ class ConnectionConfig(ConfigModel):
             project=self.project,
             base_url=self.base_url,
             client_name=client_name,
-            timeout=self.connection.timeout.seconds,
+            timeout=self.connection.retries.timeout.seconds,
             credentials=credential_provider,
         )
 
@@ -242,7 +262,7 @@ class ConnectionConfig(ConfigModel):
         return ConnectionConfig(
             project=os.environ["COGNITE_PROJECT"],
             base_url=os.environ["COGNITE_BASE_URL"],
-            integration=os.environ["COGNITE_INTEGRATION"],
+            integration=IntegrationConfig(external_id=os.environ["COGNITE_INTEGRATION"]),
             authentication=auth,
         )
 

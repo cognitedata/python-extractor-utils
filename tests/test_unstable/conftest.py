@@ -12,6 +12,7 @@ from cognite.client.credentials import OAuthClientCredentials
 from cognite.extractorutils.unstable.configuration.models import (
     ConnectionConfig,
     ExtractorConfig,
+    IntegrationConfig,
     _ClientCredentialsConfig,
 )
 from cognite.extractorutils.unstable.core.base import Extractor
@@ -75,7 +76,7 @@ def connection_config(extraction_pipeline: str) -> ConnectionConfig:
     return ConnectionConfig(
         project=os.environ["COGNITE_DEV_PROJECT"],
         base_url=os.environ["COGNITE_DEV_BASE_URL"],
-        integration=extraction_pipeline,
+        integration=IntegrationConfig(external_id=extraction_pipeline),
         authentication=_ClientCredentialsConfig(
             type="client-credentials",
             client_id=os.environ.get("COGNITE_DEV_CLIENT_ID", os.environ["COGNITE_CLIENT_ID"]),

@@ -162,7 +162,7 @@ class Runtime(Generic[ExtractorType]):
 
             application_config, current_config_revision = load_from_cdf(
                 self._cognite_client,
-                connection_config.integration,
+                connection_config.integration.external_id,
                 self._extractor_class.CONFIG_TYPE,
             )
 

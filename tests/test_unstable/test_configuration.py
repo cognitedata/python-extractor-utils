@@ -9,7 +9,8 @@ CONFIG_EXAMPLE_ONLY_REQUIRED = """
 project: test-project
 base-url: https://baseurl.com
 
-integration: test-pipeline
+integration:
+  external_id: test-pipeline
 
 authentication:
   type: client-credentials
