@@ -159,12 +159,12 @@ class SslCertificatesConfig(ConfigModel):
 
     @field_validator("allowed_thumbprints", mode="before", json_schema_input_type=str | list[str] | None)
     @classmethod
-    def cast_thumbprints(cls, scopes: str | list[str] | None) -> list[str] | None:
-        if scopes is None:
+    def cast_thumbprints(cls, thumbprints: str | list[str] | None) -> list[str] | None:
+        if thumbprints is None:
             return None
-        if isinstance(scopes, str):
-            return [scope.strip() for scope in scopes.split(",")]
-        return scopes
+        if isinstance(thumbprints, str):
+            return [scope.strip() for scope in thumbprints.split(",")]
+        return thumbprints
 
 
 class _ConnectionParameters(ConfigModel):
