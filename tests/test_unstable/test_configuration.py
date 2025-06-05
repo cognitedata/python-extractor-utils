@@ -1,6 +1,8 @@
 import os
 from io import StringIO
 
+import pytest
+
 from cognite.client.credentials import OAuthClientCredentials
 from cognite.extractorutils.unstable.configuration.loaders import ConfigFormat, load_io
 from cognite.extractorutils.unstable.configuration.models import ConnectionConfig, _ClientCredentialsConfig
@@ -19,17 +21,35 @@ authentication:
   token-url: https://get-a-token.com/token
   scopes:
     - scopea
+    - scopeb
+"""
+
+CONFIG_EXAMPLE_ONLY_REQUIRED2 = """
+project: test-project
+base-url: https://baseurl.com
+
+integration:
+  external_id: test-pipeline
+
+authentication:
+  type: client-credentials
+  client-id: testid
+  client-secret: very_secret123
+  token-url: https://get-a-token.com/token
+  scopes: scopea, scopeb
 """
 
 
-def test_load_from_io() -> None:
-    stream = StringIO(CONFIG_EXAMPLE_ONLY_REQUIRED)
+@pytest.mark.parametrize("config_str", [CONFIG_EXAMPLE_ONLY_REQUIRED, CONFIG_EXAMPLE_ONLY_REQUIRED2])
+def test_load_from_io(config_str: str) -> None:
+    stream = StringIO(config_str)
     config = load_io(stream, ConfigFormat.YAML, ConnectionConfig)
 
     assert config.project == "test-project"
     assert config.base_url == "https://baseurl.com"
     assert config.authentication.type == "client-credentials"
     assert config.authentication.client_secret == "very_secret123"
+    assert config.authentication.scopes == ["scopea", "scopeb"]
 
 
 def test_from_env() -> None:
