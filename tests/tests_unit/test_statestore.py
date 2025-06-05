@@ -12,11 +12,11 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-import datetime
 import math
 import os
 import time
 from collections import OrderedDict
+from datetime import datetime, timezone
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
@@ -144,7 +144,7 @@ def test_upload_queue_integration(MockCogniteClient: type[CogniteClient]) -> Non
         cdf_client=MockCogniteClient(), post_upload_function=state_store.post_upload_handler()
     )
 
-    start: float = datetime.datetime.now().timestamp() * 1000.0
+    start: float = datetime.now(tz=timezone.utc).timestamp() * 1000.0
 
     upload_queue.add_to_upload_queue(external_id="testId", datapoints=[(start + 1, 1), (start + 4, 4)])
     upload_queue.upload()

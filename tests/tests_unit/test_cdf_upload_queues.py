@@ -12,9 +12,9 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-import datetime
 import math
 import time
+from datetime import datetime, timezone
 from io import BytesIO
 from typing import Any
 from unittest.mock import Mock, patch
@@ -79,7 +79,7 @@ def test_ts_uploader1(MockCogniteClient: Mock) -> None:
 
     queue = TimeSeriesUploadQueue(client)
 
-    start: float = datetime.datetime.now().timestamp() * 1000.0
+    start: float = datetime.now(tz=timezone.utz).timestamp() * 1000.0
 
     queue.add_to_upload_queue(id=1, datapoints=[(start + 1, 1), (start + 2, 2)])
     queue.add_to_upload_queue(id=2, datapoints=[(start + 3, 3), (start + 4, 4)])
@@ -109,7 +109,7 @@ def test_ts_uploader2(MockCogniteClient: Mock) -> None:
     queue = TimeSeriesUploadQueue(client, max_upload_interval=2, post_upload_function=post)
     queue.start()
 
-    start: float = datetime.datetime.now().timestamp() * 1000.0
+    start: float = datetime.now(tz=timezone.utc).timestamp() * 1000.0
 
     queue.add_to_upload_queue(id=1, datapoints=[(start + 1, 1), (start + 2, 2)])
     queue.add_to_upload_queue(id=2, datapoints=[(start + 3, 3), (start + 4, 4)])
@@ -142,7 +142,7 @@ def test_ts_uploader_discard(MockCogniteClient: Mock) -> None:
     queue = TimeSeriesUploadQueue(client, max_upload_interval=2, post_upload_function=post)
     queue.start()
 
-    start: float = datetime.datetime.now().timestamp() * 1000.0
+    start: float = datetime.now(tz=timezone.utc).timestamp() * 1000.0
 
     queue.add_to_upload_queue(id=1, datapoints=[(start + 1, 1), (math.nan, 1), (start + 1, math.nan), (start + 2, 2)])
     queue.add_to_upload_queue(
