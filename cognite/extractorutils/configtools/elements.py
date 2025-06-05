@@ -599,7 +599,7 @@ class MetricsConfig:
             _logger.debug("Waiting %d seconds before clearing gateways", wait_time)
 
             sleep(wait_time)
-            for pusher in self._clear_on_stop.keys():
+            for pusher in self._clear_on_stop:
                 pusher.clear_gateway()
 
 

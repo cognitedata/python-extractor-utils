@@ -95,10 +95,7 @@ def _make_loc_str(loc: tuple) -> str:
             loc_str = f"{loc_str}{lo}"
             needs_sep = True
         else:
-            if isinstance(lo, int):
-                loc_str = f"{loc_str}[{lo}]"
-            else:
-                loc_str = f"{loc_str}.{lo}"
+            loc_str = f"{loc_str}[{lo}]" if isinstance(lo, int) else f"{loc_str}.{lo}"
 
     return loc_str
 
@@ -119,7 +116,7 @@ def load_dict(data: dict, schema: type[_T]) -> _T:
 
             if "ctx" in err and "error" in err["ctx"]:
                 exc = err["ctx"]["error"]
-                if isinstance(exc, ValueError) or isinstance(exc, AssertionError):
+                if isinstance(exc, ValueError | AssertionError):
                     messages.append(f"{exc!s}: {loc_str}")
                     continue
 

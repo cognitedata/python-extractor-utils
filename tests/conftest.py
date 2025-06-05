@@ -1,3 +1,4 @@
+import contextlib
 import os
 from collections.abc import Generator
 from dataclasses import dataclass
@@ -71,10 +72,8 @@ def clean_test(client: CogniteClient, test_parameter: ParamTest) -> None:
     elif test_parameter.test_type.value == ETestType.ASSETS.value:
         client.assets.delete(external_id=test_parameter.external_ids, ignore_unknown_ids=True)
     elif test_parameter.test_type.value == ETestType.RAW.value:
-        try:
+        with contextlib.suppress(CogniteAPIError):
             client.raw.tables.delete(test_parameter.database_name, test_parameter.table_name)
-        except CogniteAPIError:
-            pass
     elif test_parameter.test_type.value == ETestType.FILES.value:
         for file in test_parameter.external_ids:
             try:

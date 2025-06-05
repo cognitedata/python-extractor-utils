@@ -12,6 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import contextlib
 import logging
 import os
 import sys
@@ -284,10 +285,8 @@ class Extractor(Generic[CustomConfigClass]):
 
         self.extraction_pipeline = self.config.cognite.get_extraction_pipeline(self.cognite_client)
 
-        try:
+        with contextlib.suppress(AttributeError):
             self.config.metrics.start_pushers(self.cognite_client)  # type: ignore
-        except AttributeError:
-            pass
 
         def heartbeat_loop() -> None:
             while not self.cancellation_token.is_cancelled:
@@ -345,10 +344,8 @@ class Extractor(Generic[CustomConfigClass]):
         if self.state_store:
             self.state_store.synchronize()
 
-        try:
+        with contextlib.suppress(AttributeError):
             self.config.metrics.stop_pushers()  # type: ignore
-        except AttributeError:
-            pass
 
         if exc_val:
             self._report_error(exc_val)

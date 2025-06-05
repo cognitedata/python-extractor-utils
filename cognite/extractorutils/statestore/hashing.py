@@ -227,9 +227,8 @@ class LocalHashStateStore(AbstractHashStateStore):
         """
         Save states to specified JSON file
         """
-        with self.lock:
-            with open(self._file_path, "w") as f:
-                json.dump(self._local_state, f, cls=_DecimalEncoder)
+        with self.lock, open(self._file_path, "w") as f:
+            json.dump(self._local_state, f, cls=_DecimalEncoder)
 
     def __enter__(self) -> "LocalHashStateStore":
         """

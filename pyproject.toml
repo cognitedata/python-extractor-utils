@@ -73,9 +73,8 @@ line-length = 120
 target-version = "py310"
 
 [tool.ruff.lint]
-select = ["A", "E", "F", "I", "T20", "S", "B", "UP", "DTZ", "W", "LOG", "RUF"]
+select = ["A", "E", "F", "I", "T20", "S", "B", "UP", "DTZ", "W", "LOG", "RUF", "SIM"]
 ignore = ["S104", "S303", "S311"]
-unfixable = []
 
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"

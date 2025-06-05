@@ -141,7 +141,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         self.data_set_id = data_set_id
 
     def _verify_datapoint_time(self, time: int | float | datetime | str) -> bool:
-        if isinstance(time, int) or isinstance(time, float):
+        if isinstance(time, int | float):
             return not math.isnan(time) and time >= MIN_DATAPOINT_TIMESTAMP
         elif isinstance(time, str):
             return False
@@ -155,10 +155,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
             )
         elif isinstance(value, str):
             return len(value) <= MAX_DATAPOINT_STRING_LENGTH
-        elif isinstance(value, datetime):
-            return False
-        else:
-            return True
+        return not isinstance(value, datetime)
 
     def _is_datapoint_valid(
         self,

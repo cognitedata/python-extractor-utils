@@ -234,10 +234,7 @@ class AbstractStateStore(_BaseStateStore, ABC):
 
         if high is not None and new_state > high:
             return True
-        if low is not None and new_state < low:
-            return True
-
-        return False
+        return bool(low is not None and new_state < low)
 
     def __getitem__(self, external_id: str) -> tuple[Any, Any]:
         return self.get_state(external_id)  # type: ignore  # will not be list if input is single str
