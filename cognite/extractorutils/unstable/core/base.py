@@ -30,7 +30,7 @@ from cognite.extractorutils.unstable.core.tasks import ContinuousTask, Scheduled
 from cognite.extractorutils.unstable.scheduling import TaskScheduler
 from cognite.extractorutils.util import now
 
-__all__ = ["ConfigType", "ConfigRevision", "Extractor"]
+__all__ = ["ConfigRevision", "ConfigType", "Extractor"]
 
 ConfigType = TypeVar("ConfigType", bound=ExtractorConfig)
 ConfigRevision = Literal["local"] | int

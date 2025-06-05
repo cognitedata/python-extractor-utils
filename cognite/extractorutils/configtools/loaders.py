@@ -263,7 +263,7 @@ def _load_yaml(
         raise InvalidConfigError(f'Missing mandatory field "{path}"') from e
 
     except dacite.ForwardReferenceError as e:
-        raise ValueError(f"Invalid config class: {str(e)}") from e
+        raise ValueError(f"Invalid config class: {e!s}") from e
 
     config._file_hash = sha256(json.dumps(config_dict).encode("utf-8")).hexdigest()
 

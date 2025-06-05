@@ -13,7 +13,7 @@ from cognite.extractorutils.exceptions import InvalidConfigError as OldInvalidCo
 from cognite.extractorutils.unstable.configuration.exceptions import InvalidConfigError
 from cognite.extractorutils.unstable.configuration.models import ConfigModel
 
-__all__ = ["ConfigFormat", "load_file", "load_from_cdf", "load_io", "load_dict"]
+__all__ = ["ConfigFormat", "load_dict", "load_file", "load_from_cdf", "load_io"]
 
 
 _T = TypeVar("_T", bound=ConfigModel)
@@ -120,7 +120,7 @@ def load_dict(data: dict, schema: type[_T]) -> _T:
             if "ctx" in err and "error" in err["ctx"]:
                 exc = err["ctx"]["error"]
                 if isinstance(exc, ValueError) or isinstance(exc, AssertionError):
-                    messages.append(f"{str(exc)}: {loc_str}")
+                    messages.append(f"{exc!s}: {loc_str}")
                     continue
 
             messages.append(f"{err.get('msg')}: {loc_str}")

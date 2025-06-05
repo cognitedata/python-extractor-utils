@@ -586,7 +586,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
 
         column_def = self.column_definitions.get(either_id)
         if column_def is None:
-            self.logger.error(f"Can't create sequence {str(either_id)}, no column definitions provided")
+            self.logger.error(f"Can't create sequence {either_id!s}, no column definitions provided")
 
         try:
             seq = self.cdf_client.sequences.create(

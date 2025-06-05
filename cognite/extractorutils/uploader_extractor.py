@@ -17,7 +17,7 @@ A module containing a slightly more advanced base extractor class, sorting a gen
 """
 
 from collections.abc import Callable, Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from types import TracebackType
 from typing import Any, TypeVar
 
@@ -38,7 +38,7 @@ class QueueConfigClass:
     event_size: int = 10_000
     raw_size: int = 50_000
     timeseries_size: int = 1_000_000
-    upload_interval: TimeIntervalConfig = TimeIntervalConfig("1m")
+    upload_interval: TimeIntervalConfig = field(default_factory=lambda: TimeIntervalConfig("1m"))
 
 
 @dataclass

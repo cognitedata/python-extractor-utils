@@ -14,7 +14,7 @@ from cognite.extractorutils.unstable.core.logger import CogniteLogger
 if TYPE_CHECKING:
     from cognite.extractorutils.unstable.core.base import Extractor
 
-__all__ = ["ScheduledTask", "ContinuousTask", "StartupTask", "Task", "TaskContext"]
+__all__ = ["ContinuousTask", "ScheduledTask", "StartupTask", "Task", "TaskContext"]
 
 
 class TaskContext(CogniteLogger):

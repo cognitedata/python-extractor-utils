@@ -29,7 +29,7 @@ class CancellationToken:
         """
         ``True`` if the token has been cancelled, or if some parent token has been cancelled.
         """
-        return self._is_cancelled_int or self._parent is not None and self._parent.is_cancelled
+        return self._is_cancelled_int or (self._parent is not None and self._parent.is_cancelled)
 
     def is_set(self) -> bool:
         """
@@ -98,4 +98,4 @@ class CancellationToken:
         try:
             signal.signal(signal.SIGINT, sigint_handler)
         except ValueError as e:
-            logging.getLogger(__name__).warning(f"Could not register handler for interrupt signals: {str(e)}")
+            logging.getLogger(__name__).warning(f"Could not register handler for interrupt signals: {e!s}")

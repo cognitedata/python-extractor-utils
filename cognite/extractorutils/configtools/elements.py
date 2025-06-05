@@ -290,7 +290,7 @@ class CogniteConfig:
     data_set_id: int | None = None
     data_set_external_id: str | None = None
     extraction_pipeline: EitherIdConfig | None = None
-    timeout: TimeIntervalConfig = TimeIntervalConfig("30s")
+    timeout: TimeIntervalConfig = field(default_factory=lambda: TimeIntervalConfig("30s"))
     connection: ConnectionConfig = field(default_factory=ConnectionConfig)
     security_categories: list[int] | None = None
     external_id_prefix: str = ""
@@ -510,7 +510,7 @@ class _PushGatewayConfig:
     password: str | None
 
     clear_after: TimeIntervalConfig | None
-    push_interval: TimeIntervalConfig = TimeIntervalConfig("30s")
+    push_interval: TimeIntervalConfig = field(default_factory=lambda: TimeIntervalConfig("30s"))
 
 
 @dataclass
@@ -526,7 +526,7 @@ class _CogniteMetricsConfig:
     asset_external_id: str | None
     data_set: EitherIdConfig | None = None
 
-    push_interval: TimeIntervalConfig = TimeIntervalConfig("30s")
+    push_interval: TimeIntervalConfig = field(default_factory=lambda: TimeIntervalConfig("30s"))
 
 
 @dataclass
@@ -642,7 +642,7 @@ class RawStateStoreConfig(RawDestinationConfig):
     Configuration of a state store based on CDF RAW
     """
 
-    upload_interval: TimeIntervalConfig = TimeIntervalConfig("30s")
+    upload_interval: TimeIntervalConfig = field(default_factory=lambda: TimeIntervalConfig("30s"))
 
 
 @dataclass
@@ -652,7 +652,7 @@ class LocalStateStoreConfig:
     """
 
     path: Path
-    save_interval: TimeIntervalConfig = TimeIntervalConfig("30s")
+    save_interval: TimeIntervalConfig = field(default_factory=lambda: TimeIntervalConfig("30s"))
 
 
 @dataclass

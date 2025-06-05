@@ -32,7 +32,7 @@ from cognite.extractorutils.util import now
 from ._messaging import RuntimeMessage
 from .base import ConfigRevision, ConfigType, Extractor, FullConfig
 
-__all__ = ["Runtime", "ExtractorType"]
+__all__ = ["ExtractorType", "Runtime"]
 
 ExtractorType = TypeVar("ExtractorType", bound=Extractor)
 
@@ -248,7 +248,7 @@ class Runtime(Generic[ExtractorType]):
                 self.logger.critical(str(e.message))
 
             else:
-                self.logger.critical(f"Error while connecting to CDF {str(e)}")
+                self.logger.critical(f"Error while connecting to CDF {e!s}")
 
             return False
 

@@ -146,7 +146,7 @@ class RawHashStateStore(AbstractHashStateStore):
                 self._local_state.clear()
                 for row in rows:
                     if row.key is None or row.columns is None:
-                        self.logger.warning(f"None encountered in row: {str(row)}")
+                        self.logger.warning(f"None encountered in row: {row!s}")
                         # should never happen, but type from sdk is optional
                         continue
                     state = row.columns.get("digest")
@@ -219,7 +219,7 @@ class LocalHashStateStore(AbstractHashStateStore):
             except FileNotFoundError:
                 pass
             except json.decoder.JSONDecodeError as e:
-                raise ValueError(f"Invalid JSON in state store file: {str(e)}") from e
+                raise ValueError(f"Invalid JSON in state store file: {e!s}") from e
 
         self._initialized = True
 

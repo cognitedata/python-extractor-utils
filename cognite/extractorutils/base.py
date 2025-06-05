@@ -233,7 +233,7 @@ class Extractor(Generic[CustomConfigClass]):
         """
         self.logger.error("Unexpected error during extraction", exc_info=exception)
         if self.extraction_pipeline:
-            message = f"{type(exception).__name__}: {str(exception)}"[:1000]
+            message = f"{type(exception).__name__}: {exception!s}"[:1000]
 
             self.logger.info(f"Reporting new failed run: {message}")
             self.cognite_client.extraction_pipelines.runs.create(
