@@ -9,7 +9,7 @@ from random import randint
 from typing import Any, Generic, TypeVar
 from uuid import uuid4
 
-from requests.exceptions import ConnectionError
+from requests.exceptions import ConnectionError as RequestsConnectionError
 from typing_extensions import assert_never
 
 from cognite.client import CogniteClient
@@ -252,7 +252,7 @@ class Runtime(Generic[ExtractorType]):
 
             return False
 
-        except ConnectionError as e:
+        except RequestsConnectionError as e:
             # This is sometime thrown, I've seen it when trying to get an auth token but it might happen elsewhere too
             self.logger.error(str(e))
             self.logger.critical("Could not initiate connection. Please check your configuration.")

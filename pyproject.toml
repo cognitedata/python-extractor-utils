@@ -73,9 +73,8 @@ line-length = 120
 target-version = "py310"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "T20", "S", "B", "UP"]
+select = ["A", "E", "F", "I", "T20", "S", "B", "UP"]
 ignore = ["S104", "S303", "S311"]
-fixable = ["A", "B", "C", "D", "E", "F", "I", "UP"]
 unfixable = []
 
 # Allow unused variables when underscore-prefixed.

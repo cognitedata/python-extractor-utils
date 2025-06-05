@@ -132,8 +132,8 @@ def test_local_state_interaction() -> None:
     }
 
     assert len(state_store) == len(state_store._local_state)
-    for id in state_store:
-        assert id in state_store._local_state.keys()
+    for external_id in state_store:
+        assert external_id in state_store._local_state.keys()
 
 
 @patch("cognite.client.CogniteClient")

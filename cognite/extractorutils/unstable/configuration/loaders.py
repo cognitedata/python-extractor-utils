@@ -26,14 +26,14 @@ class ConfigFormat(Enum):
 
 def load_file(path: Path, schema: type[_T]) -> _T:
     if path.suffix in [".yaml", ".yml"]:
-        format = ConfigFormat.YAML
+        file_format = ConfigFormat.YAML
     elif path.suffix == ".json":
-        format = ConfigFormat.JSON
+        file_format = ConfigFormat.JSON
     else:
         raise InvalidConfigError(f"Unknown file type {path.suffix}")
 
     with open(path) as stream:
-        return load_io(stream, format, schema)
+        return load_io(stream, file_format, schema)
 
 
 def load_from_cdf(
@@ -67,11 +67,11 @@ def load_from_cdf(
         raise new_e from e
 
 
-def load_io(stream: TextIO, format: ConfigFormat, schema: type[_T]) -> _T:
-    if format == ConfigFormat.JSON:
+def load_io(stream: TextIO, file_format: ConfigFormat, schema: type[_T]) -> _T:
+    if file_format == ConfigFormat.JSON:
         data = json.load(stream)
 
-    elif format == ConfigFormat.YAML:
+    elif file_format == ConfigFormat.YAML:
         data = _load_yaml_dict_raw(stream)
 
         if "azure-keyvault" in data:

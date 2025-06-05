@@ -172,7 +172,11 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
             return True
 
     def add_to_upload_queue(
-        self, *, id: int | None = None, external_id: str | None = None, datapoints: DataPointList | None = None
+        self,
+        *,
+        id: int | None = None,  # noqa: A002
+        external_id: str | None = None,
+        datapoints: DataPointList | None = None,
     ) -> None:
         """
         Add data points to upload queue. The queue will be uploaded if the queue size is larger than the threshold
@@ -393,7 +397,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
     def set_sequence_metadata(
         self,
         metadata: dict[str, str | int | float],
-        id: int | None = None,
+        id: int | None = None,  # noqa: A002
         external_id: str | None = None,
         asset_external_id: str | None = None,
         dataset_external_id: str | None = None,
@@ -427,7 +431,10 @@ class SequenceUploadQueue(AbstractUploadQueue):
             self.sequence_descriptions[either_id] = description
 
     def set_sequence_column_definition(
-        self, col_def: list[dict[str, str]], id: int | None = None, external_id: str | None = None
+        self,
+        col_def: list[dict[str, str]],
+        id: int | None = None,  # noqa: A002
+        external_id: str | None = None,
     ) -> None:
         """
         Set sequence column definition
@@ -450,7 +457,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
         | SequenceData
         | SequenceRows,
         column_external_ids: list[dict] | None = None,
-        id: int | None = None,
+        id: int | None = None,  # noqa: A002
         external_id: str | None = None,
     ) -> None:
         """

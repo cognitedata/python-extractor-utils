@@ -47,7 +47,7 @@ master_doc = "index"
 
 # General information about the project.
 project = "cognite-extractor-utils"
-copyright = "2020, Cognite"
+copyright = "2020, Cognite"  # noqa: A001
 author = "Cognite"
 
 # The version info for the project you're documenting, acts as replacement for
