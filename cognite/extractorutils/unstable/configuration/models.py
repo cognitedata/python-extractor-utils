@@ -159,7 +159,7 @@ class SslCertificatesConfig(ConfigModel):
 
     @field_validator("allowed_thumbprints", mode="before", json_schema_input_type=str | list[str] | None)
     @classmethod
-    def cast_scopes(cls, scopes: str | list[str] | None) -> list[str] | None:
+    def cast_thumbprints(cls, scopes: str | list[str] | None) -> list[str] | None:
         if scopes is None:
             return None
         if isinstance(scopes, str):
