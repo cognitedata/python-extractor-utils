@@ -79,7 +79,7 @@ def test_ts_uploader1(MockCogniteClient: Mock) -> None:
 
     queue = TimeSeriesUploadQueue(client)
 
-    start: float = datetime.now(tz=timezone.utz).timestamp() * 1000.0
+    start: float = datetime.now(tz=timezone.utc).timestamp() * 1000.0
 
     queue.add_to_upload_queue(id=1, datapoints=[(start + 1, 1), (start + 2, 2)])
     queue.add_to_upload_queue(id=2, datapoints=[(start + 3, 3), (start + 4, 4)])
