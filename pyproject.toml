@@ -73,6 +73,9 @@ line-length = 120
 target-version = "py310"
 
 [tool.ruff.lint]
+# TODO: Add these rules, which are likely to require larger changes to the codebase:
+# D, DOC - Docstrings
+# ANN - Type annotations everywhere, disallow Any, bare dict, bare list, etc.
 select = ["A", "E", "F", "I", "T20", "S", "B", "UP", "DTZ", "W", "LOG", "RUF", "SIM", "C4", "PERF", "FURB"]
 ignore = ["S104", "S303", "S311", "PERF203"]
 
