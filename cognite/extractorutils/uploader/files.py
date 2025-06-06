@@ -716,6 +716,7 @@ class BytesUploadQueue(IOFileUploadQueue):
         """
         Add object to upload queue. The queue will be uploaded if the queue size is larger than the threshold
         specified in the __init__.
+
         Args:
             content: bytes object to upload
             metadata: metadata for the given bytes object

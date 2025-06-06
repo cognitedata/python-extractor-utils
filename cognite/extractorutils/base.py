@@ -250,7 +250,6 @@ class Extractor(Generic[CustomConfigClass]):
         Returns:
             self
         """
-
         if str(os.getenv("COGNITE_FUNCTION_RUNTIME", False)).lower() != "true":
             # Environment Variables
             env_file_found = load_dotenv(dotenv_path="./.env", override=True)

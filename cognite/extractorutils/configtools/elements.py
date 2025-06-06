@@ -774,7 +774,6 @@ class CastableInt(int):
         Type check is required to avoid unexpected behaviour, such as implictly casting booleans,
         floats and other types supported by standard int.
         """
-
         if not isinstance(value, int | str | bytes):
             raise ValueError(f"CastableInt cannot be created form value {value!r} of type {type(value)!r}.")
 

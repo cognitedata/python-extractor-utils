@@ -363,7 +363,6 @@ class SequenceUploadQueue(AbstractUploadQueue):
             thread_name: Thread name of uploader thread.
             create_missing: Create missing sequences if possible (ie, if external id is used)
         """
-
         # Super sets post_upload and threshold
         super().__init__(
             cdf_client,
@@ -468,7 +467,6 @@ class SequenceUploadQueue(AbstractUploadQueue):
             external_id: Sequence external ID
                 Us if id is None
         """
-
         if len(rows) == 0:
             pass
 
@@ -578,7 +576,6 @@ class SequenceUploadQueue(AbstractUploadQueue):
         Args:
             either_id: Id/External Id of sequence to be updated
         """
-
         column_def = self.column_definitions.get(either_id)
         if column_def is None:
             self.logger.error(f"Can't create sequence {either_id!s}, no column definitions provided")

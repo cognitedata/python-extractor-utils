@@ -329,7 +329,7 @@ def load_yaml_dict(
 
 def compile_patterns(ignore_patterns: list[str | IgnorePattern]) -> list[re.Pattern[str]]:
     """
-    list of patterns to compile
+    List of patterns to compile
 
     Args:
         ignore_patterns: A list of strings or IgnorePattern to be compiled.
