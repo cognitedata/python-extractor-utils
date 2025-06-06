@@ -73,8 +73,8 @@ class Runtime(Generic[ExtractorType]):
             help="Connection parameters",
         )
         argparser.add_argument(
-            "-l",
-            "--local-override",
+            "-f",
+            "--force-local-config",
             nargs=1,
             type=Path,
             required=False,
