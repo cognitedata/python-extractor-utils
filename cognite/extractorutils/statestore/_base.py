@@ -32,7 +32,11 @@ class _BaseStateStore(ABC):
     def start(self, initialize: bool = True) -> None:
         """
         Start saving state periodically if save_interval is set.
+
         This calls the synchronize method every save_interval seconds.
+
+        Args:
+            initialize (bool): (Optional). If True, call initialize method before starting the thread.
         """
         if initialize and not self._initialized:
             self.initialize()
