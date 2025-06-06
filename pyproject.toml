@@ -73,10 +73,11 @@ line-length = 120
 target-version = "py310"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "T20", "S", "B", "UP"]
-ignore = ["S104", "S303", "S311"]
-fixable = ["A", "B", "C", "D", "E", "F", "I", "UP"]
-unfixable = []
+# TODO: Add these rules, which are likely to require larger changes to the codebase:
+# D, DOC - Docstrings
+# ANN - Type annotations everywhere, disallow Any, bare dict, bare list, etc.
+select = ["A", "E", "F", "I", "T20", "S", "B", "UP", "DTZ", "W", "LOG", "RUF", "SIM", "C4", "PERF", "FURB"]
+ignore = ["S104", "S303", "S311", "PERF203"]
 
 # Allow unused variables when underscore-prefixed.
 dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"

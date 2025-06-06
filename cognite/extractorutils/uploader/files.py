@@ -313,14 +313,14 @@ class IOFileUploadQueue(AbstractUploadQueue):
             )
             if any_unchaged:
                 update = FileMetadataUpdate(external_id=file_meta.external_id)
-                any = False
+                need_update = False
                 if file_meta.source:
-                    any = True
+                    need_update = True
                     update.source.set(file_meta.source)
                 if file_meta.directory:
-                    any = True
+                    need_update = True
                     update.directory.set(file_meta.directory)
-                if any:
+                if need_update:
                     self.cdf_client.files.update(update)
 
         return file_meta_response, url
@@ -373,7 +373,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
     def _upload_multipart(self, size: int, file: BinaryIO, file_meta: FileMetadataOrCogniteExtractorFile) -> None:
         chunks = ChunkedStream(file, self.max_file_chunk_size, size)
         self.logger.debug(
-            f"File {file_meta.external_id} is larger than 5GiB ({size})" f", uploading in {chunks.chunk_count} chunks"
+            f"File {file_meta.external_id} is larger than 5GiB ({size}), uploading in {chunks.chunk_count} chunks"
         )
 
         returned_file_metadata = self._create_multi_part(file_meta, chunks)

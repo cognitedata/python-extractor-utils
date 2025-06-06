@@ -99,7 +99,7 @@ def test_task_error(
     assert len(extractor._task_updates) == 2
     assert len(extractor._errors) == 1
 
-    error = list(extractor._errors.values())[0]
+    error = next(iter(extractor._errors.values()))
     assert error.description == "Hey now"
     assert error.level == ErrorLevel.warning
 
@@ -139,7 +139,7 @@ def test_crashing_task(
     assert len(extractor._task_updates) == 2
     assert len(extractor._errors) == 1
 
-    error = list(extractor._errors.values())[0]
+    error = next(iter(extractor._errors.values()))
     assert error.description == "Task TestTask crashed unexpectedly"
     assert error.level == ErrorLevel.fatal
 

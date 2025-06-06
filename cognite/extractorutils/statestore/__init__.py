@@ -2,11 +2,11 @@ from .hashing import AbstractHashStateStore, LocalHashStateStore, RawHashStateSt
 from .watermark import AbstractStateStore, LocalStateStore, NoStateStore, RawStateStore
 
 __all__ = [
+    "AbstractHashStateStore",
     "AbstractStateStore",
-    "RawStateStore",
+    "LocalHashStateStore",
     "LocalStateStore",
     "NoStateStore",
-    "AbstractHashStateStore",
     "RawHashStateStore",
-    "LocalHashStateStore",
+    "RawStateStore",
 ]

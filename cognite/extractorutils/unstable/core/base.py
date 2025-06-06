@@ -30,7 +30,7 @@ from cognite.extractorutils.unstable.core.tasks import ContinuousTask, Scheduled
 from cognite.extractorutils.unstable.scheduling import TaskScheduler
 from cognite.extractorutils.util import now
 
-__all__ = ["ConfigType", "ConfigRevision", "Extractor"]
+__all__ = ["ConfigRevision", "ConfigType", "Extractor"]
 
 ConfigType = TypeVar("ConfigType", bound=ExtractorConfig)
 ConfigRevision = Literal["local"] | int
@@ -275,7 +275,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                     {
                         "name": t.name,
                         "type": "continuous" if isinstance(t, ContinuousTask) else "batch",
-                        "action": True if isinstance(t, ScheduledTask) else False,
+                        "action": bool(isinstance(t, ScheduledTask)),
                         "description": t.description,
                     }
                     for t in self._tasks

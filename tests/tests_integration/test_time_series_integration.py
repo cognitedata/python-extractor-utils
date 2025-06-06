@@ -138,7 +138,7 @@ def test_time_series_upload_queue_create_missing(set_upload_test: tuple[CogniteC
     )
 
     assert [int(p) for p in recv_points1.value] == [p[1] for p in points1]
-    assert [p for p in recv_points2.value] == [p[1] for p in points2]
+    assert list(recv_points2.value) == [p[1] for p in points2]
     assert [int(p) for p in recv_points3.value] == [p["value"] for p in points3]
 
     queue.stop()

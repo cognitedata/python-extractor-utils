@@ -12,11 +12,12 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-import datetime
+import contextlib
 import math
 import os
 import time
 from collections import OrderedDict
+from datetime import datetime, timezone
 from decimal import Decimal
 from unittest.mock import Mock, patch
 
@@ -132,8 +133,8 @@ def test_local_state_interaction() -> None:
     }
 
     assert len(state_store) == len(state_store._local_state)
-    for id in state_store:
-        assert id in state_store._local_state.keys()
+    for external_id in state_store:
+        assert external_id in state_store._local_state
 
 
 @patch("cognite.client.CogniteClient")
@@ -144,7 +145,7 @@ def test_upload_queue_integration(MockCogniteClient: type[CogniteClient]) -> Non
         cdf_client=MockCogniteClient(), post_upload_function=state_store.post_upload_handler()
     )
 
-    start: float = datetime.datetime.now().timestamp() * 1000.0
+    start: float = datetime.now(tz=timezone.utc).timestamp() * 1000.0
 
     upload_queue.add_to_upload_queue(external_id="testId", datapoints=[(start + 1, 1), (start + 4, 4)])
     upload_queue.upload()
@@ -273,10 +274,8 @@ def test_init_no_file() -> None:
 
 def test_save_and_load() -> None:
     filename = "testfile-localstatestore.json"
-    try:
+    with contextlib.suppress(FileNotFoundError):
         os.remove("testfile-localstatestore.json")
-    except FileNotFoundError:
-        pass
 
     state_store = LocalStateStore(filename)
 
@@ -302,10 +301,8 @@ def test_save_and_load() -> None:
 
 def test_start_stop() -> None:
     filename = "testfile-startstop.json"
-    try:
+    with contextlib.suppress(FileNotFoundError):
         os.remove(filename)
-    except FileNotFoundError:
-        pass
 
     state_store = LocalStateStore(filename, 1)
 
@@ -339,10 +336,8 @@ def test_start_stop() -> None:
 
 def test_invalid_file() -> None:
     filename = "testfile-invalid.json"
-    try:
+    with contextlib.suppress(FileNotFoundError):
         os.remove(filename)
-    except FileNotFoundError:
-        pass
 
     with open(filename, "w") as f:
         f.write("Not json :(")

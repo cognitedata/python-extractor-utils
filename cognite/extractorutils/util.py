@@ -229,7 +229,7 @@ def add_extraction_pipeline(
                 Called on an unsuccessful exit of the extractor
                 """
                 message = (
-                    f"Exception for function '{input_function.__name__}'. {added_message}:\n" f"{str(exception)[:1000]}"
+                    f"Exception for function '{input_function.__name__}'. {added_message}:\n{str(exception)[:1000]}"
                 )
                 cognite_client.extraction_pipelines.runs.create(
                     ExtractionPipelineRun(
@@ -570,7 +570,7 @@ def truncate_byte_len(item: str, ln: int) -> str:
 
 
 class BufferedReadWithLength(io.BufferedReader):
-    def __init__(self, raw: RawIOBase, buffer_size: int, len: int, on_close: Callable[[], None] | None = None) -> None:
+    def __init__(self, raw: RawIOBase, buffer_size: int, len: int, on_close: Callable[[], None] | None = None) -> None:  # noqa: A002
         super().__init__(raw, buffer_size)
         # Do not remove even if it appears to be unused. :P
         # Requests uses this to add the content-length header, which is necessary for writing to files in azure clusters

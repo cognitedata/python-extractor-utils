@@ -21,18 +21,18 @@ from cognite.extractorutils.configtools._util import _load_certificate_data
 from cognite.extractorutils.exceptions import InvalidConfigError
 
 __all__ = [
-    "ConfigModel",
     "AuthenticationConfig",
-    "TimeIntervalConfig",
+    "ConfigModel",
     "ConnectionConfig",
     "CronConfig",
-    "IntervalConfig",
-    "ScheduleConfig",
-    "LogLevel",
-    "LogFileHandlerConfig",
-    "LogConsoleHandlerConfig",
-    "LogHandlerConfig",
     "ExtractorConfig",
+    "IntervalConfig",
+    "LogConsoleHandlerConfig",
+    "LogFileHandlerConfig",
+    "LogHandlerConfig",
+    "LogLevel",
+    "ScheduleConfig",
+    "TimeIntervalConfig",
 ]
 
 

@@ -51,7 +51,7 @@ class TaskScheduler:
             return []
         with self._jobs_lock:
             next_runs = sorted([(j.schedule.next(), j) for j in self._jobs.values()], key=lambda tup: tup[0])
-        return [job for (next, job) in next_runs if next == next_runs[0][0]] if next_runs else []
+        return [job for (scheduled_time, job) in next_runs if scheduled_time == next_runs[0][0]] if next_runs else []
 
     def _run_job(self, job: Job) -> bool:
         with self._running_lock:

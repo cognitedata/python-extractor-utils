@@ -243,10 +243,7 @@ def _load_yaml(
         ) from e
 
     except (dacite.WrongTypeError, dacite.MissingValueError, dacite.UnionMatchError) as e:
-        if e.field_path:
-            path = e.field_path.replace("_", "-") if case_style == "hyphen" else e.field_path
-        else:
-            path = None
+        path = (e.field_path.replace("_", "-") if case_style == "hyphen" else e.field_path) if e.field_path else None
 
         def name(type_: type) -> str:
             return type_.__name__ if hasattr(type_, "__name__") else str(type_)
@@ -264,7 +261,7 @@ def _load_yaml(
         raise InvalidConfigError(f'Missing mandatory field "{path}"') from e
 
     except dacite.ForwardReferenceError as e:
-        raise ValueError(f"Invalid config class: {str(e)}") from e
+        raise ValueError(f"Invalid config class: {e!s}") from e
 
     config._file_hash = sha256(json.dumps(config_dict).encode("utf-8")).hexdigest()
 

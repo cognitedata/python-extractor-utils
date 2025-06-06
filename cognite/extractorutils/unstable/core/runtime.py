@@ -9,7 +9,7 @@ from random import randint
 from typing import Any, Generic, TypeVar
 from uuid import uuid4
 
-from requests.exceptions import ConnectionError
+from requests.exceptions import ConnectionError as RequestsConnectionError
 from typing_extensions import assert_never
 
 from cognite.client import CogniteClient
@@ -32,7 +32,7 @@ from cognite.extractorutils.util import now
 from ._messaging import RuntimeMessage
 from .base import ConfigRevision, Extractor, FullConfig
 
-__all__ = ["Runtime", "ExtractorType"]
+__all__ = ["ExtractorType", "Runtime"]
 
 ExtractorType = TypeVar("ExtractorType", bound=Extractor)
 
@@ -73,8 +73,8 @@ class Runtime(Generic[ExtractorType]):
             help="Connection parameters",
         )
         argparser.add_argument(
-            "-l",
-            "--local-override",
+            "-f",
+            "--force-local-config",
             nargs=1,
             type=Path,
             required=False,
@@ -248,11 +248,11 @@ class Runtime(Generic[ExtractorType]):
                 self.logger.critical(str(e.message))
 
             else:
-                self.logger.critical(f"Error while connecting to CDF {str(e)}")
+                self.logger.critical(f"Error while connecting to CDF {e!s}")
 
             return False
 
-        except ConnectionError as e:
+        except RequestsConnectionError as e:
             # This is sometime thrown, I've seen it when trying to get an auth token but it might happen elsewhere too
             self.logger.error(str(e))
             self.logger.critical("Could not initiate connection. Please check your configuration.")
