@@ -111,7 +111,7 @@ class EitherId:
 
     def type(self) -> str:
         """
-        Get the type of the ID
+        Get the type of the ID.
 
         Returns:
             'id' if the EitherId represents an internal ID, 'externalId' if the EitherId represents an external ID
@@ -120,7 +120,7 @@ class EitherId:
 
     def content(self) -> int | str:
         """
-        Get the value of the ID
+        Get the value of the ID.
 
         Returns:
             The ID
@@ -129,7 +129,7 @@ class EitherId:
 
     def __eq__(self, other: Any) -> bool:
         """
-        Compare with another object. Only returns true if other is an EitherId with the same type and content
+        Compare with another object. Only returns true if other is an EitherId with the same type and content.
 
         Args:
             other: Another object
@@ -144,7 +144,7 @@ class EitherId:
 
     def __hash__(self) -> int:
         """
-        Returns a hash of the internal or external ID
+        Returns a hash of the internal or external ID.
 
         Returns:
             Hash code of ID
@@ -225,7 +225,7 @@ def add_extraction_pipeline(
 
             def _report_error(exception: Exception) -> None:
                 """
-                Called on an unsuccessful exit of the extractor
+                Called on an unsuccessful exit of the extractor.
                 """
                 message = (
                     f"Exception for function '{input_function.__name__}'. {added_message}:\n{str(exception)[:1000]}"
@@ -516,7 +516,7 @@ def timestamp_to_datetime(ts: int) -> datetime:
 
 def now() -> int:
     """
-    Current time in CDF format (milliseonds since 1970-01-01 00:00:00 UTC)
+    Current time in CDF format (milliseonds since 1970-01-01 00:00:00 UTC).
     """
     return int(time() * 1000)
 

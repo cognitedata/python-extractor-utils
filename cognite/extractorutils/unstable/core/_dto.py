@@ -1,5 +1,5 @@
 """
-Temporary holding place for DTOs against Extraction Pipelines 2.0 until it's in the SDK
+Temporary holding place for DTOs against Extraction Pipelines 2.0 until it's in the SDK.
 """
 
 from typing import Any, Literal
@@ -12,7 +12,7 @@ class CogniteModel(BaseModel):
     """
     Base class for DTO classes based on pydantic, but with a few tweaks to make it inline with the CDF API guidelines:
       * camelCase instead of snake_case when serializing/deserializing into/from JSON
-      * exclude Nones from serialized JSON instead of having nulls in the response text
+      * exclude Nones from serialized JSON instead of having nulls in the response text.
     """
 
     def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:

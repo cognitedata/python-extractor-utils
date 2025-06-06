@@ -36,7 +36,7 @@ from cognite.extractorutils.util import cognite_exceptions, retry
 
 class EventUploadQueue(AbstractUploadQueue):
     """
-    Upload queue for events
+    Upload queue for events.
 
     Args:
         cdf_client: Cognite Data Fusion client to use
@@ -94,7 +94,7 @@ class EventUploadQueue(AbstractUploadQueue):
 
     def upload(self) -> None:
         """
-        Trigger an upload of the queue, clears queue afterwards
+        Trigger an upload of the queue, clears queue afterwards.
         """
 
         @retry(
@@ -142,7 +142,7 @@ class EventUploadQueue(AbstractUploadQueue):
 
     def __enter__(self) -> "EventUploadQueue":
         """
-        Wraps around start method, for use as context manager
+        Wraps around start method, for use as context manager.
 
         Returns:
             self
@@ -154,7 +154,7 @@ class EventUploadQueue(AbstractUploadQueue):
         self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         """
-        Wraps around stop method, for use as context manager
+        Wraps around stop method, for use as context manager.
 
         Args:
             exc_type: Exception type

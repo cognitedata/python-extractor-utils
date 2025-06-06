@@ -144,7 +144,7 @@ class BaseMetrics:
 
     def _proc_collect(self) -> None:
         """
-        Collect values for process metrics
+        Collect values for process metrics.
         """
         total_memory_available = psutil.virtual_memory().total
         while True:
@@ -157,7 +157,7 @@ class BaseMetrics:
 
     def _start_proc_collector(self) -> None:
         """
-        Start a thread that collects process metrics at a regular interval
+        Start a thread that collects process metrics at a regular interval.
         """
         thread = threading.Thread(target=self._proc_collect, name="ProcessMetricsCollector", daemon=True)
         thread.start()
@@ -224,7 +224,7 @@ class AbstractMetricsPusher(ABC):
 
     def __enter__(self) -> "AbstractMetricsPusher":
         """
-        Wraps around start method, for use as context manager
+        Wraps around start method, for use as context manager.
 
         Returns:
             self
@@ -236,7 +236,7 @@ class AbstractMetricsPusher(ABC):
         self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         """
-        Wraps around stop method, for use as context manager
+        Wraps around stop method, for use as context manager.
 
         Args:
             exc_type: Exception type
@@ -403,7 +403,7 @@ class CognitePusher(AbstractMetricsPusher):
 
     def _push_to_server(self) -> None:
         """
-        Create datapoints an push them to their respective time series
+        Create datapoints an push them to their respective time series.
         """
         timestamp = int(arrow.get().float_timestamp * 1000)
 

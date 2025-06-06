@@ -69,7 +69,7 @@ AuthenticationConfig = Annotated[_ClientCredentialsConfig | _ClientCertificateCo
 
 class TimeIntervalConfig:
     """
-    Configuration parameter for setting a time interval
+    Configuration parameter for setting a time interval.
     """
 
     def __init__(self, expression: str) -> None:

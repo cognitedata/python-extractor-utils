@@ -215,7 +215,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
         def run_task(task_context: TaskContext) -> None:
             """
-            A wrapped version of the task's target, with tracking and error handling
+            A wrapped version of the task's target, with tracking and error handling.
             """
             # Record a task start
             with self._checkin_lock:

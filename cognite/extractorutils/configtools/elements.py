@@ -56,7 +56,7 @@ _logger = logging.getLogger(__name__)
 @dataclass
 class CertificateConfig:
     """
-    Configuration parameters for certificates
+    Configuration parameters for certificates.
     """
 
     path: str
@@ -67,7 +67,7 @@ class CertificateConfig:
 @dataclass
 class AuthenticatorConfig:
     """
-    Configuration parameters for an OIDC flow
+    Configuration parameters for an OIDC flow.
     """
 
     client_id: str
@@ -85,7 +85,7 @@ class AuthenticatorConfig:
 @dataclass
 class ConnectionConfig:
     """
-    Configuration parameters for the global_config python SDK settings
+    Configuration parameters for the global_config python SDK settings.
     """
 
     disable_gzip: bool = False
@@ -115,7 +115,7 @@ class EitherIdConfig:
 
 class TimeIntervalConfig(yaml.YAMLObject):
     """
-    Configuration parameter for setting a time interval
+    Configuration parameter for setting a time interval.
     """
 
     def __init__(self, expression: str) -> None:
@@ -183,7 +183,7 @@ class TimeIntervalConfig(yaml.YAMLObject):
 
 class FileSizeConfig(yaml.YAMLObject):
     """
-    Configuration parameter for setting a file size
+    Configuration parameter for setting a file size.
     """
 
     def __init__(self, expression: str) -> None:
@@ -281,7 +281,7 @@ def _validate_https_url(value: str, name: str) -> None:
 @dataclass
 class CogniteConfig:
     """
-    Configuration parameters for CDF connection, such as project name, host address and authentication
+    Configuration parameters for CDF connection, such as project name, host address and authentication.
     """
 
     project: str
@@ -437,7 +437,7 @@ class _FileLoggingConfig:
 @dataclass
 class LoggingConfig:
     """
-    Logging settings, such as log levels and path to log file
+    Logging settings, such as log levels and path to log file.
     """
 
     console: _ConsoleLoggingConfig | None
@@ -449,7 +449,7 @@ class LoggingConfig:
 
     def setup_logging(self, suppress_console: bool = False) -> None:
         """
-        Sets up the default logger in the logging package to be configured as defined in this config object
+        Sets up the default logger in the logging package to be configured as defined in this config object.
 
         Args:
             suppress_console: Don't log to console regardless of config. Useful when running an extractor as a Windows
@@ -619,7 +619,7 @@ class _BaseConfig:
 @dataclass
 class BaseConfig(_BaseConfig):
     """
-    Basis for an extractor config, containing config version, ``CogniteConfig`` and ``LoggingConfig``
+    Basis for an extractor config, containing config version, ``CogniteConfig`` and ``LoggingConfig``.
     """
 
     version: str | int | None
@@ -629,7 +629,7 @@ class BaseConfig(_BaseConfig):
 @dataclass
 class RawDestinationConfig:
     """
-    Configuration parameters for using Raw
+    Configuration parameters for using Raw.
     """
 
     database: str
@@ -639,7 +639,7 @@ class RawDestinationConfig:
 @dataclass
 class RawStateStoreConfig(RawDestinationConfig):
     """
-    Configuration of a state store based on CDF RAW
+    Configuration of a state store based on CDF RAW.
     """
 
     upload_interval: TimeIntervalConfig = field(default_factory=lambda: TimeIntervalConfig("30s"))
@@ -648,7 +648,7 @@ class RawStateStoreConfig(RawDestinationConfig):
 @dataclass
 class LocalStateStoreConfig:
     """
-    Configuration of a state store using a local JSON file
+    Configuration of a state store using a local JSON file.
     """
 
     path: Path
@@ -658,7 +658,7 @@ class LocalStateStoreConfig:
 @dataclass
 class StateStoreConfig:
     """
-    Configuration of the State Store, containing ``LocalStateStoreConfig`` or ``RawStateStoreConfig``
+    Configuration of the State Store, containing ``LocalStateStoreConfig`` or ``RawStateStoreConfig``.
     """
 
     raw: RawStateStoreConfig | None = None
@@ -729,7 +729,7 @@ class RegExpFlag(Enum):
 @dataclass
 class IgnorePattern:
     """
-    Configuration for regexp for ignore pattern
+    Configuration for regexp for ignore pattern.
     """
 
     pattern: str

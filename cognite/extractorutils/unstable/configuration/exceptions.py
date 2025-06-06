@@ -1,6 +1,6 @@
 class InvalidConfigError(Exception):
     """
-    Exception thrown from ``load_yaml`` and ``load_yaml_dict`` if config file is invalid. This can be due to
+    Exception thrown from ``load_yaml`` and ``load_yaml_dict`` if config file is invalid. This can be due to.
 
       * Missing fields
       * Incompatible types

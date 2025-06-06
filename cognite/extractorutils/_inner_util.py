@@ -13,7 +13,7 @@
 #  limitations under the License.
 
 """
-A module containing utilities meant for use inside the extractor-utils package
+A module containing utilities meant for use inside the extractor-utils package.
 """
 
 import json

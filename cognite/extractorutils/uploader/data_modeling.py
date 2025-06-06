@@ -91,7 +91,7 @@ class InstanceUploadQueue(AbstractUploadQueue):
 
     def __enter__(self) -> "InstanceUploadQueue":
         """
-        Wraps around start method, for use as context manager
+        Wraps around start method, for use as context manager.
 
         Returns:
             self
@@ -106,7 +106,7 @@ class InstanceUploadQueue(AbstractUploadQueue):
         exc_tb: TracebackType | None,
     ) -> None:
         """
-        Wraps around stop method, for use as context manager
+        Wraps around stop method, for use as context manager.
 
         Args:
             exc_type: Exception type

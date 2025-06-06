@@ -37,7 +37,7 @@ from cognite.extractorutils.util import cognite_exceptions, retry
 
 class AssetUploadQueue(AbstractUploadQueue):
     """
-    Upload queue for assets
+    Upload queue for assets.
 
     Args:
         cdf_client: Cognite Data Fusion client to use
@@ -92,7 +92,7 @@ class AssetUploadQueue(AbstractUploadQueue):
 
     def upload(self) -> None:
         """
-        Trigger an upload of the queue, clears queue afterwards
+        Trigger an upload of the queue, clears queue afterwards.
         """
 
         @retry(
@@ -138,7 +138,7 @@ class AssetUploadQueue(AbstractUploadQueue):
 
     def __enter__(self) -> "AssetUploadQueue":
         """
-        Wraps around start method, for use as context manager
+        Wraps around start method, for use as context manager.
 
         Returns:
             self
@@ -153,7 +153,7 @@ class AssetUploadQueue(AbstractUploadQueue):
         exc_tb: TracebackType | None,
     ) -> None:
         """
-        Wraps around stop method, for use as context manager
+        Wraps around stop method, for use as context manager.
 
         Args:
             exc_type: Exception type

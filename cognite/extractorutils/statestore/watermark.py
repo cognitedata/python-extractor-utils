@@ -132,7 +132,7 @@ class AbstractStateStore(_BaseStateStore, ABC):
 
     def get_state(self, external_id: str | list[str]) -> tuple[Any, Any] | list[tuple[Any, Any]]:
         """
-        Get state(s) for external ID(s)
+        Get state(s) for external ID(s).
 
         Args:
             external_id: An external ID or list of external IDs to get states for
@@ -353,7 +353,7 @@ class RawStateStore(AbstractStateStore):
         )
         def impl() -> None:
             """
-            Upload local state store to CDF
+            Upload local state store to CDF.
             """
             with self.lock:
                 self._cdf_client.raw.rows.insert(db_name=self.database, table_name=self.table, row=self._local_state)
@@ -366,7 +366,7 @@ class RawStateStore(AbstractStateStore):
 
     def __enter__(self) -> "RawStateStore":
         """
-        Wraps around start method, for use as context manager
+        Wraps around start method, for use as context manager.
 
         Returns:
             self
@@ -378,7 +378,7 @@ class RawStateStore(AbstractStateStore):
         self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         """
-        Wraps around stop method, for use as context manager
+        Wraps around stop method, for use as context manager.
 
         Args:
             exc_type: Exception type
@@ -415,7 +415,7 @@ class LocalStateStore(AbstractStateStore):
 
     def initialize(self, force: bool = False) -> None:
         """
-        Load states from specified JSON file
+        Load states from specified JSON file.
 
         Args:
             force: Enable re-initialization, ie overwrite when called multiple times
@@ -436,7 +436,7 @@ class LocalStateStore(AbstractStateStore):
 
     def synchronize(self) -> None:
         """
-        Save states to specified JSON file
+        Save states to specified JSON file.
         """
         with self.lock:
             with open(self._file_path, "w") as f:
@@ -445,7 +445,7 @@ class LocalStateStore(AbstractStateStore):
 
     def __enter__(self) -> "LocalStateStore":
         """
-        Wraps around start method, for use as context manager
+        Wraps around start method, for use as context manager.
 
         Returns:
             self
@@ -460,7 +460,7 @@ class LocalStateStore(AbstractStateStore):
         exc_tb: TracebackType | None,
     ) -> None:
         """
-        Wraps around stop method, for use as context manager
+        Wraps around stop method, for use as context manager.
 
         Args:
             exc_type: Exception type

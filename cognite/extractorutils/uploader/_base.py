@@ -84,7 +84,7 @@ class AbstractUploadQueue(ABC):
 
     def _post_upload(self, uploaded: list[Any]) -> None:
         """
-        Perform post_upload_function to uploaded data, if applicable
+        Perform post_upload_function to uploaded data, if applicable.
 
         Args:
             uploaded: list of uploaded data
@@ -103,7 +103,7 @@ class AbstractUploadQueue(ABC):
 
     def _run(self) -> None:
         """
-        Internal run method for upload thread
+        Internal run method for upload thread.
         """
         while not self.cancellation_token.wait(timeout=self.max_upload_interval):
             try:
@@ -137,7 +137,7 @@ class AbstractUploadQueue(ABC):
 
     def __len__(self) -> int:
         """
-        The size of the upload queue
+        The size of the upload queue.
 
         Returns:
             Number of events in queue

@@ -58,7 +58,7 @@ class KeyVaultAuthenticationMethod(Enum):
 
 class KeyVaultLoader:
     """
-    Class responsible for configuring keyvault for clients using Azure
+    Class responsible for configuring keyvault for clients using Azure.
     """
 
     def __init__(self, config: dict | None):
@@ -307,7 +307,7 @@ def load_yaml_dict(
     keyvault_loader: KeyVaultLoader | None = None,
 ) -> dict[str, Any]:
     """
-    Read a YAML file and return a dictionary from its contents
+    Read a YAML file and return a dictionary from its contents.
 
     Args:
         source: Input stream (as returned by open(...)) or string containing YAML.
@@ -329,7 +329,7 @@ def load_yaml_dict(
 
 def compile_patterns(ignore_patterns: list[str | IgnorePattern]) -> list[re.Pattern[str]]:
     """
-    List of patterns to compile
+    List of patterns to compile.
 
     Args:
         ignore_patterns: A list of strings or IgnorePattern to be compiled.

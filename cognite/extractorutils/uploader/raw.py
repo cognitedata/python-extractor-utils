@@ -41,7 +41,7 @@ from cognite.extractorutils.util import cognite_exceptions, retry
 
 class RawUploadQueue(AbstractUploadQueue):
     """
-    Upload queue for RAW
+    Upload queue for RAW.
 
     Args:
         cdf_client: Cognite Data Fusion client to use
@@ -109,7 +109,7 @@ class RawUploadQueue(AbstractUploadQueue):
 
     def upload(self) -> None:
         """
-        Trigger an upload of the queue, clears queue afterwards
+        Trigger an upload of the queue, clears queue afterwards.
         """
 
         @retry(
@@ -154,7 +154,7 @@ class RawUploadQueue(AbstractUploadQueue):
 
     def __enter__(self) -> "RawUploadQueue":
         """
-        Wraps around start method, for use as context manager
+        Wraps around start method, for use as context manager.
 
         Returns:
             self
@@ -166,7 +166,7 @@ class RawUploadQueue(AbstractUploadQueue):
         self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         """
-        Wraps around stop method, for use as context manager
+        Wraps around stop method, for use as context manager.
 
         Args:
             exc_type: Exception type
@@ -177,7 +177,7 @@ class RawUploadQueue(AbstractUploadQueue):
 
     def __len__(self) -> int:
         """
-        The size of the upload queue
+        The size of the upload queue.
 
         Returns:
             Number of elements in queue

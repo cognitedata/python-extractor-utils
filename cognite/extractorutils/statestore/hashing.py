@@ -102,7 +102,7 @@ class RawHashStateStore(AbstractHashStateStore):
         )
         def impl() -> None:
             """
-            Upload local state store to CDF
+            Upload local state store to CDF.
             """
             with self.lock:
                 self._cdf_client.raw.rows.insert(
@@ -159,7 +159,7 @@ class RawHashStateStore(AbstractHashStateStore):
 
     def __enter__(self) -> "RawHashStateStore":
         """
-        Wraps around start method, for use as context manager
+        Wraps around start method, for use as context manager.
 
         Returns:
             self
@@ -174,7 +174,7 @@ class RawHashStateStore(AbstractHashStateStore):
         exc_tb: TracebackType | None,
     ) -> None:
         """
-        Wraps around stop method, for use as context manager
+        Wraps around stop method, for use as context manager.
 
         Args:
             exc_type: Exception type
@@ -204,7 +204,7 @@ class LocalHashStateStore(AbstractHashStateStore):
 
     def initialize(self, force: bool = False) -> None:
         """
-        Load states from specified JSON file
+        Load states from specified JSON file.
 
         Args:
             force: Enable re-initialization, ie overwrite when called multiple times
@@ -225,14 +225,14 @@ class LocalHashStateStore(AbstractHashStateStore):
 
     def synchronize(self) -> None:
         """
-        Save states to specified JSON file
+        Save states to specified JSON file.
         """
         with self.lock, open(self._file_path, "w") as f:
             json.dump(self._local_state, f, cls=_DecimalEncoder)
 
     def __enter__(self) -> "LocalHashStateStore":
         """
-        Wraps around start method, for use as context manager
+        Wraps around start method, for use as context manager.
 
         Returns:
             self
@@ -247,7 +247,7 @@ class LocalHashStateStore(AbstractHashStateStore):
         exc_tb: TracebackType | None,
     ) -> None:
         """
-        Wraps around stop method, for use as context manager
+        Wraps around stop method, for use as context manager.
 
         Args:
             exc_type: Exception type

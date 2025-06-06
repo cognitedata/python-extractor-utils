@@ -213,7 +213,7 @@ class Extractor(Generic[CustomConfigClass]):
 
     def _report_success(self) -> None:
         """
-        Called on a successful exit of the extractor
+        Called on a successful exit of the extractor.
         """
         if self.extraction_pipeline:
             self.logger.info("Reporting new successful run")
@@ -227,7 +227,7 @@ class Extractor(Generic[CustomConfigClass]):
 
     def _report_error(self, exception: BaseException) -> None:
         """
-        Called on an unsuccessful exit of the extractor
+        Called on an unsuccessful exit of the extractor.
 
         Args:
             exception: Exception object that caused the extractor to fail

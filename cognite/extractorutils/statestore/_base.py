@@ -52,7 +52,7 @@ class _BaseStateStore(ABC):
 
     def _run(self) -> None:
         """
-        Internal run method for synchronize thread
+        Internal run method for synchronize thread.
         """
         self.initialize()
         while not self.cancellation_token.wait(timeout=self.save_interval):
@@ -68,13 +68,13 @@ class _BaseStateStore(ABC):
     @abstractmethod
     def initialize(self, force: bool = False) -> None:
         """
-        Get states from remote store
+        Get states from remote store.
         """
         pass
 
     @abstractmethod
     def synchronize(self) -> None:
         """
-        Upload states to remote store
+        Upload states to remote store.
         """
         pass

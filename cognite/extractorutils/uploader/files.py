@@ -179,7 +179,7 @@ class IOByteStream(SyncByteStream):
 
 class IOFileUploadQueue(AbstractUploadQueue):
     """
-    Upload queue for files using BinaryIO
+    Upload queue for files using BinaryIO.
 
     Note that if the upload fails, the stream needs to be restarted, so
     the enqueued callback needs to produce a new IO object for each call.
@@ -568,7 +568,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
 
     def upload(self, fail_on_errors: bool = True, timeout: float | None = None) -> None:
         """
-        Wait for all uploads to finish
+        Wait for all uploads to finish.
         """
         for future in self.upload_queue:
             future.result(timeout=timeout)
@@ -581,7 +581,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
 
     def __enter__(self) -> "IOFileUploadQueue":
         """
-        Wraps around start method, for use as context manager
+        Wraps around start method, for use as context manager.
 
         Returns:
             self
@@ -598,7 +598,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
         exc_tb: TracebackType | None,
     ) -> None:
         """
-        Wraps around stop method, for use as context manager
+        Wraps around stop method, for use as context manager.
 
         Args:
             exc_type: Exception type
@@ -610,7 +610,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
 
     def __len__(self) -> int:
         """
-        The size of the upload queue
+        The size of the upload queue.
 
         Returns:
             Number of events in queue
@@ -620,7 +620,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
 
 class FileUploadQueue(IOFileUploadQueue):
     """
-    Upload queue for files
+    Upload queue for files.
 
     Args:
         cdf_client: Cognite Data Fusion client to use
@@ -678,7 +678,7 @@ class FileUploadQueue(IOFileUploadQueue):
 
 class BytesUploadQueue(IOFileUploadQueue):
     """
-    Upload queue for bytes
+    Upload queue for bytes.
 
     Args:
         cdf_client: Cognite Data Fusion client to use
