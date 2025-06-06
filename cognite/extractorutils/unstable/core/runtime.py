@@ -24,13 +24,13 @@ from cognite.extractorutils.unstable.configuration.loaders import (
     load_file,
     load_from_cdf,
 )
-from cognite.extractorutils.unstable.configuration.models import ConnectionConfig
+from cognite.extractorutils.unstable.configuration.models import ConnectionConfig, ExtractorConfig
 from cognite.extractorutils.unstable.core._dto import Error
 from cognite.extractorutils.unstable.core.errors import ErrorLevel
 from cognite.extractorutils.util import now
 
 from ._messaging import RuntimeMessage
-from .base import ConfigRevision, ConfigType, Extractor, FullConfig
+from .base import ConfigRevision, Extractor, FullConfig
 
 __all__ = ["Runtime", "ExtractorType"]
 
@@ -141,7 +141,7 @@ class Runtime(Generic[ExtractorType]):
         self,
         args: Namespace,
         connection_config: ConnectionConfig,
-    ) -> tuple[ConfigType, ConfigRevision]:
+    ) -> tuple[ExtractorConfig, ConfigRevision]:
         current_config_revision: ConfigRevision
 
         if args.local_override:
@@ -172,7 +172,7 @@ class Runtime(Generic[ExtractorType]):
         self,
         args: Namespace,
         connection_config: ConnectionConfig,
-    ) -> tuple[ConfigType, ConfigRevision] | None:
+    ) -> tuple[ExtractorConfig, ConfigRevision] | None:
         prev_error: str | None = None
 
         while not self._cancellation_token.is_cancelled:

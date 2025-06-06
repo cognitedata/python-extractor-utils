@@ -45,7 +45,7 @@ class ConfigModel(BaseModel):
     )
 
 
-class BaseAuthConfig(ConfigModel):
+class BaseCredentialsConfig(ConfigModel):
     client_id: str
     scopes: list[str]
 
@@ -57,7 +57,7 @@ class BaseAuthConfig(ConfigModel):
         return scopes
 
 
-class _ClientCredentialsConfig(BaseAuthConfig):
+class _ClientCredentialsConfig(BaseCredentialsConfig):
     type: Literal["client-credentials"]
     client_secret: str
     token_url: str
@@ -65,7 +65,7 @@ class _ClientCredentialsConfig(BaseAuthConfig):
     audience: str | None = None
 
 
-class _ClientCertificateConfig(BaseAuthConfig):
+class _ClientCertificateConfig(BaseCredentialsConfig):
     type: Literal["client-certificate"]
     path: Path
     password: str | None = None
@@ -75,7 +75,7 @@ class _ClientCertificateConfig(BaseAuthConfig):
 AuthenticationConfig = Annotated[_ClientCredentialsConfig | _ClientCertificateConfig, Field(discriminator="type")]
 
 
-class TimeIntervalConfig:
+class TimeIntervalConfig(str):
     """
     Configuration parameter for setting a time interval
     """
@@ -148,16 +148,16 @@ class TimeIntervalConfig:
 
 
 class RetriesConfig(ConfigModel):
-    max_retries: int = 10
+    max_retries: int = Field(default=10, ge=-1)
     max_backoff: TimeIntervalConfig = Field(default_factory=lambda: TimeIntervalConfig("30s"))
     timeout: TimeIntervalConfig = Field(default_factory=lambda: TimeIntervalConfig("30s"))
 
 
 class SslCertificatesConfig(ConfigModel):
     verify: bool = True
-    allowed_thumbprints: list[str] | None = None
+    allow_list: list[str] | None = None
 
-    @field_validator("allowed_thumbprints", mode="before", json_schema_input_type=str | list[str] | None)
+    @field_validator("allow_list", mode="before", json_schema_input_type=str | list[str] | None)
     @classmethod
     def cast_thumbprints(cls, thumbprints: str | list[str] | None) -> list[str] | None:
         if thumbprints is None:

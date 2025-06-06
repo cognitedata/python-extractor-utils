@@ -39,6 +39,94 @@ authentication:
   scopes: scopea, scopeb
 """
 
+FULL_CONFIG_EXAMPLE = """
+project: test-project
+base-url: https://baseurl.com
+
+integration:
+  external_id: test-pipeline
+"""
+
+CLIENT_CREDENTIALS_STRING = """
+authentication:
+  type: client-credentials
+  client-id: testid
+  client-secret: very_secret123
+  token-url: https://get-a-token.com/token
+  scopes: scopea, scopeb
+
+connection:
+  retries:
+    max-retries: 1
+    max-backoff: 2d
+    timeout: 3h
+  ssl-certificates:
+    verify: true
+    allow-list: thumbprint1, thumbprint2
+"""
+CLIENT_CERTIFICATES_STRING = """
+authentication:
+  type: client-certificate
+  client-id: testid
+  path: /path/to/cert.pem
+  password: very-strong-password
+  authority-url: https://you-are-authorized.com
+  scopes: scopea, scopeb
+
+connection:
+  retries:
+    max-retries: 1
+    max-backoff: 2d
+    timeout: 3h
+  ssl-certificates:
+    verify: true
+    allow-list: thumbprint1, thumbprint2
+"""
+
+CLIENT_CREDENTIALS_LIST = """
+authentication:
+  type: client-credentials
+  client-id: testid
+  client-secret: very_secret123
+  token-url: https://get-a-token.com/token
+  scopes:
+  - scopea
+  - scopeb
+
+connection:
+  retries:
+    max-retries: 1
+    max-backoff: 2d
+    timeout: 3h
+  ssl-certificates:
+    verify: true
+    allow-list:
+    - thumbprint1
+    - thumbprint2
+"""
+CLIENT_CERTIFICATES_LIST = """
+authentication:
+  type: client-certificate
+  client-id: testid
+  path: /path/to/cert.pem
+  password: very-strong-password
+  authority-url: https://you-are-authorized.com
+  scopes:
+  - scopea
+  - scopeb
+
+connection:
+  retries:
+    max-retries: 1
+    max-backoff: 2d
+    timeout: 3h
+  ssl-certificates:
+    verify: true
+    allow-list:
+    - thumbprint1
+    - thumbprint2
+"""
+
 
 @pytest.mark.parametrize("config_str", [CONFIG_EXAMPLE_ONLY_REQUIRED, CONFIG_EXAMPLE_ONLY_REQUIRED2])
 def test_load_from_io(config_str: str) -> None:
@@ -47,9 +135,65 @@ def test_load_from_io(config_str: str) -> None:
 
     assert config.project == "test-project"
     assert config.base_url == "https://baseurl.com"
+    assert config.integration.external_id == "test-pipeline"
     assert config.authentication.type == "client-credentials"
     assert config.authentication.client_secret == "very_secret123"
     assert config.authentication.scopes == ["scopea", "scopeb"]
+
+
+@pytest.mark.parametrize(
+    "config_str", [FULL_CONFIG_EXAMPLE + CLIENT_CREDENTIALS_STRING, FULL_CONFIG_EXAMPLE + CLIENT_CREDENTIALS_LIST]
+)
+def test_full_config_client_credentials(config_str: str) -> None:
+    stream = StringIO(config_str)
+    config = load_io(stream, ConfigFormat.YAML, ConnectionConfig)
+
+    assert config.project == "test-project"
+    assert config.base_url == "https://baseurl.com"
+    assert config.integration.external_id == "test-pipeline"
+
+    assert config.authentication.type == "client-credentials"
+    assert config.authentication.client_id == "testid"
+    assert config.authentication.client_secret == "very_secret123"
+    assert config.authentication.token_url == "https://get-a-token.com/token"
+    assert config.authentication.scopes == ["scopea", "scopeb"]
+
+    assert config.connection.retries.max_retries == 1
+    assert config.connection.retries.max_backoff.seconds == 2 * 24 * 60 * 60
+    assert config.connection.retries.max_backoff == "2d"
+    assert config.connection.retries.timeout.seconds == 3 * 60 * 60
+    assert config.connection.retries.timeout == "3h"
+
+    assert config.connection.ssl_certificates.verify
+    assert config.connection.ssl_certificates.allow_list == ["thumbprint1", "thumbprint2"]
+
+
+@pytest.mark.parametrize(
+    "config_str", [FULL_CONFIG_EXAMPLE + CLIENT_CERTIFICATES_STRING, FULL_CONFIG_EXAMPLE + CLIENT_CERTIFICATES_LIST]
+)
+def test_full_config_client_certificates(config_str: str) -> None:
+    stream = StringIO(config_str)
+    config = load_io(stream, ConfigFormat.YAML, ConnectionConfig)
+
+    assert config.project == "test-project"
+    assert config.base_url == "https://baseurl.com"
+    assert config.integration.external_id == "test-pipeline"
+
+    assert config.authentication.type == "client-certificate"
+    assert config.authentication.client_id == "testid"
+    assert config.authentication.password == "very-strong-password"
+    assert config.authentication.path.as_posix() == "/path/to/cert.pem"
+    assert config.authentication.authority_url == "https://you-are-authorized.com"
+    assert config.authentication.scopes == ["scopea", "scopeb"]
+
+    assert config.connection.retries.max_retries == 1
+    assert config.connection.retries.max_backoff.seconds == 2 * 24 * 60 * 60
+    assert config.connection.retries.max_backoff == "2d"
+    assert config.connection.retries.timeout.seconds == 3 * 60 * 60
+    assert config.connection.retries.timeout == "3h"
+
+    assert config.connection.ssl_certificates.verify
+    assert config.connection.ssl_certificates.allow_list == ["thumbprint1", "thumbprint2"]
 
 
 def test_from_env() -> None:
