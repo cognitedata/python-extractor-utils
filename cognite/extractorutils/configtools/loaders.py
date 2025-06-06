@@ -27,6 +27,7 @@ from typing import Any, Generic, TextIO, TypeVar, cast
 
 import dacite
 import yaml
+from azure.core.credentials import TokenCredential
 from azure.core.exceptions import HttpResponseError, ResourceNotFoundError, ServiceRequestError
 from azure.identity import ClientSecretCredential, DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
@@ -121,7 +122,7 @@ class KeyVaultLoader:
                 "Invalid KeyVault authentication method. Possible values : default or client-secret"
             )
 
-        self.client = SecretClient(vault_url=vault_url, credential=self.credentials)
+        self.client = SecretClient(vault_url=vault_url, credential=cast(TokenCredential, self.credentials))
 
     def __call__(self, _: yaml.SafeLoader, node: yaml.Node) -> str:
         self._init_client()
