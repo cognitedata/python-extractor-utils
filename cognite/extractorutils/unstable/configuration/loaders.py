@@ -13,7 +13,7 @@ from cognite.extractorutils.exceptions import InvalidConfigError as OldInvalidCo
 from cognite.extractorutils.unstable.configuration.exceptions import InvalidConfigError
 from cognite.extractorutils.unstable.configuration.models import ConfigModel
 
-__all__ = ["ConfigFormat", "load_file", "load_from_cdf", "load_io", "load_dict"]
+__all__ = ["ConfigFormat", "load_dict", "load_file", "load_from_cdf", "load_io"]
 
 
 _T = TypeVar("_T", bound=ConfigModel)
@@ -26,14 +26,14 @@ class ConfigFormat(Enum):
 
 def load_file(path: Path, schema: type[_T]) -> _T:
     if path.suffix in [".yaml", ".yml"]:
-        format = ConfigFormat.YAML
+        file_format = ConfigFormat.YAML
     elif path.suffix == ".json":
-        format = ConfigFormat.JSON
+        file_format = ConfigFormat.JSON
     else:
         raise InvalidConfigError(f"Unknown file type {path.suffix}")
 
     with open(path) as stream:
-        return load_io(stream, format, schema)
+        return load_io(stream, file_format, schema)
 
 
 def load_from_cdf(
@@ -67,11 +67,11 @@ def load_from_cdf(
         raise new_e from e
 
 
-def load_io(stream: TextIO, format: ConfigFormat, schema: type[_T]) -> _T:
-    if format == ConfigFormat.JSON:
+def load_io(stream: TextIO, file_format: ConfigFormat, schema: type[_T]) -> _T:
+    if file_format == ConfigFormat.JSON:
         data = json.load(stream)
 
-    elif format == ConfigFormat.YAML:
+    elif file_format == ConfigFormat.YAML:
         data = _load_yaml_dict_raw(stream)
 
         if "azure-keyvault" in data:
@@ -95,10 +95,7 @@ def _make_loc_str(loc: tuple) -> str:
             loc_str = f"{loc_str}{lo}"
             needs_sep = True
         else:
-            if isinstance(lo, int):
-                loc_str = f"{loc_str}[{lo}]"
-            else:
-                loc_str = f"{loc_str}.{lo}"
+            loc_str = f"{loc_str}[{lo}]" if isinstance(lo, int) else f"{loc_str}.{lo}"
 
     return loc_str
 
@@ -119,8 +116,8 @@ def load_dict(data: dict, schema: type[_T]) -> _T:
 
             if "ctx" in err and "error" in err["ctx"]:
                 exc = err["ctx"]["error"]
-                if isinstance(exc, ValueError) or isinstance(exc, AssertionError):
-                    messages.append(f"{str(exc)}: {loc_str}")
+                if isinstance(exc, ValueError | AssertionError):
+                    messages.append(f"{exc!s}: {loc_str}")
                     continue
 
             messages.append(f"{err.get('msg')}: {loc_str}")

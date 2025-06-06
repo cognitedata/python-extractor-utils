@@ -327,13 +327,13 @@ def test_big_file_stream(set_upload_test: tuple[CogniteClient, ParamTest]) -> No
             self,
             raw: io.RawIOBase,
             buffer_size: int,
-            len: int,
+            length: int,
             on_close: Callable[[], None] | None = None,
         ) -> None:
             super().__init__(raw, buffer_size)
             # Do not remove even if it appears to be unused. :P
             #  Requests uses this to add the content-length header, which is necessary for writing to files in azure clusters
-            self.len = len
+            self.len = length
             self.on_close = on_close
 
         def close(self) -> None:

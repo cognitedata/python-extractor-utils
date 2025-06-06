@@ -12,6 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import contextlib
 from dataclasses import dataclass
 from io import StringIO
 
@@ -104,7 +105,7 @@ def test_keyvault_and_remote(set_client: CogniteClient) -> None:
     except CogniteDuplicatedError:
         data_set_id = set_client.data_sets.retrieve(external_id=data_set_extid).id
 
-    try:
+    with contextlib.suppress(CogniteDuplicatedError):
         set_client.extraction_pipelines.create(
             ExtractionPipelineWrite(
                 external_id="utils-test-keyvault-remote",
@@ -112,8 +113,6 @@ def test_keyvault_and_remote(set_client: CogniteClient) -> None:
                 data_set_id=data_set_id,
             )
         )
-    except CogniteDuplicatedError:
-        pass
 
     set_client.extraction_pipelines.config.create(
         ExtractionPipelineConfigWrite(

@@ -78,13 +78,13 @@ from .time_series import (
 
 __all__ = [
     "AssetUploadQueue",
-    "EventUploadQueue",
     "BytesUploadQueue",
+    "DataPoint",
+    "DataPointList",
+    "EventUploadQueue",
     "FileUploadQueue",
     "IOFileUploadQueue",
     "RawUploadQueue",
-    "DataPoint",
-    "DataPointList",
     "SequenceUploadQueue",
     "TimeSeriesUploadQueue",
     "default_time_series_factory",

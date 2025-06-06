@@ -234,7 +234,7 @@ def test_simple_retry() -> None:
     with pytest.raises(ValueError):
         call_mock()
 
-    assert len(mock.call_args_list), 3
+    assert len(mock.call_args_list) == 3
 
 
 def test_simple_retry_specified() -> None:
@@ -248,7 +248,7 @@ def test_simple_retry_specified() -> None:
     with pytest.raises(ValueError):
         call_mock()
 
-    assert len(mock.call_args_list), 3
+    assert len(mock.call_args_list) == 3
 
 
 def test_not_retry_unspecified() -> None:
