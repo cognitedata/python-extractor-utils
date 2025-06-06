@@ -27,8 +27,9 @@ from cognite.extractorutils.exceptions import InvalidConfigError
 
 def _to_snake_case(dictionary: dict[str, Any], case_style: str) -> dict[str, Any]:
     """
-    Ensure that all keys in the dictionary follows the snake casing convention (recursively, so any sub-dictionaries are
-    changed too).
+    Ensure that all keys in the dictionary follows the snake casing convention.
+
+    This function will recursively fix any list or dictionaries.
 
     Args:
         dictionary: Dictionary to update.

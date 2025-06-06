@@ -1,3 +1,7 @@
+"""
+Module containing pre-built elements for common extractor configuration.
+"""
+
 #  Copyright 2023 Cognite AS
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
@@ -102,6 +106,7 @@ class ConnectionConfig:
 class EitherIdConfig:
     """
     Configuration parameter representing an ID in CDF, which can either be an external or internal ID.
+
     An EitherId can only hold one ID type, not both.
     """
 
@@ -110,6 +115,12 @@ class EitherIdConfig:
 
     @property
     def either_id(self) -> EitherId:
+        """
+        Returns an EitherId object based on the current configuration.
+
+        Raises:
+            TypeError: If both id and external_id are None, or if both are set.
+        """
         return EitherId(id=self.id, external_id=self.external_id)
 
 
@@ -122,11 +133,17 @@ class TimeIntervalConfig(yaml.YAMLObject):
         self._interval, self._expression = TimeIntervalConfig._parse_expression(expression)
 
     def __eq__(self, other: object) -> bool:
+        """
+        Two TimeIntervalConfig objects are equal if they have the same number of seconds in their interval.
+        """
         if not isinstance(other, TimeIntervalConfig):
             return NotImplemented
         return self._interval == other._interval
 
     def __hash__(self) -> int:
+        """
+        Hash function for TimeIntervalConfig based on the number of seconds in the interval.
+        """
         return hash(self._interval)
 
     @classmethod
@@ -148,36 +165,69 @@ class TimeIntervalConfig(yaml.YAMLObject):
 
     @property
     def seconds(self) -> int:
+        """
+        Time interval as number of seconds.
+        """
         return self._interval
 
     @property
     def minutes(self) -> float:
+        """
+        Time interval as number of minutes.
+
+        This is a float since the underlying interval is in seconds.
+        """
         return self._interval / 60
 
     @property
     def hours(self) -> float:
+        """
+        Time interval as number of hours.
+
+        This is a float since the underlying interval is in seconds.
+        """
         return self._interval / (60 * 60)
 
     @property
     def days(self) -> float:
+        """
+        Time interval as number of days.
+
+        This is a float since the underlying interval is in seconds.
+        """
         return self._interval / (60 * 60 * 24)
 
     @property
     def timedelta(self) -> timedelta:
+        """
+        Time interval as a timedelta object.
+        """
         days = self._interval // (60 * 60 * 24)
         seconds = self._interval % (60 * 60 * 24)
         return timedelta(days=days, seconds=seconds)
 
     def __int__(self) -> int:
+        """
+        Returns the time interval as a number of seconds.
+        """
         return int(self._interval)
 
     def __float__(self) -> float:
+        """
+        Returns the time interval as a number of seconds.
+        """
         return float(self._interval)
 
     def __str__(self) -> str:
+        """
+        Returns the time interval as a human readable string.
+        """
         return self._expression
 
     def __repr__(self) -> str:
+        """
+        Returns the time interval as a human readable string.
+        """
         return self._expression
 
 
@@ -219,50 +269,89 @@ class FileSizeConfig(yaml.YAMLObject):
 
     @property
     def bytes(self) -> int:
+        """
+        File size in bytes.
+        """
         return self._bytes
 
     @property
     def kilobytes(self) -> float:
+        """
+        File size in kilobytes.
+        """
         return self._bytes / 1000
 
     @property
     def megabytes(self) -> float:
+        """
+        File size in megabytes.
+        """
         return self._bytes / 1_000_000
 
     @property
     def gigabytes(self) -> float:
+        """
+        File size in gigabytes.
+        """
         return self._bytes / 1_000_000_000
 
     @property
     def terabytes(self) -> float:
+        """
+        File size in terabytes.
+        """
         return self._bytes / 1_000_000_000_000
 
     @property
     def kibibytes(self) -> float:
+        """
+        File size in kibibytes (1024 bytes).
+        """
         return self._bytes / 1024
 
     @property
     def mebibytes(self) -> float:
+        """
+        File size in mebibytes (1024 kibibytes).
+        """
         return self._bytes / 1_048_576
 
     @property
     def gibibytes(self) -> float:
+        """
+        File size in gibibytes (1024 mebibytes).
+        """
         return self._bytes / 1_073_741_824
 
     @property
     def tebibytes(self) -> float:
+        """
+        File size in tebibytes (1024 gibibytes).
+        """
         return self._bytes / 1_099_511_627_776
 
     def __int__(self) -> int:
+        """
+        Returns the file size as bytes.
+        """
         return int(self._bytes)
 
     def __float__(self) -> float:
+        """
+        Returns the file size as bytes.
+        """
         return float(self._bytes)
 
     def __str__(self) -> str:
+        """
+        Returns the file size as a human readable string.
+        """
         return self._expression
 
     def __repr__(self) -> str:
+        """
+        Returns the file size as a human readable string.
+        """
         return self._expression
 
 
@@ -302,6 +391,20 @@ class CogniteConfig:
         token_custom_args: dict[str, str] | None = None,
         use_experimental_sdk: bool = False,
     ) -> CogniteClient:
+        """
+        Creates a CogniteClient based on the configuration.
+
+        Args:
+            client_name: Name of the client, set as the x-cdp-app header in the requests.
+            token_custom_args: Additional arguments to pass to the token request, such as resource or audience.
+            use_experimental_sdk: If True, use the experimental SDK instead of the stable one.
+
+        Returns:
+            A CogniteClient instance configured with the provided parameters.
+
+        Raises:
+            InvalidConfigError: If the configuration is invalid, such as missing project name or invalid authority URL.
+        """
         from cognite.client.config import global_config
 
         global_config.disable_pypi_version_check = True
@@ -390,6 +493,15 @@ class CogniteConfig:
         return CogniteClient(client_config)
 
     def get_data_set(self, cdf_client: CogniteClient) -> DataSet | None:
+        """
+        Retrieves the DataSet object based on the configuration.
+
+        Args:
+            cdf_client: An instance of CogniteClient to use for retrieving the DataSet.
+
+        Returns:
+            DataSet object if data_set, data_set_id, or data_set_external_id is provided; otherwise None.
+        """
         if self.data_set_external_id:
             logging.getLogger(__name__).warning(
                 "Using data-set-external-id is deprecated, please use data-set/external-id instead"
@@ -409,6 +521,18 @@ class CogniteConfig:
         )
 
     def get_extraction_pipeline(self, cdf_client: CogniteClient) -> ExtractionPipeline | None:
+        """
+        Retrieves the ExtractionPipeline object based on the configuration.
+
+        Args:
+            cdf_client: An instance of CogniteClient to use for retrieving the ExtractionPipeline.
+
+        Returns:
+            ExtractionPipeline object if extraction_pipeline is provided, otherwise None.
+
+        Raises:
+            ValueError: If the extraction pipeline with the specified ID is not found.
+        """
         if not self.extraction_pipeline:
             return None
 
@@ -532,8 +656,9 @@ class _CogniteMetricsConfig:
 @dataclass
 class MetricsConfig:
     """
-    Destination(s) for metrics, including options for one or several Prometheus push gateways, and pushing as CDF Time
-    Series.
+    Destination(s) for metrics.
+
+    Including options for one or several Prometheus push gateways, and pushing as CDF Time Series.
     """
 
     push_gateways: list[_PushGatewayConfig] | None
@@ -541,6 +666,13 @@ class MetricsConfig:
     server: _PromServerConfig | None
 
     def start_pushers(self, cdf_client: CogniteClient, cancellation_token: CancellationToken | None = None) -> None:
+        """
+        Starts the configured metrics pushers.
+
+        Args:
+            cdf_client: An instance of CogniteClient to use for pushing metrics to CDF.
+            cancellation_token: Optional cancellation token to stop the pushers gracefully.
+        """
         self._pushers: list[AbstractMetricsPusher] = []
         self._clear_on_stop: dict[PrometheusPusher, int] = {}
 
@@ -589,6 +721,11 @@ class MetricsConfig:
             start_http_server(self.server.port, self.server.host, registry=REGISTRY)
 
     def stop_pushers(self) -> None:
+        """
+        DEPRECATED. Use cancellation_token to stop pushers instead.
+
+        Manually stop pushers and clear gateways if configured.
+        """
         pushers = self.__dict__.get("_pushers") or []
 
         for pusher in pushers:
@@ -604,6 +741,10 @@ class MetricsConfig:
 
 
 class ConfigType(Enum):
+    """
+    Type of configuration, either local or remote.
+    """
+
     LOCAL = "local"
     REMOTE = "remote"
 
@@ -677,6 +818,7 @@ class StateStoreConfig:
             cdf_client: CogniteClient object to use in case of a RAW state store (ignored otherwise)
             default_to_local: If true, return a LocalStateStore if no state store is configured. Otherwise return a
                 NoStateStore
+            cancellation_token: Cancellation token to pass to created state stores
 
         Returns:
             An (uninitialized) state store
@@ -713,12 +855,22 @@ class StateStoreConfig:
 
 
 class RegExpFlag(Enum):
+    """
+    Flags for regular expressions.
+    """
+
     IGNORECASE = "ignore-case"
     IC = "i"
     ASCII = "ascii-only"
     A = "a"
 
     def get_regex_flag(self) -> int:
+        """
+        Returns the corresponding regex flag for the enum value.
+
+        Returns:
+            The regex flag corresponding to the enum value.
+        """
         if self in (RegExpFlag.IGNORECASE, RegExpFlag.IC):
             return re.IGNORECASE
         elif self.value in (RegExpFlag.ASCII, RegExpFlag.A):
@@ -749,6 +901,12 @@ class IgnorePattern:
         return re.compile(self.pattern, flag)
 
     def __post_init__(self) -> None:
+        """
+        Validate the configuration after initialization.
+
+        Raises:
+            ValueError: If both 'options' and 'flags' are specified, or if neither is specified.
+        """
         if self.options is not None and self.flags is not None:
             raise ValueError("Only one of either 'options' or 'flags' can be specified.")
         if self.options is None and self.flags is None:
@@ -762,17 +920,26 @@ class IgnorePattern:
 
 class CastableInt(int):
     """
-    Represents an integer in a config schema. Difference from regular int is that the
-    value if this type can be  either a string or an integer in the yaml file.
+    Represents an integer in a config schema.
+
+    The difference from regular int is that the value if this type can be either a string or an integer in the yaml
+    file.
     """
 
     def __new__(cls, value: Any) -> "CastableInt":
         """
-        Returns value as is if it's int. If it's str or bytes try to convert to int.
-        Raises ValueError if conversion is unsuccessful or value is of not supported type.
+        Returns value as is if it's int.
 
-        Type check is required to avoid unexpected behaviour, such as implictly casting booleans,
-        floats and other types supported by standard int.
+        If it's str or bytes try to convert to int.
+
+        Type check is required to avoid unexpected behavior, such as implicitly casting booleans, floats and other types
+        supported by standard int.
+
+        Args:
+            value: The value to be casted to int.
+
+        Raises:
+            ValueError: If the value can not be converted to an int.
         """
         if not isinstance(value, int | str | bytes):
             raise ValueError(f"CastableInt cannot be created form value {value!r} of type {type(value)!r}.")
@@ -782,14 +949,21 @@ class CastableInt(int):
 
 class PortNumber(CastableInt):
     """
-    A subclass of int to be used in config schemas. It represents a valid port number (0 to 65535) and allows the value
-    to be of either str or int type. If the value is not a valid port number raises a ValueError at instantiation.
+    Represents a port number in a config schema.
+
+    It represents a valid port number (0 to 65535) and allows the value to be of either str or int type. If the value is
+    not a valid port number raises a ValueError at instantiation.
     """
 
     def __new__(cls, value: Any) -> "PortNumber":
         """
-        Try to convert the `value` to int. If successful, check if it's within a valid range for a port number.
-        Raises ValueError if conversion to int or validation is unsuccessful.
+        Try to cast the value to an integer and validate it as a port number.
+
+        Args:
+            value: The value to be casted to a port number.
+
+        Raises:
+            ValueError: If the value is not a valid port number (not an int or out of range).
         """
         value = super().__new__(cls, value)
 
