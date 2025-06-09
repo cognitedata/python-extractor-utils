@@ -16,7 +16,7 @@ import math
 from collections.abc import Callable
 from datetime import datetime
 from types import TracebackType
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Literal, TypedDict, TypeVar
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import (
@@ -28,6 +28,7 @@ from cognite.client.data_classes import (
 )
 from cognite.client.data_classes.data_modeling import NodeId
 from cognite.client.data_classes.data_modeling.extractor_extensions.v1 import CogniteExtractorTimeSeriesApply
+from cognite.client.data_classes.data_modeling.instances import DirectRelationReference
 from cognite.client.exceptions import CogniteDuplicatedError, CogniteNotFoundError
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.uploader._base import (
@@ -65,6 +66,11 @@ TQueue = TypeVar("TQueue", bound="BaseTimeSeriesUploadQueue")
 IdType = TypeVar("IdType", EitherId, NodeId)
 
 
+class CdmDatapointsPayload(TypedDict):
+    instanceId: NodeId
+    datapoints: DataPointList
+
+
 def default_time_series_factory(external_id: str, datapoints: DataPointList) -> TimeSeries:
     """
     Default time series factory used when create_missing in a TimeSeriesUploadQueue is given as a boolean.
@@ -82,12 +88,6 @@ def default_time_series_factory(external_id: str, datapoints: DataPointList) -> 
         else isinstance(datapoints[0][1], str)
     )
     return TimeSeries(external_id=external_id, is_string=is_string)
-
-
-def default_cdm_time_series_factory(
-    create_these_ids: set[NodeId], timeseries_apply_dict: dict[NodeId, CogniteExtractorTimeSeriesApply]
-) -> list[CogniteExtractorTimeSeriesApply]:
-    return [timeseries_apply_dict[nodeId] for nodeId in create_these_ids]
 
 
 class BaseTimeSeriesUploadQueue(AbstractUploadQueue, Generic[IdType]):
@@ -419,11 +419,9 @@ class CDMTimeSeriesUploadQueue(BaseTimeSeriesUploadQueue[NodeId]):
         max_upload_interval: int | None = None,
         trigger_log_level: str = "DEBUG",
         thread_name: str | None = None,
-        create_missing: Callable[
-            [set[NodeId], dict[NodeId, CogniteExtractorTimeSeriesApply]], list[CogniteExtractorTimeSeriesApply]
-        ]
-        | bool = False,
+        create_missing: Callable[[NodeId, DataPointList], CogniteExtractorTimeSeriesApply] | bool = False,
         cancellation_token: CancellationToken | None = None,
+        source: DirectRelationReference | None = None,
     ):
         super().__init__(
             cdf_client,
@@ -435,20 +433,50 @@ class CDMTimeSeriesUploadQueue(BaseTimeSeriesUploadQueue[NodeId]):
             cancellation_token,
         )
 
-        self.missing_factory: Callable[
-            [set[NodeId], dict[NodeId, CogniteExtractorTimeSeriesApply]], list[CogniteExtractorTimeSeriesApply]
-        ]
-        self.timeseries_apply_dict: dict[NodeId, CogniteExtractorTimeSeriesApply] = {}
+        self.missing_factory: Callable[[NodeId, DataPointList], CogniteExtractorTimeSeriesApply]
+        self.source = source
 
         if isinstance(create_missing, bool):
             self.create_missing = create_missing
-            self.missing_factory = default_cdm_time_series_factory
+            self.missing_factory = self.default_cdm_time_series_factory
         else:
             self.create_missing = True
             self.missing_factory = create_missing
 
+    def default_cdm_time_series_factory(
+        self, instance_id: NodeId, datapoints: DataPointList
+    ) -> CogniteExtractorTimeSeriesApply:
+        """
+        Default CDM time series factory used when create_missing in a CDMTimeSeriesUploadQueue is given as a boolean.
+
+        Args:
+            instance_id: Instance ID of time series to create
+            datapoints: The list of datapoints that were tried to be inserted
+            source: The source of the time series, used for creating the DirectRelationReference
+        Returns:
+            A CogniteExtractorTimeSeriesApply object with instance_id set, and the is_string automatically detected
+        """
+        is_string = (
+            isinstance(datapoints[0].get("value"), str)
+            if isinstance(datapoints[0], dict)
+            else isinstance(datapoints[0][1], str)
+        )
+
+        time_series_type: Literal["numeric", "string"] = "string" if is_string else "numeric"
+
+        return CogniteExtractorTimeSeriesApply(
+            space=instance_id.space,
+            external_id=instance_id.external_id,
+            is_step=False,
+            time_series_type=time_series_type,
+            source=self.source,
+        )
+
     def add_to_upload_queue(
-        self, *, timeseries_apply: CogniteExtractorTimeSeriesApply, datapoints: DataPointList | None = None
+        self,
+        *,
+        instance_id: NodeId,
+        datapoints: DataPointList | None = None,
     ) -> None:
         """
         Add data points to upload queue. The queue will be uploaded if the queue size is larger than the threshold
@@ -460,14 +488,9 @@ class CDMTimeSeriesUploadQueue(BaseTimeSeriesUploadQueue[NodeId]):
         """
         datapoints = self._sanitize_datapoints(datapoints)
 
-        instance_id = NodeId(timeseries_apply.space, timeseries_apply.external_id)
-
         with self.lock:
             if instance_id not in self.upload_queue:
                 self.upload_queue[instance_id] = []
-
-            if instance_id not in self.timeseries_apply_dict:
-                self.timeseries_apply_dict[instance_id] = timeseries_apply
 
             self.upload_queue[instance_id].extend(datapoints)
             self.points_queued.inc(len(datapoints))
@@ -489,12 +512,12 @@ class CDMTimeSeriesUploadQueue(BaseTimeSeriesUploadQueue[NodeId]):
             max_delay=RETRY_MAX_DELAY,
             backoff=RETRY_BACKOFF_FACTOR,
         )
-        def _upload_batch(upload_this: list[dict], retries: int = 5) -> list[dict]:
+        def _upload_batch(upload_this: list[CdmDatapointsPayload], retries: int = 5) -> list[CdmDatapointsPayload]:
             if len(upload_this) == 0:
                 return upload_this
 
             try:
-                self.cdf_client.time_series.data.insert_multiple(upload_this)
+                self.cdf_client.time_series.data.insert_multiple(upload_this)  # type: ignore[arg-type]
             except CogniteNotFoundError as ex:
                 if not retries:
                     raise ex
@@ -519,14 +542,19 @@ class CDMTimeSeriesUploadQueue(BaseTimeSeriesUploadQueue[NodeId]):
                     )
                     self.logger.info(f"Creating {len(create_these_ids)} time series")
 
-                    to_create: list[CogniteExtractorTimeSeriesApply] = self.missing_factory(
-                        create_these_ids, self.timeseries_apply_dict
-                    )
+                    datapoints_lists: dict[NodeId, DataPointList] = {
+                        ts_dict["instanceId"]: ts_dict["datapoints"]
+                        for ts_dict in upload_this
+                        if ts_dict["instanceId"] in create_these_ids
+                    }
+
+                    to_create: list[CogniteExtractorTimeSeriesApply] = [
+                        self.missing_factory(instance_id, datapoints_lists[instance_id])
+                        for instance_id in create_these_ids
+                    ]
 
                     instance_result = self.cdf_client.data_modeling.instances.apply(to_create)
                     retry_these.extend([node.as_id() for node in instance_result.nodes])
-
-                    # retry_these.extend([nodeId for nodeId in self.missing_factory(self.cdf_client, to_create)])
 
                     if len(ex.not_found) != len(create_these_ids):
                         missing = [

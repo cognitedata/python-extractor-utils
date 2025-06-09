@@ -66,14 +66,14 @@ def test_cdm_queue_single_series_numeric(set_upload_test: tuple[CogniteClient, P
     queue = CDMTimeSeriesUploadQueue(cdf_client=client, create_missing=True)
     queue.start()
 
-    ts_apply = _apply_node(params.space, ext_id, time_series_type="numeric")
+    instance_id = NodeId(space=params.space, external_id=ext_id)
 
     now = int(datetime.now(tz=timezone.utc).timestamp() * 1_000)
     datapoints_1 = _rand_numeric_points(5, now)
     datapoints_2 = _rand_numeric_points(5, now + 1000)
 
-    queue.add_to_upload_queue(timeseries_apply=ts_apply, datapoints=datapoints_1)
-    queue.add_to_upload_queue(timeseries_apply=ts_apply, datapoints=datapoints_2)
+    queue.add_to_upload_queue(instance_id=instance_id, datapoints=datapoints_1)
+    queue.add_to_upload_queue(instance_id=instance_id, datapoints=datapoints_2)
     queue.upload()
 
     time.sleep(5)
@@ -99,14 +99,14 @@ def test_create_missing_false_failure(
     queue = CDMTimeSeriesUploadQueue(cdf_client=client)
     queue.start()
 
-    ts_apply = _apply_node(params.space, ext_id, time_series_type="numeric")
+    instance_id = NodeId(space=params.space, external_id=ext_id)
 
     now = int(datetime.now(tz=timezone.utc).timestamp() * 1_000)
     datapoints_1 = _rand_numeric_points(5, now)
     datapoints_2 = _rand_numeric_points(5, now + 1000)
 
-    queue.add_to_upload_queue(timeseries_apply=ts_apply, datapoints=datapoints_1)
-    queue.add_to_upload_queue(timeseries_apply=ts_apply, datapoints=datapoints_2)
+    queue.add_to_upload_queue(instance_id=instance_id, datapoints=datapoints_1)
+    queue.add_to_upload_queue(instance_id=instance_id, datapoints=datapoints_2)
     queue.upload()
 
     time.sleep(5)
@@ -131,12 +131,12 @@ def test_cdm_queue_single_series_string(set_upload_test: tuple[CogniteClient, Pa
     queue = CDMTimeSeriesUploadQueue(cdf_client=client, create_missing=True)
     queue.start()
 
-    ts_apply = _apply_node(params.space, ext_id, time_series_type="string")
+    instance_id = NodeId(space=params.space, external_id=ext_id)
 
     now = int(datetime.now(tz=timezone.utc).timestamp() * 1_000)
     datapoints = _rand_string_points(6, now)
 
-    queue.add_to_upload_queue(timeseries_apply=ts_apply, datapoints=datapoints)
+    queue.add_to_upload_queue(instance_id=instance_id, datapoints=datapoints)
     queue.upload()
     time.sleep(5)
 
@@ -162,8 +162,8 @@ def test_cdm_queue_multiple_series_batched(set_upload_test: tuple[CogniteClient,
     dp_a = _rand_numeric_points(4, now)
     dp_b = _rand_string_points(3, now)
 
-    queue.add_to_upload_queue(timeseries_apply=_apply_node(params.space, ext_a, "numeric"), datapoints=dp_a)
-    queue.add_to_upload_queue(timeseries_apply=_apply_node(params.space, ext_b, "string"), datapoints=dp_b)
+    queue.add_to_upload_queue(instance_id=NodeId(params.space, ext_a), datapoints=dp_a)
+    queue.add_to_upload_queue(instance_id=NodeId(params.space, ext_b), datapoints=dp_b)
     queue.upload()
     time.sleep(5)
 
@@ -202,9 +202,9 @@ def test_cdm_queue_discards_invalid_values(set_upload_test: tuple[CogniteClient,
     valid_temp_str_dp = (now + 3_000, "valid_short_string")
 
     queue.add_to_upload_queue(
-        timeseries_apply=ts_apply_numeric, datapoints=[good, bad_time, bad_val_inf, bad_val_max, bad_val_min]
+        instance_id=NodeId(params.space, ext_id_1), datapoints=[good, bad_time, bad_val_inf, bad_val_max, bad_val_min]
     )
-    queue.add_to_upload_queue(timeseries_apply=ts_apply_string, datapoints=[too_long_str, valid_temp_str_dp])
+    queue.add_to_upload_queue(instance_id=NodeId(params.space, ext_id_2), datapoints=[too_long_str, valid_temp_str_dp])
     queue.upload()
     time.sleep(5)
 

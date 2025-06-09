@@ -144,9 +144,7 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
         elif isinstance(peek, InsertCDMDatapoints):
             for dp in peekable_output:
                 if isinstance(dp, InsertCDMDatapoints):
-                    self.cdm_time_series_queue.add_to_upload_queue(
-                        timeseries_apply=dp.timeseries_apply, datapoints=dp.datapoints
-                    )
+                    self.cdm_time_series_queue.add_to_upload_queue(instance_id=dp.instance_id, datapoints=dp.datapoints)
         else:
             raise ValueError(f"Unexpected type: {type(peek)}")
 

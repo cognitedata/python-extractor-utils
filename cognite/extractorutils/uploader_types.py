@@ -3,7 +3,7 @@ from typing import TypeAlias
 
 from cognite.client.data_classes import Event as _Event
 from cognite.client.data_classes import Row as _Row
-from cognite.client.data_classes.data_modeling.extractor_extensions.v1 import CogniteExtractorTimeSeriesApply
+from cognite.client.data_classes.data_modeling import NodeId
 from cognite.extractorutils.uploader.time_series import DataPoint
 
 
@@ -15,8 +15,8 @@ class InsertDatapoints:
 
 
 class InsertCDMDatapoints:
-    def __init__(self, *, timeseries_apply: CogniteExtractorTimeSeriesApply, datapoints: list[DataPoint]):
-        self.timeseries_apply = timeseries_apply
+    def __init__(self, *, instance_id: NodeId, datapoints: list[DataPoint]):
+        self.instance_id = instance_id
         self.datapoints = datapoints
 
 

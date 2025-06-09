@@ -154,8 +154,7 @@ def test_handle_cdm_timeseries(MockCogniteClient: Mock) -> None:
     node_single = NodeId("some-space", "some-id")
     client.data_modeling.instances.apply.return_value = _make_apply_result(node_single)
 
-    ts_apply_single = _apply_node("some-space", "some-id", time_series_type="numeric")
-    item_single = InsertCDMDatapoints(timeseries_apply=ts_apply_single, datapoints=[(start, 100)])
+    item_single = InsertCDMDatapoints(instance_id=node_single, datapoints=[(start, 100)])
 
     ex.handle_output(item_single)
     ex.cdm_time_series_queue.upload()
@@ -173,11 +172,8 @@ def test_handle_cdm_timeseries(MockCogniteClient: Mock) -> None:
         _make_apply_result(node_iter2),
     ]
 
-    ts_apply_1 = _apply_node("some-space", "some-id", time_series_type="numeric")
-    ts_apply_2 = _apply_node("some-space", "some-other-id", time_series_type="numeric")
-
-    item1 = InsertCDMDatapoints(timeseries_apply=ts_apply_1, datapoints=[(start, 100), (start + 1, 101)])
-    item2 = InsertCDMDatapoints(timeseries_apply=ts_apply_2, datapoints=[(start + 2, 102), (start + 3, 103)])
+    item1 = InsertCDMDatapoints(instance_id=node_iter1, datapoints=[(start, 100), (start + 1, 101)])
+    item2 = InsertCDMDatapoints(instance_id=node_iter2, datapoints=[(start + 2, 102), (start + 3, 103)])
 
     iterable_items = [item1, item2]
     ex.handle_output(iterable_items)
