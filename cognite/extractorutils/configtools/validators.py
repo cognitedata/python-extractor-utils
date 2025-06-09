@@ -15,7 +15,7 @@ def matches_patterns(patterns: list[str | re.Pattern[str]], string: str) -> bool
     Returns:
         boolean value indicating whether string matches any of the patterns.
     """
-    return any([matches_pattern(pattern, string) for pattern in patterns])
+    return any(matches_pattern(pattern, string) for pattern in patterns)
 
 
 def matches_pattern(pattern: str | re.Pattern[str], string: str) -> bool:

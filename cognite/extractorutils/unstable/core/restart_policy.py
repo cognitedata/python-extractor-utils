@@ -22,8 +22,8 @@ WHEN_CONTINUOUS_TASKS_CRASHES = _is_continuous
 WHEN_ANY_TASK_CRASHES = _true
 
 __all__ = [
-    "RestartPolicy",
     "NEVER",
-    "WHEN_CONTINUOUS_TASKS_CRASHES",
     "WHEN_ANY_TASK_CRASHES",
+    "WHEN_CONTINUOUS_TASKS_CRASHES",
+    "RestartPolicy",
 ]

@@ -11,7 +11,7 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-import datetime
+from datetime import datetime, timezone
 from typing import Literal
 from unittest.mock import Mock, patch
 
@@ -91,7 +91,7 @@ def test_handle_timeseries(MockCogniteClient: Mock) -> None:
     )
     ex.time_series_queue = TimeSeriesUploadQueue(client)
 
-    start: float = datetime.datetime.now().timestamp() * 1000.0
+    start: float = datetime.now(tz=timezone.utc).timestamp() * 1000.0
 
     # Single
     ts = InsertDatapoints(external_id="some-id", datapoints=[(start, 100)])

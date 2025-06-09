@@ -134,7 +134,7 @@ class BaseTimeSeriesUploadQueue(AbstractUploadQueue, Generic[IdType]):
         self.queue_size = TIMESERIES_UPLOADER_QUEUE_SIZE
 
     def _verify_datapoint_time(self, time: int | float | datetime | str) -> bool:
-        if isinstance(time, int) or isinstance(time, float):
+        if isinstance(time, int | float):
             return not math.isnan(time) and time >= MIN_DATAPOINT_TIMESTAMP
         elif isinstance(time, str):
             return False
@@ -148,10 +148,7 @@ class BaseTimeSeriesUploadQueue(AbstractUploadQueue, Generic[IdType]):
             )
         elif isinstance(value, str):
             return len(value) <= MAX_DATAPOINT_STRING_LENGTH
-        elif isinstance(value, datetime):
-            return False
-        else:
-            return True
+        return not isinstance(value, datetime)
 
     def _is_datapoint_valid(
         self,
@@ -268,7 +265,11 @@ class TimeSeriesUploadQueue(BaseTimeSeriesUploadQueue[EitherId]):
         self.data_set_id = data_set_id
 
     def add_to_upload_queue(
-        self, *, id: int | None = None, external_id: str | None = None, datapoints: DataPointList | None = None
+        self,
+        *,
+        id: int | None = None,  # noqa: A002
+        external_id: str | None = None,
+        datapoints: DataPointList | None = None,
     ) -> None:
         """
         Add data points to upload queue. The queue will be uploaded if the queue size is larger than the threshold
@@ -326,9 +327,7 @@ class TimeSeriesUploadQueue(BaseTimeSeriesUploadQueue[EitherId]):
 
                 if self.create_missing:
                     # Get the time series that can be created
-                    create_these_ids = set(
-                        [id_dict["externalId"] for id_dict in ex.not_found if "externalId" in id_dict]
-                    )
+                    create_these_ids = {id_dict["externalId"] for id_dict in ex.not_found if "externalId" in id_dict}
                     datapoints_lists: dict[str, DataPointList] = {
                         ts_dict["externalId"]: ts_dict["datapoints"]
                         for ts_dict in upload_this
@@ -381,7 +380,7 @@ class TimeSeriesUploadQueue(BaseTimeSeriesUploadQueue[EitherId]):
                 ]
             )
 
-            for _either_id, datapoints in self.upload_queue.items():
+            for datapoints in self.upload_queue.values():
                 self.points_written.inc(len(datapoints))
 
             try:
@@ -657,7 +656,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
     def set_sequence_metadata(
         self,
         metadata: dict[str, str | int | float],
-        id: int | None = None,
+        id: int | None = None,  # noqa: A002
         external_id: str | None = None,
         asset_external_id: str | None = None,
         dataset_external_id: str | None = None,
@@ -691,7 +690,10 @@ class SequenceUploadQueue(AbstractUploadQueue):
             self.sequence_descriptions[either_id] = description
 
     def set_sequence_column_definition(
-        self, col_def: list[dict[str, str]], id: int | None = None, external_id: str | None = None
+        self,
+        col_def: list[dict[str, str]],
+        id: int | None = None,  # noqa: A002
+        external_id: str | None = None,
     ) -> None:
         """
         Set sequence column definition
@@ -714,7 +716,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
         | SequenceData
         | SequenceRows,
         column_external_ids: list[dict] | None = None,
-        id: int | None = None,
+        id: int | None = None,  # noqa: A002
         external_id: str | None = None,
     ) -> None:
         """
@@ -843,7 +845,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
 
         column_def = self.column_definitions.get(either_id)
         if column_def is None:
-            self.logger.error(f"Can't create sequence {str(either_id)}, no column definitions provided")
+            self.logger.error(f"Can't create sequence {either_id!s}, no column definitions provided")
 
         try:
             seq = self.cdf_client.sequences.create(

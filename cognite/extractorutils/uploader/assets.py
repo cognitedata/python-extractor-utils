@@ -107,8 +107,8 @@ class AssetUploadQueue(AbstractUploadQueue):
             try:
                 self.cdf_client.assets.create(self.upload_queue)
             except CogniteDuplicatedError as e:
-                duplicated_ids = set([dup["externalId"] for dup in e.duplicated if "externalId" in dup])
-                failed: list[Asset] = [e for e in e.failed]
+                duplicated_ids = {dup["externalId"] for dup in e.duplicated if "externalId" in dup}
+                failed: list[Asset] = list(e.failed)
                 to_create = []
                 to_update = []
                 for asset in failed:

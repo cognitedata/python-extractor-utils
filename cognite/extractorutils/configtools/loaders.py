@@ -27,7 +27,6 @@ from typing import Any, Generic, TextIO, TypeVar, cast
 
 import dacite
 import yaml
-from azure.core.credentials import TokenCredential
 from azure.core.exceptions import HttpResponseError, ResourceNotFoundError, ServiceRequestError
 from azure.identity import ClientSecretCredential, DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
@@ -65,7 +64,7 @@ class KeyVaultLoader:
     def __init__(self, config: dict | None):
         self.config = config
 
-        self.credentials: TokenCredential | None = None
+        self.credentials: DefaultAzureCredential | ClientSecretCredential | None = None
         self.client: SecretClient | None = None
 
     def _init_client(self) -> None:
@@ -104,9 +103,9 @@ class KeyVaultLoader:
                 _logger.info(f"Local environment file not found at {Path.cwd() / '.env'}")
 
             if all(param in self.config for param in auth_parameters):
-                tenant_id = os.path.expandvars(self.config.get("tenant-id", None))
-                client_id = os.path.expandvars(self.config.get("client-id", None))
-                secret = os.path.expandvars(self.config.get("secret", None))
+                tenant_id = os.path.expandvars(self.config["tenant-id"])
+                client_id = os.path.expandvars(self.config["client-id"])
+                secret = os.path.expandvars(self.config["secret"])
 
                 self.credentials = ClientSecretCredential(
                     tenant_id=tenant_id,
@@ -122,7 +121,7 @@ class KeyVaultLoader:
                 "Invalid KeyVault authentication method. Possible values : default or client-secret"
             )
 
-        self.client = SecretClient(vault_url=vault_url, credential=self.credentials)  # type: ignore
+        self.client = SecretClient(vault_url=vault_url, credential=self.credentials)
 
     def __call__(self, _: yaml.SafeLoader, node: yaml.Node) -> str:
         self._init_client()
@@ -185,7 +184,9 @@ def _load_yaml_dict_raw(
         config_dict = yaml.load(source, Loader=loader)  # noqa: S506
     except ScannerError as e:
         location = e.problem_mark or e.context_mark
-        formatted_location = f" at line {location.line+1}, column {location.column+1}" if location is not None else ""
+        formatted_location = (
+            f" at line {location.line + 1}, column {location.column + 1}" if location is not None else ""
+        )
         cause = e.problem or e.context
         raise InvalidConfigError(f"Invalid YAML{formatted_location}: {cause or ''}") from e
 
@@ -241,10 +242,7 @@ def _load_yaml(
         ) from e
 
     except (dacite.WrongTypeError, dacite.MissingValueError, dacite.UnionMatchError) as e:
-        if e.field_path:
-            path = e.field_path.replace("_", "-") if case_style == "hyphen" else e.field_path
-        else:
-            path = None
+        path = (e.field_path.replace("_", "-") if case_style == "hyphen" else e.field_path) if e.field_path else None
 
         def name(type_: type) -> str:
             return type_.__name__ if hasattr(type_, "__name__") else str(type_)
@@ -262,7 +260,7 @@ def _load_yaml(
         raise InvalidConfigError(f'Missing mandatory field "{path}"') from e
 
     except dacite.ForwardReferenceError as e:
-        raise ValueError(f"Invalid config class: {str(e)}") from e
+        raise ValueError(f"Invalid config class: {e!s}") from e
 
     config._file_hash = sha256(json.dumps(config_dict).encode("utf-8")).hexdigest()
 

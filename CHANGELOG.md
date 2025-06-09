@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## Next
+
+### Changed
+
+* In the `unstable` package: `-l` / `--local-override` is renamed to `-f` / `--force-local-config`
+
 ## 7.5.14
 
 ### Added
