@@ -1,3 +1,7 @@
+"""
+Upload queue for files.
+"""
+
 #  Copyright 2023 Cognite AS
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
@@ -88,6 +92,9 @@ class ChunkedStream(RawIOBase, BinaryIO):
         self._current_chunk_size = -1
 
     def tell(self) -> int:
+        """
+        Get the current position of the stream.
+        """
         return self._pos
 
     # RawIOBase is (stupidly) incompatible with BinaryIO
@@ -97,12 +104,21 @@ class ChunkedStream(RawIOBase, BinaryIO):
     # required to satisfy mypy.
     # This may be solvable by changing the typing in the python SDK to use typing.Protocol.
     def writelines(self, __lines: Any) -> None:
+        """
+        Not supported for ChunkedStream.
+        """
         raise NotImplementedError()
 
     def write(self, __b: Any) -> int:
+        """
+        Not supported for ChunkedStream.
+        """
         raise NotImplementedError()
 
     def __enter__(self) -> "ChunkedStream":
+        """
+        Wraps around the inner stream's ``__enter__`` method, for use as context manager.
+        """
         return super().__enter__()
 
     def __exit__(
@@ -111,14 +127,23 @@ class ChunkedStream(RawIOBase, BinaryIO):
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> None:
+        """
+        Wraps around the inner stream's ``__exit__`` method, for use as context manager.
+        """
         return super().__exit__(exc_type, exc_val, exc_tb)
 
     @property
     def chunk_count(self) -> int:
+        """
+        Number of chunks in the stream.
+        """
         return ceil(self._stream_length / self._max_chunk_size)
 
     @property
     def len(self) -> int:
+        """
+        Length of the current chunk, in bytes.
+        """
         return len(self)
 
     @property
@@ -129,12 +154,21 @@ class ChunkedStream(RawIOBase, BinaryIO):
         return self._chunk_index
 
     def __len__(self) -> int:
+        """
+        Length of the current chunk, in bytes.
+        """
         return self._current_chunk_size
 
     def readable(self) -> bool:
+        """
+        Check if the stream is readable. Always True for ChunkedStream.
+        """
         return True
 
     def read(self, size: int = -1) -> bytes:
+        """
+        Read bytes from the current chunk.
+        """
         if size < 0:
             size = self._current_chunk_size - self._pos
 
@@ -162,6 +196,10 @@ class ChunkedStream(RawIOBase, BinaryIO):
 
 
 class IOByteStream(SyncByteStream):
+    """
+    Wraps a BinaryIO stream to be used as a httpx SyncByteStream.
+    """
+
     CHUNK_SIZE = 65_536
 
     def __init__(self, stream: BinaryIO) -> None:
@@ -169,6 +207,9 @@ class IOByteStream(SyncByteStream):
         self._is_stream_consumed = False
 
     def __iter__(self) -> Iterator[bytes]:
+        """
+        Iterate over the stream, yielding chunks of data.
+        """
         if self._is_stream_consumed:
             raise StreamConsumed()
         chunk = self._stream.read(self.CHUNK_SIZE)
@@ -264,6 +305,9 @@ class IOFileUploadQueue(AbstractUploadQueue):
             _QUEUES += 1
 
     def initialize_failure_logging(self) -> None:
+        """
+        Initialize the failure logging manager if a path is provided in the constructor.
+        """
         self._file_failure_manager: FileFailureManager | None = (
             FileFailureManager(path_to_file=self.failure_logging_path)
             if self.failure_logging_path is not None
@@ -271,14 +315,23 @@ class IOFileUploadQueue(AbstractUploadQueue):
         )
 
     def get_failure_logger(self) -> FileFailureManager | None:
+        """
+        Get the failure logger for this upload queue, if it exists.
+        """
         return self._file_failure_manager
 
     def add_entry_failure_logger(self, file_name: str, error: Exception) -> None:
+        """
+        Add an entry to the failure logger if it exists.
+        """
         if self._file_failure_manager is not None:
             error_reason = str(error)
             self._file_failure_manager.add(file_name=file_name, error_reason=error_reason)
 
     def flush_failure_logger(self) -> None:
+        """
+        Flush the failure logger if it exists, writing all failures to the file.
+        """
         if self._file_failure_manager is not None:
             self.logger.info("Flushing failure logs")
             self._file_failure_manager.write_to_file()
@@ -428,13 +481,14 @@ class IOFileUploadQueue(AbstractUploadQueue):
         extra_retries: tuple[type[Exception], ...] | dict[type[Exception], Callable[[Any], bool]] | None = None,
     ) -> None:
         """
-        Add file to upload queue. The file will start uploading immedeately. If the size of the queue is larger than
-        the specified max size, this call will block until it's completed the upload.
+        Add file to upload queue.
+
+        The file will start uploading immediately. If the size of the queue is larger than the specified max size, this
+        call will block until it's completed the upload.
 
         Args:
             file_meta: File metadata-object
-            file_name: Path to file to be uploaded.
-                If none, the file object will still be created, but no data is uploaded
+            read_file: Callable that returns a BinaryIO stream to read the file from.
             extra_retries: Exception types that might be raised by ``read_file`` that should be retried
         """
         retries = cognite_exceptions()
@@ -661,8 +715,10 @@ class FileUploadQueue(IOFileUploadQueue):
         file_name: str | PathLike,
     ) -> None:
         """
-        Add file to upload queue. The queue will be uploaded if the queue size is larger than the threshold
-        specified in the __init__.
+        Add file to upload queue.
+
+        The file will start uploading immediately. If the size of the queue is larger than the specified max size, this
+        call will block until it's completed the upload.
 
         Args:
             file_meta: File metadata-object
@@ -714,12 +770,14 @@ class BytesUploadQueue(IOFileUploadQueue):
 
     def add_to_upload_queue(self, content: bytes, file_meta: FileMetadataOrCogniteExtractorFile) -> None:
         """
-        Add object to upload queue. The queue will be uploaded if the queue size is larger than the threshold
-        specified in the __init__.
+        Add file to upload queue.
+
+        The file will start uploading immediately. If the size of the queue is larger than the specified max size, this
+        call will block until it's completed the upload.
 
         Args:
             content: bytes object to upload
-            metadata: metadata for the given bytes object
+            file_meta: File metadata-object
         """
 
         def get_byte_io() -> BinaryIO:

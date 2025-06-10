@@ -1,3 +1,7 @@
+"""
+Upload queue for (legacy) events.
+"""
+
 #  Copyright 2023 Cognite AS
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
@@ -78,8 +82,9 @@ class EventUploadQueue(AbstractUploadQueue):
 
     def add_to_upload_queue(self, event: Event) -> None:
         """
-        Add event to upload queue. The queue will be uploaded if the queue size is larger than the threshold
-        specified in the __init__.
+        Add event to upload queue.
+
+        The queue will be uploaded if the queue size is larger than the threshold specified in the ``__init__``.
 
         Args:
             event: Event to add

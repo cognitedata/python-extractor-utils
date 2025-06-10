@@ -1,3 +1,7 @@
+"""
+Module for uploading data modeling instances to CDF.
+"""
+
 from collections.abc import Callable
 from types import TracebackType
 from typing import Any
@@ -16,6 +20,24 @@ from cognite.extractorutils.util import cognite_exceptions, retry
 
 
 class InstanceUploadQueue(AbstractUploadQueue):
+    """
+    Upload queue for data modeling instances (nodes and edges).
+
+    Args:
+        cdf_client: Cognite Data Fusion client to use.
+        post_upload_function: A function that will be called after each upload. The function will be given one argument:
+            A list of the nodes and edges that were uploaded.
+        max_queue_size: Maximum size of upload queue. Defaults to no max size.
+        max_upload_interval: Automatically trigger an upload on an interval when run as a thread (use start/stop
+            methods). Unit is seconds.
+        trigger_log_level: Log level to log upload triggers to.
+        thread_name: Thread name of uploader thread.
+        cancellation_token: Cancellation token for managing thread cancellation.
+        auto_create_start_nodes: Automatically create start nodes if they do not exist.
+        auto_create_end_nodes: Automatically create end nodes if they do not exist.
+        auto_create_direct_relations: Automatically create direct relations if they do not exist.
+    """
+
     def __init__(
         self,
         cdf_client: CogniteClient,
@@ -52,6 +74,15 @@ class InstanceUploadQueue(AbstractUploadQueue):
         node_data: list[NodeApply] | None = None,
         edge_data: list[EdgeApply] | None = None,
     ) -> None:
+        """
+        Add instances to the upload queue.
+
+        The queue will be uploaded if the queue size is larger than the threshold specified in the ``__init__``.
+
+        Args:
+            node_data: List of nodes to add to the upload queue.
+            edge_data: List of edges to add to the upload queue.
+        """
         if node_data:
             with self.lock:
                 self.node_queue.extend(node_data)
@@ -66,6 +97,10 @@ class InstanceUploadQueue(AbstractUploadQueue):
             self._check_triggers()
 
     def upload(self) -> None:
+        """
+        Trigger an upload of the queue, clears queue afterwards.
+        """
+
         @retry(
             exceptions=cognite_exceptions(),
             cancellation_token=self.cancellation_token,

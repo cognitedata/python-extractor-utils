@@ -84,6 +84,8 @@ def safe_get(cls: type[T], *args: Any, **kwargs: Any) -> T:
 
     Args:
         cls: Metrics class to either create or get a cached version of
+        args: Arguments passed as-is to the class constructor
+        kwargs: Keyword arguments passed as-is to the class constructor
 
     Returns:
         An instance of given class
@@ -98,8 +100,10 @@ def safe_get(cls: type[T], *args: Any, **kwargs: Any) -> T:
 
 class BaseMetrics:
     """
-    Base collection of extractor metrics. The class also spawns a collector thread on init that regularly fetches
-    process information and update the ``process_*`` gauges.
+    Base collection of extractor metrics.
+
+    The class also spawns a collector thread on init that regularly fetches process information and update the
+    ``process_*`` gauges.
 
     To create a set of metrics for an extractor, create a subclass of this class.
 
@@ -165,8 +169,9 @@ class BaseMetrics:
 
 class AbstractMetricsPusher(ABC):
     """
-    Base class for metric pushers. Metric pushers spawns a thread that routinely pushes metrics to a configured
-    destination.
+    Base class for metric pushers.
+
+    Metric pushers spawns a thread that routinely pushes metrics to a configured destination.
 
     Contains all the logic for starting and running threads.
 
@@ -209,7 +214,6 @@ class AbstractMetricsPusher(ABC):
     def start(self) -> None:
         """
         Starts a thread that pushes the default registry to the configured gateway at certain intervals.
-
         """
         self.thread = threading.Thread(target=self._run, daemon=True, name=self.thread_name)
         self.thread.start()

@@ -10,7 +10,9 @@ from pydantic import BaseModel, ConfigDict
 
 class CogniteModel(BaseModel):
     """
-    Base class for DTO classes based on pydantic, but with a few tweaks to make it inline with the CDF API guidelines:
+    Base class for DTO classes based on pydantic.
+
+    With a few tweaks to make it inline with the CDF API guidelines:
       * camelCase instead of snake_case when serializing/deserializing into/from JSON
       * exclude Nones from serialized JSON instead of having nulls in the response text.
     """

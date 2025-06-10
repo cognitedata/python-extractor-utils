@@ -1,3 +1,7 @@
+"""
+Upload queue for (legacy) assets.
+"""
+
 #  Copyright 2023 Cognite AS
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
@@ -77,8 +81,9 @@ class AssetUploadQueue(AbstractUploadQueue):
 
     def add_to_upload_queue(self, asset: Asset) -> None:
         """
-        Add asset to upload queue. The queue will be uploaded if the queue size is larger than the threshold
-        specified in the __init__.
+        Add asset to upload queue.
+
+        The queue will be uploaded if the queue size is larger than the threshold specified in the ``__init__``.
 
         Args:
             asset: Asset to add

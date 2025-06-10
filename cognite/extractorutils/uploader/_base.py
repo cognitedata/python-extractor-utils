@@ -117,8 +117,7 @@ class AbstractUploadQueue(ABC):
 
     def start(self) -> None:
         """
-        Start upload thread if max_upload_interval is set, this called the upload method every max_upload_interval
-        seconds.
+        Start upload thread if max_upload_interval is set.
         """
         if self.max_upload_interval is not None:
             self.thread.start()

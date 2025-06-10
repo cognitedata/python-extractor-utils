@@ -1,3 +1,6 @@
+"""
+This module defines custom exceptions for the extractorutils package.
+"""
 #  Copyright 2020 Cognite AS
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
@@ -28,7 +31,13 @@ class InvalidConfigError(Exception):
         self.details = details
 
     def __str__(self) -> str:
+        """
+        Returns a string representation of the error.
+        """
         return f"Invalid config: {self.message}"
 
     def __repr__(self) -> str:
+        """
+        Returns a string representation of the error.
+        """
         return self.__str__()

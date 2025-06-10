@@ -1,3 +1,6 @@
+"""
+Upload queue for time series and sequences.
+"""
 #  Copyright 2023 Cognite AS
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
@@ -176,8 +179,9 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         datapoints: DataPointList | None = None,
     ) -> None:
         """
-        Add data points to upload queue. The queue will be uploaded if the queue size is larger than the threshold
-        specified in the __init__.
+        Add data points to upload queue.
+
+        The queue will be uploaded if the queue size is larger than the threshold specified in the ``__init__``.
 
         Args:
             id: Internal ID of time series. Either this or external_id must be set.
@@ -340,6 +344,21 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
 
 
 class SequenceUploadQueue(AbstractUploadQueue):
+    """
+    Upload queue for sequences.
+
+    Args:
+        cdf_client: Cognite Data Fusion client to use
+        post_upload_function: A function that will be called after each upload. The function will be given one
+            argument: A list of the events that were uploaded.
+        max_queue_size: Maximum size of upload queue. Defaults to no max size.
+        max_upload_interval: Automatically trigger an upload each m seconds when run as a thread (use start/stop
+            methods).
+        trigger_log_level: Log level to log upload triggers to.
+        thread_name: Thread name of uploader thread.
+        create_missing: Create missing sequences if possible (ie, if external id is used).
+    """
+
     def __init__(
         self,
         cdf_client: CogniteClient,
@@ -351,18 +370,6 @@ class SequenceUploadQueue(AbstractUploadQueue):
         create_missing: bool = False,
         cancellation_token: CancellationToken | None = None,
     ):
-        """
-        Args:
-            cdf_client: Cognite Data Fusion client to use
-            post_upload_function: A function that will be called after each upload. The function will be given one
-                argument: A list of the events that were uploaded.
-            max_queue_size: Maximum size of upload queue. Defaults to no max size.
-            max_upload_interval: Automatically trigger an upload each m seconds when run as a thread (use start/stop
-                methods).
-            trigger_log_level: Log level to log upload triggers to.
-            thread_name: Thread name of uploader thread.
-            create_missing: Create missing sequences if possible (ie, if external id is used).
-        """
         # Super sets post_upload and threshold
         super().__init__(
             cdf_client,
@@ -399,8 +406,10 @@ class SequenceUploadQueue(AbstractUploadQueue):
         description: str | None = None,
     ) -> None:
         """
-        Set sequence metadata. Metadata will be cached until the sequence is created. The metadata will be updated
-        if the sequence already exists.
+        Set sequence metadata.
+
+        Metadata will be cached until the sequence is created. The metadata will be updated if the sequence already
+        exists.
 
         Args:
             metadata: Sequence metadata
@@ -455,8 +464,9 @@ class SequenceUploadQueue(AbstractUploadQueue):
         external_id: str | None = None,
     ) -> None:
         """
-        Add sequence rows to upload queue. Mirrors implementation of SequenceApi.insert. Inserted rows will be
-        cached until uploaded.
+        Add sequence rows to upload queue.
+
+        Mirrors implementation of SequenceApi.insert. Inserted rows will be cached until uploaded.
 
         Args:
             rows: The rows to be inserted. Can either be a list of tuples, a list of ["rownumber": ..., "values": ...]

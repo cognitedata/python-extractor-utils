@@ -1,3 +1,7 @@
+"""
+Upload queue for RAW.
+"""
+
 #  Copyright 2023 Cognite AS
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
@@ -84,8 +88,9 @@ class RawUploadQueue(AbstractUploadQueue):
 
     def add_to_upload_queue(self, database: str, table: str, raw_row: Row) -> None:
         """
-        Adds a row to the upload queue. The queue will be uploaded if the queue size is larger than the threshold
-        specified in the __init__.
+        Adds a row to the upload queue.
+
+        The queue will be uploaded if the queue size is larger than the threshold specified in the ``__init__``.
 
         Args:
             database: The database to upload the Raw object to

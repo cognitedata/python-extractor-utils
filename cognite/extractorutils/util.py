@@ -13,8 +13,7 @@
 #  limitations under the License.
 
 """
-The ``util`` package contains miscellaneous functions and classes that can some times be useful while developing
-extractors.
+This module contains miscellaneous functions and classes.
 """
 
 import io
@@ -79,8 +78,9 @@ def ensure_assets(cdf_client: CogniteClient, assets: Iterable[Asset]) -> None:
 
 class EitherId:
     """
-    Class representing an ID in CDF, which can either be an external or internal ID. An EitherId can only hold one ID
-    type, not both.
+    Class representing an ID in CDF, which can either be an external or internal ID.
+
+    An EitherId can only hold one ID type, not both.
 
     Args:
         id: Internal ID
@@ -186,6 +186,7 @@ def add_extraction_pipeline(
         extraction_pipeline_ext_id: External ID of the extraction pipeline
         cognite_client: Client to use when communicating with CDF
         heartbeat_waiting_time: Target interval between heartbeats, in seconds
+        added_message: Message to add to the extraction pipeline run status message.
 
     Usage:
         If you have a function named "extract_data(*args, **kwargs)" and want to connect it to an extraction
@@ -275,8 +276,9 @@ def add_extraction_pipeline(
 
 def throttled_loop(target_time: int, cancellation_token: CancellationToken) -> Generator[None, None, None]:
     """
-    A loop generator that automatically sleeps until each iteration has taken the desired amount of time. Useful for
-    when you want to avoid overloading a source system with requests.
+    A loop generator that automatically sleeps until each iteration has taken the desired amount of time.
+
+    Useful for when you want to avoid overloading a source system with requests.
 
     Example:
         This example will throttle printing to only print every 10th second:
@@ -417,8 +419,9 @@ def requests_exceptions(
     status_codes: list[int] | None = None,
 ) -> dict[type[Exception], Callable[[Any], bool]]:
     """
-    Retry exceptions from using the ``requests`` library. This will retry all connection and HTTP errors matching
-    the given status codes.
+    Retry exceptions from using the ``requests`` library.
+
+    This will retry all connection and HTTP errors matching the given status codes.
 
     Example:
 
@@ -451,8 +454,9 @@ def httpx_exceptions(
     status_codes: list[int] | None = None,
 ) -> dict[type[Exception], Callable[[Any], bool]]:
     """
-    Retry exceptions from using the ``httpx`` library. This will retry all connection and HTTP errors matching
-    the given status codes.
+    Retry exceptions from using the ``httpx`` library.
+
+    This will retry all connection and HTTP errors matching the given status codes.
 
     Example:
 
@@ -485,8 +489,9 @@ def cognite_exceptions(
     status_codes: list[int] | None = None,
 ) -> dict[type[Exception], Callable[[Any], bool]]:
     """
-    Retry exceptions from using the Cognite SDK. This will retry all connection and HTTP errors matching
-    the given status codes.
+    Retry exceptions from using the Cognite SDK.
+
+    This will retry all connection and HTTP errors matching the given status codes.
 
     Example:
 
@@ -507,10 +512,28 @@ def cognite_exceptions(
 
 
 def datetime_to_timestamp(dt: datetime) -> int:
+    """
+    Convert a datetime object to a timestamp in milliseconds since 1970-01-01 00:00:00 UTC.
+
+    Args:
+        dt: The datetime object to convert. It should be timezone-aware.
+
+    Returns:
+        The timestamp in milliseconds.
+    """
     return int(dt.timestamp() * 1000)
 
 
 def timestamp_to_datetime(ts: int) -> datetime:
+    """
+    Convert a timestamp in milliseconds since 1970-01-01 00:00:00 UTC to a datetime object.
+
+    Args:
+        ts: The timestamp in milliseconds.
+
+    Returns:
+        A datetime object representing the timestamp in UTC.
+    """
     return datetime.fromtimestamp(ts / 1000, tz=timezone.utc)
 
 
@@ -524,6 +547,7 @@ def now() -> int:
 def truncate_byte_len(item: str, ln: int) -> str:
     """
     Safely truncate an arbitrary utf-8 string.
+
     Used to sanitize metadata.
 
     Args:
@@ -569,6 +593,20 @@ def truncate_byte_len(item: str, ln: int) -> str:
 
 
 class BufferedReadWithLength(io.BufferedReader):
+    """
+    A BufferedReader that also has a length attribute.
+
+    Some libraries (like requests) checks streams for a ``len`` attribute to use for the content-length header when
+    uploading files. Using this class allows these libraries to work with streams that have a known length without
+    seeking to the end of the stream to find its length.
+
+    Args:
+        raw: The raw IO object to read from.
+        buffer_size: The size of the buffer to use.
+        len: The length of the stream in bytes.
+        on_close: A callable that will be called when the stream is closed. This can be used to clean up resources.
+    """
+
     def __init__(self, raw: RawIOBase, buffer_size: int, len: int, on_close: Callable[[], None] | None = None) -> None:  # noqa: A002
         super().__init__(raw, buffer_size)
         # Do not remove even if it appears to be unused. :P
@@ -577,6 +615,9 @@ class BufferedReadWithLength(io.BufferedReader):
         self.on_close = on_close
 
     def close(self) -> None:
+        """
+        Close the stream and call the on_close callback if it is set.
+        """
         if self.on_close:
             self.on_close()
         return super().close()
@@ -588,6 +629,19 @@ def iterable_to_stream(
     buffer_size: int = io.DEFAULT_BUFFER_SIZE,
     on_close: Callable[[], None] | None = None,
 ) -> BufferedReadWithLength:
+    """
+    Convert an iterable of bytes into a stream that can be read from.
+
+    Args:
+        iterator: An iterable that yields bytes. This can be a generator or any other iterable.
+        file_size_bytes: The total size of the file in bytes. This is used to set the length of the stream.
+        buffer_size: The size of the buffer to use when reading from the stream.
+        on_close: A callable that will be called when the stream is closed. This can be used to clean up resources.
+
+    Returns:
+        A BufferedReader that can be read from, with a known length.
+    """
+
     class ChunkIteratorStream(io.RawIOBase):
         def __init__(self) -> None:
             self.last_chunk = None
