@@ -30,6 +30,7 @@ from typing import Any, Generic, TextIO, TypeVar, cast
 
 import dacite
 import yaml
+from azure.core.credentials import TokenCredential
 from azure.core.exceptions import HttpResponseError, ResourceNotFoundError, ServiceRequestError
 from azure.identity import ClientSecretCredential, DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
@@ -74,7 +75,6 @@ class KeyVaultLoader:
     def __init__(self, config: dict | None):
         self.config = config
 
-        self.credentials: DefaultAzureCredential | ClientSecretCredential | None = None
         self.client: SecretClient | None = None
 
     def _init_client(self) -> None:
@@ -98,9 +98,10 @@ class KeyVaultLoader:
 
         vault_url = f"https://{keyvault_name}.vault.azure.net"
 
+        credentials: TokenCredential
         if self.config["authentication-method"] == KeyVaultAuthenticationMethod.DEFAULT.value:
             _logger.info("Using Azure DefaultCredentials to access KeyVault")
-            self.credentials = DefaultAzureCredential()
+            credentials = DefaultAzureCredential()
 
         elif self.config["authentication-method"] == KeyVaultAuthenticationMethod.CLIENTSECRET.value:
             auth_parameters = ("client-id", "tenant-id", "secret")
@@ -117,7 +118,7 @@ class KeyVaultLoader:
                 client_id = os.path.expandvars(self.config["client-id"])
                 secret = os.path.expandvars(self.config["secret"])
 
-                self.credentials = ClientSecretCredential(
+                credentials = ClientSecretCredential(
                     tenant_id=tenant_id,
                     client_id=client_id,
                     client_secret=secret,
@@ -131,7 +132,7 @@ class KeyVaultLoader:
                 "Invalid KeyVault authentication method. Possible values : default or client-secret"
             )
 
-        self.client = SecretClient(vault_url=vault_url, credential=self.credentials)
+        self.client = SecretClient(vault_url=vault_url, credential=credentials)
 
     def __call__(self, _: yaml.SafeLoader, node: yaml.Node) -> str:
         """
