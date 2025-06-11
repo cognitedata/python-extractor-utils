@@ -247,16 +247,16 @@ def test_report_run(get_client_mock: Callable[[], CogniteClient]):
     def validate_short_message(run: ExtractionPipelineRun):
         print(f"Validating short message: {run.message}")
         assert run.extpipe_external_id == EXTRACTION_PIPELINE
-        assert (
-            len(run.message) <= MAX_MESSAGE_LENGTH_FOR_EXTRACTION_PIPELINE_RUN
-        ), f"Short message length exceeds maximum allowed length: {MAX_MESSAGE_LENGTH_FOR_EXTRACTION_PIPELINE_RUN}"
+        assert len(run.message) <= MAX_MESSAGE_LENGTH_FOR_EXTRACTION_PIPELINE_RUN, (
+            f"Short message length exceeds maximum allowed length: {MAX_MESSAGE_LENGTH_FOR_EXTRACTION_PIPELINE_RUN}"
+        )
         assert run.message == SHORT_MESSAGE, "Short message does not match expected value"
 
     def validate_long_message(run: ExtractionPipelineRun):
         print(f"Validating long message: {run.message}")
-        assert (
-            len(run.message) <= MAX_MESSAGE_LENGTH_FOR_EXTRACTION_PIPELINE_RUN
-        ), f"Long message length exceeds maximum allowed length: {MAX_MESSAGE_LENGTH_FOR_EXTRACTION_PIPELINE_RUN}"
+        assert len(run.message) <= MAX_MESSAGE_LENGTH_FOR_EXTRACTION_PIPELINE_RUN, (
+            f"Long message length exceeds maximum allowed length: {MAX_MESSAGE_LENGTH_FOR_EXTRACTION_PIPELINE_RUN}"
+        )
         assert run.message == expected_long_message, "Long message does not match expected value"
 
     extractor = Extractor(

@@ -242,9 +242,7 @@ class Extractor(Generic[CustomConfigClass]):
                 self.logger.info(f"Reporting new {status} run: {message}")
                 self.cognite_client.extraction_pipelines.runs.create(run)
             except CogniteAPIError as e:
-                self.logger.exception(
-                    f"Error while reporting run - status {status} - message {message} . Error: {str(e)}"
-                )
+                self.logger.exception(f"Error while reporting run - status {status} - message {message} . Error: {e!s}")
 
     def _report_success(self, message: str | None = None) -> None:
         """
@@ -272,7 +270,7 @@ class Extractor(Generic[CustomConfigClass]):
         Args:
             exception: Exception object that caused the extractor to fail
         """
-        message = f"{type(exception).__name__}: {str(exception)}"
+        message = f"{type(exception).__name__}: {exception!s}"
         self._report_run("failure", message)
 
     def __enter__(self) -> "Extractor":
