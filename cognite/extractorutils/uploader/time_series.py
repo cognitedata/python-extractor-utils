@@ -533,12 +533,10 @@ class CDMTimeSeriesUploadQueue(BaseTimeSeriesUploadQueue[NodeId]):
 
                 if self.create_missing:
                     # Get the time series that can be created
-                    create_these_ids = set(
-                        [
-                            NodeId(id_dict["instanceId"]["space"], id_dict["instanceId"]["externalId"])
-                            for id_dict in ex.not_found
-                        ]
-                    )
+                    create_these_ids = {
+                        NodeId(id_dict["instanceId"]["space"], id_dict["instanceId"]["externalId"])
+                        for id_dict in ex.not_found
+                    }
                     self.logger.info(f"Creating {len(create_these_ids)} time series")
 
                     datapoints_lists: dict[NodeId, DataPointList] = {
@@ -589,7 +587,7 @@ class CDMTimeSeriesUploadQueue(BaseTimeSeriesUploadQueue[NodeId]):
                 ]
             )
 
-            for _instance_id, datapoints in self.upload_queue.items():
+            for datapoints in self.upload_queue.values():
                 self.points_written.inc(len(datapoints))
 
             try:
