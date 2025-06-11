@@ -80,6 +80,7 @@ from .time_series import (
 __all__ = [
     "AssetUploadQueue",
     "BytesUploadQueue",
+    "CDMTimeSeriesUploadQueue",
     "DataPoint",
     "DataPointList",
     "EventUploadQueue",
@@ -88,6 +89,5 @@ __all__ = [
     "RawUploadQueue",
     "SequenceUploadQueue",
     "TimeSeriesUploadQueue",
-    "CDMTimeSeriesUploadQueue",
     "default_time_series_factory",
 ]
