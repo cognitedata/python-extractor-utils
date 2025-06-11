@@ -234,10 +234,7 @@ class AbstractStateStore(_BaseStateStore, ABC):
 
         if high is not None and new_state > high:
             return True
-        if low is not None and new_state < low:
-            return True
-
-        return False
+        return bool(low is not None and new_state < low)
 
     def __getitem__(self, external_id: str) -> tuple[Any, Any]:
         return self.get_state(external_id)  # type: ignore  # will not be list if input is single str
@@ -336,7 +333,7 @@ class RawStateStore(AbstractStateStore):
                 self._local_state.clear()
                 for row in rows:
                     if row.key is None or row.columns is None:
-                        self.logger.warning(f"None encountered in row: {str(row)}")
+                        self.logger.warning(f"None encountered in row: {row!s}")
                         # should never happen, but type from sdk is optional
                         continue
                     self._local_state[row.key] = row.columns
@@ -362,9 +359,7 @@ class RawStateStore(AbstractStateStore):
                 self._cdf_client.raw.rows.insert(db_name=self.database, table_name=self.table, row=self._local_state)
                 # Create a copy of deleted to facilitate testing (mock library stores list, and as it changes, the
                 # assertions fail)
-                self._cdf_client.raw.rows.delete(
-                    db_name=self.database, table_name=self.table, key=[k for k in self._deleted]
-                )
+                self._cdf_client.raw.rows.delete(db_name=self.database, table_name=self.table, key=list(self._deleted))
                 self._deleted.clear()
 
         impl()
@@ -435,7 +430,7 @@ class LocalStateStore(AbstractStateStore):
             except FileNotFoundError:
                 pass
             except json.decoder.JSONDecodeError as e:
-                raise ValueError(f"Invalid JSON in state store file: {str(e)}") from e
+                raise ValueError(f"Invalid JSON in state store file: {e!s}") from e
 
         self._initialized = True
 

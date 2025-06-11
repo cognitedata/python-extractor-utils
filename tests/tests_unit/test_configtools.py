@@ -359,11 +359,11 @@ def test_multiple_logging_console() -> None:
 
     config.logger.setup_logging()
 
-    assert 1 == len(logger.handlers)
+    assert len(logger.handlers) == 1
 
     config.logger.setup_logging()
 
-    assert 1 == len(logger.handlers)
+    assert len(logger.handlers) == 1
 
     logger.handlers.clear()
 
@@ -404,16 +404,16 @@ def test_multiple_logging_file() -> None:
     logger.handlers.clear()
 
     config_1.logger.setup_logging()
-    assert 1 == len(logger.handlers)
+    assert len(logger.handlers) == 1
 
     config_2.logger.setup_logging()
-    assert 2 == len(logger.handlers)
+    assert len(logger.handlers) == 2
 
     config_1.logger.setup_logging()
-    assert 2 == len(logger.handlers)
+    assert len(logger.handlers) == 2
 
     config_2.logger.setup_logging()
-    assert 2 == len(logger.handlers)
+    assert len(logger.handlers) == 2
 
     logger.handlers.clear()
 

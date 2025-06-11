@@ -7,7 +7,7 @@ from cognite.extractorutils.uploader.time_series import DataPoint
 
 
 class InsertDatapoints:
-    def __init__(self, *, id: int | None = None, external_id: str | None = None, datapoints: list[DataPoint]):
+    def __init__(self, *, id: int | None = None, external_id: str | None = None, datapoints: list[DataPoint]):  # noqa: A002
         self.id = id
         self.external_id = external_id
         self.datapoints = datapoints

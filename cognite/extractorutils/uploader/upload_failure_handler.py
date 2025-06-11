@@ -1,5 +1,5 @@
 from collections.abc import Iterator
-from datetime import datetime
+from datetime import datetime, timezone
 
 import jsonlines
 
@@ -22,7 +22,7 @@ class FileFailureManager:
         self.failure_logs: dict[str, str] = {}
 
         self.path_to_failure_log: str = self._pre_process_file_extension(path_to_file)
-        self.start_time = start_time or str(datetime.now())
+        self.start_time = start_time or str(datetime.now(tz=timezone.utc))
         self._initialize_failure_logs()
 
     def _pre_process_file_extension(self, path_to_file: str | None) -> str:
