@@ -148,7 +148,7 @@ def test_handle_cdm_timeseries(MockCogniteClient: Mock) -> None:
         config_class=UploaderExtractorConfig,
     )
     ex.cdm_time_series_queue = CDMTimeSeriesUploadQueue(client)
-    start: float = datetime.datetime.now().timestamp() * 1000.0
+    start: float = datetime.now(tz=timezone.utc).timestamp() * 1000.0
 
     # single
     node_single = NodeId("some-space", "some-id")
