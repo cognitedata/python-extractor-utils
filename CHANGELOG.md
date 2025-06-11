@@ -12,11 +12,20 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
-## Next
+## 7.6.0
+
+### Added
+
+* Added a common method `_report_run` that can be called from any extractors using this library to report a extractor run into Extractor Pipelines. This automatically handles truncating the message to less than 1000 characters if required.
+
+### Fixed
+
+* Fixed `_report_success` calls failing if the `success_message` was longer than 1000 characters
 
 ### Changed
 
 * In the `unstable` package: `-l` / `--local-override` is renamed to `-f` / `--force-local-config`
+
 
 ## 7.5.14
 
