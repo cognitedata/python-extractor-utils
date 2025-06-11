@@ -539,7 +539,7 @@ def timestamp_to_datetime(ts: int) -> datetime:
 
 def now() -> int:
     """
-    Current time in CDF format (milliseonds since 1970-01-01 00:00:00 UTC).
+    Current time in CDF format (milliseconds since 1970-01-01 00:00:00 UTC).
     """
     return int(time() * 1000)
 

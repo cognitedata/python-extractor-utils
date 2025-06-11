@@ -135,7 +135,7 @@ class Extractor(Generic[CustomConfigClass]):
         """
         Load a configuration file.
 
-        Either from the specified path, or by a path specified by the user in a command line arg. Will quit further
+        Either from the specified path, or from a path specified by the user in a command line arg. Will quit further
         execution of no path is given.
 
         Args:
@@ -190,7 +190,7 @@ class Extractor(Generic[CustomConfigClass]):
         Searches through the config object for a StateStoreConfig.
 
         If found, it will use that configuration to generate a state store, if no such config is found it will either
-        create a LocalStateStore or a NoStateStore depending on whether the  ``use_default_state_store`` argument to the
+        create a LocalStateStore or a NoStateStore depending on whether the ``use_default_state_store`` argument to the
         constructor was true or false.
 
         Either way, the state_store attribute is guaranteed to be set after calling this method.
@@ -376,7 +376,7 @@ class Extractor(Generic[CustomConfigClass]):
 
         Ensures that the Extractor is set up correctly (``run`` called within a ``with``) and calls the ``run_handle``.
 
-        Can be overrided in subclasses.
+        Can be overriden in subclasses.
         """
         if not self.started:
             raise ValueError("You must run the extractor in a context manager")

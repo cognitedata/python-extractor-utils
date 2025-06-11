@@ -322,7 +322,7 @@ class LocalHashStateStore(AbstractHashStateStore):
         Subsequent calls to this method will be noop unless ``force`` is set to True.
 
         Args:
-            force: Enable re-initialization, ie overwrite when called multiple times
+            force: Enable re-initialization, i.e. overwrite when called multiple times
         """
         if self._initialized and not force:
             return
