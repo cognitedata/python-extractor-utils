@@ -605,7 +605,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
             )
 
         except CogniteDuplicatedError:
-            self.logger.info(f"Sequnce already exist: {either_id}")
+            self.logger.info(f"Sequence already exist: {either_id}")
             seq = self.cdf_client.sequences.retrieve(  # type: ignore [assignment]
                 id=either_id.internal_id,
                 external_id=either_id.external_id,

@@ -199,7 +199,7 @@ class AbstractMetricsPusher(ABC):
     @abstractmethod
     def _push_to_server(self) -> None:
         """
-        Push metrics to a remote server, to be overrided in subclasses.
+        Push metrics to a remote server, to be overridden in subclasses.
         """
         pass
 

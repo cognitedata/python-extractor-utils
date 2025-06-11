@@ -22,7 +22,7 @@ class InvalidConfigError(Exception):
 
       * Missing fields
       * Incompatible types
-      * Unkown fields
+      * Unknown fields
     """
 
     def __init__(self, message: str, details: list[str] | None = None):
