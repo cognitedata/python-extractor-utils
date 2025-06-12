@@ -25,6 +25,10 @@ class InsertDatapoints:
 
 
 class InsertCDMDatapoints:
+    """
+    A class representing a batch of datapoints to be inserted into a cdm time series.
+    """
+
     def __init__(self, *, instance_id: NodeId, datapoints: list[DataPoint]):
         self.instance_id = instance_id
         self.datapoints = datapoints

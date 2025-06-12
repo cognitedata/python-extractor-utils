@@ -70,6 +70,10 @@ IdType = TypeVar("IdType", EitherId, NodeId)
 
 
 class CdmDatapointsPayload(TypedDict):
+    """
+    Represents a payload for CDF datapoints, linking them to a specific instance.
+    """
+
     instanceId: NodeId
     datapoints: DataPointList
 
@@ -95,7 +99,7 @@ def default_time_series_factory(external_id: str, datapoints: DataPointList) -> 
 
 class BaseTimeSeriesUploadQueue(AbstractUploadQueue, Generic[IdType]):
     """
-    Abstract base upload queue for time series
+    Abstract base upload queue for time series.
 
     Args:
         cdf_client: Cognite Data Fusion client to use
@@ -182,7 +186,7 @@ class BaseTimeSeriesUploadQueue(AbstractUploadQueue, Generic[IdType]):
         self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         """
-        Wraps around stop method, for use as context manager
+        Wraps around stop method, for use as context manager.
 
         Args:
             exc_type: Exception type
@@ -193,7 +197,7 @@ class BaseTimeSeriesUploadQueue(AbstractUploadQueue, Generic[IdType]):
 
     def __len__(self) -> int:
         """
-        The size of the upload queue
+        The size of the upload queue.
 
         Returns:
             Number of data points in queue
@@ -202,7 +206,7 @@ class BaseTimeSeriesUploadQueue(AbstractUploadQueue, Generic[IdType]):
 
     def __enter__(self: TQueue) -> TQueue:
         """
-        Wraps around start method, for use as context manager
+        Wraps around start method, for use as context manager.
 
         Returns:
             self
@@ -400,7 +404,7 @@ class TimeSeriesUploadQueue(BaseTimeSeriesUploadQueue[EitherId]):
 
 class CDMTimeSeriesUploadQueue(BaseTimeSeriesUploadQueue[NodeId]):
     """
-    Upload queue for CDM time series
+    Upload queue for CDM time series.
 
     Args:
         cdf_client: Cognite Data Fusion client to use
@@ -482,11 +486,12 @@ class CDMTimeSeriesUploadQueue(BaseTimeSeriesUploadQueue[NodeId]):
         datapoints: DataPointList | None = None,
     ) -> None:
         """
-        Add data points to upload queue. The queue will be uploaded if the queue size is larger than the threshold
-        specified in the __init__.
+        Add data points to upload queue.
+
+        The queue will be uploaded if the queue size is larger than the threshold specified in the __init__.
 
         Args:
-            timeseries_apply: CogniteExtractorTimeSeriesApply object for which the node is to be created.
+            instance_id: The identifier for the time series to which the datapoints belong.
             datapoints: list of data points to add
         """
         datapoints = self._sanitize_datapoints(datapoints)
@@ -504,7 +509,7 @@ class CDMTimeSeriesUploadQueue(BaseTimeSeriesUploadQueue[NodeId]):
 
     def upload(self) -> None:
         """
-        Trigger an upload of the queue, clears queue afterwards
+        Trigger an upload of the queue, clears queue afterwards.
         """
 
         @retry(
