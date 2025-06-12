@@ -84,6 +84,8 @@ def safe_get(cls: type[T], *args: Any, **kwargs: Any) -> T:
 
     Args:
         cls: Metrics class to either create or get a cached version of
+        args: Arguments passed as-is to the class constructor
+        kwargs: Keyword arguments passed as-is to the class constructor
 
     Returns:
         An instance of given class
@@ -98,8 +100,10 @@ def safe_get(cls: type[T], *args: Any, **kwargs: Any) -> T:
 
 class BaseMetrics:
     """
-    Base collection of extractor metrics. The class also spawns a collector thread on init that regularly fetches
-    process information and update the ``process_*`` gauges.
+    Base collection of extractor metrics.
+
+    The class also spawns a collector thread on init that regularly fetches process information and update the
+    ``process_*`` gauges.
 
     To create a set of metrics for an extractor, create a subclass of this class.
 
@@ -144,7 +148,7 @@ class BaseMetrics:
 
     def _proc_collect(self) -> None:
         """
-        Collect values for process metrics
+        Collect values for process metrics.
         """
         total_memory_available = psutil.virtual_memory().total
         while True:
@@ -157,7 +161,7 @@ class BaseMetrics:
 
     def _start_proc_collector(self) -> None:
         """
-        Start a thread that collects process metrics at a regular interval
+        Start a thread that collects process metrics at a regular interval.
         """
         thread = threading.Thread(target=self._proc_collect, name="ProcessMetricsCollector", daemon=True)
         thread.start()
@@ -165,8 +169,9 @@ class BaseMetrics:
 
 class AbstractMetricsPusher(ABC):
     """
-    Base class for metric pushers. Metric pushers spawns a thread that routinely pushes metrics to a configured
-    destination.
+    Base class for metric pushers.
+
+    Metric pushers spawns a thread that routinely pushes metrics to a configured destination.
 
     Contains all the logic for starting and running threads.
 
@@ -194,7 +199,7 @@ class AbstractMetricsPusher(ABC):
     @abstractmethod
     def _push_to_server(self) -> None:
         """
-        Push metrics to a remote server, to be overrided in subclasses.
+        Push metrics to a remote server, to be overridden in subclasses.
         """
         pass
 
@@ -209,7 +214,6 @@ class AbstractMetricsPusher(ABC):
     def start(self) -> None:
         """
         Starts a thread that pushes the default registry to the configured gateway at certain intervals.
-
         """
         self.thread = threading.Thread(target=self._run, daemon=True, name=self.thread_name)
         self.thread.start()
@@ -224,7 +228,7 @@ class AbstractMetricsPusher(ABC):
 
     def __enter__(self) -> "AbstractMetricsPusher":
         """
-        Wraps around start method, for use as context manager
+        Wraps around start method, for use as context manager.
 
         Returns:
             self
@@ -236,7 +240,7 @@ class AbstractMetricsPusher(ABC):
         self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         """
-        Wraps around stop method, for use as context manager
+        Wraps around stop method, for use as context manager.
 
         Args:
             exc_type: Exception type
@@ -403,7 +407,7 @@ class CognitePusher(AbstractMetricsPusher):
 
     def _push_to_server(self) -> None:
         """
-        Create datapoints an push them to their respective time series
+        Create datapoints an push them to their respective time series.
         """
         timestamp = int(arrow.get().float_timestamp * 1000)
 

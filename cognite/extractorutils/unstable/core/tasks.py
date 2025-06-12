@@ -1,3 +1,7 @@
+"""
+This module defines the base classes for tasks in the extractor framework.
+"""
+
 import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING
@@ -18,6 +22,12 @@ __all__ = ["ContinuousTask", "ScheduledTask", "StartupTask", "Task", "TaskContex
 
 
 class TaskContext(CogniteLogger):
+    """
+    Context for a task execution.
+
+    This class is used to log errors and messages related to the task execution.
+    """
+
     def __init__(self, task: "Task", extractor: "Extractor"):
         super().__init__()
         self._task = task
@@ -58,6 +68,18 @@ class _Task:
 
 
 class ScheduledTask(_Task):
+    """
+    A task that is scheduled to run at specific intervals or according to a cron expression.
+
+    This class allows you to define tasks that can be scheduled using either an interval or a cron expression.
+
+    Args:
+        name: The name of the task.
+        target: A callable that takes a ``TaskContext`` and performs the task.
+        description: An optional description of the task.
+        schedule: A ``ScheduleConfig`` object that defines the scheduling configuration for the task.
+    """
+
     def __init__(
         self,
         *,
@@ -73,6 +95,15 @@ class ScheduledTask(_Task):
     def from_interval(
         cls, *, interval: str, name: str, target: TaskTarget, description: str | None = None
     ) -> "ScheduledTask":
+        """
+        Create a scheduled task that runs at regular intervals.
+
+        Args:
+            interval: A string representing the time interval (e.g., "5m" for 5 minutes).
+            name: The name of the task.
+            target: A callable that takes a ``TaskContext`` and performs the task.
+            description: An optional description of the task.
+        """
         return ScheduledTask(
             name=name,
             target=target,
@@ -82,6 +113,15 @@ class ScheduledTask(_Task):
 
     @classmethod
     def from_cron(cls, *, cron: str, name: str, target: TaskTarget, description: str | None = None) -> "ScheduledTask":
+        """
+        Create a scheduled task that runs according to a cron expression.
+
+        Args:
+            cron: A string representing the cron expression (e.g., "0 0 * * *" for daily at midnight).
+            name: The name of the task.
+            target: A callable that takes a ``TaskContext`` and performs the task.
+            description: An optional description of the task.
+        """
         return ScheduledTask(
             name=name,
             target=target,
@@ -91,6 +131,12 @@ class ScheduledTask(_Task):
 
 
 class ContinuousTask(_Task):
+    """
+    A task that runs continuously.
+
+    Continuous tasks are started when the extractor starts and are expected to run until the extractor stops.
+    """
+
     def __init__(
         self,
         *,
@@ -102,6 +148,12 @@ class ContinuousTask(_Task):
 
 
 class StartupTask(_Task):
+    """
+    A task that runs once at the startup of the extractor.
+
+    Startup tasks are executed before any continuous or scheduled tasks and are typically used for initialization.
+    """
+
     def __init__(
         self,
         *,

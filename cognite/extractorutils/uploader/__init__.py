@@ -13,8 +13,10 @@
 #  limitations under the License.
 
 """
-Module containing upload queue classes. The UploadQueue classes chunks together items and uploads them together to CDF,
-both to minimize the load on the API, and also to speed up uploading as requests can be slow.
+Module containing upload queue classes.
+
+The UploadQueue classes chunks together items and uploads them together to CDF,both to minimize the load on the API, and
+also to speed up uploading as requests can be slow.
 
 Each upload queue comes with some configurable conditions that, when met, automatically triggers an upload.
 
