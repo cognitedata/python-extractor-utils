@@ -1,3 +1,6 @@
+"""
+Module containing functions and classes for loading configuration files.
+"""
 #  Copyright 2023 Cognite AS
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
@@ -53,13 +56,20 @@ CustomConfigClass = TypeVar("CustomConfigClass", bound=BaseConfig)
 
 
 class KeyVaultAuthenticationMethod(Enum):
+    """
+    Enum representing the authentication methods for Azure KeyVault.
+    """
+
     DEFAULT = "default"
     CLIENTSECRET = "client-secret"
 
 
 class KeyVaultLoader:
     """
-    Class responsible for configuring keyvault for clients using Azure
+    Class responsible for configuring keyvault for clients using Azure.
+
+    Args:
+        config: A dictionary containing the configuration for the keyvault.
     """
 
     def __init__(self, config: dict | None):
@@ -125,6 +135,9 @@ class KeyVaultLoader:
         self.client = SecretClient(vault_url=vault_url, credential=credentials)
 
     def __call__(self, _: yaml.SafeLoader, node: yaml.Node) -> str:
+        """
+        Method to be called when the !keyvault tag is encountered in the YAML file.
+        """
         self._init_client()
         try:
             return self.client.get_secret(node.value).value  # type: ignore  # _init_client guarantees not None
@@ -137,7 +150,14 @@ class _EnvLoader(yaml.SafeLoader):
 
 
 class SafeLoaderIgnoreUnknown(yaml.SafeLoader):
+    """
+    Variant of PyYAML's SafeLoader that ignores unknown tags.
+    """
+
     def ignore_unknown(self, node: yaml.Node) -> None:
+        """
+        Constructor for unknown tags that does nothing.
+        """
         return None
 
 
@@ -308,7 +328,7 @@ def load_yaml_dict(
     keyvault_loader: KeyVaultLoader | None = None,
 ) -> dict[str, Any]:
     """
-    Read a YAML file and return a dictionary from its contents
+    Read a YAML file and return a dictionary from its contents.
 
     Args:
         source: Input stream (as returned by open(...)) or string containing YAML.
@@ -330,7 +350,7 @@ def load_yaml_dict(
 
 def compile_patterns(ignore_patterns: list[str | IgnorePattern]) -> list[re.Pattern[str]]:
     """
-    list of patterns to compile
+    List of patterns to compile.
 
     Args:
         ignore_patterns: A list of strings or IgnorePattern to be compiled.
@@ -348,6 +368,12 @@ def compile_patterns(ignore_patterns: list[str | IgnorePattern]) -> list[re.Patt
 
 
 class ConfigResolver(Generic[CustomConfigClass]):
+    """
+    Class for resolving configuration files, either from a local file or a remote CDF extraction pipeline.
+
+    Automatically reloads the configuration file if it has changed
+    """
+
     def __init__(self, config_path: str, config_type: type[CustomConfigClass]):
         self.config_path = config_path
         self.config_type = config_type
@@ -363,6 +389,9 @@ class ConfigResolver(Generic[CustomConfigClass]):
 
     @property
     def cognite_client(self) -> CogniteClient | None:
+        """
+        Returns a CogniteClient instance based on the configuration.
+        """
         if self._cognite_client is None and self._config is not None:
             self._cognite_client = self._config.cognite.get_cognite_client("config_resolver")
         return self._cognite_client
@@ -375,6 +404,9 @@ class ConfigResolver(Generic[CustomConfigClass]):
 
     @property
     def is_remote(self) -> bool:
+        """
+        Returns True if the configuration is a remote CDF extraction pipeline config, False if it is a local file.
+        """
         raw_config_type = load_yaml_dict(self._config_text).get("type")
         if raw_config_type is None:
             _logger.warning("No config type specified, default to local")
@@ -384,6 +416,9 @@ class ConfigResolver(Generic[CustomConfigClass]):
 
     @property
     def has_changed(self) -> bool:
+        """
+        Returns True if the configuration file has changed since the last accepted configuration.
+        """
         try:
             self._resolve_config()
         except Exception:
@@ -393,18 +428,36 @@ class ConfigResolver(Generic[CustomConfigClass]):
 
     @property
     def config(self) -> CustomConfigClass:
+        """
+        Returns the current configuration object. If it has not been resolved yet, it will resolve it first.
+        """
         if self._config is None:
             self._resolve_config()
             self.accept_new_config()
         return self._config  # type: ignore
 
     def accept_new_config(self) -> None:
+        """
+        Accepts the new configuration, making it the current configuration.
+        """
         self._config = self._next_config
 
     @classmethod
     def from_cli(
         cls, name: str, description: str, version: str, config_type: type[CustomConfigClass]
     ) -> "ConfigResolver":
+        """
+        Creates a ConfigResolver instance from command line arguments.
+
+        Args:
+            name: The name of the extractor.
+            description: A description of the extractor.
+            version: The version of the extractor.
+            config_type: The type of the configuration class to be used.
+
+        Returns:
+            A ConfigResolver instance initialized with the configuration file path.
+        """
         argument_parser = argparse.ArgumentParser(sys.argv[0], description=description)
         argument_parser.add_argument(
             "config", nargs=1, type=str, help="The YAML file containing configuration for the extractor."

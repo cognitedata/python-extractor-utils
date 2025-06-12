@@ -1,3 +1,9 @@
+"""
+DEPRECATED: This module is deprecated and will be removed in a future release.
+
+These types are used in the UploaderExtractor, as well as the REST and MQTT extensions for the extractorutils library.
+"""
+
 from collections.abc import Iterable
 from typing import TypeAlias
 
@@ -7,6 +13,10 @@ from cognite.extractorutils.uploader.time_series import DataPoint
 
 
 class InsertDatapoints:
+    """
+    A class representing a batch of datapoints to be inserted into a time series.
+    """
+
     def __init__(self, *, id: int | None = None, external_id: str | None = None, datapoints: list[DataPoint]):  # noqa: A002
         self.id = id
         self.external_id = external_id
@@ -14,6 +24,10 @@ class InsertDatapoints:
 
 
 class RawRow:
+    """
+    A class representing a row of data to be inserted into a RAW table.
+    """
+
     def __init__(self, db_name: str, table_name: str, row: _Row | Iterable[_Row]):
         self.db_name = db_name
         self.table_name = table_name

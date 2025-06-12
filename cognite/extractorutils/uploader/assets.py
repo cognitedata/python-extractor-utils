@@ -1,3 +1,7 @@
+"""
+Upload queue for (legacy) assets.
+"""
+
 #  Copyright 2023 Cognite AS
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
@@ -37,7 +41,7 @@ from cognite.extractorutils.util import cognite_exceptions, retry
 
 class AssetUploadQueue(AbstractUploadQueue):
     """
-    Upload queue for assets
+    Upload queue for assets.
 
     Args:
         cdf_client: Cognite Data Fusion client to use
@@ -77,8 +81,9 @@ class AssetUploadQueue(AbstractUploadQueue):
 
     def add_to_upload_queue(self, asset: Asset) -> None:
         """
-        Add asset to upload queue. The queue will be uploaded if the queue size is larger than the threshold
-        specified in the __init__.
+        Add asset to upload queue.
+
+        The queue will be uploaded if the queue size is larger than the threshold specified in the ``__init__``.
 
         Args:
             asset: Asset to add
@@ -92,7 +97,7 @@ class AssetUploadQueue(AbstractUploadQueue):
 
     def upload(self) -> None:
         """
-        Trigger an upload of the queue, clears queue afterwards
+        Trigger an upload of the queue, clears queue afterwards.
         """
 
         @retry(
@@ -138,7 +143,7 @@ class AssetUploadQueue(AbstractUploadQueue):
 
     def __enter__(self) -> "AssetUploadQueue":
         """
-        Wraps around start method, for use as context manager
+        Wraps around start method, for use as context manager.
 
         Returns:
             self
@@ -153,7 +158,7 @@ class AssetUploadQueue(AbstractUploadQueue):
         exc_tb: TracebackType | None,
     ) -> None:
         """
-        Wraps around stop method, for use as context manager
+        Wraps around stop method, for use as context manager.
 
         Args:
             exc_type: Exception type

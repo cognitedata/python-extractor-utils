@@ -1,3 +1,7 @@
+"""
+Module that provides additional threading utilities.
+"""
+
 import logging
 import signal
 from threading import Condition
@@ -20,6 +24,9 @@ class CancellationToken:
         self._parent: CancellationToken | None = None
 
     def __repr__(self) -> str:
+        """
+        Return a string representation of the CancellationToken instance.
+        """
         cls = self.__class__
         status = "cancelled" if self.is_cancelled else "not cancelled"
         return f"<{cls.__module__}.{cls.__qualname__} at {id(self):#x}: {status}>"
@@ -60,6 +67,19 @@ class CancellationToken:
         self.cancel()
 
     def wait(self, timeout: float | None = None) -> bool:
+        """
+        Wait for the token to be cancelled, or until the timeout expires.
+
+        This can also be used as a drop-in replacement for sleep if you want to wait for a certain amount of time. A
+        call to sleep will not be interrupted by a cancellation, but a call to wait will return immediately if the token
+        is cancelled.
+
+        Args:
+            timeout: The maximum time to wait in seconds. If None, wait indefinitely.
+
+        Returns:
+            ``True`` if the token was cancelled, ``False`` if the timeout expired before cancellation.
+        """
         endtime = None
         if timeout is not None:
             endtime = time() + timeout
@@ -78,14 +98,20 @@ class CancellationToken:
         return True
 
     def create_child_token(self) -> "CancellationToken":
+        """
+        Create a child cancellation token of this token.
+
+        The child token will be cancelled if this token is cancelled, but can also be cancelled independently.
+        """
         child = CancellationToken(self._cv)
         child._parent = self
         return child
 
     def cancel_on_interrupt(self) -> None:
         """
-        Register an interrupt handler to capture SIGINT (Ctrl-C) and cancel this token,
-        instead of throwing a KeyboardInterrupt exception.
+        Register an interrupt handler to capture SIGINT (Ctrl-C) and cancel this token.
+
+        This will set the cancellation token instead of throwing a KeyboardInterrupt exception.
         """
 
         def sigint_handler(sig_num: int, frame: Any) -> None:
