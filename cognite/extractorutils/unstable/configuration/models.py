@@ -207,7 +207,7 @@ class ConnectionConfig(ConfigModel):
     """
     Configuration for connecting to a Cognite Data Fusion project.
 
-    This configuration includes the project name, base URL, integration name, and authentication details, ase well as
+    This configuration includes the project name, base URL, integration name, and authentication details, as well as
     optional connection parameters.
 
     This configuration is common for all extractors.

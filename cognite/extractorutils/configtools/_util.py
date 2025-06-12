@@ -29,7 +29,7 @@ def _to_snake_case(dictionary: dict[str, Any], case_style: str) -> dict[str, Any
     """
     Ensure that all keys in the dictionary follows the snake casing convention.
 
-    This function will recursively fix any list or dictionaries.
+    This function will recursively fix any list or dictionaries. The input dictionary is never modified in place.
 
     Args:
         dictionary: Dictionary to update.

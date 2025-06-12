@@ -136,7 +136,7 @@ class Extractor(Generic[CustomConfigClass]):
         Load a configuration file.
 
         Either from the specified path, or from a path specified by the user in a command line arg. Will quit further
-        execution of no path is given.
+        execution if no path is specified.
 
         Args:
             override_path: Optional override for file path, ie don't parse command line arguments

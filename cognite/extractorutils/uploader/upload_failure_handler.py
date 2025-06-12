@@ -1,5 +1,5 @@
 """
-This module provides a mechanism to handle file upload failures by logging details to a JSON Lines file.
+This module provides a mechanism to handle file upload failures by logging details to a newline delimited JSON file.
 """
 
 from collections.abc import Iterator
@@ -26,7 +26,7 @@ class FileErrorMapping:
 
 class FileFailureManager:
     """
-    A class to manage file upload failures by logging them to a JSON Lines file.
+    A class to manage file upload failures by logging them to a newline delimited JSON file.
     """
 
     MAX_QUEUE_SIZE = 500
@@ -81,7 +81,7 @@ class FileFailureManager:
 
     def write_to_file(self) -> None:
         """
-        Flushes the current failure logs to a JSON Lines file and clears the queue.
+        Flushes the current failure logs to a newline delimited JSON file and clears the queue.
         """
         if len(self) == 0:
             return
