@@ -224,7 +224,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         res = self.cognite_client.post(
             f"/api/v1/projects/{self.cognite_client.config.project}/integrations/checkin",
             json={
-                "externalId": self.connection_config.integration,
+                "externalId": self.connection_config.integration.external_id,
                 "taskEvents": task_updates,
                 "errors": error_updates,
             },
@@ -345,7 +345,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self.cognite_client.post(
             f"/api/v1/projects/{self.cognite_client.config.project}/integrations/extractorinfo",
             json={
-                "externalId": self.connection_config.integration,
+                "externalId": self.connection_config.integration.external_id,
                 "activeConfigRevision": self.current_config_revision,
                 "extractor": {
                     "version": self.VERSION,

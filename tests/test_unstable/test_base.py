@@ -79,7 +79,7 @@ def test_simple_task_report(
 
     # Test that the task run is entered into the history for that task
     res = extractor.cognite_client.get(
-        f"/api/v1/projects/{extractor.cognite_client.config.project}/integrations/history?integration={connection_config.integration}&taskName=TestTask",
+        f"/api/v1/projects/{extractor.cognite_client.config.project}/integrations/history?integration={connection_config.integration.external_id}&taskName=TestTask",
         headers={"cdf-version": "alpha"},
     ).json()
 
