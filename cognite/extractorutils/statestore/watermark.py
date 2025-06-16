@@ -11,78 +11,23 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-
 """
-The ``statestore`` module contains classes for keeping track of the extraction state of individual items, facilitating
-incremental load and speeding up startup times.
+State store implementation that uses watermarks to track changes.
 
-At the beginning of a run the extractor typically calls the ``initialize`` method, which loads the states from the
-remote store (which can either be a local JSON file or a table in CDF RAW), and during and/or at the end of a run, the
-``synchronize`` method is called, which saves the current states to the remote store.
+Watermarks are either low and high values, or just high values, that represent the known range of data that has been
+processed for a given external ID. This allows for incremental processing of data, where only new or changed data
+is processed in subsequent runs.
 
-You can choose the back-end for your state store with which class you're instantiating:
+For example, if a time series has a low watermark of 100 and a high watermark of 200, the extractor can start processing
+new data from 201 onwards when starting up, and can begin backfilling historical data from 100 and backwards.
 
-.. code-block:: python
+Or if a file has a high watermark of 1000, and the extractor receives a new file with a high watermark of 1500, the
+extractor will know that this the file has indeed changed.
 
-    # A state store using a JSON file as remote storage:
-    states = LocalStateStore("state.json")
-    states.initialize()
-
-    # A state store using a RAW table as remote storage:
-    states = RawStateStore(
-        cdf_client = CogniteClient(),
-        database = "extractor_states",
-        table = "my_extractor_deployment"
-    )
-    states.initialize()
-
-You can now use this state store to get states:
-
-.. code-block:: python
-
-    low, high = states.get_state(external_id = "my-id")
-
-You can set states:
-
-.. code-block:: python
-
-    states.set_state(external_id = "another-id", high=100)
-
-and similar for ``low``. The ``set_state(...)`` method will always overwrite the current state. Some times you might
-want to only set state *if larger* than the previous state, in that case consider ``expand_state(...)``:
-
-.. code-block:: python
-
-    # High watermark of another-id is already 100, nothing happens in this call:
-    states.expand_state(external_id = "another-id", high=50)
-
-    # This will set high to 150 as it is larger than the previous state
-    states.expand_state(external_id = "another-id", high=150)
-
-To store the state to the remote store, use the ``synchronize()`` method:
-
-.. code-block:: python
-
-    states.synchronize()
-
-You can set a state store to automatically update on upload triggers from an upload queue by using the
-``post_upload_function`` in the upload queue:
-
-.. code-block:: python
-
-    states = LocalStateStore("state.json")
-    states.initialize()
-
-    uploader = TimeSeriesUploadQueue(
-        cdf_client = CogniteClient(),
-        max_upload_interval = 10
-        post_upload_function = states.post_upload_handler()
-    )
-
-    # The state store is now updated automatically!
-
-    states.synchronize()
-
+This module provides the following state store implementations:
+- `RawStateStore`: A state store that uses a CDF RAW table to store states.
+- `LocalStateStore`: A state store that uses a local JSON file to store states.
+- `NoStateStore`: A state store that does not persist states between runs, but keeps the state in memory only.
 """
 
 import json
@@ -104,6 +49,8 @@ from ._base import RETRIES, RETRY_BACKOFF_FACTOR, RETRY_DELAY, RETRY_MAX_DELAY, 
 class AbstractStateStore(_BaseStateStore, ABC):
     """
     Base class for a state store.
+
+    This class is thread-safe.
 
     Args:
         save_interval: Automatically trigger synchronize each m seconds when run as a thread (use start/stop
@@ -132,7 +79,7 @@ class AbstractStateStore(_BaseStateStore, ABC):
 
     def get_state(self, external_id: str | list[str]) -> tuple[Any, Any] | list[tuple[Any, Any]]:
         """
-        Get state(s) for external ID(s)
+        Get state(s) for external ID(s).
 
         Args:
             external_id: An external ID or list of external IDs to get states for
@@ -157,6 +104,9 @@ class AbstractStateStore(_BaseStateStore, ABC):
         """
         Set/update state of a singe external ID.
 
+        Consider using `expand_state` instead, since this method will overwrite the current state no matter if it is
+        actually outside the current state.
+
         Args:
             external_id: External ID of e.g. time series to store state of
             low: Low watermark
@@ -169,8 +119,10 @@ class AbstractStateStore(_BaseStateStore, ABC):
 
     def expand_state(self, external_id: str, low: Any | None = None, high: Any | None = None) -> None:
         """
-        Like set_state, but only sets state if the proposed state is outside the stored state. That is if e.g. low is
-        lower than the stored low.
+        Only set/update state if the proposed state is outside the stored state.
+
+        Only updates the low watermark if the proposed low is lower than the stored low, and only updates the high
+        watermark if the proposed high is higher than the stored high.
 
         Args:
             external_id: External ID of e.g. time series to store state of
@@ -195,7 +147,9 @@ class AbstractStateStore(_BaseStateStore, ABC):
 
     def post_upload_handler(self) -> Callable[[list[dict[str, str | DataPointList]]], None]:
         """
-        Get a callable suitable for passing to a time series upload queue as post_upload_function, that will
+        Get a callback function to handle post-upload events.
+
+        This callable is suitable for passing to a time series upload queue as ``post_upload_function``, that will
         automatically update the states in this state store when that upload queue is uploading.
 
         Returns:
@@ -237,24 +191,43 @@ class AbstractStateStore(_BaseStateStore, ABC):
         return bool(low is not None and new_state < low)
 
     def __getitem__(self, external_id: str) -> tuple[Any, Any]:
+        """
+        Get state for a single external ID.
+        """
         return self.get_state(external_id)  # type: ignore  # will not be list if input is single str
 
     def __setitem__(self, key: str, value: tuple[Any, Any]) -> None:
+        """
+        Set state for a single external ID.
+
+        This will always overwrite the current state, so use with care.
+        """
         self.set_state(external_id=key, low=value[0], high=value[1])
 
     def __contains__(self, external_id: str) -> bool:
+        """
+        Check if an external ID is in the state store.
+        """
         return external_id in self._local_state
 
     def __len__(self) -> int:
+        """
+        Get the number of external IDs in the state store.
+        """
         return len(self._local_state)
 
     def __iter__(self) -> Iterator[str]:
+        """
+        Iterate over external IDs in the state store.
+        """
         yield from self._local_state
 
 
 class RawStateStore(AbstractStateStore):
     """
     An extractor state store based on CDF RAW.
+
+    This class is thread-safe.
 
     Args:
         cdf_client: Cognite client to use
@@ -309,6 +282,16 @@ class RawStateStore(AbstractStateStore):
         impl()
 
     def initialize(self, force: bool = False) -> None:
+        """
+        Initialize the state store by loading all known states from CDF RAW.
+
+        Unless ``force`` is set to True, this will not re-initialize the state store if it has already been initialized.
+        Subsequent calls to this method will be noop unless ``force`` is set to True.
+
+        Args:
+            force: Enable re-initialization, ie overwrite when called multiple times
+        """
+
         @retry(
             exceptions=cognite_exceptions(),
             cancellation_token=self.cancellation_token,
@@ -343,6 +326,10 @@ class RawStateStore(AbstractStateStore):
         impl()
 
     def synchronize(self) -> None:
+        """
+        Upload the contents of the state store to CDF RAW.
+        """
+
         @retry(
             exceptions=cognite_exceptions(),
             cancellation_token=self.cancellation_token,
@@ -353,7 +340,7 @@ class RawStateStore(AbstractStateStore):
         )
         def impl() -> None:
             """
-            Upload local state store to CDF
+            Upload local state store to CDF.
             """
             with self.lock:
                 self._cdf_client.raw.rows.insert(db_name=self.database, table_name=self.table, row=self._local_state)
@@ -366,7 +353,7 @@ class RawStateStore(AbstractStateStore):
 
     def __enter__(self) -> "RawStateStore":
         """
-        Wraps around start method, for use as context manager
+        Wraps around start method, for use as context manager.
 
         Returns:
             self
@@ -378,7 +365,7 @@ class RawStateStore(AbstractStateStore):
         self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         """
-        Wraps around stop method, for use as context manager
+        Wraps around stop method, for use as context manager.
 
         Args:
             exc_type: Exception type
@@ -415,7 +402,7 @@ class LocalStateStore(AbstractStateStore):
 
     def initialize(self, force: bool = False) -> None:
         """
-        Load states from specified JSON file
+        Load states from specified JSON file.
 
         Args:
             force: Enable re-initialization, ie overwrite when called multiple times
@@ -436,7 +423,7 @@ class LocalStateStore(AbstractStateStore):
 
     def synchronize(self) -> None:
         """
-        Save states to specified JSON file
+        Save states to specified JSON file.
         """
         with self.lock:
             with open(self._file_path, "w") as f:
@@ -445,7 +432,7 @@ class LocalStateStore(AbstractStateStore):
 
     def __enter__(self) -> "LocalStateStore":
         """
-        Wraps around start method, for use as context manager
+        Wraps around start method, for use as context manager.
 
         Returns:
             self
@@ -460,7 +447,7 @@ class LocalStateStore(AbstractStateStore):
         exc_tb: TracebackType | None,
     ) -> None:
         """
-        Wraps around stop method, for use as context manager
+        Wraps around stop method, for use as context manager.
 
         Args:
             exc_type: Exception type
@@ -473,13 +460,21 @@ class LocalStateStore(AbstractStateStore):
 class NoStateStore(AbstractStateStore):
     """
     A state store that only keeps states in memory and never stores or initializes from external sources.
+
+    This class is thread-safe.
     """
 
     def __init__(self) -> None:
         super().__init__()
 
     def initialize(self, force: bool = False) -> None:
+        """
+        Does nothing.
+        """
         pass
 
     def synchronize(self) -> None:
+        """
+        Does nothing.
+        """
         pass

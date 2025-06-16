@@ -1,3 +1,7 @@
+"""
+Module containing pre-built models for common extractor configuration.
+"""
+
 import os
 import re
 from datetime import timedelta
@@ -37,6 +41,10 @@ __all__ = [
 
 
 class ConfigModel(BaseModel):
+    """
+    Base model for configuration objects, setting the correct pydantic options for extractor config.
+    """
+
     model_config = ConfigDict(
         alias_generator=kebabize,
         populate_by_name=True,
@@ -69,7 +77,7 @@ AuthenticationConfig = Annotated[_ClientCredentialsConfig | _ClientCertificateCo
 
 class TimeIntervalConfig:
     """
-    Configuration parameter for setting a time interval
+    Configuration parameter for setting a time interval.
     """
 
     def __init__(self, expression: str) -> None:
@@ -77,14 +85,25 @@ class TimeIntervalConfig:
 
     @classmethod
     def __get_pydantic_core_schema__(cls, source_type: Any, handler: GetCoreSchemaHandler) -> CoreSchema:
+        """
+        Pydantic hook to define how this class should be serialized/deserialized.
+
+        This allows the class to be used as a field in Pydantic models.
+        """
         return core_schema.no_info_after_validator_function(cls, handler(str | int))
 
     def __eq__(self, other: object) -> bool:
+        """
+        Two TimeIntervalConfig objects are equal if they have the same number of seconds in their interval.
+        """
         if not isinstance(other, TimeIntervalConfig):
             return NotImplemented
         return self._interval == other._interval
 
     def __hash__(self) -> int:
+        """
+        Hash function for TimeIntervalConfig based on the number of seconds in the interval.
+        """
         return hash(self._interval)
 
     @classmethod
@@ -106,36 +125,69 @@ class TimeIntervalConfig:
 
     @property
     def seconds(self) -> int:
+        """
+        Time interval as number of seconds.
+        """
         return self._interval
 
     @property
     def minutes(self) -> float:
+        """
+        Time interval as number of minutes.
+
+        This is a float since the underlying interval is in seconds.
+        """
         return self._interval / 60
 
     @property
     def hours(self) -> float:
+        """
+        Time interval as number of hours.
+
+        This is a float since the underlying interval is in seconds.
+        """
         return self._interval / (60 * 60)
 
     @property
     def days(self) -> float:
+        """
+        Time interval as number of days.
+
+        This is a float since the underlying interval is in seconds.
+        """
         return self._interval / (60 * 60 * 24)
 
     @property
     def timedelta(self) -> timedelta:
+        """
+        Time interval as a timedelta object.
+        """
         days = self._interval // (60 * 60 * 24)
         seconds = self._interval % (60 * 60 * 24)
         return timedelta(days=days, seconds=seconds)
 
     def __int__(self) -> int:
+        """
+        Returns the time interval as a number of seconds.
+        """
         return int(self._interval)
 
     def __float__(self) -> float:
+        """
+        Returns the time interval as a number of seconds.
+        """
         return float(self._interval)
 
     def __str__(self) -> str:
+        """
+        Returns the time interval as a human readable string.
+        """
         return self._expression
 
     def __repr__(self) -> str:
+        """
+        Returns the time interval as a human readable string.
+        """
         return self._expression
 
 
@@ -152,6 +204,15 @@ class _ConnectionParameters(ConfigModel):
 
 
 class ConnectionConfig(ConfigModel):
+    """
+    Configuration for connecting to a Cognite Data Fusion project.
+
+    This configuration includes the project name, base URL, integration name, and authentication details, as well as
+    optional connection parameters.
+
+    This configuration is common for all extractors.
+    """
+
     project: str
     base_url: str
 
@@ -162,6 +223,15 @@ class ConnectionConfig(ConfigModel):
     connection: _ConnectionParameters = Field(default_factory=_ConnectionParameters)
 
     def get_cognite_client(self, client_name: str) -> CogniteClient:
+        """
+        Create a CogniteClient instance using the configuration parameters.
+
+        Args:
+            client_name: Name of the client, set as the x-cdp-app header in the requests
+
+        Returns:
+            CogniteClient: An instance of CogniteClient configured with the provided parameters.
+        """
         from cognite.client.config import global_config
 
         global_config.disable_pypi_version_check = True
@@ -218,6 +288,26 @@ class ConnectionConfig(ConfigModel):
 
     @classmethod
     def from_environment(cls) -> "ConnectionConfig":
+        """
+        Create a ConnectionConfig instance from environment variables.
+
+        Environment variables should be set as follows:
+        - COGNITE_PROJECT: The name of the Cognite Data Fusion project.
+        - COGNITE_BASE_URL: The base URL of the Cognite Data Fusion instance.
+        - COGNITE_INTEGRATION: The external ID of the corresponding integration in CDF.
+        - COGNITE_CLIENT_ID: The client ID for authentication.
+        - COGNITE_TOKEN_SCOPES: The scopes for the token.
+        - COGNITE_CLIENT_SECRET: The client secret for authentication (if using client credentials).
+        - COGNITE_TOKEN_URL: The token URL for authentication (if using client credentials).
+        - COGNITE_CLIENT_CERTIFICATE_PATH: The path to the client certificate (if using client certificate).
+        - COGNITE_AUTHORITY_URL: The authority URL for authentication (if using client certificate).
+
+        Returns:
+            ConnectionConfig: An instance of ConnectionConfig populated with the environment variables.
+
+        Raises:
+            KeyError: If any of the required environment variables are missing.
+        """
         auth: AuthenticationConfig
         if "COGNITE_CLIENT_SECRET" in os.environ:
             auth = _ClientCredentialsConfig(
@@ -248,11 +338,19 @@ class ConnectionConfig(ConfigModel):
 
 
 class CronConfig(ConfigModel):
+    """
+    Configuration parameter for setting a cron schedule.
+    """
+
     type: Literal["cron"]
     expression: str
 
 
 class IntervalConfig(ConfigModel):
+    """
+    Configuration parameter for setting an interval schedule.
+    """
+
     type: Literal["interval"]
     expression: TimeIntervalConfig
 
@@ -261,6 +359,10 @@ ScheduleConfig = Annotated[CronConfig | IntervalConfig, Field(discriminator="typ
 
 
 class LogLevel(Enum):
+    """
+    Enumeration of log levels for the extractor.
+    """
+
     CRITICAL = "CRITICAL"
     ERROR = "ERROR"
     WARNING = "WARNING"
@@ -269,6 +371,10 @@ class LogLevel(Enum):
 
 
 class LogFileHandlerConfig(ConfigModel):
+    """
+    Configuration for a log handler that writes to a file, with daily rotation.
+    """
+
     type: Literal["file"]
     path: Path
     level: LogLevel
@@ -276,6 +382,10 @@ class LogFileHandlerConfig(ConfigModel):
 
 
 class LogConsoleHandlerConfig(ConfigModel):
+    """
+    Configuration for a log handler that writes to standard output.
+    """
+
     type: Literal["console"]
     level: LogLevel
 
@@ -289,4 +399,8 @@ def _log_handler_default() -> list[LogHandlerConfig]:
 
 
 class ExtractorConfig(ConfigModel):
+    """
+    Base class for application configuration for extractors.
+    """
+
     log_handlers: list[LogHandlerConfig] = Field(default_factory=_log_handler_default)

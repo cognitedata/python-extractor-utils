@@ -1,5 +1,50 @@
+"""
+This module provides the base class for extractors.
+
+It includes functionality for task management, logging, error handling, and configuration management.
+
+Extractors should subclass the `Extractor` class and implement the `__init_tasks__` method to define their tasks.
+The subclass should also define several class attributes:
+- ``NAME``: A human-readable name for the extractor.
+- ``EXTERNAL_ID``: A unique identifier for the extractor, used when reporting to CDF Integrations.
+- ``DESCRIPTION``: A brief description of the extractor.
+- ``VERSION``: The version of the extractor, used when reporting to CDF Integrations. This should follow semantic
+   versioning.
+- ``CONFIG_TYPE``: The type of the application configuration for the extractor, which should be a subclass of
+  ``ExtractorConfig``. This should be the same class as the one used for the generic type parameter of the
+  ``Extractor`` class.
+
+
+.. code-block:: python
+
+    class MyConfig(ExtractorConfig):
+        parameter: str
+        another_parameter: int
+        schedule: ScheduleConfig
+
+    class MyExtractor(Extractor[MyConfig]):
+        NAME = "My Extractor"
+        EXTERNAL_ID = "my-extractor"
+        DESCRIPTION = "An example extractor"
+        VERSION = "1.0.0"
+
+        CONFIG_TYPE = MyConfig
+
+        def __init_tasks__(self) -> None:
+            self.add_task(
+                ScheduledTask(
+                    name="my_task",
+                    description="An example task",
+                    schedule=self.application_config.schedule,
+                    target=self.my_task_function,
+                )
+            )
+
+        def my_task_function(self, task_context: TaskContext) -> None:
+            task_context.logger.info("Running my task")
+"""
+
 import logging
-import logging.config
 import time
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
@@ -40,6 +85,13 @@ _T = TypeVar("_T", bound=ExtractorConfig)
 
 
 class FullConfig(Generic[_T]):
+    """
+    A class that holds the full configuration for an extractor.
+
+    This includes the connection configuration, application configuration, and which revision of the application
+    configuration is currently active.
+    """
+
     def __init__(
         self,
         connection_config: ConnectionConfig,
@@ -52,6 +104,16 @@ class FullConfig(Generic[_T]):
 
 
 class Extractor(Generic[ConfigType], CogniteLogger):
+    """
+    Base class for all extractors.
+
+    This class provides the basic functionality for running an extractor, including task management, logging,
+    error handling, and configuration management.
+
+    It designed to be subclassed by specific extractors, which should implement the `__init_tasks__` method
+    to define their tasks.
+    """
+
     NAME: str
     EXTERNAL_ID: str
     DESCRIPTION: str
@@ -128,6 +190,13 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                     root.addHandler(fh)
 
     def __init_tasks__(self) -> None:
+        """
+        This method should be overridden by subclasses to define their tasks.
+
+        It is called automatically when the extractor is initialized.
+
+        Subclasses should call ``self.add_task(...)`` to add tasks to the extractor.
+        """
         pass
 
     def _set_runtime_message_queue(self, queue: Queue) -> None:
@@ -200,6 +269,9 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         )
 
     def restart(self) -> None:
+        """
+        Trigger a restart of the extractor.
+        """
         self._logger.info("Restarting extractor")
         if self._runtime_messages:
             self._runtime_messages.put(RuntimeMessage.RESTART)
@@ -210,12 +282,20 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         return cls(config)
 
     def add_task(self, task: Task) -> None:
+        """
+        Add a task to the extractor.
+
+        This method wraps the task's target function to include error handling and task tracking.
+
+        Args:
+            task: The task to add. It should be an instance of ``StartupTask``, ``ContinuousTask``, or ``ScheduledTask``
+        """
         # Store this for later, since we'll override it with the wrapped version
         target = task.target
 
         def run_task(task_context: TaskContext) -> None:
             """
-            A wrapped version of the task's target, with tracking and error handling
+            A wrapped version of the task's target, with tracking and error handling.
             """
             # Record a task start
             with self._checkin_lock:
@@ -285,14 +365,29 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         )
 
     def start(self) -> None:
+        """
+        Start the extractor.
+
+        Instead of calling this method directly, it is recommended to use the context manager interface by using the
+        ``with`` statement, which ensures proper cleanup on exit.
+        """
         self._setup_logging()
         self._report_extractor_info()
         Thread(target=self._run_checkin, name="ExtractorCheckin", daemon=True).start()
 
     def stop(self) -> None:
+        """
+        Stop the extractor.
+
+        Instead of calling this method directly, it is recommended to use the context manager interface by using the
+        ``with`` statement, which ensures proper cleanup on exit.
+        """
         self.cancellation_token.cancel()
 
     def __enter__(self) -> Self:
+        """
+        Start the extractor in a context manager.
+        """
         self.start()
         return self
 
@@ -302,6 +397,9 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         exc_val: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> bool:
+        """
+        Stop the extractor when exiting the context manager.
+        """
         self.stop()
         with self._checkin_lock:
             self._checkin()
@@ -310,6 +408,17 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         return exc_val is None
 
     def run(self) -> None:
+        """
+        Run the extractor. This method starts the extractor and runs all tasks that have been added.
+
+        This method assumes ``self.start()`` has been called first. The recommended way to use this method is
+        to use the context manager interface, which ensures that the extractor is started and stopped properly.
+
+        .. code-block:: python
+
+            with extractor:
+                extractor.run()
+        """
         has_scheduled = False
 
         startup: list[StartupTask] = []

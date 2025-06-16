@@ -1,3 +1,7 @@
+"""
+Module containing utility functions for validating config values.
+"""
+
 import logging
 import re
 

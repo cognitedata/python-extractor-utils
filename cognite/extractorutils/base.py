@@ -1,3 +1,7 @@
+"""
+Module containing the base class for extractors.
+"""
+
 #  Copyright 2021 Cognite AS
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
@@ -29,16 +33,28 @@ from dotenv import load_dotenv
 from cognite.client import CogniteClient
 from cognite.client.data_classes import ExtractionPipeline, ExtractionPipelineRun
 from cognite.client.exceptions import CogniteAPIError
-from cognite.extractorutils.configtools import BaseConfig, ConfigResolver, StateStoreConfig
+from cognite.extractorutils.configtools import (
+    BaseConfig,
+    ConfigResolver,
+    StateStoreConfig,
+)
 from cognite.extractorutils.exceptions import InvalidConfigError
 from cognite.extractorutils.metrics import BaseMetrics
-from cognite.extractorutils.statestore import AbstractStateStore, LocalStateStore, NoStateStore
+from cognite.extractorutils.statestore import (
+    AbstractStateStore,
+    LocalStateStore,
+    NoStateStore,
+)
 from cognite.extractorutils.threading import CancellationToken
 
 ReportStatus = Literal["success", "failure", "seen"]
 
 
 class ReloadConfigAction(Enum):
+    """
+    Enum for actions to take when a config file is reloaded.
+    """
+
     DO_NOTHING = 1
     REPLACE_ATTRIBUTE = 2
     SHUTDOWN = 3
@@ -130,8 +146,10 @@ class Extractor(Generic[CustomConfigClass]):
 
     def _initial_load_config(self, override_path: str | None = None) -> None:
         """
-        Load a configuration file, either from the specified path, or by a path specified by the user in a command line
-        arg. Will quit further execution of no path is given.
+        Load a configuration file.
+
+        Either from the specified path, or from a path specified by the user in a command line arg. Will quit further
+        execution if no path is specified.
 
         Args:
             override_path: Optional override for file path, ie don't parse command line arguments
@@ -154,6 +172,11 @@ class Extractor(Generic[CustomConfigClass]):
             Thread(target=config_refresher, name="ConfigReloader", daemon=True).start()
 
     def reload_config_callback(self) -> None:
+        """
+        If the reload_config_action was set to CALLBACK, this method will be called when the config file is reloaded.
+
+        This method should be overridden in subclasses to provide custom behavior when the config file is reloaded.
+        """
         self.logger.error("Method for reloading configs has not been overridden in subclass")
 
     def _reload_config(self) -> None:
@@ -177,9 +200,11 @@ class Extractor(Generic[CustomConfigClass]):
 
     def _load_state_store(self) -> None:
         """
-        Searches through the config object for a StateStoreConfig. If found, it will use that configuration to generate
-        a state store, if no such config is found it will either create a LocalStateStore or a NoStateStore depending
-        on whether the  ``use_default_state_store`` argument to the constructor was true or false.
+        Searches through the config object for a StateStoreConfig.
+
+        If found, it will use that configuration to generate a state store, if no such config is found it will either
+        create a LocalStateStore or a NoStateStore depending on whether the ``use_default_state_store`` argument to the
+        constructor was true or false.
 
         Either way, the state_store attribute is guaranteed to be set after calling this method.
         """
@@ -218,11 +243,11 @@ class Extractor(Generic[CustomConfigClass]):
     def _report_run(self, status: ReportStatus, message: str) -> None:
         """
         Report the status of the extractor run to the extraction pipeline.
+
         Args:
             status: Status of the run, either success or failure or seen
             message: Message to report to the extraction pipeline
         """
-
         MAX_MESSAGE_LENGTH_FOR_EXTRACTION_PIPELINE_RUN = 1000
         if self.extraction_pipeline:
             try:
@@ -246,7 +271,7 @@ class Extractor(Generic[CustomConfigClass]):
 
     def _report_success(self, message: str | None = None) -> None:
         """
-        Called on a successful exit of the extractor
+        Called on a successful exit of the extractor.
 
         Args:
             message: Message to report to the extraction pipeline. If not provided, Extractor.success_message is taken.
@@ -256,7 +281,7 @@ class Extractor(Generic[CustomConfigClass]):
 
     def _report_failure(self, message: str) -> None:
         """
-        Called on an unsuccessful exit of the extractor
+        Called on an unsuccessful exit of the extractor.
 
         Args:
             message: Message to report to the extraction pipeline
@@ -265,7 +290,7 @@ class Extractor(Generic[CustomConfigClass]):
 
     def _report_error(self, exception: BaseException) -> None:
         """
-        Called on an unsuccessful exit of the extractor
+        Called on an unsuccessful exit of the extractor.
 
         Args:
             exception: Exception object that caused the extractor to fail
@@ -280,7 +305,6 @@ class Extractor(Generic[CustomConfigClass]):
         Returns:
             self
         """
-
         if str(os.getenv("COGNITE_FUNCTION_RUNTIME", False)).lower() != "true":
             # Environment Variables
             env_file_found = load_dotenv(dotenv_path="./.env", override=True)
@@ -294,7 +318,9 @@ class Extractor(Generic[CustomConfigClass]):
         try:
             self._initial_load_config(override_path=self.config_file_path)
         except InvalidConfigError as e:
-            print("Critical error: Could not read config file", file=sys.stderr)  # noqa: T201
+            print(  # noqa: T201
+                "Critical error: Could not read config file", file=sys.stderr
+            )
             print(str(e), file=sys.stderr)  # noqa: T201
             sys.exit(1)
 
@@ -353,7 +379,10 @@ class Extractor(Generic[CustomConfigClass]):
         return self
 
     def __exit__(
-        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> bool:
         """
         Shuts down the extractor. Makes sure states are preserved, that all uploads of data and metrics are done, etc.
@@ -387,26 +416,50 @@ class Extractor(Generic[CustomConfigClass]):
 
     def run(self) -> None:
         """
-        Run the extractor. Ensures that the Extractor is set up correctly (``run`` called within a ``with``) and calls
-        the ``run_handle``.
+        Run the extractor.
 
-        Can be overrided in subclasses.
+        Ensures that the Extractor is set up correctly (``run`` called within a ``with``) and calls the ``run_handle``.
+
+        Can be overriden in subclasses.
         """
         if not self.started:
             raise ValueError("You must run the extractor in a context manager")
         if self.run_handle:
-            self.run_handle(self.cognite_client, self.state_store, self.config, self.cancellation_token)
+            self.run_handle(
+                self.cognite_client,
+                self.state_store,
+                self.config,
+                self.cancellation_token,
+            )
         else:
             raise ValueError("No run_handle defined")
 
     @classmethod
     def get_current_config(cls) -> CustomConfigClass:
+        """
+        Get the current configuration singleton.
+
+        Returns:
+            The current configuration singleton
+
+        Raises:
+            ValueError: If no configuration singleton has been created, meaning no config file has been loaded.
+        """
         if Extractor._config_singleton is None:  # type: ignore
             raise ValueError("No config singleton created. Have a config file been loaded?")
         return Extractor._config_singleton  # type: ignore
 
     @classmethod
     def get_current_statestore(cls) -> AbstractStateStore:
+        """
+        Get the current state store singleton.
+
+        Returns:
+            The current state store singleton
+
+        Raises:
+            ValueError: If no state store singleton has been created, meaning no state store has been loaded.
+        """
         if Extractor._statestore_singleton is None:
             raise ValueError("No state store singleton created. Have a state store been loaded?")
         return Extractor._statestore_singleton
