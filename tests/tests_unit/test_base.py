@@ -11,13 +11,16 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
+import logging
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from unittest.mock import patch
+from textwrap import shorten
+from unittest.mock import Mock, patch
 
 import pytest
 
 from cognite.client import CogniteClient
+from cognite.client.data_classes import ExtractionPipeline, ExtractionPipelineRun
 from cognite.extractorutils import Extractor
 from cognite.extractorutils.configtools import BaseConfig, StateStoreConfig
 from cognite.extractorutils.statestore import LocalStateStore, NoStateStore
@@ -126,3 +129,151 @@ def test_state_store_getter() -> None:
     e5._load_state_store()
 
     assert isinstance(Extractor.get_current_statestore(), LocalStateStore)
+
+
+@patch("cognite.client.CogniteClient")
+def test_report_success(
+    get_client_mock: Callable[[], CogniteClient],
+) -> None:
+    print("Report success test")
+
+    EXTRACTION_PIPELINE = "test_extraction_pipeline"
+    MESSAGE = "test message"
+
+    def validate_message(run: ExtractionPipelineRun):
+        print(f"Validating message: {run.message}")
+        assert run.extpipe_external_id == EXTRACTION_PIPELINE
+        assert run.status == "success"
+        assert run.message == MESSAGE, "Message does not match expected value"
+
+    extractor = Extractor(
+        name="extractor_test_report_success",
+        description="description",
+        config_class=ConfigWithoutStates,
+    )
+    extractor._initial_load_config("tests/tests_unit/dummyconfig.yaml")
+    extractor.cognite_client = get_client_mock()
+    extractor.logger = logging.getLogger("test_logger")
+
+    extractor.extraction_pipeline = ExtractionPipeline(external_id=EXTRACTION_PIPELINE, name=EXTRACTION_PIPELINE)
+    extractor.cognite_client.extraction_pipelines.runs.create = Mock(side_effect=validate_message)
+
+    extractor._report_success(message=MESSAGE)
+    extractor.extraction_pipeline = None
+
+
+@patch("cognite.client.CogniteClient")
+def test_report_failure(
+    get_client_mock: Callable[[], CogniteClient],
+) -> None:
+    print("Report success test")
+
+    EXTRACTION_PIPELINE = "test_extraction_pipeline"
+    MESSAGE = "test message"
+
+    def validate_message(run: ExtractionPipelineRun):
+        print(f"Validating message: {run.message}")
+        assert run.extpipe_external_id == EXTRACTION_PIPELINE
+        assert run.status == "failure"
+        assert run.message == MESSAGE, "Message does not match expected value"
+
+    extractor = Extractor(
+        name="extractor_test_report_failure",
+        description="description",
+        config_class=ConfigWithoutStates,
+    )
+    extractor._initial_load_config("tests/tests_unit/dummyconfig.yaml")
+    extractor.cognite_client = get_client_mock()
+    extractor.logger = logging.getLogger("test_logger")
+
+    extractor.extraction_pipeline = ExtractionPipeline(external_id=EXTRACTION_PIPELINE, name=EXTRACTION_PIPELINE)
+    extractor.cognite_client.extraction_pipelines.runs.create = Mock(side_effect=validate_message)
+
+    extractor._report_failure(message=MESSAGE)
+    extractor.extraction_pipeline = None
+
+
+@patch("cognite.client.CogniteClient")
+def test_report_error(
+    get_client_mock: Callable[[], CogniteClient],
+) -> None:
+    print("Report error test")
+
+    EXTRACTION_PIPELINE = "test_extraction_pipeline"
+    MESSAGE = "test exception"
+    expected_message = f"Exception: {MESSAGE}"
+
+    def validate_message(run: ExtractionPipelineRun):
+        print(f"Validating message: {run.message}")
+        assert run.extpipe_external_id == EXTRACTION_PIPELINE
+        assert run.status == "failure"
+        assert run.message == expected_message, "Message does not match expected value"
+
+    extractor = Extractor(
+        name="extractor_test_report_error",
+        description="description",
+        config_class=ConfigWithoutStates,
+    )
+    extractor._initial_load_config("tests/tests_unit/dummyconfig.yaml")
+    extractor.cognite_client = get_client_mock()
+    extractor.logger = logging.getLogger("test_logger")
+
+    extractor.extraction_pipeline = ExtractionPipeline(external_id=EXTRACTION_PIPELINE, name=EXTRACTION_PIPELINE)
+    extractor.cognite_client.extraction_pipelines.runs.create = Mock(side_effect=validate_message)
+
+    exception = Exception(MESSAGE)
+
+    extractor._report_error(exception=exception)
+    extractor.extraction_pipeline = None
+
+
+@patch("cognite.client.CogniteClient")
+def test_report_run(get_client_mock: Callable[[], CogniteClient]):
+    print("Report run test")
+
+    MAX_MESSAGE_LENGTH_FOR_EXTRACTION_PIPELINE_RUN = 1000
+
+    EXTRACTION_PIPELINE = "test_extraction_pipeline"
+    SHORT_MESSAGE = "hello world"
+    LONG_MESSAGE = "x " * 1500
+
+    expected_long_message = shorten(
+        text=LONG_MESSAGE,
+        width=MAX_MESSAGE_LENGTH_FOR_EXTRACTION_PIPELINE_RUN,
+        placeholder="...",
+    )
+
+    # Mock method for reporting run
+    def validate_short_message(run: ExtractionPipelineRun):
+        print(f"Validating short message: {run.message}")
+        assert run.extpipe_external_id == EXTRACTION_PIPELINE
+        assert len(run.message) <= MAX_MESSAGE_LENGTH_FOR_EXTRACTION_PIPELINE_RUN, (
+            f"Short message length exceeds maximum allowed length: {MAX_MESSAGE_LENGTH_FOR_EXTRACTION_PIPELINE_RUN}"
+        )
+        assert run.message == SHORT_MESSAGE, "Short message does not match expected value"
+
+    def validate_long_message(run: ExtractionPipelineRun):
+        print(f"Validating long message: {run.message}")
+        assert len(run.message) <= MAX_MESSAGE_LENGTH_FOR_EXTRACTION_PIPELINE_RUN, (
+            f"Long message length exceeds maximum allowed length: {MAX_MESSAGE_LENGTH_FOR_EXTRACTION_PIPELINE_RUN}"
+        )
+        assert run.message == expected_long_message, "Long message does not match expected value"
+
+    extractor = Extractor(
+        name="extractor_test_report_run",
+        description="description",
+        config_class=ConfigWithoutStates,
+    )
+    extractor._initial_load_config("tests/tests_unit/dummyconfig.yaml")
+    extractor.cognite_client = get_client_mock()
+    extractor.logger = logging.getLogger("test_logger")
+
+    extractor.extraction_pipeline = ExtractionPipeline(external_id=EXTRACTION_PIPELINE, name=EXTRACTION_PIPELINE)
+    extractor.cognite_client.extraction_pipelines.runs.create = Mock(side_effect=validate_short_message)
+    extractor._report_run(status="success", message=SHORT_MESSAGE)
+
+    extractor.cognite_client.extraction_pipelines.runs.create = Mock(side_effect=validate_long_message)
+    extractor._report_run(status="success", message=LONG_MESSAGE)
+
+    extractor.extraction_pipeline = None
+    # assert False
