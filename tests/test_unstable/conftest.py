@@ -13,6 +13,7 @@ from cognite.extractorutils.unstable.configuration.models import (
     ConnectionConfig,
     ExtractorConfig,
     IntegrationConfig,
+    Scopes,
     _ClientCredentialsConfig,
 )
 from cognite.extractorutils.unstable.core.base import Extractor
@@ -81,7 +82,9 @@ def connection_config(extraction_pipeline: str) -> ConnectionConfig:
             type="client-credentials",
             client_id=os.environ.get("COGNITE_DEV_CLIENT_ID", os.environ["COGNITE_CLIENT_ID"]),
             client_secret=os.environ.get("COGNITE_DEV_CLIENT_SECRET", os.environ["COGNITE_CLIENT_SECRET"]),
-            scopes=os.environ["COGNITE_DEV_TOKEN_SCOPES"].split(","),
+            scopes=Scopes(
+                os.environ["COGNITE_DEV_TOKEN_SCOPES"],
+            ),
             token_url=os.environ.get("COGNITE_DEV_TOKEN_URL", os.environ["COGNITE_TOKEN_URL"]),
         ),
     )

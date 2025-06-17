@@ -5,7 +5,11 @@ import pytest
 
 from cognite.client.credentials import OAuthClientCredentials
 from cognite.extractorutils.unstable.configuration.loaders import ConfigFormat, load_io
-from cognite.extractorutils.unstable.configuration.models import ConnectionConfig, _ClientCredentialsConfig
+from cognite.extractorutils.unstable.configuration.models import (
+    ConnectionConfig,
+    TimeIntervalConfig,
+    _ClientCredentialsConfig,
+)
 
 CONFIG_EXAMPLE_ONLY_REQUIRED = """
 project: test-project
@@ -19,9 +23,7 @@ authentication:
   client-id: testid
   client-secret: very_secret123
   token-url: https://get-a-token.com/token
-  scopes:
-    - scopea
-    - scopeb
+  scopes: scopea scopeb
 """
 
 CONFIG_EXAMPLE_ONLY_REQUIRED2 = """
@@ -36,7 +38,7 @@ authentication:
   client-id: testid
   client-secret: very_secret123
   token-url: https://get-a-token.com/token
-  scopes: scopea, scopeb
+  scopes: scopea scopeb
 """
 
 FULL_CONFIG_EXAMPLE = """
@@ -53,7 +55,7 @@ authentication:
   client-id: testid
   client-secret: very_secret123
   token-url: https://get-a-token.com/token
-  scopes: scopea, scopeb
+  scopes: scopea scopeb
 
 connection:
   retries:
@@ -62,7 +64,9 @@ connection:
     timeout: 3h
   ssl-certificates:
     verify: true
-    allow-list: thumbprint1, thumbprint2
+    allow-list:
+    - thumbprint1
+    - thumbprint2
 """
 CLIENT_CERTIFICATES_STRING = """
 authentication:
@@ -71,7 +75,7 @@ authentication:
   path: /path/to/cert.pem
   password: very-strong-password
   authority-url: https://you-are-authorized.com
-  scopes: scopea, scopeb
+  scopes: scopea scopeb
 
 connection:
   retries:
@@ -80,7 +84,9 @@ connection:
     timeout: 3h
   ssl-certificates:
     verify: true
-    allow-list: thumbprint1, thumbprint2
+    allow-list:
+    - thumbprint1
+    - thumbprint2
 """
 
 CLIENT_CREDENTIALS_LIST = """
@@ -89,9 +95,7 @@ authentication:
   client-id: testid
   client-secret: very_secret123
   token-url: https://get-a-token.com/token
-  scopes:
-  - scopea
-  - scopeb
+  scopes: scopea scopeb
 
 connection:
   retries:
@@ -111,9 +115,7 @@ authentication:
   path: /path/to/cert.pem
   password: very-strong-password
   authority-url: https://you-are-authorized.com
-  scopes:
-  - scopea
-  - scopeb
+  scopes: scopea scopeb
 
 connection:
   retries:
@@ -138,7 +140,7 @@ def test_load_from_io(config_str: str) -> None:
     assert config.integration.external_id == "test-pipeline"
     assert config.authentication.type == "client-credentials"
     assert config.authentication.client_secret == "very_secret123"
-    assert config.authentication.scopes == ["scopea", "scopeb"]
+    assert list(config.authentication.scopes) == ["scopea", "scopeb"]
 
 
 @pytest.mark.parametrize(
@@ -156,13 +158,13 @@ def test_full_config_client_credentials(config_str: str) -> None:
     assert config.authentication.client_id == "testid"
     assert config.authentication.client_secret == "very_secret123"
     assert config.authentication.token_url == "https://get-a-token.com/token"
-    assert config.authentication.scopes == ["scopea", "scopeb"]
+    assert list(config.authentication.scopes) == ["scopea", "scopeb"]
 
     assert config.connection.retries.max_retries == 1
     assert config.connection.retries.max_backoff.seconds == 2 * 24 * 60 * 60
-    assert config.connection.retries.max_backoff == "2d"
+    assert config.connection.retries.max_backoff == TimeIntervalConfig("2d")
     assert config.connection.retries.timeout.seconds == 3 * 60 * 60
-    assert config.connection.retries.timeout == "3h"
+    assert config.connection.retries.timeout == TimeIntervalConfig("3h")
 
     assert config.connection.ssl_certificates.verify
     assert config.connection.ssl_certificates.allow_list == ["thumbprint1", "thumbprint2"]
@@ -184,13 +186,13 @@ def test_full_config_client_certificates(config_str: str) -> None:
     assert config.authentication.password == "very-strong-password"
     assert config.authentication.path.as_posix() == "/path/to/cert.pem"
     assert config.authentication.authority_url == "https://you-are-authorized.com"
-    assert config.authentication.scopes == ["scopea", "scopeb"]
+    assert list(config.authentication.scopes) == ["scopea", "scopeb"]
 
     assert config.connection.retries.max_retries == 1
     assert config.connection.retries.max_backoff.seconds == 2 * 24 * 60 * 60
-    assert config.connection.retries.max_backoff == "2d"
+    assert config.connection.retries.max_backoff == TimeIntervalConfig("2d")
     assert config.connection.retries.timeout.seconds == 3 * 60 * 60
-    assert config.connection.retries.timeout == "3h"
+    assert config.connection.retries.timeout == TimeIntervalConfig("3h")
 
     assert config.connection.ssl_certificates.verify
     assert config.connection.ssl_certificates.allow_list == ["thumbprint1", "thumbprint2"]

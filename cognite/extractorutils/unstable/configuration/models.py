@@ -1,12 +1,13 @@
 import os
 import re
+from collections.abc import Iterator
 from datetime import timedelta
 from enum import Enum
 from pathlib import Path
 from typing import Annotated, Any, Literal
 
 from humps import kebabize
-from pydantic import BaseModel, ConfigDict, Field, GetCoreSchemaHandler, field_validator
+from pydantic import BaseModel, ConfigDict, Field, GetCoreSchemaHandler
 from pydantic_core import CoreSchema, core_schema
 from typing_extensions import assert_never
 
@@ -45,16 +46,34 @@ class ConfigModel(BaseModel):
     )
 
 
+class Scopes(str):
+    def __init__(self, scopes: str) -> None:
+        self._scopes = list(scopes.split(" "))
+
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source_type: Any, handler: GetCoreSchemaHandler) -> CoreSchema:
+        return core_schema.no_info_after_validator_function(cls, handler(str))
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Scopes):
+            return NotImplemented
+        return self._scopes == other._scopes
+
+    def __hash__(self) -> int:
+        return hash(self._scopes)
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._scopes)
+
+    # def __next__(self) -> str:
+    #     if not self._scopes:
+    #         raise StopIteration
+    #     return self._scopes.pop(0)
+
+
 class BaseCredentialsConfig(ConfigModel):
     client_id: str
-    scopes: list[str]
-
-    @field_validator("scopes", mode="before", json_schema_input_type=str | list[str])
-    @classmethod
-    def cast_scopes(cls, scopes: str | list[str]) -> list[str]:
-        if isinstance(scopes, str):
-            return [scope.strip() for scope in scopes.split(",")]
-        return scopes
+    scopes: Scopes
 
 
 class _ClientCredentialsConfig(BaseCredentialsConfig):
@@ -75,7 +94,7 @@ class _ClientCertificateConfig(BaseCredentialsConfig):
 AuthenticationConfig = Annotated[_ClientCredentialsConfig | _ClientCertificateConfig, Field(discriminator="type")]
 
 
-class TimeIntervalConfig(str):
+class TimeIntervalConfig:
     """
     Configuration parameter for setting a time interval
     """
@@ -157,15 +176,6 @@ class SslCertificatesConfig(ConfigModel):
     verify: bool = True
     allow_list: list[str] | None = None
 
-    @field_validator("allow_list", mode="before", json_schema_input_type=str | list[str] | None)
-    @classmethod
-    def cast_thumbprints(cls, thumbprints: str | list[str] | None) -> list[str] | None:
-        if thumbprints is None:
-            return None
-        if isinstance(thumbprints, str):
-            return [scope.strip() for scope in thumbprints.split(",")]
-        return thumbprints
-
 
 class _ConnectionParameters(ConfigModel):
     retries: RetriesConfig = Field(default_factory=RetriesConfig)
@@ -220,7 +230,7 @@ class ConnectionConfig(ConfigModel):
                     client_id=client_certificate.client_id,
                     cert_thumbprint=str(thumbprint),
                     certificate=str(key),
-                    scopes=client_certificate.scopes,
+                    scopes=list(client_certificate.scopes),
                 )
 
             case _:
@@ -245,7 +255,9 @@ class ConnectionConfig(ConfigModel):
                 client_id=os.environ["COGNITE_CLIENT_ID"],
                 client_secret=os.environ["COGNITE_CLIENT_SECRET"],
                 token_url=os.environ["COGNITE_TOKEN_URL"],
-                scopes=os.environ["COGNITE_TOKEN_SCOPES"].split(","),
+                scopes=Scopes(
+                    os.environ["COGNITE_TOKEN_SCOPES"],
+                ),
             )
         elif "COGNITE_CLIENT_CERTIFICATE_PATH" in os.environ:
             auth = _ClientCertificateConfig(
@@ -254,7 +266,9 @@ class ConnectionConfig(ConfigModel):
                 path=Path(os.environ["COGNITE_CLIENT_CERTIFICATE_PATH"]),
                 password=os.environ.get("COGNITE_CLIENT_CERTIFICATE_PATH"),
                 authority_url=os.environ["COGNITE_AUTHORITY_URL"],
-                scopes=os.environ["COGNITE_TOKEN_SCOPES"].split(","),
+                scopes=Scopes(
+                    os.environ["COGNITE_TOKEN_SCOPES"],
+                ),
             )
         else:
             raise KeyError("Missing auth, either COGNITE_CLIENT_SECRET or COGNITE_CLIENT_CERTIFICATE_PATH must be set")
