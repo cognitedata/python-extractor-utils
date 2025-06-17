@@ -1,3 +1,9 @@
+"""
+DEPRECATED. Use the normal base class and instantiate the upload queues manually.
+
+A module containing a version of the Extractor class with pre-defined upload queues.
+"""
+
 #  Copyright 2022 Cognite AS
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
@@ -11,10 +17,6 @@
 #  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
-
-"""
-A module containing a slightly more advanced base extractor class, sorting a generic output into upload queues.
-"""
 
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass, field
@@ -35,6 +37,10 @@ from cognite.extractorutils.uploader_types import CdfTypes, Event, InsertDatapoi
 
 @dataclass
 class QueueConfigClass:
+    """
+    Configuration for several upload queues.
+    """
+
     event_size: int = 10_000
     raw_size: int = 50_000
     timeseries_size: int = 1_000_000
@@ -43,6 +49,10 @@ class QueueConfigClass:
 
 @dataclass
 class UploaderExtractorConfig(BaseConfig):
+    """
+    Base configuration for the UploaderExtractor.
+    """
+
     queues: QueueConfigClass | None
 
 
@@ -108,6 +118,13 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
         self.middleware = middleware if isinstance(middleware, list) else []
 
     def handle_output(self, output: CdfTypes) -> None:
+        """
+        Handle the output of the extractor and sort it into appropriate upload queues.
+
+        Args:
+            output: The output from the extractor, which can be an Event, RawRow, InsertDatapoints, or an iterable of
+                these types.
+        """
         list_output = [output] if not isinstance(output, Iterable) else output
         peekable_output = peekable(list_output)
 
@@ -145,6 +162,9 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
         return item
 
     def __enter__(self) -> "UploaderExtractor":
+        """
+        Initializes the upload queues and returns the extractor instance.
+        """
         super().__enter__()
 
         queue_config = self.config.queues if self.config.queues else QueueConfigClass()
@@ -173,6 +193,9 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
     def __exit__(
         self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> bool:
+        """
+        Waits for the upload queues and exits the extractor context.
+        """
         self.event_queue.__exit__(exc_type, exc_val, exc_tb)
         self.raw_queue.__exit__(exc_type, exc_val, exc_tb)
         self.time_series_queue.__exit__(exc_type, exc_val, exc_tb)

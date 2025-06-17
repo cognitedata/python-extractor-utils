@@ -1,3 +1,17 @@
+"""
+This module defines the restart policies for extractors.
+
+Is is used by the ``Runtime`` to determine whether an extractor should be restarted after a task failure.
+
+It provides three predefined restart policies:
+- ``NEVER``: The extractor will never be restarted.
+- ``WHEN_ANY_TASK_CRASHES``: The extractor will be restarted if any task crashes.
+- ``WHEN_CONTINUOUS_TASKS_CRASHES``: The extractor will be restarted only if a continuous task crashes.
+
+Users can also define their own restart policies by providing a callable that takes a `Task` and an `Exception`
+and returns a boolean indicating whether the extractor should be restarted.
+"""
+
 from collections.abc import Callable
 
 from cognite.extractorutils.unstable.core.tasks import ContinuousTask, Task

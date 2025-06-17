@@ -1,3 +1,6 @@
+"""
+Upload queue for time series and sequences.
+"""
 #  Copyright 2023 Cognite AS
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
@@ -81,7 +84,7 @@ def default_time_series_factory(external_id: str, datapoints: DataPointList) -> 
 
 class TimeSeriesUploadQueue(AbstractUploadQueue):
     """
-    Upload queue for time series
+    Upload queue for time series.
 
     Args:
         cdf_client: Cognite Data Fusion client to use
@@ -176,8 +179,9 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         datapoints: DataPointList | None = None,
     ) -> None:
         """
-        Add data points to upload queue. The queue will be uploaded if the queue size is larger than the threshold
-        specified in the __init__.
+        Add data points to upload queue.
+
+        The queue will be uploaded if the queue size is larger than the threshold specified in the ``__init__``.
 
         Args:
             id: Internal ID of time series. Either this or external_id must be set.
@@ -210,7 +214,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
 
     def upload(self) -> None:
         """
-        Trigger an upload of the queue, clears queue afterwards
+        Trigger an upload of the queue, clears queue afterwards.
         """
 
         @retry(
@@ -308,7 +312,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
 
     def __enter__(self) -> "TimeSeriesUploadQueue":
         """
-        Wraps around start method, for use as context manager
+        Wraps around start method, for use as context manager.
 
         Returns:
             self
@@ -320,7 +324,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         """
-        Wraps around stop method, for use as context manager
+        Wraps around stop method, for use as context manager.
 
         Args:
             exc_type: Exception type
@@ -331,7 +335,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
 
     def __len__(self) -> int:
         """
-        The size of the upload queue
+        The size of the upload queue.
 
         Returns:
             Number of data points in queue
@@ -340,6 +344,21 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
 
 
 class SequenceUploadQueue(AbstractUploadQueue):
+    """
+    Upload queue for sequences.
+
+    Args:
+        cdf_client: Cognite Data Fusion client to use
+        post_upload_function: A function that will be called after each upload. The function will be given one
+            argument: A list of the events that were uploaded.
+        max_queue_size: Maximum size of upload queue. Defaults to no max size.
+        max_upload_interval: Automatically trigger an upload each m seconds when run as a thread (use start/stop
+            methods).
+        trigger_log_level: Log level to log upload triggers to.
+        thread_name: Thread name of uploader thread.
+        create_missing: Create missing sequences if possible (ie, if external id is used).
+    """
+
     def __init__(
         self,
         cdf_client: CogniteClient,
@@ -351,19 +370,6 @@ class SequenceUploadQueue(AbstractUploadQueue):
         create_missing: bool = False,
         cancellation_token: CancellationToken | None = None,
     ):
-        """
-        Args:
-            cdf_client: Cognite Data Fusion client to use
-            post_upload_function: A function that will be called after each upload. The function will be given one
-                argument: A list of the events that were uploaded.
-            max_queue_size: Maximum size of upload queue. Defaults to no max size.
-            max_upload_interval: Automatically trigger an upload each m seconds when run as a thread (use start/stop
-                methods).
-            trigger_log_level: Log level to log upload triggers to.
-            thread_name: Thread name of uploader thread.
-            create_missing: Create missing sequences if possible (ie, if external id is used)
-        """
-
         # Super sets post_upload and threshold
         super().__init__(
             cdf_client,
@@ -400,8 +406,10 @@ class SequenceUploadQueue(AbstractUploadQueue):
         description: str | None = None,
     ) -> None:
         """
-        Set sequence metadata. Metadata will be cached until the sequence is created. The metadata will be updated
-        if the sequence already exists
+        Set sequence metadata.
+
+        Metadata will be cached until the sequence is created. The metadata will be updated if the sequence already
+        exists.
 
         Args:
             metadata: Sequence metadata
@@ -432,7 +440,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
         external_id: str | None = None,
     ) -> None:
         """
-        Set sequence column definition
+        Set sequence column definition.
 
         Args:
             col_def: Sequence column definition
@@ -456,8 +464,9 @@ class SequenceUploadQueue(AbstractUploadQueue):
         external_id: str | None = None,
     ) -> None:
         """
-        Add sequence rows to upload queue. Mirrors implementation of SequenceApi.insert. Inserted rows will be
-        cached until uploaded
+        Add sequence rows to upload queue.
+
+        Mirrors implementation of SequenceApi.insert. Inserted rows will be cached until uploaded.
 
         Args:
             rows: The rows to be inserted. Can either be a list of tuples, a list of ["rownumber": ..., "values": ...]
@@ -468,7 +477,6 @@ class SequenceUploadQueue(AbstractUploadQueue):
             external_id: Sequence external ID
                 Us if id is None
         """
-
         if len(rows) == 0:
             pass
 
@@ -511,7 +519,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
 
     def upload(self) -> None:
         """
-        Trigger an upload of the queue, clears queue afterwards
+        Trigger an upload of the queue, clears queue afterwards.
         """
 
         @retry(
@@ -573,12 +581,11 @@ class SequenceUploadQueue(AbstractUploadQueue):
 
     def _create_or_update(self, either_id: EitherId) -> None:
         """
-        Create or update sequence, based on provided metadata and column definitions
+        Create or update sequence, based on provided metadata and column definitions.
 
         Args:
             either_id: Id/External Id of sequence to be updated
         """
-
         column_def = self.column_definitions.get(either_id)
         if column_def is None:
             self.logger.error(f"Can't create sequence {either_id!s}, no column definitions provided")
@@ -598,7 +605,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
             )
 
         except CogniteDuplicatedError:
-            self.logger.info(f"Sequnce already exist: {either_id}")
+            self.logger.info(f"Sequence already exist: {either_id}")
             seq = self.cdf_client.sequences.retrieve(  # type: ignore [assignment]
                 id=either_id.internal_id,
                 external_id=either_id.external_id,
@@ -610,7 +617,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
 
     def _resolve_asset_ids(self) -> None:
         """
-        Resolve id of assets if specified, for use in sequence creation
+        Resolve id of assets if specified, for use in sequence creation.
         """
         assets = set(self.sequence_asset_external_ids.values())
         assets.discard(None)  # type: ignore  # safeguard, remove Nones if any
@@ -630,7 +637,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
 
     def _resolve_dataset_ids(self) -> None:
         """
-        Resolve id of datasets if specified, for use in sequence creation
+        Resolve id of datasets if specified, for use in sequence creation.
         """
         datasets = set(self.sequence_dataset_external_ids.values())
         datasets.discard(None)  # type: ignore  # safeguard, remove Nones if any
@@ -650,7 +657,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
 
     def __enter__(self) -> "SequenceUploadQueue":
         """
-        Wraps around start method, for use as context manager
+        Wraps around start method, for use as context manager.
 
         Returns:
             self
@@ -662,7 +669,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
         self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
     ) -> None:
         """
-        Wraps around stop method, for use as context manager
+        Wraps around stop method, for use as context manager.
 
         Args:
             exc_type: Exception type
@@ -673,7 +680,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
 
     def __len__(self) -> int:
         """
-        The size of the upload queue
+        The size of the upload queue.
 
         Returns:
             Number of data points in queue
