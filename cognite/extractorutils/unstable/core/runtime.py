@@ -1,3 +1,28 @@
+"""
+Module providing the runtime for an extractor.
+
+The runtime is responsible for starting the extractor in a separate process, managing its lifecycle, and handling
+configuration loading and updates. It also handles errors and restarts the extractor if necessary.
+
+It is the preferred way to run an extractor, as it provides a more robust and flexible way to manage the extractor's
+lifecycle compared to running it directly in the main process.
+
+The runtime also contains a command line interface (CLI) for starting the extractor, which allows users to specify
+the connection configuration and other parameters.
+
+.. code-block:: python
+
+    from cognite.extractorutils.unstable.core.runtime import Runtime
+    from my_extractor import MyExtractor
+
+    def main() -> None:
+        runtime = Runtime(MyExtractor)
+        runtime.run()
+
+    if __name__ == "__main__":
+        main()
+"""
+
 import logging
 import os
 import sys
@@ -38,6 +63,13 @@ ExtractorType = TypeVar("ExtractorType", bound=Extractor)
 
 
 class Runtime(Generic[ExtractorType]):
+    """
+    The runtime for an extractor.
+
+    This class is responsible for starting the extractor in a separate process, managing its lifecycle, and handling
+    configuration loading and updates. It also handles errors and restarts the extractor if necessary.
+    """
+
     RETRY_CONFIG_INTERVAL = 30
 
     def __init__(
@@ -261,6 +293,12 @@ class Runtime(Generic[ExtractorType]):
         return True
 
     def run(self) -> None:
+        """
+        Run the extractor runtime.
+
+        This is intended as the main entry point for the extractor runtime, and starts by parsing command line
+        arguments.
+        """
         argparser = self._create_argparser()
         args = argparser.parse_args()
 

@@ -1,3 +1,6 @@
+"""
+This module defines custom exceptions for the extractorutils package.
+"""
 #  Copyright 2020 Cognite AS
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,11 +18,11 @@
 
 class InvalidConfigError(Exception):
     """
-    Exception thrown from ``load_yaml`` and ``load_yaml_dict`` if config file is invalid. This can be due to
+    Exception thrown from ``load_yaml`` and ``load_yaml_dict`` if config file is invalid. This can be due to.
 
       * Missing fields
       * Incompatible types
-      * Unkown fields
+      * Unknown fields
     """
 
     def __init__(self, message: str, details: list[str] | None = None):
@@ -28,7 +31,13 @@ class InvalidConfigError(Exception):
         self.details = details
 
     def __str__(self) -> str:
+        """
+        Returns a string representation of the error.
+        """
         return f"Invalid config: {self.message}"
 
     def __repr__(self) -> str:
+        """
+        Returns a string representation of the error.
+        """
         return self.__str__()

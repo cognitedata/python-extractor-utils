@@ -32,7 +32,11 @@ class _BaseStateStore(ABC):
     def start(self, initialize: bool = True) -> None:
         """
         Start saving state periodically if save_interval is set.
+
         This calls the synchronize method every save_interval seconds.
+
+        Args:
+            initialize (bool): (Optional). If True, call initialize method before starting the thread.
         """
         if initialize and not self._initialized:
             self.initialize()
@@ -52,7 +56,7 @@ class _BaseStateStore(ABC):
 
     def _run(self) -> None:
         """
-        Internal run method for synchronize thread
+        Internal run method for synchronize thread.
         """
         self.initialize()
         while not self.cancellation_token.wait(timeout=self.save_interval):
@@ -68,13 +72,13 @@ class _BaseStateStore(ABC):
     @abstractmethod
     def initialize(self, force: bool = False) -> None:
         """
-        Get states from remote store
+        Get states from remote store.
         """
         pass
 
     @abstractmethod
     def synchronize(self) -> None:
         """
-        Upload states to remote store
+        Upload states to remote store.
         """
         pass
