@@ -65,11 +65,6 @@ class Scopes(str):
     def __iter__(self) -> Iterator[str]:
         return iter(self._scopes)
 
-    # def __next__(self) -> str:
-    #     if not self._scopes:
-    #         raise StopIteration
-    #     return self._scopes.pop(0)
-
 
 class BaseCredentialsConfig(ConfigModel):
     client_id: str
@@ -177,7 +172,7 @@ class SslCertificatesConfig(ConfigModel):
     allow_list: list[str] | None = None
 
 
-class _ConnectionParameters(ConfigModel):
+class ConnectionParameters(ConfigModel):
     retries: RetriesConfig = Field(default_factory=RetriesConfig)
     ssl_certificates: SslCertificatesConfig = Field(default_factory=SslCertificatesConfig)
 
@@ -194,7 +189,7 @@ class ConnectionConfig(ConfigModel):
 
     authentication: AuthenticationConfig
 
-    connection: _ConnectionParameters = Field(default_factory=_ConnectionParameters)
+    connection: ConnectionParameters = Field(default_factory=ConnectionParameters)
 
     def get_cognite_client(self, client_name: str) -> CogniteClient:
         from cognite.client.config import global_config
