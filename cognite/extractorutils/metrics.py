@@ -54,6 +54,7 @@ from prometheus_client.exposition import basic_auth_handler, delete_from_gateway
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset, Datapoints, DatapointsArray, TimeSeries
+from cognite.client.data_classes.data_modeling import NodeId
 from cognite.client.exceptions import CogniteDuplicatedError
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.util import EitherId
@@ -411,7 +412,7 @@ class CognitePusher(AbstractMetricsPusher):
         """
         timestamp = int(arrow.get().float_timestamp * 1000)
 
-        datapoints: list[dict[str, str | int | list[Any] | Datapoints | DatapointsArray]] = []
+        datapoints: list[dict[str, str | int | list[Any] | Datapoints | DatapointsArray | NodeId]] = []
 
         for metric in REGISTRY.collect():
             if isinstance(metric, Metric) and metric.type in ["gauge", "counter"]:
