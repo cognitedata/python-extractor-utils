@@ -11,9 +11,10 @@ from _pytest.logging import LogCaptureFixture
 from conftest import ETestType, ParamTest
 
 from cognite.client import CogniteClient
+from cognite.client.data_classes import StatusCode
 from cognite.client.data_classes.data_modeling import NodeApply, NodeId
 from cognite.client.data_classes.data_modeling.extractor_extensions.v1 import CogniteExtractorTimeSeriesApply
-from cognite.client.exceptions import CogniteNotFoundError
+from cognite.client.exceptions import CogniteAPIError, CogniteNotFoundError
 from cognite.extractorutils.uploader.time_series import CDMTimeSeriesUploadQueue
 
 MIN_DATAPOINT_TIMESTAMP = -2208988800000
@@ -190,8 +191,6 @@ def test_cdm_queue_discards_invalid_values(set_upload_test: tuple[CogniteClient,
     queue = CDMTimeSeriesUploadQueue(cdf_client=client, create_missing=True)
     queue.start()
 
-    ts_apply_numeric = _apply_node(params.space, ext_id_1, "numeric")
-    ts_apply_string = _apply_node(params.space, ext_id_2, "string")
     now = int(datetime.now(tz=timezone.utc).timestamp() * 1_000)
     good = (now, 123)
     bad_time = (MIN_DATAPOINT_TIMESTAMP - 1, 9)
@@ -216,3 +215,112 @@ def test_cdm_queue_discards_invalid_values(set_upload_test: tuple[CogniteClient,
     assert [str(v) for v in recv_points_2.value] == [valid_temp_str_dp[1]]
     assert too_long_str[1] not in recv_points_2.value
     queue.stop()
+
+
+@pytest.mark.parametrize(
+    "ts_type, invalid_dps_function, expected_error_msg",
+    [
+        ("numeric", _rand_string_points, "Expected numeric value"),
+        ("string", _rand_numeric_points, "Expected string value"),
+    ],
+    ids=["string_into_numeric_fails", "numeric_into_string_fails"],
+)
+def test_cdm_queue_fails_on_data_type_mismatch(
+    set_upload_test: tuple[CogniteClient, ParamTest],
+    ts_type: Literal["numeric", "string"],
+    invalid_dps_function: callable,
+    expected_error_msg: str,
+) -> None:
+    """
+    Tests that the uploader fails with a specific error when the datapoint type
+    does not match the time series type. This test is parametrized to cover:
+    1. Ingesting string datapoints into a numeric time series.
+    2. Ingesting numeric datapoints into a string time series.
+    """
+    client, params = set_upload_test
+    ext_id = params.external_ids[0]
+    instance_id = NodeId(space=params.space, external_id=ext_id)
+
+    node = _apply_node(params.space, ext_id, ts_type)
+    client.data_modeling.instances.apply(nodes=node)
+    time.sleep(2)
+
+    queue = CDMTimeSeriesUploadQueue(cdf_client=client, create_missing=False)
+    now = int(datetime.now(tz=timezone.utc).timestamp() * 1_000)
+    invalid_dps = invalid_dps_function(n=5, start_ms=now)
+    queue.add_to_upload_queue(instance_id=instance_id, datapoints=invalid_dps)
+
+    with pytest.raises(CogniteAPIError) as excinfo:
+        queue.upload()
+
+    assert excinfo.value.code == 400
+    assert expected_error_msg in excinfo.value.message
+
+    retrieved_dps = client.time_series.data.retrieve(instance_id=instance_id)
+    assert len(retrieved_dps) == 0
+
+
+def test_cdm_queue_with_status_codes(set_upload_test: tuple[CogniteClient, ParamTest]) -> None:
+    """
+    Tests ingesting datapoints that include status codes into a numeric CDM time series.
+    """
+    client, params = set_upload_test
+
+    queue = CDMTimeSeriesUploadQueue(cdf_client=client, create_missing=True)
+    queue.start()
+
+    start = int(datetime.now(tz=timezone.utc).timestamp() * 1000) - 5_000
+
+    statuses = [
+        StatusCode.Good,
+        StatusCode.Uncertain,
+        StatusCode.Bad,
+        3145728,  # GoodClamped
+    ]
+
+    points1 = [(start + i * 42, random.random(), random.choice(statuses)) for i in range(30)]
+    queue.add_to_upload_queue(
+        instance_id=NodeId(space=params.space, external_id=params.external_ids[0]), datapoints=points1
+    )
+
+    points2 = [(start + i * 24, random.random(), random.choice(statuses)) for i in range(50)]
+    queue.add_to_upload_queue(
+        instance_id=NodeId(space=params.space, external_id=params.external_ids[1]), datapoints=points2
+    )
+
+    queue.upload()
+    time.sleep(5)
+
+    recv_points1 = client.time_series.data.retrieve(
+        instance_id=NodeId(space=params.space, external_id=params.external_ids[0]),
+        start=start - 100,
+        end="now",
+        limit=None,
+        include_status=True,
+        treat_uncertain_as_bad=False,
+        ignore_bad_datapoints=False,
+    )
+
+    recv_points2 = client.time_series.data.retrieve(
+        instance_id=NodeId(space=params.space, external_id=params.external_ids[1]),
+        start=start - 100,
+        end="now",
+        limit=None,
+        include_status=True,
+        treat_uncertain_as_bad=False,
+        ignore_bad_datapoints=False,
+    )
+    queue.stop()
+
+    assert len(recv_points1) == len(points1)
+    assert len(recv_points2) == len(points2)
+
+    for point, recv_point in zip(points1, recv_points1):  # noqa: B905
+        assert point[0] == recv_point.timestamp
+        assert point[1] == recv_point.value
+        assert point[2] == recv_point.status_code
+
+    for point, recv_point in zip(points2, recv_points2):  # noqa: B905
+        assert point[0] == recv_point.timestamp
+        assert point[1] == recv_point.value
+        assert point[2] == recv_point.status_code
