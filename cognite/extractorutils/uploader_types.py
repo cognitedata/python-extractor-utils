@@ -9,6 +9,7 @@ from typing import TypeAlias
 
 from cognite.client.data_classes import Event as _Event
 from cognite.client.data_classes import Row as _Row
+from cognite.client.data_classes.data_modeling import NodeId
 from cognite.extractorutils.uploader.time_series import DataPoint
 
 
@@ -20,6 +21,16 @@ class InsertDatapoints:
     def __init__(self, *, id: int | None = None, external_id: str | None = None, datapoints: list[DataPoint]):  # noqa: A002
         self.id = id
         self.external_id = external_id
+        self.datapoints = datapoints
+
+
+class InsertCDMDatapoints:
+    """
+    A class representing a batch of datapoints to be inserted into a cdm time series.
+    """
+
+    def __init__(self, *, instance_id: NodeId, datapoints: list[DataPoint]):
+        self.instance_id = instance_id
         self.datapoints = datapoints
 
 
