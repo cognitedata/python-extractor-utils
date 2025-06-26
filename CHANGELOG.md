@@ -12,6 +12,17 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.7.0
+
+### Added
+
+* Added the `CDMTimeSeriesUploadQueue` class to upload time series datapoints to instances in the Cognite Data Model (CDM). This new uploader uses `NodeId` for identification and can automatically create `CogniteExtractorTimeSeriesApply` instances if they are missing.
+
+### Changed
+
+* Refactored the time series uploaders for better code reuse and maintainability. A new generic base class, `BaseTimeSeriesUploadQueue`, has been introduced to contain common logic for datapoint validation and sanitization. Both the existing `TimeSeriesUploadQueue` and the new `CDMTimeSeriesUploadQueue` now inherit from this base class.
+
+
 ## 7.6.0
 
 ### Added
