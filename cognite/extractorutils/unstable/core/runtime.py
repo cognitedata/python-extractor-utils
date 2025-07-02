@@ -216,8 +216,8 @@ class Runtime(Generic[ExtractorType]):
             except OSError as e:
                 self.logger.critical(f"Could not change working directory to {cwd}: {e}")
                 raise InvalidConfigError(f"Could not change working directory to {cwd}") from e
-        else:
-            self.logger.info(f"No working directory specified, using current directory: {os.getcwd()}")
+
+        self.logger.info(f"Using {os.getcwd()} as working directory")
 
     def _safe_get_application_config(
         self,
