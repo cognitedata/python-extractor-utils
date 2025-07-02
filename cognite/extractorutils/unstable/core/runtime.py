@@ -114,6 +114,15 @@ class Runtime(Generic[ExtractorType]):
             help="Include to use a local application configuration instead of fetching it from CDF",
         )
         argparser.add_argument(
+            "-l",
+            "--log-level",
+            choices=["debug", "info", "warning", "error", "critical"],
+            type=str,
+            required=False,
+            default="info",
+            help="Set the logging level for the runtime. Default is 'info'.",
+        )
+        argparser.add_argument(
             "--skip-init-checks",
             action="store_true",
             help="Skip any checks during startup. Useful for debugging, not recommended for production deployments.",
@@ -334,6 +343,7 @@ class Runtime(Generic[ExtractorType]):
                     connection_config=connection_config,
                     application_config=application_config,
                     current_config_revision=current_config_revision,
+                    log_level_override=args.log_level,
                 )
             )
             process.join()
