@@ -118,6 +118,14 @@ class Runtime(Generic[ExtractorType]):
             action="store_true",
             help="Skip any checks during startup. Useful for debugging, not recommended for production deployments.",
         )
+        argparser.add_argument(
+            "-c",
+            "--cwd",
+            nargs=1,
+            type=Path,
+            required=False,
+            help="Set the current working directory for the extractor.",
+        )
 
         return argparser
 
@@ -199,6 +207,17 @@ class Runtime(Generic[ExtractorType]):
             )
 
         return application_config, current_config_revision
+
+    def _try_change_cwd(self, cwd: Path | None) -> None:
+        if cwd is not None:
+            try:
+                os.chdir(cwd)
+                self.logger.info(f"Changed working directory to {cwd}")
+            except OSError as e:
+                self.logger.critical(f"Could not change working directory to {cwd}: {e}")
+                raise InvalidConfigError(f"Could not change working directory to {cwd}") from e
+        else:
+            self.logger.info(f"No working directory specified, using current directory: {os.getcwd()}")
 
     def _safe_get_application_config(
         self,
@@ -305,6 +324,7 @@ class Runtime(Generic[ExtractorType]):
         self.logger.info(f"Started runtime with PID {os.getpid()}")
 
         try:
+            self._try_change_cwd(args.cwd)
             connection_config = load_file(args.connection_config[0], ConnectionConfig)
         except InvalidConfigError as e:
             self.logger.error(str(e))
