@@ -176,12 +176,12 @@ class Runtime(Generic[ExtractorType]):
     ) -> tuple[ExtractorConfig, ConfigRevision]:
         current_config_revision: ConfigRevision
 
-        if args.local_override:
+        if args.force_local_config:
             self.logger.info("Loading local application config")
 
             current_config_revision = "local"
             try:
-                application_config = load_file(args.local_override[0], self._extractor_class.CONFIG_TYPE)
+                application_config = load_file(args.force_local_config[0], self._extractor_class.CONFIG_TYPE)
             except InvalidConfigError as e:
                 self.logger.critical(str(e))
                 raise e

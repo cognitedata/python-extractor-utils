@@ -32,7 +32,7 @@ def test_load_local_config(connection_config: ConnectionConfig, local_config_fil
 
     config: TestConfig
     config, revision = runtime._try_get_application_config(
-        args=Namespace(local_override=[local_config_file]),
+        args=Namespace(force_local_config=[local_config_file]),
         connection_config=connection_config,
     )
 
@@ -57,7 +57,7 @@ def test_load_cdf_config(connection_config: ConnectionConfig) -> None:
 
     config: TestConfig
     config, revision = runtime._try_get_application_config(
-        args=Namespace(local_override=None),
+        args=Namespace(force_local_config=None),
         connection_config=connection_config,
     )
 
@@ -96,7 +96,7 @@ def test_load_cdf_config_initial_empty(connection_config: ConnectionConfig) -> N
 
     start_time = time.time()
     result: tuple[TestConfig, ConfigRevision] | None = runtime._safe_get_application_config(
-        args=Namespace(local_override=None),
+        args=Namespace(force_local_config=None),
         connection_config=connection_config,
     )
     duration = time.time() - start_time
