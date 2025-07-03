@@ -119,7 +119,6 @@ class Runtime(Generic[ExtractorType]):
             help="Skip any checks during startup. Useful for debugging, not recommended for production deployments.",
         )
         argparser.add_argument(
-            "-c",
             "--cwd",
             nargs=1,
             type=Path,
@@ -324,7 +323,7 @@ class Runtime(Generic[ExtractorType]):
         self.logger.info(f"Started runtime with PID {os.getpid()}")
 
         try:
-            self._try_change_cwd(args.cwd)
+            self._try_change_cwd(args.cwd[0])
             connection_config = load_file(args.connection_config[0], ConnectionConfig)
         except InvalidConfigError as e:
             self.logger.error(str(e))
