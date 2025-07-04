@@ -25,7 +25,7 @@ class InvalidConfigError(Exception):
       * Unknown fields
     """
 
-    def __init__(self, message: str, details: list[str] | None = None):
+    def __init__(self, message: str, details: list[str] | None = None) -> None:
         super().__init__()
         self.message = message
         self.details = details

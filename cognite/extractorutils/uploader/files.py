@@ -103,13 +103,13 @@ class ChunkedStream(RawIOBase, BinaryIO):
     # resolve the same way. These four useless methods with liberal use of Any are
     # required to satisfy mypy.
     # This may be solvable by changing the typing in the python SDK to use typing.Protocol.
-    def writelines(self, __lines: Any) -> None:
+    def writelines(self, __lines: Any) -> None:  # noqa: ANN401
         """
         Not supported for ChunkedStream.
         """
         raise NotImplementedError()
 
-    def write(self, __b: Any) -> int:
+    def write(self, __b: Any) -> int:  # noqa: ANN401
         """
         Not supported for ChunkedStream.
         """
@@ -250,7 +250,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
         max_parallelism: int | None = None,
         failure_logging_path: None | str = None,
         ssl_verify: bool | str = True,
-    ):
+    ) -> None:
         # Super sets post_upload and threshold
         super().__init__(
             cdf_client,
@@ -696,7 +696,7 @@ class FileUploadQueue(IOFileUploadQueue):
         overwrite_existing: bool = False,
         cancellation_token: CancellationToken | None = None,
         ssl_verify: bool | str = True,
-    ):
+    ) -> None:
         # Super sets post_upload and threshold
         super().__init__(
             cdf_client=cdf_client,

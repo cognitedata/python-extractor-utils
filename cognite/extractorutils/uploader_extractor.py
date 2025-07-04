@@ -105,7 +105,7 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
         heartbeat_waiting_time: int = 600,
         handle_interrupts: bool = True,
         middleware: list[Callable[[dict], dict]] | None = None,
-    ):
+    ) -> None:
         super().__init__(
             name=name,
             description=description,
@@ -165,7 +165,7 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
         else:
             raise ValueError(f"Unexpected type: {type(peek)}")
 
-    def _apply_middleware(self, item: Any) -> Any:
+    def _apply_middleware(self, item: Any) -> Any:  # noqa: ANN401
         for mw in self.middleware:
             item = mw(item)
         return item

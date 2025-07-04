@@ -6,7 +6,7 @@ import logging
 import signal
 from threading import Condition
 from time import time
-from typing import Any
+from types import FrameType
 
 
 class CancellationToken:
@@ -114,7 +114,7 @@ class CancellationToken:
         This will set the cancellation token instead of throwing a KeyboardInterrupt exception.
         """
 
-        def sigint_handler(sig_num: int, frame: Any) -> None:
+        def sigint_handler(sig_num: int, frame: FrameType | None) -> None:
             logger = logging.getLogger(__name__)
             logger.warning("Interrupt signal received, stopping extractor gracefully")
             self.cancel()

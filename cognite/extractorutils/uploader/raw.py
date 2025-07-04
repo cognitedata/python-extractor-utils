@@ -67,7 +67,7 @@ class RawUploadQueue(AbstractUploadQueue):
         trigger_log_level: str = "DEBUG",
         thread_name: str | None = None,
         cancellation_token: CancellationToken | None = None,
-    ):
+    ) -> None:
         # Super sets post_upload and thresholds
         super().__init__(
             cdf_client,
