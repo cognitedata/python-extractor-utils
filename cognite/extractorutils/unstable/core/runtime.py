@@ -49,13 +49,13 @@ from cognite.extractorutils.unstable.configuration.loaders import (
     load_file,
     load_from_cdf,
 )
-from cognite.extractorutils.unstable.configuration.models import ConnectionConfig
+from cognite.extractorutils.unstable.configuration.models import ConnectionConfig, ExtractorConfig
 from cognite.extractorutils.unstable.core._dto import Error
 from cognite.extractorutils.unstable.core.errors import ErrorLevel
 from cognite.extractorutils.util import now
 
 from ._messaging import RuntimeMessage
-from .base import ConfigRevision, ConfigType, Extractor, FullConfig
+from .base import ConfigRevision, Extractor, FullConfig
 
 __all__ = ["ExtractorType", "Runtime"]
 
@@ -173,15 +173,15 @@ class Runtime(Generic[ExtractorType]):
         self,
         args: Namespace,
         connection_config: ConnectionConfig,
-    ) -> tuple[ConfigType, ConfigRevision]:
+    ) -> tuple[ExtractorConfig, ConfigRevision]:
         current_config_revision: ConfigRevision
 
-        if args.local_override:
+        if args.force_local_config:
             self.logger.info("Loading local application config")
 
             current_config_revision = "local"
             try:
-                application_config = load_file(args.local_override[0], self._extractor_class.CONFIG_TYPE)
+                application_config = load_file(args.force_local_config[0], self._extractor_class.CONFIG_TYPE)
             except InvalidConfigError as e:
                 self.logger.critical(str(e))
                 raise e
@@ -194,7 +194,7 @@ class Runtime(Generic[ExtractorType]):
 
             application_config, current_config_revision = load_from_cdf(
                 self._cognite_client,
-                connection_config.integration,
+                connection_config.integration.external_id,
                 self._extractor_class.CONFIG_TYPE,
             )
 
@@ -204,7 +204,7 @@ class Runtime(Generic[ExtractorType]):
         self,
         args: Namespace,
         connection_config: ConnectionConfig,
-    ) -> tuple[ConfigType, ConfigRevision] | None:
+    ) -> tuple[ExtractorConfig, ConfigRevision] | None:
         prev_error: str | None = None
 
         while not self._cancellation_token.is_cancelled:
@@ -233,7 +233,7 @@ class Runtime(Generic[ExtractorType]):
                 self._cognite_client.post(
                     f"/api/v1/projects/{self._cognite_client.config.project}/odin/checkin",
                     json={
-                        "externalId": connection_config.integration,
+                        "externalId": connection_config.integration.external_id,
                         "errors": [error.model_dump()],
                     },
                     headers={"cdf-version": "alpha"},

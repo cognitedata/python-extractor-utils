@@ -1,6 +1,7 @@
 """
 Module containing the base class for extractors.
 """
+
 #  Copyright 2021 Cognite AS
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,19 +23,31 @@ import sys
 from collections.abc import Callable
 from dataclasses import is_dataclass
 from enum import Enum
+from textwrap import shorten
 from threading import Thread
 from types import TracebackType
-from typing import Any, Generic, TypeVar
+from typing import Any, Generic, Literal, TypeVar
 
 from dotenv import load_dotenv
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import ExtractionPipeline, ExtractionPipelineRun
-from cognite.extractorutils.configtools import BaseConfig, ConfigResolver, StateStoreConfig
+from cognite.client.exceptions import CogniteAPIError
+from cognite.extractorutils.configtools import (
+    BaseConfig,
+    ConfigResolver,
+    StateStoreConfig,
+)
 from cognite.extractorutils.exceptions import InvalidConfigError
 from cognite.extractorutils.metrics import BaseMetrics
-from cognite.extractorutils.statestore import AbstractStateStore, LocalStateStore, NoStateStore
+from cognite.extractorutils.statestore import (
+    AbstractStateStore,
+    LocalStateStore,
+    NoStateStore,
+)
 from cognite.extractorutils.threading import CancellationToken
+
+ReportStatus = Literal["success", "failure", "seen"]
 
 
 class ReloadConfigAction(Enum):
@@ -227,19 +240,53 @@ class Extractor(Generic[CustomConfigClass]):
 
         Extractor._statestore_singleton = self.state_store
 
-    def _report_success(self) -> None:
+    def _report_run(self, status: ReportStatus, message: str) -> None:
+        """
+        Report the status of the extractor run to the extraction pipeline.
+
+        Args:
+            status: Status of the run, either success or failure or seen
+            message: Message to report to the extraction pipeline
+        """
+        MAX_MESSAGE_LENGTH_FOR_EXTRACTION_PIPELINE_RUN = 1000
+        if self.extraction_pipeline:
+            try:
+                message = message or ""
+                shortened_message = shorten(
+                    message,
+                    width=MAX_MESSAGE_LENGTH_FOR_EXTRACTION_PIPELINE_RUN,
+                    placeholder="...",
+                )
+
+                run = ExtractionPipelineRun(
+                    extpipe_external_id=self.extraction_pipeline.external_id,
+                    status=status,
+                    message=shortened_message,
+                )
+
+                self.logger.info(f"Reporting new {status} run: {message}")
+                self.cognite_client.extraction_pipelines.runs.create(run)
+            except CogniteAPIError as e:
+                self.logger.exception(f"Error while reporting run - status {status} - message {message} . Error: {e!s}")
+
+    def _report_success(self, message: str | None = None) -> None:
         """
         Called on a successful exit of the extractor.
+
+        Args:
+            message: Message to report to the extraction pipeline. If not provided, Extractor.success_message is taken.
         """
-        if self.extraction_pipeline:
-            self.logger.info("Reporting new successful run")
-            self.cognite_client.extraction_pipelines.runs.create(
-                ExtractionPipelineRun(
-                    extpipe_external_id=self.extraction_pipeline.external_id,
-                    status="success",
-                    message=self.success_message,
-                )
-            )
+        message = message or self.success_message
+        self._report_run("success", message)
+
+    def _report_failure(self, message: str) -> None:
+        """
+        Called on an unsuccessful exit of the extractor.
+
+        Args:
+            message: Message to report to the extraction pipeline
+        """
+        self._report_run("failure", message)
 
     def _report_error(self, exception: BaseException) -> None:
         """
@@ -248,16 +295,8 @@ class Extractor(Generic[CustomConfigClass]):
         Args:
             exception: Exception object that caused the extractor to fail
         """
-        self.logger.error("Unexpected error during extraction", exc_info=exception)
-        if self.extraction_pipeline:
-            message = f"{type(exception).__name__}: {exception!s}"[:1000]
-
-            self.logger.info(f"Reporting new failed run: {message}")
-            self.cognite_client.extraction_pipelines.runs.create(
-                ExtractionPipelineRun(
-                    extpipe_external_id=self.extraction_pipeline.external_id, status="failure", message=message
-                )
-            )
+        message = f"{type(exception).__name__}: {exception!s}"
+        self._report_run("failure", message)
 
     def __enter__(self) -> "Extractor":
         """
@@ -279,7 +318,9 @@ class Extractor(Generic[CustomConfigClass]):
         try:
             self._initial_load_config(override_path=self.config_file_path)
         except InvalidConfigError as e:
-            print("Critical error: Could not read config file", file=sys.stderr)  # noqa: T201
+            print(  # noqa: T201
+                "Critical error: Could not read config file", file=sys.stderr
+            )
             print(str(e), file=sys.stderr)  # noqa: T201
             sys.exit(1)
 
@@ -338,7 +379,10 @@ class Extractor(Generic[CustomConfigClass]):
         return self
 
     def __exit__(
-        self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: TracebackType | None
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
     ) -> bool:
         """
         Shuts down the extractor. Makes sure states are preserved, that all uploads of data and metrics are done, etc.
@@ -381,7 +425,12 @@ class Extractor(Generic[CustomConfigClass]):
         if not self.started:
             raise ValueError("You must run the extractor in a context manager")
         if self.run_handle:
-            self.run_handle(self.cognite_client, self.state_store, self.config, self.cancellation_token)
+            self.run_handle(
+                self.cognite_client,
+                self.state_store,
+                self.config,
+                self.cancellation_token,
+            )
         else:
             raise ValueError("No run_handle defined")
 

@@ -4,6 +4,7 @@ Module containing pre-built models for common extractor configuration.
 
 import os
 import re
+from collections.abc import Iterator
 from datetime import timedelta
 from enum import Enum
 from pathlib import Path
@@ -53,23 +54,44 @@ class ConfigModel(BaseModel):
     )
 
 
-class _ClientCredentialsConfig(ConfigModel):
-    type: Literal["client-credentials"]
+class Scopes(str):
+    def __init__(self, scopes: str) -> None:
+        self._scopes = list(scopes.split(" "))
+
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source_type: Any, handler: GetCoreSchemaHandler) -> CoreSchema:
+        return core_schema.no_info_after_validator_function(cls, handler(str))
+
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Scopes):
+            return NotImplemented
+        return self._scopes == other._scopes
+
+    def __hash__(self) -> int:
+        return hash(self._scopes)
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._scopes)
+
+
+class BaseCredentialsConfig(ConfigModel):
     client_id: str
+    scopes: Scopes
+
+
+class _ClientCredentialsConfig(BaseCredentialsConfig):
+    type: Literal["client-credentials"]
     client_secret: str
     token_url: str
-    scopes: list[str]
     resource: str | None = None
     audience: str | None = None
 
 
-class _ClientCertificateConfig(ConfigModel):
+class _ClientCertificateConfig(BaseCredentialsConfig):
     type: Literal["client-certificate"]
-    client_id: str
     path: Path
     password: str | None = None
     authority_url: str
-    scopes: list[str]
 
 
 AuthenticationConfig = Annotated[_ClientCredentialsConfig | _ClientCertificateConfig, Field(discriminator="type")]
@@ -191,16 +213,24 @@ class TimeIntervalConfig:
         return self._expression
 
 
-class _ConnectionParameters(ConfigModel):
-    gzip_compression: bool = False
-    status_forcelist: list[int] = Field(default_factory=lambda: [429, 502, 503, 504])
-    max_retries: int = 10
-    max_retries_connect: int = 3
-    max_retry_backoff: TimeIntervalConfig = Field(default_factory=lambda: TimeIntervalConfig("30s"))
-    max_connection_pool_size: int = 50
-    ssl_verify: bool = True
-    proxies: dict[str, str] = Field(default_factory=dict)
+class RetriesConfig(ConfigModel):
+    max_retries: int = Field(default=10, ge=-1)
+    max_backoff: TimeIntervalConfig = Field(default_factory=lambda: TimeIntervalConfig("30s"))
     timeout: TimeIntervalConfig = Field(default_factory=lambda: TimeIntervalConfig("30s"))
+
+
+class SslCertificatesConfig(ConfigModel):
+    verify: bool = True
+    allow_list: list[str] | None = None
+
+
+class ConnectionParameters(ConfigModel):
+    retries: RetriesConfig = Field(default_factory=RetriesConfig)
+    ssl_certificates: SslCertificatesConfig = Field(default_factory=SslCertificatesConfig)
+
+
+class IntegrationConfig(ConfigModel):
+    external_id: str
 
 
 class ConnectionConfig(ConfigModel):
@@ -216,11 +246,11 @@ class ConnectionConfig(ConfigModel):
     project: str
     base_url: str
 
-    integration: str
+    integration: IntegrationConfig
 
     authentication: AuthenticationConfig
 
-    connection: _ConnectionParameters = Field(default_factory=_ConnectionParameters)
+    connection: ConnectionParameters = Field(default_factory=ConnectionParameters)
 
     def get_cognite_client(self, client_name: str) -> CogniteClient:
         """
@@ -235,14 +265,9 @@ class ConnectionConfig(ConfigModel):
         from cognite.client.config import global_config
 
         global_config.disable_pypi_version_check = True
-        global_config.disable_gzip = not self.connection.gzip_compression
-        global_config.status_forcelist = set(self.connection.status_forcelist)
-        global_config.max_retries = self.connection.max_retries
-        global_config.max_retries_connect = self.connection.max_retries_connect
-        global_config.max_retry_backoff = self.connection.max_retry_backoff.seconds
-        global_config.max_connection_pool_size = self.connection.max_connection_pool_size
-        global_config.disable_ssl = not self.connection.ssl_verify
-        global_config.proxies = self.connection.proxies
+        global_config.max_retries = self.connection.retries.max_retries
+        global_config.max_retry_backoff = self.connection.retries.max_backoff.seconds
+        global_config.disable_ssl = not self.connection.ssl_certificates.verify
 
         credential_provider: CredentialProvider
         match self.authentication:
@@ -270,7 +295,7 @@ class ConnectionConfig(ConfigModel):
                     client_id=client_certificate.client_id,
                     cert_thumbprint=str(thumbprint),
                     certificate=str(key),
-                    scopes=client_certificate.scopes,
+                    scopes=list(client_certificate.scopes),
                 )
 
             case _:
@@ -280,7 +305,7 @@ class ConnectionConfig(ConfigModel):
             project=self.project,
             base_url=self.base_url,
             client_name=client_name,
-            timeout=self.connection.timeout.seconds,
+            timeout=self.connection.retries.timeout.seconds,
             credentials=credential_provider,
         )
 
@@ -315,7 +340,9 @@ class ConnectionConfig(ConfigModel):
                 client_id=os.environ["COGNITE_CLIENT_ID"],
                 client_secret=os.environ["COGNITE_CLIENT_SECRET"],
                 token_url=os.environ["COGNITE_TOKEN_URL"],
-                scopes=os.environ["COGNITE_TOKEN_SCOPES"].split(","),
+                scopes=Scopes(
+                    os.environ["COGNITE_TOKEN_SCOPES"],
+                ),
             )
         elif "COGNITE_CLIENT_CERTIFICATE_PATH" in os.environ:
             auth = _ClientCertificateConfig(
@@ -324,7 +351,9 @@ class ConnectionConfig(ConfigModel):
                 path=Path(os.environ["COGNITE_CLIENT_CERTIFICATE_PATH"]),
                 password=os.environ.get("COGNITE_CLIENT_CERTIFICATE_PATH"),
                 authority_url=os.environ["COGNITE_AUTHORITY_URL"],
-                scopes=os.environ["COGNITE_TOKEN_SCOPES"].split(","),
+                scopes=Scopes(
+                    os.environ["COGNITE_TOKEN_SCOPES"],
+                ),
             )
         else:
             raise KeyError("Missing auth, either COGNITE_CLIENT_SECRET or COGNITE_CLIENT_CERTIFICATE_PATH must be set")
@@ -332,7 +361,7 @@ class ConnectionConfig(ConfigModel):
         return ConnectionConfig(
             project=os.environ["COGNITE_PROJECT"],
             base_url=os.environ["COGNITE_BASE_URL"],
-            integration=os.environ["COGNITE_INTEGRATION"],
+            integration=IntegrationConfig(external_id=os.environ["COGNITE_INTEGRATION"]),
             authentication=auth,
         )
 

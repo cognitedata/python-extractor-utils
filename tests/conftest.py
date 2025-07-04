@@ -18,6 +18,7 @@ NUM_EDGES = NUM_NODES // 100
 
 class ETestType(Enum):
     TIME_SERIES = "time_series"
+    CDM_TIME_SERIES = "cdm_time_series"
     FILES = "files"
     RAW = "raw"
     ASSETS = "assets"
@@ -67,6 +68,10 @@ def set_client() -> CogniteClient:
 def clean_test(client: CogniteClient, test_parameter: ParamTest) -> None:
     if test_parameter.test_type.value == ETestType.TIME_SERIES.value:
         client.time_series.delete(external_id=test_parameter.external_ids, ignore_unknown_ids=True)
+    if test_parameter.test_type.value == ETestType.CDM_TIME_SERIES.value:
+        client.data_modeling.instances.delete(
+            nodes=[NodeId("ExtractorUtilsTests", i) for i in test_parameter.external_ids]
+        )
     elif test_parameter.test_type.value == ETestType.EVENTS.value:
         client.events.delete(external_id=test_parameter.external_ids, ignore_unknown_ids=True)
     elif test_parameter.test_type.value == ETestType.ASSETS.value:
