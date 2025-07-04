@@ -122,7 +122,7 @@ class BaseTimeSeriesUploadQueue(AbstractUploadQueue, Generic[IdType]):
         trigger_log_level: str = "DEBUG",
         thread_name: str | None = None,
         cancellation_token: CancellationToken | None = None,
-    ):
+    ) -> None:
         # Super sets post_upload and threshold
         super().__init__(
             cdf_client,
@@ -429,7 +429,7 @@ class CDMTimeSeriesUploadQueue(BaseTimeSeriesUploadQueue[NodeId]):
         create_missing: Callable[[NodeId, DataPointList], CogniteExtractorTimeSeriesApply] | bool = False,
         cancellation_token: CancellationToken | None = None,
         source: DirectRelationReference | None = None,
-    ):
+    ) -> None:
         super().__init__(
             cdf_client,
             post_upload_function,
