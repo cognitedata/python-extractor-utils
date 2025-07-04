@@ -97,10 +97,12 @@ class FullConfig(Generic[_T]):
         connection_config: ConnectionConfig,
         application_config: _T,
         current_config_revision: ConfigRevision,
+        log_level_override: str | None = None,
     ) -> None:
         self.connection_config = connection_config
         self.application_config = application_config
         self.current_config_revision = current_config_revision
+        self.log_level_override = log_level_override
 
 
 class Extractor(Generic[ConfigType], CogniteLogger):
@@ -132,6 +134,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self.connection_config = config.connection_config
         self.application_config = config.application_config
         self.current_config_revision = config.current_config_revision
+        self.log_level_override = config.log_level_override
 
         self.cognite_client = self.connection_config.get_cognite_client(f"{self.EXTERNAL_ID}-{self.VERSION}")
 
@@ -147,8 +150,15 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self.__init_tasks__()
 
     def _setup_logging(self) -> None:
-        min_level = min([_resolve_log_level(h.level.value) for h in self.application_config.log_handlers])
-        max_level = max([_resolve_log_level(h.level.value) for h in self.application_config.log_handlers])
+        if self.log_level_override:
+            # Use the override level if provided
+            level_to_set = _resolve_log_level(self.log_level_override)
+            min_level = level_to_set
+            max_level = level_to_set
+        else:
+            # Otherwise, use the levels from the config file
+            min_level = min([_resolve_log_level(h.level.value) for h in self.application_config.log_handlers])
+            max_level = max([_resolve_log_level(h.level.value) for h in self.application_config.log_handlers])
 
         root = logging.getLogger()
         root.setLevel(min_level)
@@ -173,7 +183,10 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                 case LogConsoleHandlerConfig() as console_handler:
                     sh = logging.StreamHandler()
                     sh.setFormatter(fmt)
-                    sh.setLevel(_resolve_log_level(console_handler.level.value))
+                    level_for_handler = (
+                        level_to_set if self.log_level_override else _resolve_log_level(console_handler.level.value)
+                    )
+                    sh.setLevel(level_for_handler)
 
                     root.addHandler(sh)
 
@@ -184,7 +197,10 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                         utc=True,
                         backupCount=file_handler.retention,
                     )
-                    fh.setLevel(_resolve_log_level(file_handler.level.value))
+                    level_for_handler = (
+                        level_to_set if self.log_level_override else _resolve_log_level(file_handler.level.value)
+                    )
+                    fh.setLevel(level_for_handler)
                     fh.setFormatter(fmt)
 
                     root.addHandler(fh)
