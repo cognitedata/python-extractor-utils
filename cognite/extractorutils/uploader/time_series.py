@@ -115,7 +115,7 @@ class TimeSeriesUploadQueue(AbstractUploadQueue):
         create_missing: Callable[[str, DataPointList], TimeSeries] | bool = False,
         data_set_id: int | None = None,
         cancellation_token: CancellationToken | None = None,
-    ):
+    ) -> None:
         # Super sets post_upload and threshold
         super().__init__(
             cdf_client,
@@ -369,7 +369,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
         thread_name: str | None = None,
         create_missing: bool = False,
         cancellation_token: CancellationToken | None = None,
-    ):
+    ) -> None:
         # Super sets post_upload and threshold
         super().__init__(
             cdf_client,

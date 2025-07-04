@@ -72,7 +72,7 @@ class KeyVaultLoader:
         config: A dictionary containing the configuration for the keyvault.
     """
 
-    def __init__(self, config: dict | None):
+    def __init__(self, config: dict | None) -> None:
         self.config = config
 
         self.client: SecretClient | None = None
@@ -374,7 +374,7 @@ class ConfigResolver(Generic[CustomConfigClass]):
     Automatically reloads the configuration file if it has changed
     """
 
-    def __init__(self, config_path: str, config_type: type[CustomConfigClass]):
+    def __init__(self, config_path: str, config_type: type[CustomConfigClass]) -> None:
         self.config_path = config_path
         self.config_type = config_type
 

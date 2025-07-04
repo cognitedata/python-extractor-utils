@@ -84,7 +84,7 @@ class TimeIntervalConfig:
         self._interval, self._expression = TimeIntervalConfig._parse_expression(expression)
 
     @classmethod
-    def __get_pydantic_core_schema__(cls, source_type: Any, handler: GetCoreSchemaHandler) -> CoreSchema:
+    def __get_pydantic_core_schema__(cls, source_type: Any, handler: GetCoreSchemaHandler) -> CoreSchema:  # noqa: ANN401
         """
         Pydantic hook to define how this class should be serialized/deserialized.
 

@@ -28,7 +28,7 @@ class TaskContext(CogniteLogger):
     This class is used to log errors and messages related to the task execution.
     """
 
-    def __init__(self, task: "Task", extractor: "Extractor"):
+    def __init__(self, task: "Task", extractor: "Extractor") -> None:
         super().__init__()
         self._task = task
         self._extractor = extractor
@@ -87,7 +87,7 @@ class ScheduledTask(_Task):
         target: TaskTarget,
         description: str | None = None,
         schedule: ScheduleConfig,
-    ):
+    ) -> None:
         super().__init__(name=name, target=target, description=description)
         self.schedule = schedule
 

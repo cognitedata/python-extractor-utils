@@ -66,7 +66,7 @@ _metrics_singularities = {}
 T = TypeVar("T")
 
 
-def safe_get(cls: type[T], *args: Any, **kwargs: Any) -> T:
+def safe_get(cls: type[T], *args: Any, **kwargs: Any) -> T:  # noqa: ANN401
     """
     A factory for instances of metrics collections.
 
@@ -121,7 +121,7 @@ class BaseMetrics:
         process_scrape_interval: Interval (in seconds) between each fetch of data for the ``process_*`` gauges
     """
 
-    def __init__(self, extractor_name: str, extractor_version: str, process_scrape_interval: float = 15):
+    def __init__(self, extractor_name: str, extractor_version: str, process_scrape_interval: float = 15) -> None:
         extractor_name = extractor_name.strip().replace(" ", "_")
 
         self.startup = Gauge(f"{extractor_name}_start_time", "Timestamp (seconds) of when the extractor last started")
@@ -186,7 +186,7 @@ class AbstractMetricsPusher(ABC):
         push_interval: int | None = None,
         thread_name: str | None = None,
         cancellation_token: CancellationToken | None = None,
-    ):
+    ) -> None:
         self.push_interval = push_interval
         self.thread_name = thread_name
 
@@ -273,7 +273,7 @@ class PrometheusPusher(AbstractMetricsPusher):
         password: str | None = None,
         thread_name: str | None = None,
         cancellation_token: CancellationToken | None = None,
-    ):
+    ) -> None:
         super().__init__(push_interval, thread_name, cancellation_token)
 
         self.username = username
@@ -282,7 +282,9 @@ class PrometheusPusher(AbstractMetricsPusher):
 
         self.url = url
 
-    def _auth_handler(self, url: str, method: str, timeout: int, headers: list[tuple[str, str]], data: Any) -> Callable:
+    def _auth_handler(
+        self, url: str, method: str, timeout: int, headers: list[tuple[str, str]], data: bytes
+    ) -> Callable[[], None]:
         """
         Returns a authentication handler against the Prometheus Pushgateway to use in the pushadd_to_gateway method.
 
@@ -349,7 +351,7 @@ class CognitePusher(AbstractMetricsPusher):
         data_set: EitherId | None = None,
         thread_name: str | None = None,
         cancellation_token: CancellationToken | None = None,
-    ):
+    ) -> None:
         super().__init__(push_interval, thread_name, cancellation_token)
 
         self.cdf_client = cdf_client
