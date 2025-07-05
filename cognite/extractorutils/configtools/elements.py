@@ -29,6 +29,7 @@ from urllib.parse import urljoin, urlparse
 
 import yaml
 from prometheus_client import REGISTRY, start_http_server
+from typing_extensions import Self
 
 from cognite.client import ClientConfig, CogniteClient
 from cognite.client.credentials import (
@@ -926,7 +927,7 @@ class CastableInt(int):
     file.
     """
 
-    def __new__(cls, value: Any) -> "CastableInt":
+    def __new__(cls, value: int | str | bytes) -> Self:
         """
         Returns value as is if it's int.
 
@@ -955,7 +956,7 @@ class PortNumber(CastableInt):
     not a valid port number raises a ValueError at instantiation.
     """
 
-    def __new__(cls, value: Any) -> "PortNumber":
+    def __new__(cls, value: int | str | bytes) -> Self:
         """
         Try to cast the value to an integer and validate it as a port number.
 

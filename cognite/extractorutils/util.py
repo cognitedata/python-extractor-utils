@@ -30,12 +30,14 @@ from typing import Any, TypeVar
 from decorator import decorator
 
 from cognite.client import CogniteClient
+from cognite.client._api.assets import AssetsAPI
+from cognite.client._api.time_series import TimeSeriesAPI
 from cognite.client.data_classes import Asset, ExtractionPipelineRun, TimeSeries
 from cognite.client.exceptions import CogniteAPIError, CogniteException, CogniteFileUploadError, CogniteNotFoundError
 from cognite.extractorutils.threading import CancellationToken
 
 
-def _ensure(endpoint: Any, items: Iterable[Any]) -> None:
+def _ensure(endpoint: TimeSeriesAPI | AssetsAPI, items: Iterable[Any]) -> None:
     try:
         external_ids = [ts.external_id for ts in items]
 
@@ -90,7 +92,7 @@ class EitherId:
         TypeError: If none of both of id types are set.
     """
 
-    def __init__(self, **kwargs: int | str | None):
+    def __init__(self, **kwargs: int | str | None) -> None:
         internal_id = kwargs.get("id")
         external_id = kwargs.get("externalId") or kwargs.get("external_id")
 
@@ -127,7 +129,7 @@ class EitherId:
         """
         return self.internal_id or self.external_id  # type: ignore  # checked to be not None in init
 
-    def __eq__(self, other: Any) -> bool:
+    def __eq__(self, other: object) -> bool:
         """
         Compare with another object. Only returns true if other is an EitherId with the same type and content.
 
@@ -210,7 +212,7 @@ def add_extraction_pipeline(
 
     def decorator_ext_pip(input_function: Callable[..., _T1]) -> Callable[..., _T1]:
         @wraps(input_function)
-        def wrapper_ext_pip(*args: Any, **kwargs: Any) -> _T1:
+        def wrapper_ext_pip(*args: Any, **kwargs: Any) -> _T1:  # noqa: ANN401
             ##############################
             # Setup Extraction Pipelines #
             ##############################
@@ -397,7 +399,7 @@ def retry(
     """
 
     @decorator
-    def retry_decorator(f: Callable[..., _T2], *fargs: Any, **fkwargs: Any) -> _T2:
+    def retry_decorator(f: Callable[..., _T2], *fargs: Any, **fkwargs: Any) -> _T2:  # noqa: ANN401
         args = fargs if fargs else []
         kwargs = fkwargs if fkwargs else {}
 
@@ -657,7 +659,7 @@ def iterable_to_stream(
         def readable(self) -> bool:
             return True
 
-        def readinto(self, buffer: Any) -> int | None:
+        def readinto(self, buffer: "WritableBuffer") -> int | None:  # type: ignore[name-defined]  # noqa: F821
             try:
                 # Bytes to return
                 ln = len(buffer)

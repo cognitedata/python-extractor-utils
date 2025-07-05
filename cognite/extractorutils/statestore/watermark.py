@@ -1,3 +1,6 @@
+# ruff: noqa: ANN401
+# TODO: the state stores should be generic over the type of state, not just Any.
+
 #  Copyright 2020 Cognite AS
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
@@ -66,7 +69,7 @@ class AbstractStateStore(_BaseStateStore, ABC):
         trigger_log_level: str = "DEBUG",
         thread_name: str | None = None,
         cancellation_token: CancellationToken | None = None,
-    ):
+    ) -> None:
         super().__init__(
             save_interval=save_interval,
             trigger_log_level=trigger_log_level,
@@ -249,7 +252,7 @@ class RawStateStore(AbstractStateStore):
         trigger_log_level: str = "DEBUG",
         thread_name: str | None = None,
         cancellation_token: CancellationToken | None = None,
-    ):
+    ) -> None:
         super().__init__(save_interval, trigger_log_level, thread_name, cancellation_token)
 
         self._cdf_client = cdf_client
@@ -395,7 +398,7 @@ class LocalStateStore(AbstractStateStore):
         trigger_log_level: str = "DEBUG",
         thread_name: str | None = None,
         cancellation_token: CancellationToken | None = None,
-    ):
+    ) -> None:
         super().__init__(save_interval, trigger_log_level, thread_name, cancellation_token)
 
         self._file_path = file_path

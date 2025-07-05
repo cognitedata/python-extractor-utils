@@ -140,7 +140,7 @@ def test_report_success(
     EXTRACTION_PIPELINE = "test_extraction_pipeline"
     MESSAGE = "test message"
 
-    def validate_message(run: ExtractionPipelineRun):
+    def validate_message(run: ExtractionPipelineRun) -> None:
         print(f"Validating message: {run.message}")
         assert run.extpipe_external_id == EXTRACTION_PIPELINE
         assert run.status == "success"
@@ -171,7 +171,7 @@ def test_report_failure(
     EXTRACTION_PIPELINE = "test_extraction_pipeline"
     MESSAGE = "test message"
 
-    def validate_message(run: ExtractionPipelineRun):
+    def validate_message(run: ExtractionPipelineRun) -> None:
         print(f"Validating message: {run.message}")
         assert run.extpipe_external_id == EXTRACTION_PIPELINE
         assert run.status == "failure"
@@ -203,7 +203,7 @@ def test_report_error(
     MESSAGE = "test exception"
     expected_message = f"Exception: {MESSAGE}"
 
-    def validate_message(run: ExtractionPipelineRun):
+    def validate_message(run: ExtractionPipelineRun) -> None:
         print(f"Validating message: {run.message}")
         assert run.extpipe_external_id == EXTRACTION_PIPELINE
         assert run.status == "failure"
@@ -228,7 +228,7 @@ def test_report_error(
 
 
 @patch("cognite.client.CogniteClient")
-def test_report_run(get_client_mock: Callable[[], CogniteClient]):
+def test_report_run(get_client_mock: Callable[[], CogniteClient]) -> None:
     print("Report run test")
 
     MAX_MESSAGE_LENGTH_FOR_EXTRACTION_PIPELINE_RUN = 1000
@@ -244,7 +244,7 @@ def test_report_run(get_client_mock: Callable[[], CogniteClient]):
     )
 
     # Mock method for reporting run
-    def validate_short_message(run: ExtractionPipelineRun):
+    def validate_short_message(run: ExtractionPipelineRun) -> None:
         print(f"Validating short message: {run.message}")
         assert run.extpipe_external_id == EXTRACTION_PIPELINE
         assert len(run.message) <= MAX_MESSAGE_LENGTH_FOR_EXTRACTION_PIPELINE_RUN, (
@@ -252,7 +252,7 @@ def test_report_run(get_client_mock: Callable[[], CogniteClient]):
         )
         assert run.message == SHORT_MESSAGE, "Short message does not match expected value"
 
-    def validate_long_message(run: ExtractionPipelineRun):
+    def validate_long_message(run: ExtractionPipelineRun) -> None:
         print(f"Validating long message: {run.message}")
         assert len(run.message) <= MAX_MESSAGE_LENGTH_FOR_EXTRACTION_PIPELINE_RUN, (
             f"Long message length exceeds maximum allowed length: {MAX_MESSAGE_LENGTH_FOR_EXTRACTION_PIPELINE_RUN}"

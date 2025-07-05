@@ -64,7 +64,7 @@ class AssetUploadQueue(AbstractUploadQueue):
         trigger_log_level: str = "DEBUG",
         thread_name: str | None = None,
         cancellation_token: CancellationToken | None = None,
-    ):
+    ) -> None:
         super().__init__(
             cdf_client,
             post_upload_function,
