@@ -18,7 +18,7 @@ Changes are grouped as follows
 
 ### Added
 
-- Ability for users to customize the working directory of the extractor using the `--cwd` flag in the CLI.
+* Ability for users to customize the working directory of the extractor using the `--cwd` flag in the CLI.
 * Added a new command-line argument, --log-level (-l) to allow users to override configured log levels for a single run.
 
 ## 7.7.0
