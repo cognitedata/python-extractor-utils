@@ -50,7 +50,7 @@ class InstanceUploadQueue(AbstractUploadQueue):
         auto_create_start_nodes: bool = True,
         auto_create_end_nodes: bool = True,
         auto_create_direct_relations: bool = True,
-    ):
+    ) -> None:
         super().__init__(
             cdf_client,
             post_upload_function,

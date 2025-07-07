@@ -37,14 +37,14 @@ def resolve_log_level_for_httpx(level: str) -> str:
 
 
 class _DecimalEncoder(json.JSONEncoder):
-    def default(self, obj: Any) -> dict[str, str]:
+    def default(self, obj: Any) -> dict[str, str]:  # noqa: ANN401
         if isinstance(obj, Decimal):
             return {"type": "decimal_encoded", "value": str(obj)}
         return super().default(obj)
 
 
 class _DecimalDecoder(json.JSONDecoder):
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
+    def __init__(self, *args: Any, **kwargs: Any) -> None:  # noqa: ANN401
         json.JSONDecoder.__init__(self, *args, object_hook=self.object_hook, **kwargs)
 
     def object_hook(self, obj_dict: dict[str, str]) -> dict[str, str] | Decimal:

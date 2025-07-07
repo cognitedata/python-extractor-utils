@@ -50,7 +50,7 @@ class AbstractUploadQueue(ABC):
         trigger_log_level: str = "DEBUG",
         thread_name: str | None = None,
         cancellation_token: CancellationToken | None = None,
-    ):
+    ) -> None:
         self.cdf_client = cdf_client
 
         self.threshold = max_queue_size if max_queue_size is not None else -1

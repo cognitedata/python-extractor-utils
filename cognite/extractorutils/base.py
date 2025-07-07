@@ -112,7 +112,7 @@ class Extractor(Generic[CustomConfigClass]):
         reload_config_interval: int | None = 300,
         reload_config_action: ReloadConfigAction = ReloadConfigAction.DO_NOTHING,
         success_message: str = "Successful shutdown",
-    ):
+    ) -> None:
         self.name = name
         self.description = description
         self.run_handle = run_handle

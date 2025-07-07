@@ -74,9 +74,8 @@ target-version = "py310"
 
 [tool.ruff.lint]
 # TODO: Add these rules, which are likely to require larger changes to the codebase:
-# D, DOC - Docstrings
-# ANN - Type annotations everywhere, disallow Any, bare dict, bare list, etc.
-select = ["A", "E", "F", "I", "T20", "S", "B", "UP", "DTZ", "W", "LOG", "RUF", "SIM", "C4", "PERF", "FURB", "D", "D213"]
+# DOC - More docstring lints
+select = ["A", "E", "F", "I", "T20", "S", "B", "UP", "DTZ", "W", "LOG", "RUF", "SIM", "C4", "PERF", "FURB", "D", "D213", "ANN"]
 ignore = ["S104", "S303", "S311", "PERF203", "D212", "D200", "D107"]
 
 # Allow unused variables when underscore-prefixed.
@@ -84,7 +83,7 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 
 [tool.ruff.lint.per-file-ignores]
-"tests/*" = ["S101", "T201", "S105", "S106", "S608", "E501", "S113", "F841", "B017", "D"]
+"tests/*" = ["S101", "T201", "S105", "S106", "S608", "E501", "S113", "F841", "B017", "D", "ANN401"] # TODO: turn off ANN401 ignore (ie don't allow Any)
 "**/__init__.py" = ["F401"]
 "docs/*" = ["E402"]
 

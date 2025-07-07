@@ -17,14 +17,14 @@ class CogniteModel(BaseModel):
       * exclude Nones from serialized JSON instead of having nulls in the response text.
     """
 
-    def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+    def model_dump(self, *args: Any, **kwargs: Any) -> dict[str, Any]:  # noqa: ANN401
         if kwargs:
             kwargs["exclude_none"] = True
         else:
             kwargs = {"exclude_none": True}
         return BaseModel.model_dump(self, *args, **kwargs)
 
-    def dict(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
+    def dict(self, *args: Any, **kwargs: Any) -> dict[str, Any]:  # noqa: ANN401
         return self.model_dump(*args, **kwargs)
 
     model_config = ConfigDict(alias_generator=camelize, populate_by_name=True, extra="forbid")
