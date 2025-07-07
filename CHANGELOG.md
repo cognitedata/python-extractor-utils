@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## Next
+
+### Added
+
+* Added a new command-line argument, --log-level (-l) to allow users to override configured log levels for a single run.
+
 ## 7.7.0
 
 ### Added

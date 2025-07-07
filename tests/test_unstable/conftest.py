@@ -16,7 +16,7 @@ from cognite.extractorutils.unstable.configuration.models import (
     Scopes,
     _ClientCredentialsConfig,
 )
-from cognite.extractorutils.unstable.core.base import Extractor
+from cognite.extractorutils.unstable.core.base import Extractor, StartupTask, TaskContext
 
 
 @pytest.fixture
@@ -106,3 +106,15 @@ class TestExtractor(Extractor[TestConfig]):
     DESCRIPTION = "Test of the new runtime"
     VERSION = "1.0.0"
     CONFIG_TYPE = TestConfig
+
+    def __init_tasks__(self) -> None:
+        """
+        A simple task that runs on startup and logs messages at different levels.
+        """
+
+        def log_messages_task(ctx: TaskContext) -> None:
+            ctx.debug("This is a debug message.")
+            ctx.info("This is an info message.")
+            ctx.warning("This is a warning message.")
+
+        self.add_task(StartupTask(name="log_task", target=log_messages_task))
