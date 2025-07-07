@@ -18,6 +18,14 @@ from cognite.extractorutils.unstable.configuration.models import (
 )
 from cognite.extractorutils.unstable.core.base import Extractor, StartupTask, TaskContext
 
+working_dir = os.getcwd()
+
+
+@pytest.fixture(autouse=True)
+def reset_environment() -> Generator[None, None, None]:
+    yield
+    os.chdir(working_dir)
+
 
 @pytest.fixture
 def set_client() -> CogniteClient:
