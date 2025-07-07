@@ -151,8 +151,8 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
     def _setup_logging(self) -> None:
         if self.log_level_override:
-            # Use the override level if provided
             level_to_set = _resolve_log_level(self.log_level_override)
+            # Use the override level if provided
             min_level = level_to_set
             max_level = level_to_set
         else:
@@ -183,8 +183,8 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                 case LogConsoleHandlerConfig() as console_handler:
                     sh = logging.StreamHandler()
                     sh.setFormatter(fmt)
-                    level_for_handler = (
-                        level_to_set if self.log_level_override else _resolve_log_level(console_handler.level.value)
+                    level_for_handler = _resolve_log_level(
+                        self.log_level_override if self.log_level_override else console_handler.level.value
                     )
                     sh.setLevel(level_for_handler)
 
@@ -197,8 +197,8 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                         utc=True,
                         backupCount=file_handler.retention,
                     )
-                    level_for_handler = (
-                        level_to_set if self.log_level_override else _resolve_log_level(file_handler.level.value)
+                    level_for_handler = _resolve_log_level(
+                        self.log_level_override if self.log_level_override else file_handler.level.value
                     )
                     fh.setLevel(level_for_handler)
                     fh.setFormatter(fmt)
