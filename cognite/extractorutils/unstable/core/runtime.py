@@ -134,6 +134,11 @@ class Runtime(Generic[ExtractorType]):
             required=False,
             help="Set the current working directory for the extractor.",
         )
+        argparser.add_argument(
+            "--dry-run",
+            action="store_true",
+            help="Run without writing to CDF. The extractor must support this feature for this to work.",
+        )
 
         return argparser
 
@@ -166,6 +171,9 @@ class Runtime(Generic[ExtractorType]):
         try:
             with extractor:
                 extractor.run()
+
+        except NotImplementedError as e:
+            logging.getLogger(__name__).critical(f"Configuration error: {e}")
 
         except Exception:
             self.logger.exception("Extractor crashed, will attempt restart")
@@ -232,6 +240,13 @@ class Runtime(Generic[ExtractorType]):
         args: Namespace,
         connection_config: ConnectionConfig,
     ) -> tuple[ExtractorConfig, ConfigRevision] | None:
+        if args.dry_run and not args.force_local_config:
+            self.logger.warning(
+                "Running in dry-run mode without a local application config file (-f). "
+                "The extractor will not perform any actions."
+            )
+            return None
+
         prev_error: str | None = None
 
         while not self._cancellation_token.is_cancelled:
@@ -339,7 +354,7 @@ class Runtime(Generic[ExtractorType]):
             self.logger.critical("Could not load connection config")
             sys.exit(1)
 
-        if not args.skip_init_checks and not self._verify_connection_config(connection_config):
+        if not args.dry_run and not args.skip_init_checks and not self._verify_connection_config(connection_config):
             sys.exit(1)
 
         # This has to be Any. We don't know the type of the extractors' config at type checking since the self doesn't
@@ -363,6 +378,7 @@ class Runtime(Generic[ExtractorType]):
                     application_config=application_config,
                     current_config_revision=current_config_revision,
                     log_level_override=args.log_level,
+                    is_dry_run=args.dry_run,
                 )
             )
             process.join()
