@@ -52,7 +52,7 @@ from logging.handlers import TimedRotatingFileHandler
 from multiprocessing import Queue
 from threading import RLock, Thread
 from types import TracebackType
-from typing import Generic, Literal, TypeVar
+from typing import Any, Generic, Literal, TypeVar
 
 from humps import pascalize
 from typing_extensions import Self, assert_never
@@ -84,6 +84,36 @@ ConfigRevision = Literal["local"] | int
 _T = TypeVar("_T", bound=ExtractorConfig)
 
 
+class _NoOpCogniteClient:
+    """A mock CogniteClient that performs no actions, for use in dry-run mode."""
+
+    class _MockResponse:
+        def __init__(self, url: str) -> None:
+            self._url = url
+
+        def json(self) -> dict:
+            if "integrations/checkin" in self._url:
+                return {"lastConfigRevision": None}
+            return {}
+
+    def __init__(self, config: ConnectionConfig, client_name: str) -> None:
+        class MockSDKConfig:
+            def __init__(self, project: str) -> None:
+                self.project = project
+
+        self.config = MockSDKConfig(config.project)
+        self._logger = logging.getLogger(__name__)
+        self._logger.info(f"CogniteClient is in no-op mode (dry-run). Client name: {client_name}")
+
+    def post(self, url: str, json: dict, **kwargs: dict[str, Any]) -> _MockResponse:
+        self._logger.info(f"[DRY-RUN] SKIPPED POST to {url} with payload: {json}")
+        return self._MockResponse(url)
+
+    def get(self, url: str, **kwargs: dict[str, Any]) -> _MockResponse:
+        self._logger.info(f"[DRY-RUN] SKIPPED GET from {url}")
+        return self._MockResponse(url)
+
+
 class FullConfig(Generic[_T]):
     """
     A class that holds the full configuration for an extractor.
@@ -98,11 +128,13 @@ class FullConfig(Generic[_T]):
         application_config: _T,
         current_config_revision: ConfigRevision,
         log_level_override: str | None = None,
+        is_dry_run: bool = False,
     ) -> None:
         self.connection_config = connection_config
         self.application_config = application_config
         self.current_config_revision = current_config_revision
         self.log_level_override = log_level_override
+        self.is_dry_run = is_dry_run
 
 
 class Extractor(Generic[ConfigType], CogniteLogger):
@@ -124,8 +156,13 @@ class Extractor(Generic[ConfigType], CogniteLogger):
     CONFIG_TYPE: type[ConfigType]
 
     RESTART_POLICY: RestartPolicy = WHEN_CONTINUOUS_TASKS_CRASHES
+    SUPPORTS_DRY_RUN: bool = False
 
     def __init__(self, config: FullConfig[ConfigType]) -> None:
+        self.is_dry_run = config.is_dry_run
+        if self.is_dry_run and not self.SUPPORTS_DRY_RUN:
+            raise NotImplementedError(f"Extractor '{self.NAME}' does not support dry-run mode.")
+
         self._logger = logging.getLogger(f"{self.EXTERNAL_ID}.main")
 
         self.cancellation_token = CancellationToken()
@@ -136,7 +173,10 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self.current_config_revision = config.current_config_revision
         self.log_level_override = config.log_level_override
 
-        self.cognite_client = self.connection_config.get_cognite_client(f"{self.EXTERNAL_ID}-{self.VERSION}")
+        if self.is_dry_run:
+            self.cognite_client = _NoOpCogniteClient(self.connection_config, f"{self.EXTERNAL_ID}-{self.VERSION}")
+        else:
+            self.cognite_client = self.connection_config.get_cognite_client(f"{self.EXTERNAL_ID}-{self.VERSION}")
 
         self._checkin_lock = RLock()
         self._runtime_messages: Queue[RuntimeMessage] | None = None
