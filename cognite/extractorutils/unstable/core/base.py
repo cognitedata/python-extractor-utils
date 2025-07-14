@@ -126,9 +126,9 @@ class FullConfig(Generic[_T]):
 
     def __init__(
         self,
+        connection_config: ConnectionConfig | None,
         application_config: _T,
         current_config_revision: ConfigRevision,
-        connection_config: ConnectionConfig | None = None,
         log_level_override: str | None = None,
         is_dry_run: bool = False,
     ) -> None:
