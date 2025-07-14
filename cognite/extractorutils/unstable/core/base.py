@@ -97,12 +97,13 @@ class _NoOpCogniteClient:
                 return {"lastConfigRevision": None}
             return {}
 
-    def __init__(self, config: ConnectionConfig, client_name: str) -> None:
+    def __init__(self, config: ConnectionConfig | None, client_name: str) -> None:
         class MockSDKConfig:
             def __init__(self, project: str) -> None:
                 self.project = project
 
-        self.config = MockSDKConfig(config.project)
+        project_name = config.project if config else "dry-run-no-config"
+        self.config = MockSDKConfig(project_name)
         self._logger = logging.getLogger(__name__)
         self._logger.info(f"CogniteClient is in no-op mode (dry-run). Client name: {client_name}")
 
@@ -125,9 +126,9 @@ class FullConfig(Generic[_T]):
 
     def __init__(
         self,
-        connection_config: ConnectionConfig,
         application_config: _T,
         current_config_revision: ConfigRevision,
+        connection_config: ConnectionConfig | None = None,
         log_level_override: str | None = None,
         is_dry_run: bool = False,
     ) -> None:
@@ -177,8 +178,10 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
         if self.is_dry_run:
             self.cognite_client = _NoOpCogniteClient(self.connection_config, f"{self.EXTERNAL_ID}-{self.VERSION}")
-        else:
+        elif self.connection_config:
             self.cognite_client = self.connection_config.get_cognite_client(f"{self.EXTERNAL_ID}-{self.VERSION}")
+        else:
+            raise ValueError("Connection config is missing and not in dry-run mode.")
 
         self._checkin_lock = RLock()
         self._runtime_messages: Queue[RuntimeMessage] | None = None
@@ -261,6 +264,9 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self._runtime_messages = queue
 
     def _checkin(self) -> None:
+        if not self.connection_config:
+            return
+
         with self._checkin_lock:
             task_updates = [t.model_dump() for t in self._task_updates]
             self._task_updates.clear()
@@ -400,6 +406,9 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                 )
 
     def _report_extractor_info(self) -> None:
+        if not self.connection_config:
+            return
+
         self.cognite_client.post(
             f"/api/v1/projects/{self.cognite_client.config.project}/integrations/extractorinfo",
             json={

@@ -101,7 +101,7 @@ class Runtime(Generic[ExtractorType]):
             "--connection-config",
             nargs=1,
             type=Path,
-            required=True,
+            required=False,
             help="Connection parameters",
         )
         argparser.add_argument(
@@ -196,7 +196,7 @@ class Runtime(Generic[ExtractorType]):
     def _try_get_application_config(
         self,
         args: Namespace,
-        connection_config: ConnectionConfig,
+        connection_config: ConnectionConfig | None,
     ) -> tuple[ExtractorConfig, ConfigRevision]:
         current_config_revision: ConfigRevision
 
@@ -216,11 +216,12 @@ class Runtime(Generic[ExtractorType]):
         else:
             self.logger.info("Loading application config from CDF")
 
-            application_config, current_config_revision = load_from_cdf(
-                self._cognite_client,
-                connection_config.integration.external_id,
-                self._extractor_class.CONFIG_TYPE,
-            )
+            if connection_config:
+                application_config, current_config_revision = load_from_cdf(
+                    self._cognite_client,
+                    connection_config.integration.external_id,
+                    self._extractor_class.CONFIG_TYPE,
+                )
 
         return application_config, current_config_revision
 
@@ -238,7 +239,7 @@ class Runtime(Generic[ExtractorType]):
     def _safe_get_application_config(
         self,
         args: Namespace,
-        connection_config: ConnectionConfig,
+        connection_config: ConnectionConfig | None,
     ) -> tuple[ExtractorConfig, ConfigRevision] | None:
         if args.dry_run and not args.force_local_config:
             self.logger.warning(
@@ -272,23 +273,28 @@ class Runtime(Generic[ExtractorType]):
                     task=None,
                 )
 
-                self._cognite_client.post(
-                    f"/api/v1/projects/{self._cognite_client.config.project}/odin/checkin",
-                    json={
-                        "externalId": connection_config.integration.external_id,
-                        "errors": [error.model_dump()],
-                    },
-                    headers={"cdf-version": "alpha"},
-                )
+                if connection_config:
+                    self._cognite_client.post(
+                        f"/api/v1/projects/{self._cognite_client.config.project}/odin/checkin",
+                        json={
+                            "externalId": connection_config.integration.external_id,
+                            "errors": [error.model_dump()],
+                        },
+                        headers={"cdf-version": "alpha"},
+                    )
 
                 self._cancellation_token.wait(randint(1, self.RETRY_CONFIG_INTERVAL))
 
         return None
 
-    def _verify_connection_config(self, connection_config: ConnectionConfig) -> bool:
+    def _verify_connection_config(self, connection_config: ConnectionConfig | None) -> bool:
+        if connection_config is None:
+            return False
+
         self._cognite_client = connection_config.get_cognite_client(
             f"{self._extractor_class.EXTERNAL_ID}-{self._extractor_class.VERSION}"
         )
+
         try:
             self._cognite_client.post(
                 f"/api/v1/projects/{self._cognite_client.config.project}/odin/checkin",
@@ -348,7 +354,20 @@ class Runtime(Generic[ExtractorType]):
 
         try:
             self._try_change_cwd(args.cwd[0])
-            connection_config = load_file(args.connection_config[0], ConnectionConfig)
+
+            if args.dry_run:
+                self.logger.info("Running in dry-run mode. No data will be written to CDF.")
+
+                connection_config = (
+                    load_file(args.connection_config[0], ConnectionConfig) if args.connection_config else None
+                )
+            else:
+                if not args.connection_config:
+                    self.logger.critical("Connection config file is required when not in dry-run mode.")
+                    sys.exit(1)
+
+                connection_config = load_file(args.connection_config[0], ConnectionConfig)
+
         except InvalidConfigError as e:
             self.logger.error(str(e))
             self.logger.critical("Could not load connection config")
