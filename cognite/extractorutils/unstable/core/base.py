@@ -57,6 +57,7 @@ from typing import Any, Generic, Literal, TypeVar
 from humps import pascalize
 from typing_extensions import Self, assert_never
 
+from cognite.client import CogniteClient
 from cognite.extractorutils._inner_util import _resolve_log_level
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.unstable.configuration.models import (
@@ -157,6 +158,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
     RESTART_POLICY: RestartPolicy = WHEN_CONTINUOUS_TASKS_CRASHES
     SUPPORTS_DRY_RUN: bool = False
+    cognite_client: _NoOpCogniteClient | CogniteClient
 
     def __init__(self, config: FullConfig[ConfigType]) -> None:
         self.is_dry_run = config.is_dry_run
