@@ -278,7 +278,7 @@ class Runtime(Generic[ExtractorType]):
             self._cognite_client.post(
                 f"/api/v1/projects/{self._cognite_client.config.project}/odin/checkin",
                 json={
-                    "externalId": connection_config.integration,
+                    "externalId": connection_config.integration.external_id,
                 },
                 headers={"cdf-version": "alpha"},
             )
