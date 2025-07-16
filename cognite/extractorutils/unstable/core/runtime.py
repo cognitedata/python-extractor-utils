@@ -213,15 +213,18 @@ class Runtime(Generic[ExtractorType]):
                 self.logger.critical(str(e))
                 raise InvalidConfigError(str(e)) from e
 
-        else:
+        elif connection_config:
             self.logger.info("Loading application config from CDF")
 
-            if connection_config:
-                application_config, current_config_revision = load_from_cdf(
-                    self._cognite_client,
-                    connection_config.integration.external_id,
-                    self._extractor_class.CONFIG_TYPE,
-                )
+            application_config, current_config_revision = load_from_cdf(
+                self._cognite_client,
+                connection_config.integration.external_id,
+                self._extractor_class.CONFIG_TYPE,
+            )
+
+        else:
+            self.logger.critical("No connection config provided and no local config file specified.")
+            raise InvalidConfigError("No connection config provided and no local config file specified.")
 
         return application_config, current_config_revision
 
