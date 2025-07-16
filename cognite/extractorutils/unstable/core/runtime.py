@@ -332,7 +332,8 @@ class Runtime(Generic[ExtractorType]):
         self.logger.info(f"Started runtime with PID {os.getpid()}")
 
         try:
-            self._try_change_cwd(args.cwd[0])
+            if args.cwd is not None and len(args.cwd) > 0:
+                self._try_change_cwd(args.cwd[0])
             connection_config = load_file(args.connection_config[0], ConnectionConfig)
         except InvalidConfigError as e:
             self.logger.error(str(e))
