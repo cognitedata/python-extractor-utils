@@ -93,9 +93,7 @@ class _NoOpCogniteClient:
             self._url = url
 
         def json(self) -> dict:
-            if "integrations/checkin" in self._url:
-                return {"lastConfigRevision": None}
-            return {}
+            return {"lastConfigRevision": None} if "integrations/checkin" in self._url else {}
 
     def __init__(self, config: ConnectionConfig | None, client_name: str) -> None:
         class MockSDKConfig:
