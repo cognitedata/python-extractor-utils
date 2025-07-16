@@ -147,7 +147,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self._tasks: list[Task] = []
         self._task_updates: list[TaskUpdate] = []
         self._errors: dict[str, Error] = {}
-        self._start_time: datetime = datetime.now(tz=UTC)
+        self._start_time: datetime
 
         self.__init_tasks__()
 
@@ -437,6 +437,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
             with extractor:
                 extractor.run()
         """
+        self._start_time = datetime.now(tz=UTC)
         has_scheduled = False
 
         startup: list[StartupTask] = []
