@@ -122,6 +122,11 @@ def test_load_cdf_config_initial_empty(connection_config: ConnectionConfig) -> N
     assert "No configuration found for the given integration" in errors["items"][0]["description"]
 
 
+def test_verify_connection_config(connection_config: ConnectionConfig) -> None:
+    runtime = Runtime(TestExtractor)
+    assert runtime._verify_connection_config(connection_config)
+
+
 def test_changing_cwd() -> None:
     runtime = Runtime(TestExtractor)
     original_cwd = os.getcwd()
