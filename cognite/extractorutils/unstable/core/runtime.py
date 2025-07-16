@@ -216,14 +216,14 @@ class Runtime(Generic[ExtractorType]):
 
         return application_config, current_config_revision
 
-    def _try_change_cwd(self, cwd: Path | None) -> None:
-        if cwd is not None:
+    def _try_set_cwd(self, args: Namespace) -> None:
+        if args.cwd is not None and len(args.cwd) > 0:
             try:
-                os.chdir(cwd)
-                self.logger.info(f"Changed working directory to {cwd}")
+                os.chdir(args.cwd[0])
+                self.logger.info(f"Changed working directory to {args.cwd[0]}")
             except OSError as e:
-                self.logger.critical(f"Could not change working directory to {cwd}: {e}")
-                raise InvalidConfigError(f"Could not change working directory to {cwd}") from e
+                self.logger.critical(f"Could not change working directory to {args.cwd[0]}: {e}")
+                raise InvalidConfigError(f"Could not change working directory to {args.cwd[0]}") from e
 
         self.logger.info(f"Using {os.getcwd()} as working directory")
 
@@ -332,8 +332,7 @@ class Runtime(Generic[ExtractorType]):
         self.logger.info(f"Started runtime with PID {os.getpid()}")
 
         try:
-            if args.cwd is not None and len(args.cwd) > 0:
-                self._try_change_cwd(args.cwd[0])
+            self._try_set_cwd(args)
             connection_config = load_file(args.connection_config[0], ConnectionConfig)
         except InvalidConfigError as e:
             self.logger.error(str(e))
