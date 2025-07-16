@@ -47,6 +47,7 @@ The subclass should also define several class attributes:
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
+from datetime import UTC, datetime
 from functools import partial
 from logging.handlers import TimedRotatingFileHandler
 from multiprocessing import Queue
@@ -146,6 +147,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self._tasks: list[Task] = []
         self._task_updates: list[TaskUpdate] = []
         self._errors: dict[str, Error] = {}
+        self._start_time: datetime = datetime.now(tz=UTC)
 
         self.__init_tasks__()
 
