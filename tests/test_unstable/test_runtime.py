@@ -122,10 +122,15 @@ def test_load_cdf_config_initial_empty(connection_config: ConnectionConfig) -> N
     assert "No configuration found for the given integration" in errors["items"][0]["description"]
 
 
+def test_verify_connection_config(connection_config: ConnectionConfig) -> None:
+    runtime = Runtime(TestExtractor)
+    assert runtime._verify_connection_config(connection_config)
+
+
 def test_changing_cwd() -> None:
     runtime = Runtime(TestExtractor)
     original_cwd = os.getcwd()
-    runtime._try_change_cwd(Path(__file__).parent)
+    runtime._try_set_cwd(args=Namespace(cwd=(Path(__file__).parent.as_posix(),)))
 
     assert os.getcwd() == str(Path(__file__).parent)
     assert os.getcwd() != original_cwd
