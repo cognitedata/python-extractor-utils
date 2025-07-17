@@ -67,8 +67,10 @@ from cognite.extractorutils.unstable.configuration.models import (
     LogFileHandlerConfig,
 )
 from cognite.extractorutils.unstable.core._dto import Error as DtoError
-from cognite.extractorutils.unstable.core._dto import TaskUpdate
+from cognite.extractorutils.unstable.core._dto import ExtractorInfo, StartupRequest, TaskType, TaskUpdate
+from cognite.extractorutils.unstable.core._dto import Task as DtoTask
 from cognite.extractorutils.unstable.core._messaging import RuntimeMessage
+from cognite.extractorutils.unstable.core.checkin_worker import CheckinWorker
 from cognite.extractorutils.unstable.core.errors import Error, ErrorLevel
 from cognite.extractorutils.unstable.core.logger import CogniteLogger
 from cognite.extractorutils.unstable.core.restart_policy import WHEN_CONTINUOUS_TASKS_CRASHES, RestartPolicy
@@ -102,7 +104,7 @@ class FullConfig(Generic[_T]):
     ) -> None:
         self.connection_config = connection_config
         self.application_config = application_config
-        self.current_config_revision = current_config_revision
+        self.current_config_revision: ConfigRevision = current_config_revision
         self.log_level_override = log_level_override
 
 
@@ -134,7 +136,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
         self.connection_config = config.connection_config
         self.application_config = config.application_config
-        self.current_config_revision = config.current_config_revision
+        self.current_config_revision: ConfigRevision = config.current_config_revision
         self.log_level_override = config.log_level_override
 
         self.cognite_client = self.connection_config.get_cognite_client(f"{self.EXTERNAL_ID}-{self.VERSION}")
@@ -148,6 +150,13 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self._task_updates: list[TaskUpdate] = []
         self._errors: dict[str, Error] = {}
         self._start_time: datetime
+        self._checkin_worker = CheckinWorker(
+            self.cognite_client,
+            self.connection_config.integration.external_id,
+            self._logger,
+            # self.restart,
+            # self._runtime_messages,
+        )
 
         self.__init_tasks__()
 
@@ -257,14 +266,25 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         ):
             self.restart()
 
+    def _get_startup_request(self) -> StartupRequest:
+        return StartupRequest(
+            external_id=self.connection_config.integration.external_id,
+            active_config_revision=self.current_config_revision,
+            extractor=ExtractorInfo(version=self.VERSION, external_id=self.EXTERNAL_ID),
+            tasks=[
+                DtoTask(
+                    type=TaskType.continuous if isinstance(t, ContinuousTask) else TaskType.batch,
+                    action=isinstance(t, ScheduledTask),
+                    description=t.description,
+                    name=t.name,
+                )
+                for t in self._tasks
+            ],
+            timestamp=int(self._start_time.timestamp() * 1000),
+        )
+
     def _run_checkin(self) -> None:
-        while not self.cancellation_token.is_cancelled:
-            try:
-                self._logger.debug("Running checkin")
-                self._checkin()
-            except Exception:
-                self._logger.exception("Error during checkin")
-            self.cancellation_token.wait(10)
+        self._checkin_worker.run_periodic_checkin(self.cancellation_token, self._get_startup_request())
 
     def _report_error(self, error: Error) -> None:
         with self._checkin_lock:
@@ -359,28 +379,28 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                     ),
                 )
 
-    def _report_extractor_info(self) -> None:
-        self.cognite_client.post(
-            f"/api/v1/projects/{self.cognite_client.config.project}/integrations/extractorinfo",
-            json={
-                "externalId": self.connection_config.integration.external_id,
-                "activeConfigRevision": self.current_config_revision,
-                "extractor": {
-                    "version": self.VERSION,
-                    "externalId": self.EXTERNAL_ID,
-                },
-                "tasks": [
-                    {
-                        "name": t.name,
-                        "type": "continuous" if isinstance(t, ContinuousTask) else "batch",
-                        "action": bool(isinstance(t, ScheduledTask)),
-                        "description": t.description,
-                    }
-                    for t in self._tasks
-                ],
-            },
-            headers={"cdf-version": "alpha"},
-        )
+    # def _report_extractor_info(self) -> None:
+    #     self.cognite_client.post(
+    #         f"/api/v1/projects/{self.cognite_client.config.project}/integrations/extractorinfo",
+    #         json={
+    #             "externalId": self.connection_config.integration.external_id,
+    #             "activeConfigRevision": self.current_config_revision,
+    #             "extractor": {
+    #                 "version": self.VERSION,
+    #                 "externalId": self.EXTERNAL_ID,
+    #             },
+    #             "tasks": [
+    #                 {
+    #                     "name": t.name,
+    #                     "type": "continuous" if isinstance(t, ContinuousTask) else "batch",
+    #                     "action": bool(isinstance(t, ScheduledTask)),
+    #                     "description": t.description,
+    #                 }
+    #                 for t in self._tasks
+    #             ],
+    #         },
+    #         headers={"cdf-version": "alpha"},
+    #     )
 
     def start(self) -> None:
         """
@@ -390,7 +410,8 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         ``with`` statement, which ensures proper cleanup on exit.
         """
         self._setup_logging()
-        self._report_extractor_info()
+        # self._report_extractor_info()
+        self._start_time = datetime.now(tz=timezone.utc)
         Thread(target=self._run_checkin, name="ExtractorCheckin", daemon=True).start()
 
     def stop(self) -> None:
@@ -437,7 +458,6 @@ class Extractor(Generic[ConfigType], CogniteLogger):
             with extractor:
                 extractor.run()
         """
-        self._start_time = datetime.now(tz=timezone.utc)
         has_scheduled = False
 
         startup: list[StartupTask] = []
@@ -470,7 +490,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                             ),
                         )
                     )
-        self._logger.info("Startup done")
+        self._logger.info("Extractor started")
 
         for task in continuous:
             Thread(

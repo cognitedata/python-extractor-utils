@@ -1,0 +1,10 @@
+project: ${COGNITE_PROJECT}
+base_url: ${COGNITE_BASE_URL}
+integration:
+  external-id: tunde-testing
+authentication:
+  type: client-credentials
+  client-secret: ${COGNITE_CLIENT_SECRET}
+  client-id: ${COGNITE_CLIENT_ID}
+  token-url: ${COGNITE_TOKEN_URL}
+  scopes: ${COGNITE_SCOPES}

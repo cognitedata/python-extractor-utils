@@ -2,10 +2,12 @@
 Temporary holding place for DTOs against Extraction Pipelines 2.0 until it's in the SDK.
 """
 
-from typing import Any, Literal
+from enum import Enum
+from typing import Annotated, Any, Literal, Optional, TypeAliasType
 
+from annotated_types import Len
 from humps import camelize
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, StringConstraints
 
 
 class CogniteModel(BaseModel):
@@ -30,17 +32,81 @@ class CogniteModel(BaseModel):
     model_config = ConfigDict(alias_generator=camelize, populate_by_name=True, extra="forbid")
 
 
+class HasExternalId(CogniteModel):
+    external_id: str
+
+
 class TaskUpdate(CogniteModel):
     type: Literal["started"] | Literal["ended"]
     name: str
     timestamp: int
 
 
-class Error(CogniteModel):
-    external_id: str
+TaskUpdateList = Annotated[list[TaskUpdate], Len(min_length=1, max_length=1000)]
+
+
+class Error(HasExternalId):
     level: str
     description: str
     details: str | None
     start_time: int
     end_time: int | None
     task: str | None
+
+
+ErrorList = Annotated[list[Error], Len(min_length=0, max_length=1000)]
+
+
+VersionType = Annotated[str, StringConstraints(min_length=1, max_length=32)]
+DescriptionType = Annotated[str, StringConstraints(min_length=0, max_length=500)]
+
+
+class HasVersion(CogniteModel):
+    version: VersionType | None = None
+
+
+class ExtractorInfo(HasExternalId, HasVersion):
+    pass
+
+
+class TaskType(Enum):
+    continuous = "continuous"
+    batch = "batch"
+
+
+class Task(CogniteModel):
+    type: TaskType
+    name: str
+    action: bool = False
+    description: DescriptionType | None = None
+
+
+TaskList = Annotated[list[Task], Len(min_length=1, max_length=1000)]
+
+
+class StartupRequest(HasExternalId):
+    extractor: ExtractorInfo
+    tasks: TaskList | None = None
+    active_config_revision: int | Literal["local"] | None = None
+    timestamp: int | None = None
+
+
+class CheckinRequest(HasExternalId):
+    task_events: TaskUpdateList | None = None
+    errors: ErrorList | None = None
+
+
+class CheckinResponse(HasExternalId):
+    last_config_revision: int | None
+
+
+JSONType = TypeAliasType(  # type: ignore
+    "JSONType",
+    bool
+    | int
+    | float
+    | str
+    | None
+    | list[Optional["JSONType"]]  # type: ignore
+    | dict[str, Optional["JSONType"]],  # type: ignore  # type: ignore
+)

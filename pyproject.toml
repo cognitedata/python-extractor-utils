@@ -33,6 +33,7 @@ dependencies = [
     "pyhumps>=3.8.0",
     "croniter>=6.0.0",
     "jsonlines>=4.0.0",
+    "dill>=0.4.0",
 ]
 
 [project.urls]
@@ -120,3 +121,6 @@ only-include = ["cognite"]
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[project.scripts]
+my-extractor = "cognite.examples.unstable.my_extractor:main"

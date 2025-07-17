@@ -24,6 +24,7 @@ the connection configuration and other parameters.
 """
 
 import logging
+import multiprocessing as mp
 import os
 import sys
 import time
@@ -34,6 +35,8 @@ from random import randint
 from typing import Any, Generic, TypeVar
 from uuid import uuid4
 
+# TODO: Remove this import when we can use Python 3.8+ and `multiprocessing` supports `dill`
+import dill as pickle  # type: ignore[import]
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from typing_extensions import assert_never
 
@@ -56,6 +59,10 @@ from cognite.extractorutils.util import now
 
 from ._messaging import RuntimeMessage
 from .base import ConfigRevision, Extractor, FullConfig
+
+# FIX: Remove this
+mp.set_start_method("spawn", force=True)
+mp.reducer.ForkingPickler = pickle.Pickler  # type: ignore
 
 __all__ = ["ExtractorType", "Runtime"]
 
@@ -278,7 +285,7 @@ class Runtime(Generic[ExtractorType]):
             self._cognite_client.post(
                 f"/api/v1/projects/{self._cognite_client.config.project}/odin/checkin",
                 json={
-                    "externalId": connection_config.integration,
+                    "externalId": connection_config.integration.external_id,
                 },
                 headers={"cdf-version": "alpha"},
             )
@@ -332,7 +339,8 @@ class Runtime(Generic[ExtractorType]):
         self.logger.info(f"Started runtime with PID {os.getpid()}")
 
         try:
-            self._try_change_cwd(args.cwd[0])
+            if args.cwd is not None and len(args.cwd) > 0:
+                self._try_change_cwd(args.cwd[0])
             connection_config = load_file(args.connection_config[0], ConnectionConfig)
         except InvalidConfigError as e:
             self.logger.error(str(e))
