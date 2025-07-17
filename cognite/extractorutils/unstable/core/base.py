@@ -89,29 +89,49 @@ class _NoOpCogniteClient:
     """A mock CogniteClient that performs no actions, for use in dry-run mode."""
 
     class _MockResponse:
-        def __init__(self, url: str) -> None:
+        def __init__(self, url: str, current_config_revision: int | str, external_id: str) -> None:
             self._url = url
+            self.current_config_revision = current_config_revision
+            self.external_id = external_id
 
         def json(self) -> dict:
-            return {"lastConfigRevision": None} if "integrations/checkin" in self._url else {}
+            if "integrations/checkin" in self._url or "/integrations/extractorinfo" in self._url:
+                if self.current_config_revision == "local":
+                    return {"externalId": self.external_id}
+                elif isinstance(self.current_config_revision, int):
+                    return {"externalId": self.external_id, "lastConfigRevision": self.current_config_revision}
+            return {}
 
-    def __init__(self, config: ConnectionConfig | None, client_name: str) -> None:
+    def __init__(
+        self,
+        config: ConnectionConfig | None,
+        current_config_revision: int | str,
+        client_name: str,
+        logger: logging.Logger,
+    ) -> None:
         class MockSDKConfig:
             def __init__(self, project: str) -> None:
                 self.project = project
 
         project_name = config.project if config else "dry-run-no-config"
+        self.external_id = config.integration.external_id if config and config.integration else "dry-run-no-integration"
         self.config = MockSDKConfig(project_name)
-        self._logger = logging.getLogger(__name__)
+        self.current_config_revision = current_config_revision
+        # self._logger = logging.getLogger(__name__)
+        self._logger = logger
         self._logger.info(f"CogniteClient is in no-op mode (dry-run). Client name: {client_name}")
 
     def post(self, url: str, json: dict, **kwargs: dict[str, Any]) -> _MockResponse:
-        self._logger.info(f"[DRY-RUN] SKIPPED POST to {url} with payload: {json}")
-        return self._MockResponse(url)
+        response = self._MockResponse(url, self.current_config_revision, self.external_id)
+        self._logger.info(f"[DRY-RUN] SKIPPED POST to {url} with payload: {json}.")
+        self._logger.info(f"[DRY-RUN] Response: {response.json()}")
+        return response
 
     def get(self, url: str, **kwargs: dict[str, Any]) -> _MockResponse:
-        self._logger.info(f"[DRY-RUN] SKIPPED GET from {url}")
-        return self._MockResponse(url)
+        response = self._MockResponse(url, self.current_config_revision, self.external_id)
+        self._logger.info(f"[DRY-RUN] SKIPPED GET from {url}.")
+        self._logger.info(f"[DRY-RUN] Response: {response.json()}")
+        return response
 
 
 class FullConfig(Generic[_T]):
@@ -124,15 +144,15 @@ class FullConfig(Generic[_T]):
 
     def __init__(
         self,
-        connection_config: ConnectionConfig | None,
         application_config: _T,
         current_config_revision: ConfigRevision,
+        connection_config: ConnectionConfig | None,
         log_level_override: str | None = None,
         is_dry_run: bool = False,
     ) -> None:
-        self.connection_config = connection_config
         self.application_config = application_config
         self.current_config_revision = current_config_revision
+        self.connection_config = connection_config
         self.log_level_override = log_level_override
         self.is_dry_run = is_dry_run
 
@@ -175,7 +195,9 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self.log_level_override = config.log_level_override
 
         if self.is_dry_run:
-            self.cognite_client = _NoOpCogniteClient(self.connection_config, f"{self.EXTERNAL_ID}-{self.VERSION}")
+            self.cognite_client = _NoOpCogniteClient(
+                self.connection_config, self.current_config_revision, f"{self.EXTERNAL_ID}-{self.VERSION}", self._logger
+            )
         elif self.connection_config:
             self.cognite_client = self.connection_config.get_cognite_client(f"{self.EXTERNAL_ID}-{self.VERSION}")
         else:
