@@ -33,6 +33,7 @@ def test_simple_task_report(
             current_config_revision=1,
         )
     )
+    extractor._start_time = datetime.fromtimestamp(now() / 1000, timezone.utc)
 
     extractor.add_task(
         ScheduledTask(

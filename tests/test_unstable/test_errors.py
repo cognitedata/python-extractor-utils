@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from time import sleep
 
 import pytest
@@ -6,6 +7,7 @@ from cognite.extractorutils.unstable.configuration.models import ConnectionConfi
 from cognite.extractorutils.unstable.core.base import FullConfig
 from cognite.extractorutils.unstable.core.errors import ErrorLevel
 from cognite.extractorutils.unstable.core.tasks import ScheduledTask, TaskContext
+from cognite.extractorutils.util import now
 from test_unstable.conftest import TestConfig, TestExtractor
 
 
@@ -77,6 +79,7 @@ def test_task_error(
             current_config_revision=1,
         )
     )
+    extractor._start_time = datetime.fromtimestamp(now() / 1000, timezone.utc)
 
     def task(tc: TaskContext) -> None:
         sleep(0.05)
@@ -130,6 +133,7 @@ def test_crashing_task(
             target=task,
         )
     )
+    extractor._start_time = datetime.fromtimestamp(now() / 1000, timezone.utc)
 
     extractor._report_extractor_info()
     extractor._scheduler.trigger("TestTask")
