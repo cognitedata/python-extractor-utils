@@ -1,3 +1,4 @@
+from datetime import UTC, datetime
 from time import sleep
 
 import pytest
@@ -157,3 +158,36 @@ def test_log_level_override(
         assert log in console_output
     for log in unexpected_logs:
         assert log not in console_output
+
+
+def test_report_extractor_info(
+    connection_config: ConnectionConfig,
+    application_config: TestConfig,
+) -> None:
+    """
+    Tests that the extractor info is reported correctly.
+    """
+    extractor = TestExtractor(
+        FullConfig(
+            connection_config=connection_config,
+            application_config=application_config,
+            current_config_revision=1,
+        )
+    )
+    extractor._start_time = datetime.fromtimestamp(now() / 1000, UTC)
+    startup_request = extractor._get_startup_request()
+
+    extractor._report_extractor_info()
+
+    res = extractor.cognite_client.post(
+        f"/api/v1/projects/{extractor.cognite_client.config.project}/integrations/byids",
+        json={"items": [{"externalId": connection_config.integration.external_id}]},
+        headers={"cdf-version": "alpha"},
+    ).json()
+    assert "items" in res
+    assert len(res["items"]) == 1
+    item = res["items"][0]
+    assert "externalId" in item and item["externalId"] == connection_config.integration.external_id
+    assert "tasks" in item and startup_request.tasks is not None
+    assert len(item["tasks"]) == len(startup_request.tasks)
+    assert item["tasks"][0]["name"] == "log_task"
