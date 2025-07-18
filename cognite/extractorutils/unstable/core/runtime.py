@@ -54,6 +54,7 @@ from cognite.extractorutils.unstable.configuration.loaders import (
 )
 from cognite.extractorutils.unstable.configuration.models import ConnectionConfig, ExtractorConfig
 from cognite.extractorutils.unstable.core._dto import Error
+from cognite.extractorutils.unstable.core.checkin_worker import CheckinWorker
 from cognite.extractorutils.unstable.core.errors import ErrorLevel
 from cognite.extractorutils.util import now
 
@@ -167,7 +168,14 @@ class Runtime(Generic[ExtractorType]):
         config: FullConfig,
     ) -> None:
         # This code is run inside the new extractor process
-        extractor = self._extractor_class._init_from_runtime(config)
+        checkin_worker = CheckinWorker(
+            self._cognite_client,
+            config.connection_config.integration.external_id,
+            self.logger,
+            lambda: self.on_revision_changed(),
+            active_revision=config.current_config_revision,
+        )
+        extractor = self._extractor_class._init_from_runtime(config, checkin_worker)
         extractor._set_runtime_message_queue(message_queue)
 
         try:
@@ -388,3 +396,7 @@ class Runtime(Generic[ExtractorType]):
             else:
                 self.logger.info("Shutting down runtime")
                 self._cancellation_token.cancel()
+
+    def on_revision_changed(self) -> None:
+        """Handle a change in the configuration revision."""
+        self._message_queue.put(RuntimeMessage.RESTART)

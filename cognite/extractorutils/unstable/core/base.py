@@ -53,7 +53,7 @@ from logging.handlers import TimedRotatingFileHandler
 from multiprocessing import Queue
 from threading import RLock, Thread
 from types import TracebackType
-from typing import Generic, Literal, TypeVar
+from typing import Generic, TypeVar
 
 from humps import pascalize
 from typing_extensions import Self, assert_never
@@ -61,13 +61,14 @@ from typing_extensions import Self, assert_never
 from cognite.extractorutils._inner_util import _resolve_log_level
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.unstable.configuration.models import (
+    ConfigRevision,
+    ConfigType,
     ConnectionConfig,
     ExtractorConfig,
     LogConsoleHandlerConfig,
     LogFileHandlerConfig,
 )
-from cognite.extractorutils.unstable.core._dto import Error as DtoError
-from cognite.extractorutils.unstable.core._dto import ExtractorInfo, StartupRequest, TaskType, TaskUpdate
+from cognite.extractorutils.unstable.core._dto import ExtractorInfo, StartupRequest, TaskType
 from cognite.extractorutils.unstable.core._dto import Task as DtoTask
 from cognite.extractorutils.unstable.core._messaging import RuntimeMessage
 from cognite.extractorutils.unstable.core.checkin_worker import CheckinWorker
@@ -79,9 +80,6 @@ from cognite.extractorutils.unstable.scheduling import TaskScheduler
 from cognite.extractorutils.util import now
 
 __all__ = ["ConfigRevision", "ConfigType", "Extractor"]
-
-ConfigType = TypeVar("ConfigType", bound=ExtractorConfig)
-ConfigRevision = Literal["local"] | int
 
 
 _T = TypeVar("_T", bound=ExtractorConfig)
@@ -128,7 +126,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
     RESTART_POLICY: RestartPolicy = WHEN_CONTINUOUS_TASKS_CRASHES
 
-    def __init__(self, config: FullConfig[ConfigType]) -> None:
+    def __init__(self, config: FullConfig[ConfigType], checkin_worker: CheckinWorker) -> None:
         self._logger = logging.getLogger(f"{self.EXTERNAL_ID}.main")
 
         self.cancellation_token = CancellationToken()
@@ -147,16 +145,8 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self._scheduler = TaskScheduler(self.cancellation_token.create_child_token())
 
         self._tasks: list[Task] = []
-        self._task_updates: list[TaskUpdate] = []
-        self._errors: dict[str, Error] = {}
         self._start_time: datetime
-        self._checkin_worker = CheckinWorker(
-            self.cognite_client,
-            self.connection_config.integration.external_id,
-            self._logger,
-            # self.restart,
-            # self._runtime_messages,
-        )
+        self._checkin_worker = checkin_worker
 
         self.__init_tasks__()
 
@@ -230,41 +220,8 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self._runtime_messages = queue
 
     def _checkin(self) -> None:
-        with self._checkin_lock:
-            task_updates = [t.model_dump() for t in self._task_updates]
-            self._task_updates.clear()
-
-            error_updates = [
-                DtoError(
-                    external_id=e.external_id,
-                    level=e.level.value,
-                    description=e.description,
-                    details=e.details,
-                    start_time=e.start_time,
-                    end_time=e.end_time,
-                    task=e._task_name if e._task_name is not None else None,
-                ).model_dump()
-                for e in self._errors.values()
-            ]
-            self._errors.clear()
-
-        res = self.cognite_client.post(
-            f"/api/v1/projects/{self.cognite_client.config.project}/integrations/checkin",
-            json={
-                "externalId": self.connection_config.integration.external_id,
-                "taskEvents": task_updates,
-                "errors": error_updates,
-            },
-            headers={"cdf-version": "alpha"},
-        )
-        new_config_revision = res.json().get("lastConfigRevision")
-
-        if (
-            new_config_revision
-            and self.current_config_revision != "local"
-            and new_config_revision > self.current_config_revision
-        ):
-            self.restart()
+        while not self.cancellation_token.is_cancelled:
+            self._checkin_worker.run_periodic_checkin(self.cancellation_token, self._get_startup_request())
 
     def _get_startup_request(self) -> StartupRequest:
         return StartupRequest(
@@ -279,16 +236,17 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                     name=t.name,
                 )
                 for t in self._tasks
-            ],
+            ]
+            if len(self._tasks) > 0
+            else None,
             timestamp=int(self._start_time.timestamp() * 1000),
         )
 
     def _run_checkin(self) -> None:
-        self._checkin_worker.run_periodic_checkin(self.cancellation_token, self._get_startup_request())
+        self._checkin()
 
     def _report_error(self, error: Error) -> None:
-        with self._checkin_lock:
-            self._errors[error.external_id] = error
+        self._checkin_worker.report_error(error)
 
     def _new_error(
         self,
@@ -316,8 +274,8 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self.cancellation_token.cancel()
 
     @classmethod
-    def _init_from_runtime(cls, config: FullConfig[ConfigType]) -> Self:
-        return cls(config)
+    def _init_from_runtime(cls, config: FullConfig[ConfigType], checkin_worker: CheckinWorker) -> Self:
+        return cls(config, checkin_worker)
 
     def add_task(self, task: Task) -> None:
         """
@@ -336,10 +294,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
             A wrapped version of the task's target, with tracking and error handling.
             """
             # Record a task start
-            with self._checkin_lock:
-                self._task_updates.append(
-                    TaskUpdate(type="started", name=task.name, timestamp=now()),
-                )
+            self._checkin_worker.report_task_start(name=task.name, timestamp=now())
 
             try:
                 # Run task
@@ -358,10 +313,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
             finally:
                 # Record task end
-                with self._checkin_lock:
-                    self._task_updates.append(
-                        TaskUpdate(type="ended", name=task.name, timestamp=now()),
-                    )
+                self._checkin_worker.report_task_end(name=task.name, timestamp=now())
 
         task.target = run_task
         self._tasks.append(task)
@@ -379,29 +331,6 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                     ),
                 )
 
-    # def _report_extractor_info(self) -> None:
-    #     self.cognite_client.post(
-    #         f"/api/v1/projects/{self.cognite_client.config.project}/integrations/extractorinfo",
-    #         json={
-    #             "externalId": self.connection_config.integration.external_id,
-    #             "activeConfigRevision": self.current_config_revision,
-    #             "extractor": {
-    #                 "version": self.VERSION,
-    #                 "externalId": self.EXTERNAL_ID,
-    #             },
-    #             "tasks": [
-    #                 {
-    #                     "name": t.name,
-    #                     "type": "continuous" if isinstance(t, ContinuousTask) else "batch",
-    #                     "action": bool(isinstance(t, ScheduledTask)),
-    #                     "description": t.description,
-    #                 }
-    #                 for t in self._tasks
-    #             ],
-    #         },
-    #         headers={"cdf-version": "alpha"},
-    #     )
-
     def start(self) -> None:
         """
         Start the extractor.
@@ -410,7 +339,6 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         ``with`` statement, which ensures proper cleanup on exit.
         """
         self._setup_logging()
-        # self._report_extractor_info()
         self._start_time = datetime.now(tz=timezone.utc)
         Thread(target=self._run_checkin, name="ExtractorCheckin", daemon=True).start()
 
@@ -439,11 +367,9 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         """
         Stop the extractor when exiting the context manager.
         """
-        self.stop()
-        with self._checkin_lock:
-            self._checkin()
-
         self._logger.info("Shutting down extractor")
+        self._checkin_worker.flush(self.cancellation_token)
+        self.stop()
         return exc_val is None
 
     def run(self) -> None:

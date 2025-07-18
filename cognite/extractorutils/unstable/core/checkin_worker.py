@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from logging import Logger
 from secrets import SystemRandom
 from threading import RLock
@@ -6,16 +7,20 @@ from time import sleep
 from cognite.client import CogniteClient
 from cognite.client.exceptions import CogniteAPIError, CogniteAuthError, CogniteConnectionError
 from cognite.extractorutils.threading import CancellationToken
+from cognite.extractorutils.unstable.configuration.models import ConfigRevision
 from cognite.extractorutils.unstable.core._dto import (
     CheckinRequest,
     CheckinResponse,
-    Error,
     JSONType,
     StartupRequest,
     TaskUpdate,
 )
+from cognite.extractorutils.unstable.core._dto import (
+    Error as DtoError,
+)
+from cognite.extractorutils.unstable.core.errors import Error
 
-DEFAULT_SLEEP_INTERVAL = STARTUP_BACKOFF_SECONDS = 30.0
+DEFAULT_SLEEP_INTERVAL = STARTUP_BACKOFF_SECONDS = 5  # 30.0
 MAX_ERRORS_PER_CHECKIN = MAX_TASK_UPDATES_PER_CHECKIN = 1000
 rng = SystemRandom()
 
@@ -29,20 +34,19 @@ class CheckinWorker:
         cognite_client: CogniteClient,
         integration: str,
         logger: Logger,
-        # on_revision_change: Callable[[], None],
-        # runtime_messages: Queue[RuntimeMessage] | None = None,
+        on_revision_change: Callable[[], None],
+        active_revision: ConfigRevision,
         retry_startup: bool = False,
-        active_revision: int | None = None,
     ) -> None:
         self._cognite_client: CogniteClient = cognite_client
         self._integration: str = integration
         self._logger: Logger = logger
+        self._on_revision_change: Callable[[], None] = on_revision_change
         self._is_running: bool = False
         self._retry_startup: bool = retry_startup
         self._has_reported_startup: bool = False
-        # self._runtime_messages: Queue[RuntimeMessage] | None = runtime_messages
-        self._active_revision: int | None = active_revision
-        self._errors: dict[str, Error] = {}
+        self._active_revision: ConfigRevision = active_revision
+        self._errors: dict[str, DtoError] = {}
         self._task_updates: list[TaskUpdate] = []
 
     def run_periodic_checkin(
@@ -58,6 +62,7 @@ class CheckinWorker:
                 try:
                     self._report_startup(startup_request)
                     self._has_reported_startup = True
+                    break
                 except Exception as e:
                     if not self._retry_startup:
                         raise RuntimeError("Could not report startup") from e
@@ -71,13 +76,15 @@ class CheckinWorker:
         report_interval = interval or DEFAULT_SLEEP_INTERVAL
 
         while not cancellation_token.is_cancelled:
+            self._logger.debug("Running periodic check-in with interval %.2f seconds", report_interval)
             self.flush(cancellation_token)
+            self._logger.debug("Check-in worker finished check-in, sleeping for %.2f seconds", report_interval)
             sleep(report_interval)
 
     def _report_startup(self, startup_request: StartupRequest) -> None:
         try:
             response = self._cognite_client.post(
-                f"/api/v1/projects/{self._cognite_client.config.project}/integrations/extractorinfo",
+                f"/api/v1/projects/{self._cognite_client.config.project}/integrations/startup",
                 json=startup_request.model_dump(mode="json"),
                 headers={"cdf-version": "alpha"},
             )
@@ -95,7 +102,6 @@ class CheckinWorker:
             raise
 
         except CogniteAPIError as e:
-            # Error response from the CDF API
             if e.code == 401:
                 self._logger.critical(
                     "Got a 401 error from CDF. Please check your configuration. "
@@ -111,24 +117,29 @@ class CheckinWorker:
 
     def _handle_checkin_response(self, response: JSONType) -> None:
         checkin_response = CheckinResponse.model_validate(response)
+        self._logger.debug("Received check-in response: %s", checkin_response)
 
-        if self._active_revision is not None and checkin_response.last_config_revision is not None:
-            if self._active_revision < checkin_response.last_config_revision:
+        if isinstance(self._active_revision, int) and checkin_response.last_config_revision is not None:
+            if self._active_revision == "local":
+                self._logger.warning(
+                    "Remote config revision changed "
+                    f"{self._active_revision} -> {checkin_response.last_config_revision}. "
+                    "The extractor is currently using local configuration and will need to be manually restarted "
+                    "and configured to use remote config for the new config to take effect.",
+                )
+            elif self._active_revision < checkin_response.last_config_revision:
                 self._logger.info(
                     f"Remote config changed from {self._active_revision} to {checkin_response.last_config_revision}."
                 )
-                # self.restart_extractor(cancellation_token)
-            elif self._active_revision is None:
-                self._logger.warning("")
-
-    # def restart_extractor(self, cancellation_token: CancellationToken) -> None:
-    #     self._logger.info("Restarting extractor")
-    #     if self._runtime_messages:
-    #         self._runtime_messages.put(RuntimeMessage.RESTART)
-    #     cancellation_token.cancel()
+                self._on_revision_change()
 
     def flush(self, cancellation_token: CancellationToken) -> None:
         with self._flush_lock:
+            self._logger.debug(
+                "Going to report check-in with %d errors and %d task updates.",
+                len(self._errors),
+                len(self._task_updates),
+            )
             self.report_checkin(cancellation_token)
 
     def report_checkin(self, cancellation_token: CancellationToken) -> None:
@@ -147,13 +158,16 @@ class CheckinWorker:
             else:
                 new_errors = list(self._errors.values())
                 self._errors.clear()
-                task_updates = self._task_updates
+                task_updates = self._task_updates[:]
+                self._task_updates.clear()
 
             new_errors.sort(key=lambda e: e.end_time or e.start_time)
             task_updates.sort(key=lambda t: t.timestamp)
 
         while not cancellation_token.is_cancelled:
             if len(new_errors) <= MAX_ERRORS_PER_CHECKIN and len(task_updates) <= MAX_TASK_UPDATES_PER_CHECKIN:
+                self._logger.debug("Writing check-in with no batching needed.")
+                self._logger.debug("Writing %d errors and %d task updates.", len(new_errors), len(task_updates))
                 errors_to_write = new_errors
                 new_errors = []
                 task_updates_to_write = task_updates
@@ -195,7 +209,11 @@ class CheckinWorker:
             if errsIdx == 0 and tasksIdx == 0:
                 self._logger.debug("No new errors or task updates to report, stopping checkin.")
                 break
-        else:
+
+        self._logger.debug("Check-in worker finished writing check-in.")
+
+        if cancellation_token.is_cancelled:
+            self._logger.debug("Extractor was stopped during check-in, requeuing remaining errors and task updates.")
             self._requeue_checkin(new_errors, task_updates)
 
     def try_write_checkin(self, checkin_request: CheckinRequest) -> None:
@@ -218,7 +236,6 @@ class CheckinWorker:
             raise
 
         except CogniteAPIError as e:
-            # Error response from the CDF API
             if e.code == 401:
                 self._logger.critical(
                     "Got a 401 error from CDF. Please check your configuration. "
@@ -234,7 +251,40 @@ class CheckinWorker:
 
             self._requeue_checkin(checkin_request.errors, checkin_request.task_events)
 
-    def _requeue_checkin(self, errors: list[Error] | None, task_updates: list[TaskUpdate] | None) -> None:
+    def report_error(self, error: Error) -> None:
+        """
+        Report an error to the CDF API.
+
+        This method is used to report errors that occur during the execution of the extractor.
+        It will automatically requeue the error if the check-in fails.
+        """
+        with self._start_lock:
+            if error.external_id not in self._errors:
+                self._errors[error.external_id] = error.into_dto()
+            else:
+                self._logger.warning(f"Error {error.external_id} already reported, skipping re-reporting.")
+
+    def report_task_start(self, name: str, timestamp: int) -> None:
+        """
+        Report a task start to the CDF API.
+
+        This method is used to report start related to tasks that are running in the extractor.
+        It will automatically requeue the task update if the check-in fails.
+        """
+        with self._start_lock:
+            self._task_updates.append(TaskUpdate(type="started", name=name, timestamp=timestamp))
+
+    def report_task_end(self, name: str, timestamp: int) -> None:
+        """
+        Report a task end to the CDF API.
+
+        This method is used to report end related to tasks that are running in the extractor.
+        It will automatically requeue the task update if the check-in fails.
+        """
+        with self._start_lock:
+            self._task_updates.append(TaskUpdate(type="ended", name=name, timestamp=timestamp))
+
+    def _requeue_checkin(self, errors: list[DtoError] | None, task_updates: list[TaskUpdate] | None) -> None:
         with self._start_lock:
             for error in errors or []:
                 if error.external_id not in self._errors:

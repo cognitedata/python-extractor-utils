@@ -25,6 +25,7 @@ class MyExtractor(Extractor[MyConfig]):
                 schedule=IntervalConfig(type="interval", expression=TimeIntervalConfig("5s")),
             )
         )
+        pass
 
     def run_my_task(self, ctx: TaskContext) -> None:
         ctx.debug("This is a detailed debug message.")

@@ -10,6 +10,7 @@ from uuid import uuid4
 
 from typing_extensions import assert_never
 
+from cognite.extractorutils.unstable.core._dto import Error as DtoError
 from cognite.extractorutils.util import now
 
 if TYPE_CHECKING:
@@ -77,8 +78,6 @@ class Error:
         self._extractor = extractor
         self._task_name = task_name
 
-        self._extractor._report_error(self)
-
     def instant(self) -> None:
         """
         Make this error an instant error, meaning it does not have a duration.
@@ -126,3 +125,15 @@ class Error:
         """
         self.finish()
         return exc_val is None
+
+    def into_dto(self) -> DtoError:
+        """Convert the error into a DTO (Data Transfer Object) for reporting."""
+        return DtoError(
+            external_id=self.external_id,
+            level=self.level.value,
+            description=self.description,
+            details=self.details,
+            start_time=self.start_time,
+            end_time=self.end_time,
+            task=self._task_name,
+        )
