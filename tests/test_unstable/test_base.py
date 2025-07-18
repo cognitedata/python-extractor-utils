@@ -1,4 +1,4 @@
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 from time import sleep
 
 import pytest
@@ -174,7 +174,7 @@ def test_report_extractor_info(
             current_config_revision=1,
         )
     )
-    extractor._start_time = datetime.fromtimestamp(now() / 1000, UTC)
+    extractor._start_time = datetime.fromtimestamp(now() / 1000, timezone.utc)
     startup_request = extractor._get_startup_request()
 
     extractor._report_extractor_info()
