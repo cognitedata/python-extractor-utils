@@ -53,11 +53,12 @@ from logging.handlers import TimedRotatingFileHandler
 from multiprocessing import Queue
 from threading import RLock, Thread
 from types import TracebackType
-from typing import Generic, Literal, TypeVar
+from typing import Any, Generic, Literal, TypeVar
 
 from humps import pascalize
 from typing_extensions import Self, assert_never
 
+from cognite.client import CogniteClient
 from cognite.extractorutils._inner_util import _resolve_log_level
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.unstable.configuration.models import (
@@ -85,6 +86,55 @@ ConfigRevision = Literal["local"] | int
 _T = TypeVar("_T", bound=ExtractorConfig)
 
 
+class _NoOpCogniteClient:
+    """A mock CogniteClient that performs no actions, for use in dry-run mode."""
+
+    class _MockResponse:
+        def __init__(self, url: str, current_config_revision: int | str, external_id: str) -> None:
+            self._url = url
+            self.current_config_revision = current_config_revision
+            self.external_id = external_id
+
+        def json(self) -> dict:
+            if "integrations/checkin" in self._url or "/integrations/extractorinfo" in self._url:
+                if self.current_config_revision == "local":
+                    return {"externalId": self.external_id}
+                elif isinstance(self.current_config_revision, int):
+                    return {"externalId": self.external_id, "lastConfigRevision": self.current_config_revision}
+            return {}
+
+    def __init__(
+        self,
+        config: ConnectionConfig | None,
+        current_config_revision: int | str,
+        client_name: str,
+        logger: logging.Logger,
+    ) -> None:
+        class MockSDKConfig:
+            def __init__(self, project: str) -> None:
+                self.project = project
+
+        project_name = config.project if config else "dry-run-no-config"
+        self.external_id = config.integration.external_id if config and config.integration else "dry-run-no-integration"
+        self.config = MockSDKConfig(project_name)
+        self.current_config_revision = current_config_revision
+        # self._logger = logging.getLogger(__name__)
+        self._logger = logger
+        self._logger.info(f"CogniteClient is in no-op mode (dry-run). Client name: {client_name}")
+
+    def post(self, url: str, json: dict, **kwargs: dict[str, Any]) -> _MockResponse:
+        response = self._MockResponse(url, self.current_config_revision, self.external_id)
+        self._logger.info(f"[DRY-RUN] SKIPPED POST to {url} with payload: {json}.")
+        self._logger.info(f"[DRY-RUN] Response: {response.json()}")
+        return response
+
+    def get(self, url: str, **kwargs: dict[str, Any]) -> _MockResponse:
+        response = self._MockResponse(url, self.current_config_revision, self.external_id)
+        self._logger.info(f"[DRY-RUN] SKIPPED GET from {url}.")
+        self._logger.info(f"[DRY-RUN] Response: {response.json()}")
+        return response
+
+
 class FullConfig(Generic[_T]):
     """
     A class that holds the full configuration for an extractor.
@@ -95,15 +145,17 @@ class FullConfig(Generic[_T]):
 
     def __init__(
         self,
-        connection_config: ConnectionConfig,
         application_config: _T,
         current_config_revision: ConfigRevision,
+        connection_config: ConnectionConfig | None,
         log_level_override: str | None = None,
+        is_dry_run: bool = False,
     ) -> None:
-        self.connection_config = connection_config
         self.application_config = application_config
         self.current_config_revision = current_config_revision
+        self.connection_config = connection_config
         self.log_level_override = log_level_override
+        self.is_dry_run = is_dry_run
 
 
 class Extractor(Generic[ConfigType], CogniteLogger):
@@ -125,8 +177,14 @@ class Extractor(Generic[ConfigType], CogniteLogger):
     CONFIG_TYPE: type[ConfigType]
 
     RESTART_POLICY: RestartPolicy = WHEN_CONTINUOUS_TASKS_CRASHES
+    SUPPORTS_DRY_RUN: bool = False
+    cognite_client: _NoOpCogniteClient | CogniteClient
 
     def __init__(self, config: FullConfig[ConfigType]) -> None:
+        self.is_dry_run = config.is_dry_run
+        if self.is_dry_run and not self.SUPPORTS_DRY_RUN:
+            raise NotImplementedError(f"Extractor '{self.NAME}' does not support dry-run mode.")
+
         self._logger = logging.getLogger(f"{self.EXTERNAL_ID}.main")
 
         self.cancellation_token = CancellationToken()
@@ -137,7 +195,14 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self.current_config_revision = config.current_config_revision
         self.log_level_override = config.log_level_override
 
-        self.cognite_client = self.connection_config.get_cognite_client(f"{self.EXTERNAL_ID}-{self.VERSION}")
+        if self.is_dry_run:
+            self.cognite_client = _NoOpCogniteClient(
+                self.connection_config, self.current_config_revision, f"{self.EXTERNAL_ID}-{self.VERSION}", self._logger
+            )
+        elif self.connection_config:
+            self.cognite_client = self.connection_config.get_cognite_client(f"{self.EXTERNAL_ID}-{self.VERSION}")
+        else:
+            raise ValueError("Connection config is missing and not in dry-run mode.")
 
         self._checkin_lock = RLock()
         self._runtime_messages: Queue[RuntimeMessage] | None = None
@@ -221,6 +286,9 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self._runtime_messages = queue
 
     def _checkin(self) -> None:
+        if not self.connection_config:
+            return
+
         with self._checkin_lock:
             task_updates = [t.model_dump() for t in self._task_updates]
             self._task_updates.clear()
@@ -360,6 +428,9 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                 )
 
     def _report_extractor_info(self) -> None:
+        if not self.connection_config:
+            return
+
         self.cognite_client.post(
             f"/api/v1/projects/{self.cognite_client.config.project}/integrations/extractorinfo",
             json={

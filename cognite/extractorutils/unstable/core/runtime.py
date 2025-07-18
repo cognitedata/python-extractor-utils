@@ -101,7 +101,7 @@ class Runtime(Generic[ExtractorType]):
             "--connection-config",
             nargs=1,
             type=Path,
-            required=True,
+            required=False,
             help="Connection parameters",
         )
         argparser.add_argument(
@@ -133,6 +133,11 @@ class Runtime(Generic[ExtractorType]):
             type=Path,
             required=False,
             help="Set the current working directory for the extractor.",
+        )
+        argparser.add_argument(
+            "--dry-run",
+            action="store_true",
+            help="Run without writing to CDF. The extractor must support this feature for this to work.",
         )
 
         return argparser
@@ -167,6 +172,9 @@ class Runtime(Generic[ExtractorType]):
             with extractor:
                 extractor.run()
 
+        except NotImplementedError as e:
+            logging.getLogger(__name__).critical(f"Configuration error: {e}")
+
         except Exception:
             self.logger.exception("Extractor crashed, will attempt restart")
             message_queue.put(RuntimeMessage.RESTART)
@@ -188,7 +196,7 @@ class Runtime(Generic[ExtractorType]):
     def _try_get_application_config(
         self,
         args: Namespace,
-        connection_config: ConnectionConfig,
+        connection_config: ConnectionConfig | None,
     ) -> tuple[ExtractorConfig, ConfigRevision]:
         current_config_revision: ConfigRevision
 
@@ -205,7 +213,7 @@ class Runtime(Generic[ExtractorType]):
                 self.logger.critical(str(e))
                 raise InvalidConfigError(str(e)) from e
 
-        else:
+        elif connection_config:
             self.logger.info("Loading application config from CDF")
 
             application_config, current_config_revision = load_from_cdf(
@@ -213,6 +221,10 @@ class Runtime(Generic[ExtractorType]):
                 connection_config.integration.external_id,
                 self._extractor_class.CONFIG_TYPE,
             )
+
+        else:
+            self.logger.critical("No connection config provided and no local config file specified.")
+            raise InvalidConfigError("No connection config provided and no local config file specified.")
 
         return application_config, current_config_revision
 
@@ -230,8 +242,15 @@ class Runtime(Generic[ExtractorType]):
     def _safe_get_application_config(
         self,
         args: Namespace,
-        connection_config: ConnectionConfig,
+        connection_config: ConnectionConfig | None,
     ) -> tuple[ExtractorConfig, ConfigRevision] | None:
+        if args.dry_run and not args.force_local_config:
+            self.logger.warning(
+                "Running in dry-run mode without a local application config file (-f). "
+                "The extractor will not perform any actions."
+            )
+            return None
+
         prev_error: str | None = None
 
         while not self._cancellation_token.is_cancelled:
@@ -257,23 +276,28 @@ class Runtime(Generic[ExtractorType]):
                     task=None,
                 )
 
-                self._cognite_client.post(
-                    f"/api/v1/projects/{self._cognite_client.config.project}/odin/checkin",
-                    json={
-                        "externalId": connection_config.integration.external_id,
-                        "errors": [error.model_dump()],
-                    },
-                    headers={"cdf-version": "alpha"},
-                )
+                if connection_config:
+                    self._cognite_client.post(
+                        f"/api/v1/projects/{self._cognite_client.config.project}/odin/checkin",
+                        json={
+                            "externalId": connection_config.integration.external_id,
+                            "errors": [error.model_dump()],
+                        },
+                        headers={"cdf-version": "alpha"},
+                    )
 
                 self._cancellation_token.wait(randint(1, self.RETRY_CONFIG_INTERVAL))
 
         return None
 
-    def _verify_connection_config(self, connection_config: ConnectionConfig) -> bool:
+    def _verify_connection_config(self, connection_config: ConnectionConfig | None) -> bool:
+        if connection_config is None:
+            return False
+
         self._cognite_client = connection_config.get_cognite_client(
             f"{self._extractor_class.EXTERNAL_ID}-{self._extractor_class.VERSION}"
         )
+
         try:
             self._cognite_client.post(
                 f"/api/v1/projects/{self._cognite_client.config.project}/odin/checkin",
@@ -333,13 +357,26 @@ class Runtime(Generic[ExtractorType]):
 
         try:
             self._try_set_cwd(args)
-            connection_config = load_file(args.connection_config[0], ConnectionConfig)
+
+            if args.dry_run:
+                self.logger.info("Running in dry-run mode. No data will be written to CDF.")
+
+                connection_config = (
+                    load_file(args.connection_config[0], ConnectionConfig) if args.connection_config else None
+                )
+            else:
+                if not args.connection_config:
+                    self.logger.critical("Connection config file is required when not in dry-run mode.")
+                    sys.exit(1)
+
+                connection_config = load_file(args.connection_config[0], ConnectionConfig)
+
         except InvalidConfigError as e:
             self.logger.error(str(e))
             self.logger.critical("Could not load connection config")
             sys.exit(1)
 
-        if not args.skip_init_checks and not self._verify_connection_config(connection_config):
+        if not args.dry_run and not args.skip_init_checks and not self._verify_connection_config(connection_config):
             sys.exit(1)
 
         # This has to be Any. We don't know the type of the extractors' config at type checking since the self doesn't
@@ -363,6 +400,7 @@ class Runtime(Generic[ExtractorType]):
                     application_config=application_config,
                     current_config_revision=current_config_revision,
                     log_level_override=args.log_level,
+                    is_dry_run=args.dry_run,
                 )
             )
             process.join()

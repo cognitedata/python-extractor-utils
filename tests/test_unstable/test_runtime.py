@@ -9,7 +9,7 @@ from threading import Thread
 import pytest
 
 from cognite.extractorutils.unstable.configuration.models import ConnectionConfig
-from cognite.extractorutils.unstable.core.base import ConfigRevision
+from cognite.extractorutils.unstable.core.base import ConfigRevision, FullConfig
 from cognite.extractorutils.unstable.core.runtime import Runtime
 from test_unstable.conftest import TestConfig, TestExtractor
 
@@ -97,7 +97,7 @@ def test_load_cdf_config_initial_empty(connection_config: ConnectionConfig) -> N
 
     start_time = time.time()
     result: tuple[TestConfig, ConfigRevision] | None = runtime._safe_get_application_config(
-        args=Namespace(force_local_config=None),
+        args=Namespace(force_local_config=None, dry_run=False),
         connection_config=connection_config,
     )
     duration = time.time() - start_time
@@ -134,3 +134,44 @@ def test_changing_cwd() -> None:
 
     assert os.getcwd() == str(Path(__file__).parent)
     assert os.getcwd() != original_cwd
+
+
+def test_unsupported_dry_run_crashes(connection_config: ConnectionConfig) -> None:
+    """
+    Tests that an extractor with SUPPORTS_DRY_RUN = False raises a
+    NotImplementedError if started in dry-run mode.
+    """
+    extractor_class = TestExtractor
+
+    full_config = FullConfig(
+        connection_config=connection_config,
+        application_config=TestConfig(parameter_one=1, parameter_two="a"),
+        current_config_revision=1,
+        is_dry_run=True,
+    )
+
+    with pytest.raises(NotImplementedError, match="does not support dry-run mode"):
+        extractor_class(full_config)
+
+
+def test_supported_dry_run_uses_noop_client(connection_config: ConnectionConfig) -> None:
+    """
+    Tests that an extractor with SUPPORTS_DRY_RUN = True uses the
+    _NoOpCogniteClient when in dry-run mode.
+    """
+
+    class DryRunSupportedExtractor(TestExtractor):
+        SUPPORTS_DRY_RUN = True
+
+    full_config = FullConfig(
+        connection_config=connection_config,
+        application_config=TestConfig(parameter_one=1, parameter_two="a"),
+        current_config_revision=1,
+        is_dry_run=True,
+    )
+
+    extractor = DryRunSupportedExtractor(full_config)
+
+    from cognite.extractorutils.unstable.core.base import _NoOpCogniteClient
+
+    assert isinstance(extractor.cognite_client, _NoOpCogniteClient)
