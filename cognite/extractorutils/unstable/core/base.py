@@ -123,13 +123,13 @@ class Extractor(Generic[ConfigType], CogniteLogger):
     VERSION: str
 
     CONFIG_TYPE: type[ConfigType]
+    cancellation_token = CancellationToken()
 
     RESTART_POLICY: RestartPolicy = WHEN_CONTINUOUS_TASKS_CRASHES
 
     def __init__(self, config: FullConfig[ConfigType], checkin_worker: CheckinWorker) -> None:
         self._logger = logging.getLogger(f"{self.EXTERNAL_ID}.main")
 
-        self.cancellation_token = CancellationToken()
         self.cancellation_token.cancel_on_interrupt()
 
         self.connection_config = config.connection_config

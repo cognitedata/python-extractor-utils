@@ -35,6 +35,7 @@ class CheckinWorker:
         integration: str,
         logger: Logger,
         on_revision_change: Callable[[], None],
+        on_fatal_error: Callable[[Exception], None],
         active_revision: ConfigRevision,
         retry_startup: bool = False,
     ) -> None:
@@ -42,6 +43,7 @@ class CheckinWorker:
         self._integration: str = integration
         self._logger: Logger = logger
         self._on_revision_change: Callable[[], None] = on_revision_change
+        self._on_fatal_error: Callable[[Exception], None] = on_fatal_error
         self._is_running: bool = False
         self._retry_startup: bool = retry_startup
         self._has_reported_startup: bool = False
@@ -94,12 +96,12 @@ class CheckinWorker:
             if e.__cause__ is not None:
                 self._logger.error(str(e.__cause__))
             self._logger.critical("Could not connect to CDF. Please check your configuration.")
-            raise
+            self._on_fatal_error(e)
 
         except CogniteAuthError as e:
             self._logger.error(str(e))
             self._logger.critical("Could not get an access token. Please check your configuration.")
-            raise
+            self._on_fatal_error(e)
 
         except CogniteAPIError as e:
             if e.code == 401:
@@ -107,7 +109,7 @@ class CheckinWorker:
                     "Got a 401 error from CDF. Please check your configuration. "
                     "Make sure the credentials and project is correct."
                 )
-                raise
+                self._on_fatal_error(e)
 
             elif e.message:
                 self._logger.critical(str(e.message))

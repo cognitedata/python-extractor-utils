@@ -24,7 +24,6 @@ the connection configuration and other parameters.
 """
 
 import logging
-import multiprocessing as mp
 import os
 import sys
 import time
@@ -35,8 +34,6 @@ from random import randint
 from typing import Any, Generic, TypeVar
 from uuid import uuid4
 
-# TODO: Remove this import when we can use Python 3.8+ and `multiprocessing` supports `dill`
-import dill as pickle  # type: ignore[import]
 from requests.exceptions import ConnectionError as RequestsConnectionError
 from typing_extensions import assert_never
 
@@ -61,13 +58,59 @@ from cognite.extractorutils.util import now
 from ._messaging import RuntimeMessage
 from .base import ConfigRevision, Extractor, FullConfig
 
-# FIX: Remove this
-mp.set_start_method("spawn", force=True)
-mp.reducer.ForkingPickler = pickle.Pickler  # type: ignore
-
 __all__ = ["ExtractorType", "Runtime"]
 
 ExtractorType = TypeVar("ExtractorType", bound=Extractor)
+
+
+def _run_extractor_process(
+    extractor_class: type[Extractor],
+    cognite_client: CogniteClient,
+    logger: logging.Logger,
+    config: FullConfig,
+    message_queue: Queue,
+) -> None:
+    """
+    This function is the entry point for the new extractor process.
+
+    It's a top-level function to avoid pickling the complex Runtime instance.
+    """
+    try:
+        extractor = extractor_class._init_from_runtime(
+            config,
+            CheckinWorker(
+                cognite_client,
+                config.connection_config.integration.external_id,
+                logger,
+                lambda: on_revision_changed(logger, extractor_class, message_queue),
+                lambda e: on_fatal_error(logger, extractor_class),
+                config.current_config_revision,
+            ),
+        )
+        extractor._set_runtime_message_queue(message_queue)
+
+        with extractor:
+            extractor.run()
+
+    except NotImplementedError as e:
+        logging.getLogger(__name__).critical(f"Configuration error: {e}")
+
+    except Exception:
+        # Since this is a new process, we use a standard logger here to report the crash
+        logger.exception("Extractor crashed, will attempt restart")
+        message_queue.put(RuntimeMessage.RESTART)
+
+
+def on_revision_changed(logger: logging.Logger, extractor_class: type[Extractor], message_queue: Queue) -> None:
+    """Handle a change in the configuration revision."""
+    message_queue.put(RuntimeMessage.RESTART)
+    extractor_class.cancellation_token.cancel()
+
+
+def on_fatal_error(logger: logging.Logger, extractor_class: type[Extractor]) -> None:
+    """Handle a fatal error in the extractor."""
+    logger.error(f"Fatal error in {extractor_class.EXTERNAL_ID}, shutting down.")
+    extractor_class.cancellation_token.cancel()
 
 
 class Runtime(Generic[ExtractorType]):
@@ -162,29 +205,43 @@ class Runtime(Generic[ExtractorType]):
 
         root.addHandler(console_handler)
 
-    def _inner_run(
-        self,
-        message_queue: Queue,
-        config: FullConfig,
-    ) -> None:
-        # This code is run inside the new extractor process
-        checkin_worker = CheckinWorker(
-            self._cognite_client,
-            config.connection_config.integration.external_id,
-            self.logger,
-            lambda: self.on_revision_changed(),
-            active_revision=config.current_config_revision,
-        )
-        extractor = self._extractor_class._init_from_runtime(config, checkin_worker)
-        extractor._set_runtime_message_queue(message_queue)
+    # def _inner_run(
+    #     self,
+    #     message_queue: Queue,
+    #     config: FullConfig,
+    # ) -> None:
+    #     # This code is run inside the new extractor process
+    #     checkin_worker = CheckinWorker(
+    #         self._cognite_client,
+    #         config.connection_config.integration.external_id,
+    #         self.logger,
+    #         lambda: self.on_revision_changed(),
+    #         active_revision=config.current_config_revision,
+    #     )
+    #     extractor = self._extractor_class._init_from_runtime(config, checkin_worker)
+    #     extractor._set_runtime_message_queue(message_queue)
+    #
+    #     try:
+    #         with extractor:
+    #             extractor.run()
+    #
+    #     except Exception:
+    #         self.logger.exception("Extractor crashed, will attempt restart")
+    #         message_queue.put(RuntimeMessage.RESTART)
 
-        try:
-            with extractor:
-                extractor.run()
-
-        except Exception:
-            self.logger.exception("Extractor crashed, will attempt restart")
-            message_queue.put(RuntimeMessage.RESTART)
+    # def _spawn_extractor(
+    #     self,
+    #     config: FullConfig,
+    # ) -> Process:
+    #     self._message_queue = Queue()
+    #     process = Process(
+    #         target=self._inner_run,
+    #         args=(self._message_queue, config),
+    #     )
+    #
+    #     process.start()
+    #     self.logger.info(f"Started extractor with PID {process.pid}")
+    #     return process
 
     def _spawn_extractor(
         self,
@@ -192,10 +249,15 @@ class Runtime(Generic[ExtractorType]):
     ) -> Process:
         self._message_queue = Queue()
         process = Process(
-            target=self._inner_run,
-            args=(self._message_queue, config),
+            target=_run_extractor_process,
+            args=(
+                self._extractor_class,
+                self._cognite_client,
+                self.logger,
+                config,
+                self._message_queue,
+            ),
         )
-
         process.start()
         self.logger.info(f"Started extractor with PID {process.pid}")
         return process
@@ -396,7 +458,3 @@ class Runtime(Generic[ExtractorType]):
             else:
                 self.logger.info("Shutting down runtime")
                 self._cancellation_token.cancel()
-
-    def on_revision_changed(self) -> None:
-        """Handle a change in the configuration revision."""
-        self._message_queue.put(RuntimeMessage.RESTART)
