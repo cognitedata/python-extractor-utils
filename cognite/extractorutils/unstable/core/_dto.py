@@ -3,11 +3,12 @@ Temporary holding place for DTOs against Extraction Pipelines 2.0 until it's in 
 """
 
 from enum import Enum
-from typing import Annotated, Any, Literal, Optional, TypeAliasType
+from typing import Annotated, Any, Literal, Optional
 
 from annotated_types import Len
 from humps import camelize
 from pydantic import BaseModel, ConfigDict, StringConstraints
+from typing_extensions import TypeAliasType
 
 
 class CogniteModel(BaseModel):
