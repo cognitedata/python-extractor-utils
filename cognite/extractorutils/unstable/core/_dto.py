@@ -107,4 +107,4 @@ class CheckinRequest(HasExternalId):
 
 
 class CheckinResponse(HasExternalId):
-    last_config_revision: int | None
+    last_config_revision: int | None = None
