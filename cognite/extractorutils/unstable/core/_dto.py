@@ -37,10 +37,14 @@ class HasExternalId(CogniteModel):
     external_id: str
 
 
+MessageType = Annotated[str, StringConstraints(min_length=0, max_length=1000)]
+
+
 class TaskUpdate(CogniteModel):
     type: Literal["started"] | Literal["ended"]
     name: str
     timestamp: int
+    message: MessageType | None = None
 
 
 class Error(HasExternalId):
