@@ -48,9 +48,11 @@ class SimpleExtractor(Extractor[SimpleConfig]):
 
     # add more tasks as needed
 
+
 def main() -> None:
     runtime = Runtime(SimpleExtractor)
     runtime.run()
+
 
 if __name__ == "__main__":
     main()
