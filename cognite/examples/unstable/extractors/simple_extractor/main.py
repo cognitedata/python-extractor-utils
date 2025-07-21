@@ -50,6 +50,9 @@ class SimpleExtractor(Extractor[SimpleConfig]):
 
 
 def main() -> None:
+    """
+    Main function to run the SimpleExtractor.
+    """
     runtime = Runtime(SimpleExtractor)
     runtime.run()
 
