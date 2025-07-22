@@ -61,6 +61,7 @@ dev-dependencies = [
     "types-pyyaml>=6.0.12.20241230",
     "types-psutil>=6.1.0.20241221",
     "types-decorator>=5.1.8.20240310",
+    "requests-mock>=1.12.1"
 ]
 
 [tool.ruff]

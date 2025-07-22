@@ -63,9 +63,9 @@ class Error:
         self,
         level: ErrorLevel,
         description: str,
-        details: str | None,
-        task_name: str | None,
         extractor: "Extractor",
+        details: str | None = None,
+        task_name: str | None = None,
     ) -> None:
         self.level = level
         self.description = description
