@@ -105,5 +105,5 @@ class CheckinRequest(WithExternalId):
     errors: ErrorList | None = None
 
 
-class CheckinResponse(HasExternalId):
+class CheckinResponse(WithExternalId):
     last_config_revision: int | None = None
