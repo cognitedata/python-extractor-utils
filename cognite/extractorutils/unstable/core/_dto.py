@@ -33,7 +33,7 @@ class CogniteModel(BaseModel):
     model_config = ConfigDict(alias_generator=camelize, populate_by_name=True, extra="forbid")
 
 
-class HasExternalId(CogniteModel):
+class WithExternalId(CogniteModel):
     external_id: str
 
 
@@ -47,8 +47,7 @@ class TaskUpdate(CogniteModel):
     message: MessageType | None = None
 
 
-class Error(HasExternalId):
-    external_id: str
+class Error(WithExternalId):
     level: str
     description: str
     details: str | None
@@ -74,11 +73,11 @@ JSONType = TypeAliasType(  # type: ignore
 )
 
 
-class HasVersion(CogniteModel):
+class WithVersion(CogniteModel):
     version: VersionType | None = None
 
 
-class ExtractorInfo(HasExternalId, HasVersion):
+class ExtractorInfo(WithExternalId, WithVersion):
     pass
 
 
@@ -94,14 +93,14 @@ class Task(CogniteModel):
     description: DescriptionType | None = None
 
 
-class StartupRequest(HasExternalId):
+class StartupRequest(WithExternalId):
     extractor: ExtractorInfo
     tasks: TaskList | None = None
     active_config_revision: int | Literal["local"] | None = None
     timestamp: int | None = None
 
 
-class CheckinRequest(HasExternalId):
+class CheckinRequest(WithExternalId):
     task_events: TaskUpdateList | None = None
     errors: ErrorList | None = None
 
