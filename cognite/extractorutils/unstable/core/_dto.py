@@ -77,15 +77,9 @@ ErrorList = Annotated[list[Error], Len(min_length=0, max_length=1000)]
 VersionType = Annotated[str, StringConstraints(min_length=1, max_length=32)]
 DescriptionType = Annotated[str, StringConstraints(min_length=0, max_length=500)]
 TaskList = Annotated[list["Task"], Len(min_length=1, max_length=1000)]
-JSONType = TypeAliasType(  # type: ignore
+JSONType = TypeAliasType(  # type: ignore[misc]
     "JSONType",
-    bool
-    | int
-    | float
-    | str
-    | None
-    | list[Optional["JSONType"]]  # type: ignore
-    | dict[str, Optional["JSONType"]],  # type: ignore  # type: ignore
+    bool | int | float | str | None | list[Optional["JSONType"]] | dict[str, Optional["JSONType"]],  # type: ignore[misc]
 )
 
 
