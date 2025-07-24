@@ -10,6 +10,9 @@ from humps import camelize
 from pydantic import BaseModel, ConfigDict, StringConstraints
 from typing_extensions import TypeAliasType
 
+from cognite.extractorutils.unstable.core.errors import Error as InternalError
+from cognite.extractorutils.unstable.core.errors import ErrorLevel
+
 
 class CogniteModel(BaseModel):
     """
@@ -48,12 +51,25 @@ class TaskUpdate(CogniteModel):
 
 
 class Error(WithExternalId):
-    level: str
+    level: ErrorLevel
     description: str
     details: str | None
     start_time: int
     end_time: int | None
     task: str | None
+
+    @classmethod
+    def from_internal(cls, error: InternalError) -> "Error":
+        """Convert the error into a DTO (Data Transfer Object) for reporting."""
+        return Error(
+            external_id=error.external_id,
+            level=error.level,
+            description=error.description,
+            details=error.details,
+            start_time=error.start_time,
+            end_time=error.end_time,
+            task=error._task_name,
+        )
 
 
 TaskUpdateList = Annotated[list[TaskUpdate], Len(min_length=1, max_length=1000)]
