@@ -8,7 +8,7 @@ from collections.abc import Iterator
 from datetime import timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, TypeVar
 
 from humps import kebabize
 from pydantic import BaseModel, ConfigDict, Field, GetCoreSchemaHandler
@@ -433,3 +433,7 @@ class ExtractorConfig(ConfigModel):
     """
 
     log_handlers: list[LogHandlerConfig] = Field(default_factory=_log_handler_default)
+
+
+ConfigType = TypeVar("ConfigType", bound=ExtractorConfig)
+ConfigRevision = Literal["local"] | int
