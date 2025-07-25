@@ -286,7 +286,7 @@ class CheckinWorker:
         """
         with self._start_lock:
             if error.external_id not in self._errors:
-                self._errors[error.external_id] = error.into_dto()
+                self._errors[error.external_id] = DtoError.from_internal(error)
             else:
                 self._logger.warning(f"Error {error.external_id} already reported, skipping re-reporting.")
 

@@ -231,19 +231,19 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
     def _checkin(self) -> None:
         with self._checkin_lock:
-            task_updates = [t.model_dump() for t in self._task_updates]
+            task_updates = [t.model_dump(mode="json") for t in self._task_updates]
             self._task_updates.clear()
 
             error_updates = [
                 DtoError(
                     external_id=e.external_id,
-                    level=e.level.value,
+                    level=e.level,
                     description=e.description,
                     details=e.details,
                     start_time=e.start_time,
                     end_time=e.end_time,
                     task=e._task_name if e._task_name is not None else None,
-                ).model_dump()
+                ).model_dump(mode="json")
                 for e in self._errors.values()
             ]
             self._errors.clear()
