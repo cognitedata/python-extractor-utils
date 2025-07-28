@@ -28,9 +28,10 @@ import os
 import sys
 import time
 from argparse import ArgumentParser, Namespace
-from multiprocessing import Process, Queue
+from multiprocessing import Event, Process, Queue
 from pathlib import Path
 from random import randint
+from threading import Thread
 from typing import Any, Generic, TypeVar
 from uuid import uuid4
 
@@ -60,6 +61,24 @@ from .base import ConfigRevision, Extractor, FullConfig
 __all__ = ["ExtractorType", "Runtime"]
 
 ExtractorType = TypeVar("ExtractorType", bound=Extractor)
+
+
+def _extractor_process_entrypoint(
+    extractor_class: type[Extractor],
+    message_queue: Queue,
+    config: FullConfig,
+) -> None:
+    logger = logging.getLogger(f"{extractor_class.EXTERNAL_ID}.runtime")
+    extractor = extractor_class._init_from_runtime(config)
+    extractor._set_runtime_message_queue(message_queue)
+
+    try:
+        with extractor:
+            extractor.run()
+
+    except Exception:
+        logger.exception("Extractor crashed, will attempt restart")
+        message_queue.put(RuntimeMessage.RESTART)
 
 
 class Runtime(Generic[ExtractorType]):
@@ -154,31 +173,14 @@ class Runtime(Generic[ExtractorType]):
 
         root.addHandler(console_handler)
 
-    def _inner_run(
-        self,
-        message_queue: Queue,
-        config: FullConfig,
-    ) -> None:
-        # This code is run inside the new extractor process
-        extractor = self._extractor_class._init_from_runtime(config)
-        extractor._set_runtime_message_queue(message_queue)
-
-        try:
-            with extractor:
-                extractor.run()
-
-        except Exception:
-            self.logger.exception("Extractor crashed, will attempt restart")
-            message_queue.put(RuntimeMessage.RESTART)
-
     def _spawn_extractor(
         self,
         config: FullConfig,
     ) -> Process:
         self._message_queue = Queue()
         process = Process(
-            target=self._inner_run,
-            args=(self._message_queue, config),
+            target=_extractor_process_entrypoint,
+            args=(self._extractor_class, self._message_queue, config),
         )
 
         process.start()
@@ -331,6 +333,16 @@ class Runtime(Generic[ExtractorType]):
 
         self.logger.info(f"Started runtime with PID {os.getpid()}")
 
+        mp_cancel_event = Event()
+
+        def cancellation_watcher() -> None:
+            """Waits for the runtime token and sets the shared event."""
+            self._cancellation_token.wait()
+            mp_cancel_event.set()
+
+        watcher_thread = Thread(target=cancellation_watcher, daemon=True, name="RuntimeCancelWatcher")
+        watcher_thread.start()
+
         try:
             self._try_set_cwd(args)
             connection_config = load_file(args.connection_config[0], ConnectionConfig)
@@ -363,6 +375,7 @@ class Runtime(Generic[ExtractorType]):
                     application_config=application_config,
                     current_config_revision=current_config_revision,
                     log_level_override=args.log_level,
+                    cancel_event=mp_cancel_event,
                 )
             )
             process.join()

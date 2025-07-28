@@ -51,6 +51,7 @@ from datetime import datetime, timezone
 from functools import partial
 from logging.handlers import TimedRotatingFileHandler
 from multiprocessing import Queue
+from multiprocessing.synchronize import Event as MpEvent
 from threading import RLock, Thread
 from types import TracebackType
 from typing import Generic, Literal, TypeVar
@@ -99,11 +100,13 @@ class FullConfig(Generic[_T]):
         application_config: _T,
         current_config_revision: ConfigRevision,
         log_level_override: str | None = None,
+        cancel_event: MpEvent | None = None,
     ) -> None:
         self.connection_config = connection_config
         self.application_config = application_config
         self.current_config_revision = current_config_revision
         self.log_level_override = log_level_override
+        self.cancel_event = cancel_event
 
 
 class Extractor(Generic[ConfigType], CogniteLogger):
@@ -132,6 +135,9 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self.cancellation_token = CancellationToken()
         self.cancellation_token.cancel_on_interrupt()
 
+        if config.cancel_event:
+            self._setup_cancellation_watcher(config.cancel_event)
+
         self.connection_config = config.connection_config
         self.application_config = config.application_config
         self.current_config_revision = config.current_config_revision
@@ -150,6 +156,19 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self._start_time: datetime
 
         self.__init_tasks__()
+
+    def _setup_cancellation_watcher(self, cancel_event: MpEvent) -> None:
+        """Starts a daemon thread to watch the inter-process event."""
+
+        def watcher() -> None:
+            """Blocks until the event is set, then cancels the local token."""
+            cancel_event.wait()
+            if not self.cancellation_token.is_cancelled:
+                self._logger.info("Cancellation signal received from runtime. Shutting down gracefully.")
+                self.cancellation_token.cancel()
+
+        thread = Thread(target=watcher, name="RuntimeCancellationWatcher", daemon=True)
+        thread.start()
 
     def _setup_logging(self) -> None:
         if self.log_level_override:
