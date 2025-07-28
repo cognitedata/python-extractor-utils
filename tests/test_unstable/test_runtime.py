@@ -1,15 +1,20 @@
 import os
+import sys
 import time
 from argparse import Namespace
 from collections.abc import Generator
+from multiprocessing import Process
 from pathlib import Path
 from random import randint
 from threading import Thread
+from typing import Self
 
 import pytest
+from _pytest.monkeypatch import MonkeyPatch
 
+from cognite.examples.unstable.extractors.simple_extractor.main import SimpleExtractor
 from cognite.extractorutils.unstable.configuration.models import ConnectionConfig
-from cognite.extractorutils.unstable.core.base import ConfigRevision
+from cognite.extractorutils.unstable.core.base import ConfigRevision, FullConfig
 from cognite.extractorutils.unstable.core.runtime import Runtime
 from test_unstable.conftest import TestConfig, TestExtractor
 
@@ -134,3 +139,79 @@ def test_changing_cwd() -> None:
 
     assert os.getcwd() == str(Path(__file__).parent)
     assert os.getcwd() != original_cwd
+
+
+def test_runtime_cancellation_propagates_to_extractor(
+    monkeypatch: MonkeyPatch, capfd: pytest.CaptureFixture[str]
+) -> None:
+    """
+    Start the runtime, then cancel its token. Verify that:
+      1) The child's watcher logs "Cancellation signal received from runtime. Shutting down gracefully."
+      2) The child process is not alive after shutdown.
+      3) The runtime main loop returns (thread finished).
+
+    This test runs close to how you run the CLI:
+      uv run simple-extractor --cwd cognite/examples/unstable/extractors/simple_extractor/config \
+         -c connection_config.yaml -f config.yaml --skip-init-checks
+    """
+
+    cfg_dir = Path("cognite/examples/unstable/extractors/simple_extractor/config").resolve()
+    assert cfg_dir.exists(), f"Config directory not found: {cfg_dir}"
+
+    conn_cfg = cfg_dir / "connection_config.yaml"
+    app_cfg = cfg_dir / "config.yaml"
+    assert conn_cfg.exists(), f"Missing connection_config.yaml at {conn_cfg}"
+    assert app_cfg.exists(), f"Missing config.yaml at {app_cfg}"
+
+    argv = [
+        "simple-extractor",
+        "--cwd",
+        str(cfg_dir),
+        "-c",
+        str(conn_cfg.name),
+        "-f",
+        str(app_cfg.name),
+        "--skip-init-checks",
+        "-l",
+        "info",
+    ]
+    monkeypatch.setattr(sys, "argv", argv)
+    monkeypatch.setenv("PYTHONUNBUFFERED", "1")
+
+    runtime = Runtime(SimpleExtractor)
+
+    child_holder = {}
+    original_spawn = Runtime._spawn_extractor
+
+    def spy_spawn(self: Self, config: FullConfig) -> Process:
+        p = original_spawn(self, config)
+        child_holder["proc"] = p
+        return p
+
+    monkeypatch.setattr(Runtime, "_spawn_extractor", spy_spawn, raising=True)
+
+    t = Thread(target=runtime.run, name="RuntimeMain")
+    t.start()
+
+    start = time.time()
+    while "proc" not in child_holder and time.time() - start < 10:
+        time.sleep(0.05)
+
+    assert "proc" in child_holder, "Extractor process was not spawned in time."
+    proc = child_holder["proc"]
+
+    time.sleep(0.5)
+
+    runtime._cancellation_token.cancel()
+
+    t.join(timeout=30)
+    assert not t.is_alive(), "Runtime did not shut down within timeout after cancellation."
+
+    proc.join(timeout=0)
+    assert not proc.is_alive(), "Extractor process is still alive"
+
+    out, err = capfd.readouterr()
+    combined = (out or "") + (err or "")
+    assert "Cancellation signal received from runtime. Shutting down gracefully." in combined, (
+        f"Expected cancellation log line not found in output.\nCaptured output:\n{combined}"
+    )
