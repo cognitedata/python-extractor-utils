@@ -1,4 +1,13 @@
-"""Check-in worker for reporting errors and task updates to the CDF Integrations API."""
+"""
+Check-in worker for reporting errors and task updates to the CDF Integrations API.
+
+The logic in this file is based off of the implementation in the dotnet extractorutils package.
+
+It manages the reporting of startup, errors, and task updates to the Integrations API.
+
+It ensures that startup (on none extractor related errors) are reported first,
+followed by (all) errors and task updates.
+"""
 
 import sys
 from collections.abc import Callable
@@ -42,7 +51,7 @@ class CheckinWorker:
     2. Manage how we handle retries and backoff.
     """
 
-    _start_lock = RLock()
+    _lock = RLock()
     _flush_lock = RLock()
 
     def __init__(
@@ -74,7 +83,7 @@ class CheckinWorker:
 
     @active_revision.setter
     def active_revision(self, value: ConfigRevision) -> None:
-        with self._start_lock:
+        with self._lock:
             self._active_revision = value
 
     def run_periodic_checkin(
@@ -91,7 +100,7 @@ class CheckinWorker:
             startup_request: The start up request.
             interval: The interval in seconds between each check-in. If None, defaults to DEFAULT_SLEEP_INTERVAL.
         """
-        with self._start_lock:
+        with self._lock:
             if self._is_running:
                 raise RuntimeError("Attempting to start a check-in worker that was already running")
             self._is_running = True
@@ -115,15 +124,13 @@ class CheckinWorker:
                 if not should_retry:
                     self._has_reported_startup = True
                     break
-                else:
-                    if not self._retry_startup:
-                        raise RuntimeError("Could not report startup")
+                elif not self._retry_startup:
+                    raise RuntimeError("Could not report startup")
 
-                    a = (interval or STARTUP_BACKOFF_SECONDS) / 2
-                    b = (interval or STARTUP_BACKOFF_SECONDS) * 3 / 2
-                    next_retry = a + (b - a) * rng.random()
-                    self._logger.info("Failed to report startup, retrying in %.2f seconds", next_retry)
-                    sleep(next_retry)
+                interval = interval or STARTUP_BACKOFF_SECONDS
+                next_retry = interval / 2 + interval * rng.random()
+                self._logger.info("Failed to report startup, retrying in %.2f seconds", next_retry)
+                sleep(next_retry)
 
     def _report_startup(self, startup_request: StartupRequest) -> bool:
         return self._wrap_checkin_like_request(
@@ -174,7 +181,7 @@ class CheckinWorker:
         Arguments:
         cancellation_token: A token to cancel the check-in reporting.
         """
-        with self._start_lock:
+        with self._lock:
             if not self._has_reported_startup:
                 new_errors = [error for error in self._errors.values() if error.task is None]
                 if len(new_errors) == 0:
@@ -198,7 +205,6 @@ class CheckinWorker:
 
         while not cancellation_token.is_cancelled:
             if len(new_errors) <= MAX_ERRORS_PER_CHECKIN and len(task_updates) <= MAX_TASK_UPDATES_PER_CHECKIN:
-                self._logger.debug("Writing check-in with no batching needed.")
                 self._logger.debug("Writing %d errors and %d task updates.", len(new_errors), len(task_updates))
                 errors_to_write = new_errors
                 new_errors = []
@@ -285,7 +291,7 @@ class CheckinWorker:
         This method is used to report errors that occur during the execution of the extractor.
         It will automatically requeue the error if the check-in fails.
         """
-        with self._start_lock:
+        with self._lock:
             if error.external_id not in self._errors:
                 self._errors[error.external_id] = DtoError.from_internal(error)
             else:
@@ -298,7 +304,7 @@ class CheckinWorker:
         This method is used to queue start related to tasks that are running in the extractor.
         It will automatically requeue the task update if the check-in fails.
         """
-        with self._start_lock:
+        with self._lock:
             self._task_updates.append(
                 TaskUpdate(type="started", name=name, timestamp=timestamp or (int(now() * 1000)), message=message)
             )
@@ -310,13 +316,13 @@ class CheckinWorker:
         This method is used to queue end related to tasks that are running in the extractor.
         It will automatically requeue the task update if the check-in fails.
         """
-        with self._start_lock:
+        with self._lock:
             self._task_updates.append(
                 TaskUpdate(type="ended", name=name, timestamp=timestamp or (int(now() * 1000)), message=message)
             )
 
     def _requeue_checkin(self, errors: list[DtoError] | None, task_updates: list[TaskUpdate] | None) -> None:
-        with self._start_lock:
+        with self._lock:
             for error in errors or []:
                 if error.external_id not in self._errors:
                     self._errors[error.external_id] = error
