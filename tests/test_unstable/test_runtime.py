@@ -9,10 +9,10 @@ from random import randint
 from threading import Thread
 
 import pytest
-import yaml
 from _pytest.monkeypatch import MonkeyPatch
 from typing_extensions import Self
 
+from cognite.client import CogniteClient
 from cognite.examples.unstable.extractors.simple_extractor.main import SimpleExtractor
 from cognite.extractorutils.unstable.configuration.models import ConnectionConfig
 from cognite.extractorutils.unstable.core.base import ConfigRevision, FullConfig
@@ -141,7 +141,6 @@ def test_changing_cwd() -> None:
     assert os.getcwd() == str(Path(__file__).parent)
     assert os.getcwd() != original_cwd
 
-from cognite.client import CogniteClient
 
 @pytest.fixture
 def integration_external_id(set_client: CogniteClient) -> Generator[str, None, None]:
@@ -163,6 +162,7 @@ def integration_external_id(set_client: CogniteClient) -> Generator[str, None, N
         json={"items": [{"externalId": external_id}]},
         headers={"cdf-version": "alpha"},
     )
+
 
 def test_runtime_cancellation_propagates_to_extractor(
     integration_external_id: str, monkeypatch: MonkeyPatch, capfd: pytest.CaptureFixture[str]
