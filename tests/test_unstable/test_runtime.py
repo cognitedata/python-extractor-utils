@@ -191,7 +191,7 @@ def test_runtime_cancellation_propagates_to_extractor(
 
     monkeypatch.setattr(Runtime, "_spawn_extractor", spy_spawn, raising=True)
 
-    t = Thread(target=runtime.run, name="RuntimeMain")
+    t = Thread(target=runtime.run, name=f"RuntimeMain-{randint(0, 1000000)}")
     t.start()
 
     start = time.time()
