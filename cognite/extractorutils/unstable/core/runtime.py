@@ -251,7 +251,7 @@ class Runtime(Generic[ExtractorType]):
                 ts = now()
                 error = Error(
                     external_id=str(uuid4()),
-                    level=ErrorLevel.fatal.value,
+                    level=ErrorLevel.fatal,
                     start_time=ts,
                     end_time=ts,
                     description=error_message,
@@ -263,7 +263,7 @@ class Runtime(Generic[ExtractorType]):
                     f"/api/v1/projects/{self._cognite_client.config.project}/odin/checkin",
                     json={
                         "externalId": connection_config.integration.external_id,
-                        "errors": [error.model_dump()],
+                        "errors": [error.model_dump(mode="json")],
                     },
                     headers={"cdf-version": "alpha"},
                 )
