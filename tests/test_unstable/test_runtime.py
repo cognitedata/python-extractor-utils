@@ -155,7 +155,7 @@ def test_runtime_cancellation_propagates_to_extractor(
       uv run simple-extractor --cwd cognite/examples/unstable/extractors/simple_extractor/config \
          -c connection_config.yaml -f config.yaml --skip-init-checks
     """
-
+    print(f"external id for integration is: {extraction_pipeline}")
     cfg_dir = Path("cognite/examples/unstable/extractors/simple_extractor/config")
     base_cfg = yaml.safe_load((cfg_dir / "connection_config.yaml").read_text())
     # Update the integration external ID to match the extraction pipeline
