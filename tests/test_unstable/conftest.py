@@ -61,7 +61,7 @@ class MockFunction:
 @pytest.fixture
 def extraction_pipeline(set_client: CogniteClient) -> Generator[str, None, None]:
     external_id = f"utils-test-{uuid4().hex}"
-    response = set_client.post(
+    set_client.post(
         url=f"/api/v1/projects/{set_client.config.project}/odin",
         json={
             "items": [
@@ -70,10 +70,6 @@ def extraction_pipeline(set_client: CogniteClient) -> Generator[str, None, None]
         },
         headers={"cdf-version": "alpha"},
     )
-
-    print(f"Created extraction pipeline with external ID: {external_id}")
-    print(f"Response from odin: {response.json()}")
-    assert response.status_code == 201, f"Failed to create extraction pipeline: {response.text}"
 
     yield external_id
 

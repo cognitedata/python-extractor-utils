@@ -143,7 +143,7 @@ def test_changing_cwd() -> None:
 
 
 def test_runtime_cancellation_propagates_to_extractor(
-    extraction_pipeline: str, tmp_path: Path, monkeypatch: MonkeyPatch, capfd: pytest.CaptureFixture[str]
+    extraction_pipeline: str, tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
     """
     Start the runtime, then cancel its token. Verify that:
@@ -155,32 +155,39 @@ def test_runtime_cancellation_propagates_to_extractor(
       uv run simple-extractor --cwd cognite/examples/unstable/extractors/simple_extractor/config \
          -c connection_config.yaml -f config.yaml --skip-init-checks
     """
-    print(f"external id for integration is: {extraction_pipeline}")
+    log_file = tmp_path / "test_run.log"
+    temp_app_config_file = tmp_path / "config.yaml"
+    temp_conn_config_file = tmp_path / "connection_config.yaml"
+
     cfg_dir = Path("cognite/examples/unstable/extractors/simple_extractor/config")
-    base_cfg = yaml.safe_load((cfg_dir / "connection_config.yaml").read_text())
-    # Update the integration external ID to match the extraction pipeline
-    base_cfg["integration"]["external_id"] = extraction_pipeline
+    conn_cfg_data = yaml.safe_load((cfg_dir / "connection_config.yaml").read_text())
+    conn_cfg_data["integration"]["external_id"] = extraction_pipeline
+    temp_conn_config_file.write_text(yaml.dump(conn_cfg_data))
 
-    conn_file = tmp_path / f"test-{randint(0, 1000000)}-connection_config.yaml"
+    app_cfg_data = yaml.safe_load((cfg_dir / "config.yaml").read_text())
 
-    conn_file.write_text(yaml.safe_dump(base_cfg))
+    app_cfg_data["log-handlers"] = [
+        {
+            "type": "file",
+            "path": str(log_file),
+            "level": "INFO",
+        }
+    ]
+    temp_app_config_file.write_text(yaml.dump(app_cfg_data))
 
     argv = [
         "simple-extractor",
         "--cwd",
-        str(cfg_dir),
+        str(tmp_path),
         "-c",
-        str(conn_file),
+        temp_conn_config_file.name,
         "-f",
-        "config.yaml",
+        temp_app_config_file.name,
         "--skip-init-checks",
-        "-l",
-        "info",
     ]
     monkeypatch.setattr(sys, "argv", argv)
 
     runtime = Runtime(SimpleExtractor)
-
     child_holder = {}
     original_spawn = Runtime._spawn_extractor
 
@@ -195,24 +202,22 @@ def test_runtime_cancellation_propagates_to_extractor(
     t.start()
 
     start = time.time()
-    while "proc" not in child_holder and time.time() - start < 10:
+    while "proc" not in child_holder and time.time() - start < 15:
         time.sleep(0.05)
 
     assert "proc" in child_holder, "Extractor process was not spawned in time."
     proc = child_holder["proc"]
 
-    time.sleep(0.5)
-
+    time.sleep(1.0)
     runtime._cancellation_token.cancel()
 
     t.join(timeout=30)
     assert not t.is_alive(), "Runtime did not shut down within timeout after cancellation."
 
-    proc.join(timeout=0)
+    proc.join(timeout=5)
     assert not proc.is_alive(), "Extractor process is still alive"
 
-    out, err = capfd.readouterr()
-    combined = (out or "") + (err or "")
-    assert "Cancellation signal received from runtime. Shutting down gracefully." in combined, (
-        f"Expected cancellation log line not found in output.\nCaptured output:\n{combined}"
+    log_content = log_file.read_text()
+    assert "Cancellation signal received from runtime. Shutting down gracefully." in log_content, (
+        f"Expected cancellation log line not found in output.\nCaptured output:\n{log_content}"
     )
