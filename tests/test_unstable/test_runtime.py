@@ -7,10 +7,10 @@ from multiprocessing import Process
 from pathlib import Path
 from random import randint
 from threading import Thread
-from typing import Self
 
 import pytest
 from _pytest.monkeypatch import MonkeyPatch
+from typing_extensions import Self
 
 from cognite.examples.unstable.extractors.simple_extractor.main import SimpleExtractor
 from cognite.extractorutils.unstable.configuration.models import ConnectionConfig
