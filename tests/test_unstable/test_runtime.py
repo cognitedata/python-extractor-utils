@@ -9,6 +9,7 @@ from random import randint
 from threading import Thread
 
 import pytest
+import yaml
 from _pytest.monkeypatch import MonkeyPatch
 from typing_extensions import Self
 
@@ -142,7 +143,7 @@ def test_changing_cwd() -> None:
 
 
 def test_runtime_cancellation_propagates_to_extractor(
-    monkeypatch: MonkeyPatch, capfd: pytest.CaptureFixture[str]
+    extraction_pipeline: str, tmp_path: Path, monkeypatch: MonkeyPatch, capfd: pytest.CaptureFixture[str]
 ) -> None:
     """
     Start the runtime, then cancel its token. Verify that:
@@ -158,25 +159,27 @@ def test_runtime_cancellation_propagates_to_extractor(
     cfg_dir = Path("cognite/examples/unstable/extractors/simple_extractor/config").resolve()
     assert cfg_dir.exists(), f"Config directory not found: {cfg_dir}"
 
-    conn_cfg = cfg_dir / "connection_config.yaml"
-    app_cfg = cfg_dir / "config.yaml"
-    assert conn_cfg.exists(), f"Missing connection_config.yaml at {conn_cfg}"
-    assert app_cfg.exists(), f"Missing config.yaml at {app_cfg}"
+    cfg_dir = Path("cognite/examples/unstable/extractors/simple_extractor/config")
+    base_cfg = yaml.safe_load((cfg_dir / "connection_config.yaml").read_text())
+    # Update the integration external ID to match the extraction pipeline
+    base_cfg["integration"]["external_id"] = extraction_pipeline
+
+    conn_file = tmp_path / "connection_config.yaml"
+    conn_file.write_text(yaml.safe_dump(base_cfg))
 
     argv = [
         "simple-extractor",
         "--cwd",
         str(cfg_dir),
         "-c",
-        str(conn_cfg.name),
+        str(conn_file),
         "-f",
-        str(app_cfg.name),
+        "config.yaml",
         "--skip-init-checks",
         "-l",
         "info",
     ]
     monkeypatch.setattr(sys, "argv", argv)
-    monkeypatch.setenv("PYTHONUNBUFFERED", "1")
 
     runtime = Runtime(SimpleExtractor)
 
