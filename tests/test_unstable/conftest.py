@@ -99,6 +99,7 @@ def connection_config(extraction_pipeline: str) -> ConnectionConfig:
 
 
 class TestConfig(ExtractorConfig):
+    __test__ = False
     parameter_one: int
     parameter_two: str
 
@@ -109,6 +110,7 @@ def application_config() -> TestConfig:
 
 
 class TestExtractor(Extractor[TestConfig]):
+    __test__ = False
     NAME = "Test extractor"
     EXTERNAL_ID = "test-extractor"
     DESCRIPTION = "Test of the new runtime"
