@@ -9,10 +9,10 @@ from random import randint
 from threading import Thread
 
 import pytest
+import yaml
 from _pytest.monkeypatch import MonkeyPatch
 from typing_extensions import Self
 
-from cognite.client import CogniteClient
 from cognite.examples.unstable.extractors.simple_extractor.main import SimpleExtractor
 from cognite.extractorutils.unstable.configuration.models import ConnectionConfig
 from cognite.extractorutils.unstable.core.base import ConfigRevision, FullConfig
@@ -142,30 +142,8 @@ def test_changing_cwd() -> None:
     assert os.getcwd() != original_cwd
 
 
-@pytest.fixture
-def integration_external_id(set_client: CogniteClient) -> Generator[str, None, None]:
-    external_id = "utils-test-keyvault-remote"
-    set_client.post(
-        url=f"/api/v1/projects/{set_client.config.project}/odin",
-        json={
-            "items": [
-                {"externalId": external_id, "extractor": {"externalId": "test-extractor"}},
-            ]
-        },
-        headers={"cdf-version": "alpha"},
-    )
-
-    yield external_id
-
-    set_client.post(
-        url=f"/api/v1/projects/{set_client.config.project}/odin/delete",
-        json={"items": [{"externalId": external_id}]},
-        headers={"cdf-version": "alpha"},
-    )
-
-
 def test_runtime_cancellation_propagates_to_extractor(
-    integration_external_id: str, monkeypatch: MonkeyPatch, capfd: pytest.CaptureFixture[str]
+    extraction_pipeline: str, tmp_path: Path, monkeypatch: MonkeyPatch, capfd: pytest.CaptureFixture[str]
 ) -> None:
     """
     Start the runtime, then cancel its token. Verify that:
@@ -178,15 +156,21 @@ def test_runtime_cancellation_propagates_to_extractor(
          -c connection_config.yaml -f config.yaml --skip-init-checks
     """
 
-    cfg_dir = Path("cognite/examples/unstable/extractors/simple_extractor/config").resolve()
-    assert cfg_dir.exists(), f"Config directory not found: {cfg_dir}"
+    cfg_dir = Path("cognite/examples/unstable/extractors/simple_extractor/config")
+    base_cfg = yaml.safe_load((cfg_dir / "connection_config.yaml").read_text())
+    # Update the integration external ID to match the extraction pipeline
+    base_cfg["integration"]["external_id"] = extraction_pipeline
+
+    conn_file = tmp_path / f"test-{randint(0, 1000000)}-connection_config.yaml"
+
+    conn_file.write_text(yaml.safe_dump(base_cfg))
 
     argv = [
         "simple-extractor",
         "--cwd",
         str(cfg_dir),
         "-c",
-        "connection_config.yaml",
+        str(conn_file),
         "-f",
         "config.yaml",
         "--skip-init-checks",
