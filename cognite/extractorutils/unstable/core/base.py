@@ -109,13 +109,11 @@ class FullConfig(Generic[_T]):
         application_config: _T,
         current_config_revision: ConfigRevision,
         log_level_override: str | None = None,
-        cancel_event: MpEvent | None = None,
     ) -> None:
         self.connection_config = connection_config
         self.application_config = application_config
         self.current_config_revision: ConfigRevision = current_config_revision
         self.log_level_override = log_level_override
-        self.cancel_event = cancel_event
 
 
 class Extractor(Generic[ConfigType], CogniteLogger):
@@ -143,9 +141,6 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
         self.cancellation_token = CancellationToken()
         self.cancellation_token.cancel_on_interrupt()
-
-        if config.cancel_event:
-            self._setup_cancellation_watcher(config.cancel_event)
 
         self.connection_config = config.connection_config
         self.application_config = config.application_config
@@ -247,6 +242,10 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
     def _set_runtime_message_queue(self, queue: Queue) -> None:
         self._runtime_messages = queue
+
+    def _attach_runtime_controls(self, *, cancel_event: MpEvent, message_queue: Queue) -> None:
+        self._set_runtime_message_queue(message_queue)
+        self._setup_cancellation_watcher(cancel_event)
 
     def _checkin(self) -> None:
         with self._checkin_lock:
