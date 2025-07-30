@@ -142,9 +142,7 @@ def test_changing_cwd() -> None:
     assert os.getcwd() != original_cwd
 
 
-def _write_conn_from_fixture(
-    base_yaml_path: Path, out_path: Path, cfg: ConnectionConfig
-) -> None:
+def _write_conn_from_fixture(base_yaml_path: Path, out_path: Path, cfg: ConnectionConfig) -> None:
     """Start from the repo YAML and overwrite with plain strings from the fixture."""
     data = yaml.safe_load(base_yaml_path.read_text())
 
@@ -192,16 +190,21 @@ def test_runtime_cancellation_propagates_to_extractor(
 
     argv = [
         "simple-extractor",
-        "--cwd", str(tmp_path),           
-        "-c", conn_file.name,
-        "-f", app_file.name,
+        "--cwd",
+        str(tmp_path),
+        "-c",
+        conn_file.name,
+        "-f",
+        app_file.name,
         "--skip-init-checks",
-        "-l", "info",
+        "-l",
+        "info",
     ]
 
     monkeypatch.setattr(sys, "argv", argv)
 
     from cognite.extractorutils.unstable.core.base import Extractor
+
     monkeypatch.setattr(Extractor, "_report_extractor_info", lambda self: None)
     monkeypatch.setattr(Extractor, "_checkin", lambda self: None)
 
