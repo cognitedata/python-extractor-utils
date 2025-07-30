@@ -142,8 +142,33 @@ def test_changing_cwd() -> None:
     assert os.getcwd() != original_cwd
 
 
+def _write_conn_from_fixture(
+    base_yaml_path: Path, out_path: Path, cfg: ConnectionConfig
+) -> None:
+    """Start from the repo YAML and overwrite with plain strings from the fixture."""
+    data = yaml.safe_load(base_yaml_path.read_text())
+
+    data["project"] = cfg.project
+    data["base_url"] = cfg.base_url
+
+    integ = data.setdefault("integration", {})
+    integ["external_id"] = cfg.integration.external_id
+
+    auth = cfg.authentication
+    scopes_value = getattr(auth.scopes, "value", None) or str(auth.scopes)
+    data["authentication"] = {
+        "type": "client-credentials",
+        "client_id": auth.client_id,
+        "client_secret": auth.client_secret,
+        "token_url": auth.token_url,
+        "scopes": scopes_value,
+    }
+
+    out_path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+
+
 def test_runtime_cancellation_propagates_to_extractor(
-    extraction_pipeline: str, tmp_path: Path, monkeypatch: MonkeyPatch, capfd: pytest.CaptureFixture[str]
+    connection_config: ConnectionConfig, tmp_path: Path, monkeypatch: MonkeyPatch, capfd: pytest.CaptureFixture[str]
 ) -> None:
     """
     Start the runtime, then cancel its token. Verify that:
@@ -156,28 +181,29 @@ def test_runtime_cancellation_propagates_to_extractor(
          -c connection_config.yaml -f config.yaml --skip-init-checks
     """
     cfg_dir = Path("cognite/examples/unstable/extractors/simple_extractor/config")
-    base_cfg = yaml.safe_load((cfg_dir / "connection_config.yaml").read_text())
-    # Update the integration external ID to match the extraction pipeline
-    base_cfg["integration"]["external_id"] = extraction_pipeline
+    base_conn = cfg_dir / "connection_config.yaml"
+    base_app = cfg_dir / "config.yaml"
 
     conn_file = tmp_path / f"test-{randint(0, 1000000)}-connection_config.yaml"
+    _write_conn_from_fixture(base_conn, conn_file, connection_config)
 
-    conn_file.write_text(yaml.safe_dump(base_cfg))
+    app_file = tmp_path / f"test-{randint(0, 1000000)}-config.yaml"
+    app_file.write_text(base_app.read_text(encoding="utf-8"))
 
     argv = [
         "simple-extractor",
-        "--cwd",
-        str(cfg_dir),
-        "-c",
-        str(conn_file),
-        "-f",
-        "config.yaml",
+        "--cwd", str(tmp_path),           
+        "-c", conn_file.name,
+        "-f", app_file.name,
         "--skip-init-checks",
-        "-l",
-        "info",
+        "-l", "info",
     ]
 
     monkeypatch.setattr(sys, "argv", argv)
+
+    from cognite.extractorutils.unstable.core.base import Extractor
+    monkeypatch.setattr(Extractor, "_report_extractor_info", lambda self: None)
+    monkeypatch.setattr(Extractor, "_checkin", lambda self: None)
 
     runtime = Runtime(SimpleExtractor)
 
