@@ -203,11 +203,6 @@ def test_runtime_cancellation_propagates_to_extractor(
 
     monkeypatch.setattr(sys, "argv", argv)
 
-    from cognite.extractorutils.unstable.core.base import Extractor
-
-    monkeypatch.setattr(Extractor, "_report_extractor_info", lambda self: None)
-    monkeypatch.setattr(Extractor, "_checkin", lambda self: None)
-
     runtime = Runtime(SimpleExtractor)
 
     child_holder = {}
