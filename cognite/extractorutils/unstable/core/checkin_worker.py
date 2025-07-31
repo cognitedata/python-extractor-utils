@@ -64,6 +64,20 @@ class CheckinWorker:
         active_revision: ConfigRevision,
         retry_startup: bool = False,
     ) -> None:
+        """
+        Initialize the CheckinWorker.
+
+        Args:
+            cognite_client (CogniteClient): Cognite client to use for API requests.
+            integration (str): The external ID of the integration.
+            logger (Logger): Logger to use for logging.
+            on_revision_change (Callable[[int], None]): A trigger function to call when
+                                                        the configuration revision changes.
+            on_fatal_error: Callable[[Exception], None]: A trigger function to call when a fatal error occurs
+                                                         such as a wrong CDF credentials.
+            active_revision (ConfigRevision): The initial config revision when the worker is initialized.
+            retry_startup (bool): Whether to retry reporting startup if it fails. Defaults to False.
+        """
         self._cognite_client: CogniteClient = cognite_client
         self._integration: str = integration
         self._logger: Logger = logger
