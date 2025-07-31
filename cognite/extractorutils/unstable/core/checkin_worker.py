@@ -67,7 +67,7 @@ class CheckinWorker:
         """
         Initialize the CheckinWorker.
 
-        Args:
+        Arguments:
             cognite_client (CogniteClient): Cognite client to use for API requests.
             integration (str): The external ID of the integration.
             logger (Logger): Logger to use for logging.
