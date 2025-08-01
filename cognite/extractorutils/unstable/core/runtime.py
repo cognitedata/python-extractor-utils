@@ -28,9 +28,12 @@ import os
 import sys
 import time
 from argparse import ArgumentParser, Namespace
-from multiprocessing import Process, Queue
+from dataclasses import dataclass
+from multiprocessing import Event, Process, Queue
+from multiprocessing.synchronize import Event as MpEvent
 from pathlib import Path
 from random import randint
+from threading import Thread
 from typing import Any, Generic, TypeVar
 from uuid import uuid4
 
@@ -60,6 +63,33 @@ from .base import ConfigRevision, Extractor, FullConfig
 __all__ = ["ExtractorType", "Runtime"]
 
 ExtractorType = TypeVar("ExtractorType", bound=Extractor)
+
+
+@dataclass
+class _RuntimeControls:
+    cancel_event: MpEvent
+    message_queue: Queue
+
+
+def _extractor_process_entrypoint(
+    extractor_class: type[Extractor],
+    controls: _RuntimeControls,
+    config: FullConfig,
+) -> None:
+    logger = logging.getLogger(f"{extractor_class.EXTERNAL_ID}.runtime")
+    extractor = extractor_class._init_from_runtime(config)
+    extractor._attach_runtime_controls(
+        cancel_event=controls.cancel_event,
+        message_queue=controls.message_queue,
+    )
+
+    try:
+        with extractor:
+            extractor.run()
+
+    except Exception:
+        logger.exception("Extractor crashed, will attempt restart")
+        controls.message_queue.put(RuntimeMessage.RESTART)
 
 
 class Runtime(Generic[ExtractorType]):
@@ -154,31 +184,39 @@ class Runtime(Generic[ExtractorType]):
 
         root.addHandler(console_handler)
 
-    def _inner_run(
-        self,
-        message_queue: Queue,
-        config: FullConfig,
-    ) -> None:
-        # This code is run inside the new extractor process
-        extractor = self._extractor_class._init_from_runtime(config)
-        extractor._set_runtime_message_queue(message_queue)
+    def _start_cancellation_watcher(self, mp_cancel_event: MpEvent) -> None:
+        """
+        Start the inter-process cancellation watcher thread.
 
-        try:
-            with extractor:
-                extractor.run()
+        This creates a daemon thread that waits for the runtime's CancellationToken
+        and sets the multiprocessing Event to signal the child process.
+        """
 
-        except Exception:
-            self.logger.exception("Extractor crashed, will attempt restart")
-            message_queue.put(RuntimeMessage.RESTART)
+        def cancellation_watcher() -> None:
+            """Waits for the runtime token and sets the shared event."""
+            self._cancellation_token.wait()
+            mp_cancel_event.set()
+
+        watcher_thread = Thread(target=cancellation_watcher, daemon=True, name="RuntimeCancelWatcher")
+        watcher_thread.start()
 
     def _spawn_extractor(
         self,
         config: FullConfig,
     ) -> Process:
         self._message_queue = Queue()
+        mp_cancel_event = Event()
+
+        self._start_cancellation_watcher(mp_cancel_event)
+
+        controls = _RuntimeControls(
+            cancel_event=mp_cancel_event,
+            message_queue=self._message_queue,
+        )
+
         process = Process(
-            target=self._inner_run,
-            args=(self._message_queue, config),
+            target=_extractor_process_entrypoint,
+            args=(self._extractor_class, controls, config),
         )
 
         process.start()
