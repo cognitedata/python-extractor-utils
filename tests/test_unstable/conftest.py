@@ -1,10 +1,14 @@
+import gzip
+import json
 import os
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 from threading import RLock
 from time import sleep, time
+from typing import Any
 from uuid import uuid4
 
 import pytest
+import requests_mock
 
 from cognite.client import CogniteClient
 from cognite.client.config import ClientConfig
@@ -96,6 +100,74 @@ def connection_config(extraction_pipeline: str) -> ConnectionConfig:
             token_url=os.environ.get("COGNITE_DEV_TOKEN_URL", os.environ["COGNITE_TOKEN_URL"]),
         ),
     )
+
+
+@pytest.fixture
+def checkin_bag() -> Generator[list, None]:
+    bag: list = []
+    yield bag
+    bag.clear()
+
+
+@pytest.fixture
+def task_events() -> Generator[list, None]:
+    tasks: list = []
+    yield tasks
+    tasks.clear()
+
+
+@pytest.fixture
+def error_list() -> Generator[list, None]:
+    errors_list: list = []
+    yield errors_list
+    errors_list.clear()
+
+
+@pytest.fixture
+def mock_startup_request(
+    connection_config: ConnectionConfig,
+    checkin_bag: list,
+) -> Callable[[requests_mock.Mocker, int, str], None]:
+    def mocker(requests_mock: requests_mock.Mocker, status_code: int = 200, message: str = "Request failed") -> None:
+        def json_callback(request: Any, context: Any) -> dict:
+            if status_code != 200:
+                return {"error": {"message": message, "code": status_code}}
+
+            checkin_bag.append(json.loads(gzip.decompress(request.body).decode("utf-8")))
+            return {"lastConfigRevision": 1, "externalId": connection_config.integration.external_id}
+
+        requests_mock.register_uri(
+            method="POST",
+            url=f"{connection_config.base_url}api/v1/projects/{connection_config.project}/integrations/startup",
+            json=json_callback,
+            status_code=status_code,
+        )
+
+    return mocker
+
+
+@pytest.fixture
+def mock_checkin_request(
+    connection_config: ConnectionConfig, checkin_bag: list, error_list: list, task_events: list
+) -> Callable[[requests_mock.Mocker, int], None]:
+    def mocker(requests_mock: requests_mock.Mocker, revision: int = 1) -> None:
+        def json_callback(request: Any, context: Any) -> dict:
+            req = json.loads(gzip.decompress(request.body).decode("utf-8"))
+            checkin_bag.append(req)
+            if "errors" in req:
+                error_list.extend(req["errors"])
+            if "taskEvents" in req:
+                task_events.extend(req["taskEvents"])
+            return {"lastConfigRevision": revision, "externalId": connection_config.integration.external_id}
+
+        requests_mock.register_uri(
+            method="POST",
+            url=f"{connection_config.base_url}api/v1/projects/{connection_config.project}/integrations/checkin",
+            json=json_callback,
+            status_code=200,
+        )
+
+    return mocker
 
 
 class TestConfig(ExtractorConfig):
