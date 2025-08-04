@@ -74,7 +74,6 @@ from cognite.extractorutils.unstable.core._dto import (
     ExtractorInfo,
     StartupRequest,
     TaskType,
-    TaskUpdate,
 )
 from cognite.extractorutils.unstable.core._dto import (
     Task as DtoTask,
@@ -162,8 +161,6 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self._scheduler = TaskScheduler(self.cancellation_token.create_child_token())
 
         self._tasks: list[Task] = []
-        self._task_updates: list[TaskUpdate] = []
-        self._errors: dict[str, Error] = {}
         self._start_time: datetime
 
         self.__init_tasks__()

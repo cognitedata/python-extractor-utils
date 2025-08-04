@@ -77,6 +77,8 @@ class Error:
         self._extractor = extractor
         self._task_name = task_name
 
+        self._extractor._report_error(self)
+
     def instant(self) -> None:
         """
         Make this error an instant error, meaning it does not have a duration.
