@@ -70,13 +70,14 @@ from cognite.extractorutils.unstable.configuration.models import (
     LogFileHandlerConfig,
 )
 from cognite.extractorutils.unstable.core._dto import (
-    Error as DtoError,
-)
-from cognite.extractorutils.unstable.core._dto import (
+    CogniteModel,
     ExtractorInfo,
     StartupRequest,
     TaskType,
     TaskUpdate,
+)
+from cognite.extractorutils.unstable.core._dto import (
+    Error as DtoError,
 )
 from cognite.extractorutils.unstable.core._dto import (
     Task as DtoTask,
@@ -89,7 +90,12 @@ from cognite.extractorutils.unstable.core.tasks import ContinuousTask, Scheduled
 from cognite.extractorutils.unstable.scheduling import TaskScheduler
 from cognite.extractorutils.util import now
 
-__all__ = ["ConfigRevision", "ConfigType", "Extractor"]
+__all__ = [
+    "CogniteModel",
+    "ConfigRevision",
+    "ConfigType",
+    "Extractor",
+]
 
 
 _T = TypeVar("_T", bound=ExtractorConfig)
