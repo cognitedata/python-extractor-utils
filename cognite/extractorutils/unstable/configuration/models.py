@@ -433,6 +433,7 @@ class ExtractorConfig(ConfigModel):
     """
 
     log_handlers: list[LogHandlerConfig] = Field(default_factory=_log_handler_default)
+    retry_startup: bool = Field(True)
 
 
 ConfigType = TypeVar("ConfigType", bound=ExtractorConfig)

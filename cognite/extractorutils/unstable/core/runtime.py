@@ -54,6 +54,7 @@ from cognite.extractorutils.unstable.configuration.loaders import (
 )
 from cognite.extractorutils.unstable.configuration.models import ConnectionConfig, ExtractorConfig
 from cognite.extractorutils.unstable.core._dto import Error
+from cognite.extractorutils.unstable.core.checkin_worker import CheckinWorker
 from cognite.extractorutils.unstable.core.errors import ErrorLevel
 from cognite.extractorutils.util import now
 
@@ -77,7 +78,16 @@ def _extractor_process_entrypoint(
     config: FullConfig,
 ) -> None:
     logger = logging.getLogger(f"{extractor_class.EXTERNAL_ID}.runtime")
-    extractor = extractor_class._init_from_runtime(config)
+    checkin_worker = CheckinWorker(
+        config.connection_config.get_cognite_client(f"{extractor_class.EXTERNAL_ID}-{extractor_class.VERSION}"),
+        config.connection_config.integration.external_id,
+        logger,
+        lambda: on_revision_changed(controls),
+        lambda _: on_fatal_error(controls),
+        config.current_config_revision,
+        config.application_config.retry_startup,
+    )
+    extractor = extractor_class._init_from_runtime(config, checkin_worker)
     extractor._attach_runtime_controls(
         cancel_event=controls.cancel_event,
         message_queue=controls.message_queue,
@@ -90,6 +100,28 @@ def _extractor_process_entrypoint(
     except Exception:
         logger.exception("Extractor crashed, will attempt restart")
         controls.message_queue.put(RuntimeMessage.RESTART)
+
+
+def on_revision_changed(controls: _RuntimeControls) -> None:
+    """
+    Handle a change in the configuration revision.
+
+    Args:
+        controls(_RuntimeControls): The runtime controls containing the message queue and cancellation event.
+    """
+    controls.message_queue.put(RuntimeMessage.RESTART)
+    controls.cancel_event.set()
+
+
+def on_fatal_error(controls: _RuntimeControls) -> None:
+    """
+    Handle a fatal error in the extractor.
+
+    Args:
+        logger(logging.Logger): The logger to use for logging messages.
+        controls(_RuntimeControls): The runtime controls containing the message queue and cancellation event.
+    """
+    controls.cancel_event.set()
 
 
 class Runtime(Generic[ExtractorType]):
@@ -255,6 +287,7 @@ class Runtime(Generic[ExtractorType]):
         return application_config, current_config_revision
 
     def _try_set_cwd(self, args: Namespace) -> None:
+        # TODO: Use path resolvers to handle relative paths and ensure they are absolute (Path(args.cwd[0]).resolve())
         if args.cwd is not None and len(args.cwd) > 0:
             try:
                 os.chdir(args.cwd[0])
