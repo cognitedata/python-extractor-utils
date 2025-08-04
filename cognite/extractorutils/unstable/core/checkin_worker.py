@@ -59,7 +59,7 @@ class CheckinWorker:
         cognite_client: CogniteClient,
         integration: str,
         logger: Logger,
-        on_revision_change: Callable[[], None],
+        on_revision_change: Callable[[int], None],
         on_fatal_error: Callable[[Exception], None],
         active_revision: ConfigRevision,
         retry_startup: bool = False,
@@ -81,7 +81,7 @@ class CheckinWorker:
         self._cognite_client: CogniteClient = cognite_client
         self._integration: str = integration
         self._logger: Logger = logger
-        self._on_revision_change: Callable[[], None] = on_revision_change
+        self._on_revision_change: Callable[[int], None] = on_revision_change
         self._on_fatal_error: Callable[[Exception], None] = on_fatal_error
         self._is_running: bool = False
         self._retry_startup: bool = retry_startup
@@ -169,7 +169,7 @@ class CheckinWorker:
                 )
             elif self._active_revision < checkin_response.last_config_revision:
                 self._active_revision = checkin_response.last_config_revision
-                self._on_revision_change()
+                self._on_revision_change(checkin_response.last_config_revision)
 
     def flush(self, cancellation_token: CancellationToken) -> None:
         """

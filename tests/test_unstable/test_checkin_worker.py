@@ -1,6 +1,7 @@
 import logging
 from collections.abc import Callable
 from datetime import datetime, timezone
+from multiprocessing import Event, Queue
 from threading import Thread
 from time import sleep
 
@@ -26,6 +27,8 @@ def test_report_startup_request(
     requests_mock.real_http = True
     mock_startup_request(requests_mock)
     cognite_client = connection_config.get_cognite_client("test_checkin")
+    message_queue: Queue = Queue()
+    mp_cancel_event = Event()
     worker = CheckinWorker(
         cognite_client,
         connection_config.integration.external_id,
@@ -38,8 +41,10 @@ def test_report_startup_request(
     test_extractor = TestExtractor(
         FullConfig(
             connection_config=connection_config, application_config=application_config, current_config_revision=1
-        )
+        ),
+        worker,
     )
+    test_extractor._attach_runtime_controls(cancel_event=mp_cancel_event, message_queue=message_queue)
     test_extractor._start_time = datetime.fromtimestamp(int(now() / 1000), tz=timezone.utc)
 
     worker._report_startup(test_extractor._get_startup_request())
@@ -63,13 +68,9 @@ def test_flush_and_checkin(
     requests_mock.real_http = True
     mock_checkin_request(requests_mock)
     cognite_client = connection_config.get_cognite_client("test_checkin")
+    message_queue: Queue = Queue()
+    mp_cancel_event = Event()
     cancellation_token = CancellationToken()
-    test_extractor = TestExtractor(
-        FullConfig(
-            connection_config=connection_config, application_config=application_config, current_config_revision=1
-        )
-    )
-    test_extractor._start_time = datetime.fromtimestamp(int(now() / 1000), tz=timezone.utc)
     worker = CheckinWorker(
         cognite_client,
         connection_config.integration.external_id,
@@ -80,7 +81,14 @@ def test_flush_and_checkin(
         False,
     )
     worker._has_reported_startup = True
-
+    test_extractor = TestExtractor(
+        FullConfig(
+            connection_config=connection_config, application_config=application_config, current_config_revision=1
+        ),
+        worker,
+    )
+    test_extractor._attach_runtime_controls(cancel_event=mp_cancel_event, message_queue=message_queue)
+    test_extractor._start_time = datetime.fromtimestamp(int(now() / 1000), tz=timezone.utc)
     worker.report_task_end("task1", faker.sentence())
     worker.report_task_start("task1", faker.sentence())
     worker.report_error(
@@ -115,12 +123,6 @@ def test_run_report_periodic(
     mock_checkin_request(requests_mock)
     cognite_client = connection_config.get_cognite_client("test_checkin")
     cancellation_token = CancellationToken()
-    test_extractor = TestExtractor(
-        FullConfig(
-            connection_config=connection_config, application_config=application_config, current_config_revision=1
-        )
-    )
-    test_extractor._start_time = datetime.fromtimestamp(int(now() / 1000), tz=timezone.utc)
     worker = CheckinWorker(
         cognite_client,
         connection_config.integration.external_id,
@@ -130,6 +132,16 @@ def test_run_report_periodic(
         1,
         False,
     )
+    test_extractor = TestExtractor(
+        FullConfig(
+            connection_config=connection_config, application_config=application_config, current_config_revision=1
+        ),
+        worker,
+    )
+    test_extractor._start_time = datetime.fromtimestamp(int(now() / 1000), tz=timezone.utc)
+    message_queue: Queue = Queue()
+    mp_cancel_event = Event()
+    test_extractor._attach_runtime_controls(cancel_event=mp_cancel_event, message_queue=message_queue)
 
     worker.report_task_end("task1", faker.sentence())
     worker.report_task_start("task1", faker.sentence())
@@ -171,12 +183,6 @@ def test_run_report_periodic_ensure_reorder(
     mock_checkin_request(requests_mock)
     cognite_client = connection_config.get_cognite_client("test_checkin")
     cancellation_token = CancellationToken()
-    test_extractor = TestExtractor(
-        FullConfig(
-            connection_config=connection_config, application_config=application_config, current_config_revision=1
-        )
-    )
-    test_extractor._start_time = datetime.fromtimestamp(int(now() / 1000), tz=timezone.utc)
     worker = CheckinWorker(
         cognite_client,
         connection_config.integration.external_id,
@@ -186,6 +192,16 @@ def test_run_report_periodic_ensure_reorder(
         1,
         False,
     )
+    test_extractor = TestExtractor(
+        FullConfig(
+            connection_config=connection_config, application_config=application_config, current_config_revision=1
+        ),
+        worker,
+    )
+    test_extractor._start_time = datetime.fromtimestamp(int(now() / 1000), tz=timezone.utc)
+    message_queue: Queue = Queue()
+    mp_cancel_event = Event()
+    test_extractor._attach_runtime_controls(cancel_event=mp_cancel_event, message_queue=message_queue)
 
     behind = now() - 10
     ahead = now()
@@ -246,12 +262,6 @@ def test_run_report_periodic_chunking(
     mock_checkin_request(requests_mock)
     cognite_client = connection_config.get_cognite_client("test_checkin")
     cancellation_token = CancellationToken()
-    test_extractor = TestExtractor(
-        FullConfig(
-            connection_config=connection_config, application_config=application_config, current_config_revision=1
-        )
-    )
-    test_extractor._start_time = datetime.fromtimestamp(int(now() / 1000), tz=timezone.utc)
     worker = CheckinWorker(
         cognite_client,
         connection_config.integration.external_id,
@@ -261,6 +271,16 @@ def test_run_report_periodic_chunking(
         1,
         False,
     )
+    test_extractor = TestExtractor(
+        FullConfig(
+            connection_config=connection_config, application_config=application_config, current_config_revision=1
+        ),
+        worker,
+    )
+    test_extractor._start_time = datetime.fromtimestamp(int(now() / 1000), tz=timezone.utc)
+    message_queue: Queue = Queue()
+    mp_cancel_event = Event()
+    test_extractor._attach_runtime_controls(cancel_event=mp_cancel_event, message_queue=message_queue)
 
     start_time = now()
     for i in range(1000):
@@ -319,13 +339,6 @@ def test_on_fatal_hook_is_called(
     requests_mock.real_http = True
     mock_startup_request(requests_mock, 401, "Unauthorized request")
     cognite_client = connection_config.get_cognite_client("test_checkin")
-    test_extractor = TestExtractor(
-        FullConfig(
-            connection_config=connection_config, application_config=application_config, current_config_revision=1
-        )
-    )
-    test_extractor._start_time = datetime.fromtimestamp(int(now() / 1000), tz=timezone.utc)
-    cancellation_token = CancellationToken()
     on_fatal_count = 0
 
     def on_fatal_hook(_: Exception) -> None:
@@ -343,6 +356,17 @@ def test_on_fatal_hook_is_called(
         False,
     )
     worker._retry_startup = True
+    test_extractor = TestExtractor(
+        FullConfig(
+            connection_config=connection_config, application_config=application_config, current_config_revision=1
+        ),
+        worker,
+    )
+    test_extractor._start_time = datetime.fromtimestamp(int(now() / 1000), tz=timezone.utc)
+    message_queue: Queue = Queue()
+    mp_cancel_event = Event()
+    test_extractor._attach_runtime_controls(cancel_event=mp_cancel_event, message_queue=message_queue)
+    cancellation_token = CancellationToken()
 
     process = Thread(
         target=worker._run_startup_report,
@@ -366,13 +390,6 @@ def test_on_revision_change_hook_is_called(
     mock_startup_request(requests_mock)
     mock_checkin_request(requests_mock, 2)
     cognite_client = connection_config.get_cognite_client("test_checkin")
-    test_extractor = TestExtractor(
-        FullConfig(
-            connection_config=connection_config, application_config=application_config, current_config_revision=1
-        )
-    )
-    test_extractor._start_time = datetime.fromtimestamp(int(now() / 1000), tz=timezone.utc)
-    cancellation_token = CancellationToken()
     on_revision_change_value = 0
 
     def on_revision_change(revision: int) -> None:
@@ -389,6 +406,19 @@ def test_on_revision_change_hook_is_called(
         1,
         False,
     )
+    test_extractor = TestExtractor(
+        FullConfig(
+            connection_config=connection_config, application_config=application_config, current_config_revision=1
+        ),
+        worker,
+    )
+    test_extractor._start_time = datetime.fromtimestamp(int(now() / 1000), tz=timezone.utc)
+    message_queue: Queue = Queue()
+    mp_cancel_event = Event()
+    test_extractor._attach_runtime_controls(cancel_event=mp_cancel_event, message_queue=message_queue)
+    cancellation_token = CancellationToken()
+    on_revision_change_value = 0
+
     worker._retry_startup = True
 
     process = Thread(

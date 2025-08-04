@@ -82,7 +82,7 @@ def _extractor_process_entrypoint(
         config.connection_config.get_cognite_client(f"{extractor_class.EXTERNAL_ID}-{extractor_class.VERSION}"),
         config.connection_config.integration.external_id,
         logger,
-        lambda: on_revision_changed(controls),
+        lambda _: on_revision_changed(controls),
         lambda _: on_fatal_error(controls),
         config.current_config_revision,
         config.application_config.retry_startup,
