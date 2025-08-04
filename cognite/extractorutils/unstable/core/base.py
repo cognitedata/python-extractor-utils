@@ -51,6 +51,7 @@ from datetime import datetime, timezone
 from functools import partial
 from logging.handlers import TimedRotatingFileHandler
 from multiprocessing import Queue
+from multiprocessing.synchronize import Event as MpEvent
 from threading import RLock, Thread
 from types import TracebackType
 from typing import Generic, TypeVar
@@ -166,6 +167,19 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
         self.__init_tasks__()
 
+    def _setup_cancellation_watcher(self, cancel_event: MpEvent) -> None:
+        """Starts a daemon thread to watch the inter-process event."""
+
+        def watcher() -> None:
+            """Blocks until the event is set, then cancels the local token."""
+            cancel_event.wait()
+            if not self.cancellation_token.is_cancelled:
+                self._logger.info("Cancellation signal received from runtime. Shutting down gracefully.")
+                self.cancellation_token.cancel()
+
+        thread = Thread(target=watcher, name="RuntimeCancellationWatcher", daemon=True)
+        thread.start()
+
     def _setup_logging(self) -> None:
         if self.log_level_override:
             level_to_set = _resolve_log_level(self.log_level_override)
@@ -234,6 +248,10 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
     def _set_runtime_message_queue(self, queue: Queue) -> None:
         self._runtime_messages = queue
+
+    def _attach_runtime_controls(self, *, cancel_event: MpEvent, message_queue: Queue) -> None:
+        self._set_runtime_message_queue(message_queue)
+        self._setup_cancellation_watcher(cancel_event)
 
     def _checkin(self) -> None:
         with self._checkin_lock:

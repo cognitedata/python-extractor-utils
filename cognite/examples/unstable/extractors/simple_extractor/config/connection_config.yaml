@@ -1,5 +1,5 @@
 project: ${COGNITE_PROJECT}
-base-url: ${COGNITE_BASE_URL}
+base_url: ${COGNITE_BASE_URL}
 integration:
   external_id: "utils-test-keyvault-remote"
 authentication:
