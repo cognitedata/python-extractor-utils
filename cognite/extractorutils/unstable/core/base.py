@@ -45,10 +45,12 @@ The subclass should also define several class attributes:
 """
 
 import logging
+import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from functools import partial
+from logging.handlers import NTEventLogHandler as WindowsEventHandler
 from logging.handlers import TimedRotatingFileHandler
 from multiprocessing import Queue
 from multiprocessing.synchronize import Event as MpEvent
@@ -68,6 +70,7 @@ from cognite.extractorutils.unstable.configuration.models import (
     ExtractorConfig,
     LogConsoleHandlerConfig,
     LogFileHandlerConfig,
+    LogWindowsEventHandlerConfig,
 )
 from cognite.extractorutils.unstable.core._dto import (
     CogniteModel,
@@ -235,6 +238,27 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                     fh.setFormatter(fmt)
 
                     root.addHandler(fh)
+
+                case LogWindowsEventHandlerConfig() as windows_event_log_handler:
+                    try:
+                        if sys.platform == "win32":
+                            wh = WindowsEventHandler(self.NAME)
+                            level_for_handler = _resolve_log_level(
+                                self.log_level_override
+                                if self.log_level_override
+                                else windows_event_log_handler.level.value
+                            )
+                            wh.setLevel(level_for_handler)
+                            wh.setFormatter(fmt)
+
+                            root.addHandler(wh)
+                        else:
+                            self._logger.warning("Windows Event Log handler is only available on Windows.")
+
+                    except ImportError:
+                        self._logger.warning(
+                            "To use the Windows Event Log handler, the 'pywin32' package must be installed."
+                        )
 
     def __init_tasks__(self) -> None:
         """
