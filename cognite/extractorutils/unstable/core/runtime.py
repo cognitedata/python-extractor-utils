@@ -256,12 +256,14 @@ class Runtime(Generic[ExtractorType]):
 
     def _try_set_cwd(self, args: Namespace) -> None:
         if args.cwd is not None and len(args.cwd) > 0:
+            path = Path(args.cwd[0])
+            resolved_path = path.resolve()
             try:
-                os.chdir(args.cwd[0])
-                self.logger.info(f"Changed working directory to {args.cwd[0]}")
+                os.chdir(resolved_path)
+                self.logger.info(f"Changed working directory to {resolved_path}")
             except OSError as e:
-                self.logger.critical(f"Could not change working directory to {args.cwd[0]}: {e}")
-                raise InvalidConfigError(f"Could not change working directory to {args.cwd[0]}") from e
+                self.logger.critical(f"Could not change working directory to {resolved_path}: {e}")
+                raise InvalidConfigError(f"Could not change working directory to {resolved_path}") from e
 
         self.logger.info(f"Using {os.getcwd()} as working directory")
 
