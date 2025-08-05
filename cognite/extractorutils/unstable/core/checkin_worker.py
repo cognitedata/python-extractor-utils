@@ -371,6 +371,7 @@ class CheckinWorker:
 
             return True
         except Exception as e:
+            self._logger.critical(f"Extractor could not connect to CDF {e!s}")
             self._on_fatal_error(e)
             return True
 

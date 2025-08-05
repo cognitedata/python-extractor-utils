@@ -246,7 +246,7 @@ def test_run_report_periodic_ensure_reorder(
     assert err0_time <= err1_time, "Errors should be ordered by time, but they are not."
 
 
-def test_run_report_periodic_chunking(
+def test_run_report_periodic_checkin(
     connection_config: ConnectionConfig,
     application_config: TestConfig,
     requests_mock: requests_mock.Mocker,
@@ -328,6 +328,8 @@ def test_run_report_periodic_chunking(
 
     assert error_list[0]["level"] == second_error.level.value
     assert error_list[1]["level"] == first_error.level.value
+    assert len(worker._errors) == 0
+    assert len(worker._task_updates) == 0
 
 
 def test_on_fatal_hook_is_called(
@@ -429,3 +431,63 @@ def test_on_revision_change_hook_is_called(
     process.join(timeout=10)
 
     assert on_revision_change_value == 2
+
+
+def test_run_report_periodic_checkin_requeue(
+    connection_config: ConnectionConfig,
+    application_config: TestConfig,
+    requests_mock: requests_mock.Mocker,
+    mock_checkin_request: Callable[..., None],
+    mock_startup_request: Callable[[requests_mock.Mocker], None],
+    faker: faker.Faker,
+) -> None:
+    requests_mock.real_http = True
+    mock_startup_request(requests_mock)
+    mock_checkin_request(requests_mock, status_code=400)
+    cognite_client = connection_config.get_cognite_client("test_checkin")
+    cancellation_token = CancellationToken()
+    worker = CheckinWorker(
+        cognite_client,
+        connection_config.integration.external_id,
+        logging.getLogger(__name__),
+        lambda _: None,
+        lambda _: None,
+        1,
+        False,
+    )
+    test_extractor = TestExtractor(
+        FullConfig(
+            connection_config=connection_config, application_config=application_config, current_config_revision=1
+        ),
+        worker,
+    )
+    test_extractor._start_time = datetime.fromtimestamp(int(now() / 1000), tz=timezone.utc)
+    message_queue: Queue = Queue()
+    mp_cancel_event = Event()
+    test_extractor._attach_runtime_controls(cancel_event=mp_cancel_event, message_queue=message_queue)
+
+    first_error = Error(
+        level=ErrorLevel.warning,
+        description=faker.sentence(),
+        task_name="task1",
+        extractor=test_extractor,
+        details=None,
+    )
+    second_error = Error(
+        level=ErrorLevel.error, description=faker.sentence(), task_name="task1", extractor=test_extractor, details=None
+    )
+
+    worker.report_error(first_error)
+    worker.report_error(second_error)
+
+    process = Thread(
+        target=worker.run_periodic_checkin,
+        args=(cancellation_token, test_extractor._get_startup_request(), 20),
+    )
+    process.start()
+    process.join(timeout=2)
+    cancellation_token.cancel()
+
+    # initial 2 requests for auth and startup, then 1 for expected number of check-ins
+    assert requests_mock.call_count == 2 + 1
+    assert len(worker._errors) == 2
