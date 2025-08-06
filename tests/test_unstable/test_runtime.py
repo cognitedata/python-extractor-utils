@@ -14,6 +14,7 @@ from _pytest.monkeypatch import MonkeyPatch
 from typing_extensions import Self
 
 from cognite.examples.unstable.extractors.simple_extractor.main import SimpleExtractor
+from cognite.extractorutils.unstable.configuration.exceptions import InvalidArgumentError
 from cognite.extractorutils.unstable.configuration.models import ConnectionConfig
 from cognite.extractorutils.unstable.core.base import ConfigRevision, FullConfig
 from cognite.extractorutils.unstable.core.runtime import Runtime
@@ -145,7 +146,7 @@ def test_changing_cwd() -> None:
 def test_change_cwd_to_nonexistent() -> None:
     runtime = Runtime(TestExtractor)
 
-    with pytest.raises(FileNotFoundError, match="No such file or directory"):
+    with pytest.raises(InvalidArgumentError, match="No such file or directory"):
         runtime._try_set_cwd(args=Namespace(cwd=(Path("nonexistent_directory").as_posix(),)))
 
 

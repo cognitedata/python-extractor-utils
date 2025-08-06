@@ -47,7 +47,7 @@ from cognite.client.exceptions import (
     CogniteConnectionError,
 )
 from cognite.extractorutils.threading import CancellationToken
-from cognite.extractorutils.unstable.configuration.exceptions import InvalidConfigError
+from cognite.extractorutils.unstable.configuration.exceptions import InvalidArgumentError, InvalidConfigError
 from cognite.extractorutils.unstable.configuration.loaders import (
     load_file,
     load_from_cdf,
@@ -256,13 +256,13 @@ class Runtime(Generic[ExtractorType]):
 
     def _try_set_cwd(self, args: Namespace) -> None:
         if args.cwd is not None and len(args.cwd) > 0:
-            resolved_path = Path(args.cwd[0]).resolve(strict=True)
             try:
+                resolved_path = Path(args.cwd[0]).resolve(strict=True)
                 os.chdir(resolved_path)
                 self.logger.info(f"Changed working directory to {resolved_path}")
-            except OSError as e:
-                self.logger.critical(f"Could not change working directory to {resolved_path}: {e}")
-                raise InvalidConfigError(f"Could not change working directory to {resolved_path}") from e
+            except (FileNotFoundError, OSError) as e:
+                self.logger.critical(f"Could not change working directory to {args.cwd[0]}: {e}")
+                raise InvalidArgumentError(f"Could not change working directory to {args.cwd[0]}: {e}") from e
 
         self.logger.info(f"Using {os.getcwd()} as working directory")
 

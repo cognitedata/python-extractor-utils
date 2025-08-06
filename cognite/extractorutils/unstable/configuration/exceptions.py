@@ -30,3 +30,30 @@ class InvalidConfigError(Exception):
         Underlying message prefixed with 'Invalid config:'.
         """
         return self.__str__()
+
+
+class InvalidArgumentError(Exception):
+    """
+    Exception thrown when an invalid argument is passed to the extractor.
+
+    This can be due to:
+      * Missing required arguments
+      * Invalid argument types
+      * Unsupported argument values
+    """
+
+    def __init__(self, message: str) -> None:
+        super().__init__(message)
+        self.message = message
+
+    def __str__(self) -> str:
+        """
+        Underlying message prefixed with 'Invalid argument:'.
+        """
+        return f"Invalid argument: {self.message}"
+
+    def __repr__(self) -> str:
+        """
+        Underlying message prefixed with 'Invalid argument:'.
+        """
+        return self.__str__()
