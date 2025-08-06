@@ -51,7 +51,6 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from functools import partial
 from logging.handlers import NTEventLogHandler as WindowsEventHandler
-from logging.handlers import TimedRotatingFileHandler
 from multiprocessing import Queue
 from multiprocessing.synchronize import Event as MpEvent
 from threading import RLock, Thread
@@ -87,7 +86,7 @@ from cognite.extractorutils.unstable.core._dto import (
 )
 from cognite.extractorutils.unstable.core._messaging import RuntimeMessage
 from cognite.extractorutils.unstable.core.errors import Error, ErrorLevel
-from cognite.extractorutils.unstable.core.logger import CogniteLogger
+from cognite.extractorutils.unstable.core.logger import CogniteLogger, RobustFileHandler
 from cognite.extractorutils.unstable.core.restart_policy import WHEN_CONTINUOUS_TASKS_CRASHES, RestartPolicy
 from cognite.extractorutils.unstable.core.tasks import ContinuousTask, ScheduledTask, StartupTask, Task, TaskContext
 from cognite.extractorutils.unstable.scheduling import TaskScheduler
@@ -225,23 +224,35 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                     root.addHandler(sh)
 
                 case LogFileHandlerConfig() as file_handler:
-                    fh = TimedRotatingFileHandler(
-                        filename=file_handler.path,
-                        when="midnight",
-                        utc=True,
-                        backupCount=file_handler.retention,
-                    )
-                    level_for_handler = _resolve_log_level(
-                        self.log_level_override if self.log_level_override else file_handler.level.value
-                    )
-                    fh.setLevel(level_for_handler)
-                    fh.setFormatter(fmt)
+                    try:
+                        fh = RobustFileHandler(
+                            filename=file_handler.path,
+                            when="midnight",
+                            utc=True,
+                            backupCount=file_handler.retention,
+                            create_dirs=True,
+                        )
+                        level_for_handler = _resolve_log_level(
+                            self.log_level_override if self.log_level_override else file_handler.level.value
+                        )
+                        fh.setLevel(level_for_handler)
+                        fh.setFormatter(fmt)
 
-                    root.addHandler(fh)
+                        root.addHandler(fh)
+                    except (OSError, PermissionError) as e:
+                        self._logger.warning(
+                            f"Could not create or write to log file {file_handler.path}: {e}. "
+                            "Falling back to console logging."
+                        )
+                        if not any(isinstance(h, logging.StreamHandler) for h in root.handlers):
+                            sh = logging.StreamHandler()
+                            sh.setFormatter(fmt)
+                            sh.setLevel(level_for_handler)
+                            root.addHandler(sh)
 
                 case LogWindowsEventHandlerConfig() as windows_event_log_handler:
-                    try:
-                        if sys.platform == "win32":
+                    if sys.platform == "win32":
+                        try:
                             wh = WindowsEventHandler(self.NAME)
                             level_for_handler = _resolve_log_level(
                                 self.log_level_override
@@ -252,13 +263,12 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                             wh.setFormatter(fmt)
 
                             root.addHandler(wh)
-                        else:
-                            self._logger.warning("Windows Event Log handler is only available on Windows.")
-
-                    except ImportError:
-                        self._logger.warning(
-                            "To use the Windows Event Log handler, the 'pywin32' package must be installed."
-                        )
+                        except ImportError:
+                            self._logger.warning(
+                                "To use the Windows Event Log handler, the 'pywin32' package must be installed."
+                            )
+                    else:
+                        self._logger.warning("Windows Event Log handler is only available on Windows.")
 
     def __init_tasks__(self) -> None:
         """
