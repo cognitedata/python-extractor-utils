@@ -142,6 +142,13 @@ def test_changing_cwd() -> None:
     assert os.getcwd() != original_cwd
 
 
+def test_change_cwd_to_nonexistent() -> None:
+    runtime = Runtime(TestExtractor)
+
+    with pytest.raises(FileNotFoundError, match="No such file or directory"):
+        runtime._try_set_cwd(args=Namespace(cwd=(Path("nonexistent_directory").as_posix(),)))
+
+
 def _write_conn_from_fixture(base_yaml_path: Path, out_path: Path, cfg: ConnectionConfig) -> None:
     """Start from the repo YAML and overwrite with plain strings from the fixture."""
     data = yaml.safe_load(base_yaml_path.read_text())

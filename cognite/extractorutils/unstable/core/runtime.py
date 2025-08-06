@@ -256,7 +256,7 @@ class Runtime(Generic[ExtractorType]):
 
     def _try_set_cwd(self, args: Namespace) -> None:
         if args.cwd is not None and len(args.cwd) > 0:
-            resolved_path = Path(args.cwd[0]).resolve()
+            resolved_path = Path(args.cwd[0]).resolve(strict=True)
             try:
                 os.chdir(resolved_path)
                 self.logger.info(f"Changed working directory to {resolved_path}")
