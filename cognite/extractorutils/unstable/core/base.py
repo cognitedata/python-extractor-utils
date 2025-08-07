@@ -271,8 +271,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         )
 
     def _run_checkin(self) -> None:
-        while not self.cancellation_token.is_cancelled:
-            self._checkin_worker.run_periodic_checkin(self.cancellation_token, self._get_startup_request())
+        self._checkin_worker.run_periodic_checkin(self.cancellation_token, self._get_startup_request())
 
     def _report_error(self, error: Error) -> None:
         self._checkin_worker.report_error(error)
