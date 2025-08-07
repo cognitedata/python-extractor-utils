@@ -287,7 +287,6 @@ class Runtime(Generic[ExtractorType]):
         return application_config, current_config_revision
 
     def _try_set_cwd(self, args: Namespace) -> None:
-        # TODO: Use path resolvers to handle relative paths and ensure they are absolute (Path(args.cwd[0]).resolve())
         if args.cwd is not None and len(args.cwd) > 0:
             try:
                 resolved_path = Path(args.cwd[0]).resolve(strict=True)
