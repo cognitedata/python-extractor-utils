@@ -87,7 +87,7 @@ class CheckinWorker:
         self._retry_startup: bool = retry_startup
         self._has_reported_startup: bool = False
         self._active_revision: ConfigRevision = active_revision
-        self._errors: dict[str, DtoError] = {}
+        self._errors: dict[str, Error] = {}
         self._task_updates: list[TaskUpdate] = []
 
     @property
@@ -127,7 +127,7 @@ class CheckinWorker:
             self._logger.debug("Running periodic check-in with interval %.2f seconds", report_interval)
             self.flush(cancellation_token)
             self._logger.debug(f"Check-in worker finished check-in, sleeping for {report_interval:.2f} seconds")
-            sleep(report_interval)
+            cancellation_token.wait(report_interval)
 
     def _run_startup_report(
         self, cancellation_token: CancellationToken, startup_request: StartupRequest, interval: float | None = None
@@ -168,9 +168,7 @@ class CheckinWorker:
                     "and configured to use remote config for the new config to take effect.",
                 )
             elif self._active_revision < checkin_response.last_config_revision:
-                self._logger.info(
-                    f"Remote config changed from {self._active_revision} to {checkin_response.last_config_revision}."
-                )
+                self._active_revision = checkin_response.last_config_revision
                 self._on_revision_change(checkin_response.last_config_revision)
 
     def flush(self, cancellation_token: CancellationToken) -> None:
@@ -197,7 +195,7 @@ class CheckinWorker:
         """
         with self._lock:
             if not self._has_reported_startup:
-                new_errors = [error for error in self._errors.values() if error.task is None]
+                new_errors = [error for error in self._errors.values() if error._task_name is None]
                 if len(new_errors) == 0:
                     self._logger.info("No startup request has been reported yet, skipping check-in.")
                     return
@@ -225,11 +223,8 @@ class CheckinWorker:
                 task_updates_to_write = task_updates
                 task_updates = []
                 self.try_write_checkin(
-                    CheckinRequest(
-                        external_id=self._integration,
-                        errors=errors_to_write if len(errors_to_write) > 0 else None,
-                        task_events=task_updates_to_write if len(task_updates_to_write) > 0 else None,
-                    ),
+                    errors_to_write,
+                    task_updates_to_write,
                 )
                 break
 
@@ -264,11 +259,8 @@ class CheckinWorker:
             if tasks_idx > 0:
                 task_updates = task_updates[tasks_idx:]
             self.try_write_checkin(
-                CheckinRequest(
-                    external_id=self._integration,
-                    errors=errors_to_write if len(errors_to_write) > 0 else None,
-                    task_events=task_updates_to_write if len(task_updates_to_write) > 0 else None,
-                )
+                errors_to_write,
+                task_updates_to_write,
             )
             if errs_idx == 0 and tasks_idx == 0:
                 self._logger.debug("Check-in worker finished writing check-in.")
@@ -278,15 +270,21 @@ class CheckinWorker:
             self._logger.debug("Extractor was stopped during check-in, requeuing remaining errors and task updates.")
             self._requeue_checkin(new_errors, task_updates)
 
-    def try_write_checkin(self, checkin_request: CheckinRequest) -> None:
+    def try_write_checkin(self, errors: list[Error], task_updates: list[TaskUpdate]) -> None:
         """
         We try to write a check-in.
 
         This will try to write a check in to integrations.
 
         Arguments:
-        checkin_request: The check-in request to write.
+        errors(list[Error]): The errors to write.
+        task_updates(list[TaskUpdate]): The task updates to write.
         """
+        checkin_request = CheckinRequest(
+            external_id=self._integration,
+            errors=list(map(DtoError.from_internal, errors)) if len(errors) > 0 else None,
+            task_events=task_updates if len(task_updates) > 0 else None,
+        )
         should_requeue = self._wrap_checkin_like_request(
             lambda: self._cognite_client.post(
                 f"/api/v1/projects/{self._cognite_client.config.project}/integrations/checkin",
@@ -296,7 +294,7 @@ class CheckinWorker:
         )
 
         if should_requeue:
-            self._requeue_checkin(checkin_request.errors, checkin_request.task_events)
+            self._requeue_checkin(errors, checkin_request.task_events)
 
     def report_error(self, error: Error) -> None:
         """
@@ -307,7 +305,7 @@ class CheckinWorker:
         """
         with self._lock:
             if error.external_id not in self._errors:
-                self._errors[error.external_id] = DtoError.from_internal(error)
+                self._errors[error.external_id] = error
             else:
                 self._logger.warning(f"Error {error.external_id} already reported, skipping re-reporting.")
 
@@ -335,7 +333,7 @@ class CheckinWorker:
                 TaskUpdate(type="ended", name=name, timestamp=timestamp or (int(now() * 1000)), message=message)
             )
 
-    def _requeue_checkin(self, errors: list[DtoError] | None, task_updates: list[TaskUpdate] | None) -> None:
+    def _requeue_checkin(self, errors: list[Error] | None, task_updates: list[TaskUpdate] | None) -> None:
         with self._lock:
             for error in errors or []:
                 if error.external_id not in self._errors:
@@ -373,6 +371,7 @@ class CheckinWorker:
 
             return True
         except Exception as e:
+            self._logger.critical(f"Extractor could not connect to CDF {e!s}")
             self._on_fatal_error(e)
             return True
 
