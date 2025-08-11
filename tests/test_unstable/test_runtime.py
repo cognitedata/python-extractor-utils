@@ -123,6 +123,7 @@ def test_load_cdf_config_initial_empty(connection_config: ConnectionConfig) -> N
     errors = cognite_client.get(
         url=f"/api/v1/projects/{cognite_client.config.project}/odin/errors",
         params={"integration": connection_config.integration.external_id},
+        headers={"cdf-version": "alpha"},
     ).json()
 
     assert len(errors["items"]) == 1
