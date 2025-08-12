@@ -150,8 +150,10 @@ def mock_startup_request(
 def mock_checkin_request(
     connection_config: ConnectionConfig, checkin_bag: list, error_list: list, task_events: list
 ) -> Callable[[requests_mock.Mocker, int], None]:
-    def mocker(requests_mock: requests_mock.Mocker, revision: int = 1) -> None:
+    def mocker(requests_mock: requests_mock.Mocker, revision: int = 1, status_code: int = 200) -> None:
         def json_callback(request: Any, context: Any) -> dict:
+            if status_code == 400:
+                return {"error": {"message": "Request failed", "code": status_code}}
             req = json.loads(gzip.decompress(request.body).decode("utf-8"))
             checkin_bag.append(req)
             if "errors" in req:
@@ -164,7 +166,7 @@ def mock_checkin_request(
             method="POST",
             url=f"{connection_config.base_url}api/v1/projects/{connection_config.project}/integrations/checkin",
             json=json_callback,
-            status_code=200,
+            status_code=status_code,
         )
 
     return mocker

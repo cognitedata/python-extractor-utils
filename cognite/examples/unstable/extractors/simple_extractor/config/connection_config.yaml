@@ -1,10 +1,10 @@
 project: ${COGNITE_PROJECT}
 base_url: ${COGNITE_BASE_URL}
 integration:
-  external_id: "utils-test-keyvault-remote"
+  external_id: ${COGNITE_INTEGRATION_ID}
 authentication:
   type: "client-credentials"
   client_id: ${COGNITE_CLIENT_ID}
   client_secret: ${COGNITE_CLIENT_SECRET}
   token_url: ${COGNITE_TOKEN_URL}
-  scopes: ${COGNITE_BASE_URL}/.default
+  scopes: ${COGNITE_SCOPES}
