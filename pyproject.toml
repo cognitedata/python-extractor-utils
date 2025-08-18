@@ -40,6 +40,9 @@ repository = "https://github.com/cognitedata/python-extractor-utils"
 
 [project.optional-dependencies]
 experimental = ["cognite-sdk-experimental"]
+windows-service = [
+    "simple-winservice; sys_platform == 'win32'"
+]
 
 [tool.uv]
 dev-dependencies = [
