@@ -61,9 +61,6 @@ from humps import pascalize
 from typing_extensions import Self, assert_never
 
 from cognite.extractorutils._inner_util import _resolve_log_level
-from cognite.extractorutils.configtools import (
-    StateStoreConfig,
-)
 from cognite.extractorutils.statestore import (
     AbstractStateStore,
     LocalStateStore,
@@ -77,6 +74,7 @@ from cognite.extractorutils.unstable.configuration.models import (
     ExtractorConfig,
     LogConsoleHandlerConfig,
     LogFileHandlerConfig,
+    StateStoreConfig,
 )
 from cognite.extractorutils.unstable.core._dto import (
     CogniteModel,
