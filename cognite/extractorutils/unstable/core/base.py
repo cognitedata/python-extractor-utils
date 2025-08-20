@@ -263,7 +263,8 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                             root.addHandler(wh)
                         except ImportError:
                             self._logger.warning(
-                                "To use the Windows Event Log handler, the 'pywin32' package must be installed."
+                                "Failed to import the 'pywin32' package. This should install automatically on windows."
+                                "Please try reinstalling to resolve this issue."
                             )
                     else:
                         self._logger.warning("Windows Event Log handler is only available on Windows.")
