@@ -4,6 +4,7 @@ import shutil
 import tempfile
 import time
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 
 from cognite.extractorutils.unstable.core.logger import RobustFileHandler
@@ -12,8 +13,8 @@ from cognite.extractorutils.unstable.core.logger import RobustFileHandler
 class TestRobustFileHandler(unittest.TestCase):
     def setUp(self) -> None:
         self.test_dir = tempfile.mkdtemp()
-        self.log_dir = os.path.join(self.test_dir, "logs", "nested", "dir")
-        self.log_file = os.path.join(self.log_dir, "test.log")
+        self.log_dir = Path(self.test_dir, "logs", "nested", "dir")
+        self.log_file = Path(self.log_dir, "test.log")
 
     def tearDown(self) -> None:
         shutil.rmtree(self.test_dir)
@@ -45,10 +46,10 @@ class TestRobustFileHandler(unittest.TestCase):
                 create_dirs=False,
             )
 
-    @patch("os.makedirs")
-    def test_permission_error(self, mock_makedirs: unittest.mock.MagicMock) -> None:
+    @patch("pathlib.Path.mkdir")
+    def test_permission_error(self, mock_mkdir: unittest.mock.MagicMock) -> None:
         """Test handling of permission errors"""
-        mock_makedirs.side_effect = PermissionError("Permission denied")
+        mock_mkdir.side_effect = PermissionError("Permission denied")
 
         with self.assertRaises(PermissionError):
             RobustFileHandler(

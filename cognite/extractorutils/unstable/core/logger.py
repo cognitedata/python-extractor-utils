@@ -327,9 +327,10 @@ class RobustFileHandler(TimedRotatingFileHandler):
 
         try:
             if self.create_dirs:
-                directory = os.path.dirname(filename)
-                if directory and not os.path.exists(directory):
-                    os.makedirs(directory, exist_ok=True)
+                directory = filename.parent
+                directory.mkdir(parents=True, exist_ok=True)
+                if not os.access(directory, os.W_OK):
+                    raise PermissionError(f"Cannot write to directory: {directory}")
 
             super().__init__(
                 filename,
