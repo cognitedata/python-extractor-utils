@@ -7,6 +7,7 @@ from multiprocessing import Process
 from pathlib import Path
 from random import randint
 from threading import Thread
+from unittest.mock import MagicMock, patch
 
 import pytest
 import yaml
@@ -249,3 +250,65 @@ def test_runtime_cancellation_propagates_to_extractor(
     assert "Cancellation signal received from runtime. Shutting down gracefully." in combined, (
         f"Expected cancellation log line not found in output.\nCaptured output:\n{combined}"
     )
+
+
+@patch("sys.platform", "win32")
+@patch("cognite.extractorutils.unstable.core.runtime.Queue")
+@patch("cognite.extractorutils.unstable.core.runtime.WindowsEventHandler")
+@patch("logging.getLogger")
+def test_logging_on_windows(mock_get_logger: MagicMock, mock_windows_handler: MagicMock, mock_queue: MagicMock) -> None:
+    """
+    Tests that the logger correctly initializes a console handler
+    and a WindowsEventHandler when running on Windows.
+    """
+    mock_root_logger = MagicMock()
+    mock_get_logger.return_value = mock_root_logger
+    mock_handler_instance = MagicMock()
+    mock_windows_handler.return_value = mock_handler_instance
+
+    runtime = Runtime(TestExtractor)
+
+    mock_windows_handler.assert_called_once_with(TestExtractor.NAME)
+
+    assert mock_root_logger.addHandler.call_count == 2
+    mock_root_logger.addHandler.assert_any_call(mock_handler_instance)
+
+
+@patch("sys.platform", "linux")
+@patch("cognite.extractorutils.unstable.core.runtime.WindowsEventHandler")
+@patch("logging.getLogger")
+def test_logging_on_non_windows(mock_get_logger: MagicMock, mock_windows_handler: MagicMock) -> None:
+    """
+    Tests that the logger only initializes a console handler
+    and skips the WindowsEventHandler when not on Windows.
+    """
+    mock_root_logger = MagicMock()
+    mock_get_logger.return_value = mock_root_logger
+    runtime = Runtime(TestExtractor)
+
+    mock_windows_handler.assert_not_called()
+
+    assert mock_root_logger.addHandler.call_count == 1
+
+
+@patch("sys.platform", "win32")
+@patch("cognite.extractorutils.unstable.core.runtime.Queue")
+@patch("cognite.extractorutils.unstable.core.runtime.WindowsEventHandler", side_effect=ImportError)
+@patch("logging.getLogger")
+def test_logging_on_windows_with_import_error(
+    mock_get_logger: MagicMock, mock_windows_handler: MagicMock, mock_queue: MagicMock
+) -> None:
+    """
+    Tests that the bootstrap logger handles an ImportError gracefully if pywin32
+    is not installed on a Windows system.
+    """
+    mock_root_logger = MagicMock()
+    mock_get_logger.return_value = mock_root_logger
+    runtime = Runtime(TestExtractor)
+
+    runtime.logger.warning.assert_called_with(
+        "Failed to import the 'pywin32' package. This should install automatically on windows. "
+        "Please try reinstalling to resolve this issue."
+    )
+
+    assert mock_root_logger.addHandler.call_count == 1
