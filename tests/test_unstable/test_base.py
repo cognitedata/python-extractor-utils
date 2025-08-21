@@ -67,9 +67,8 @@ def test_log_level_override(
         logging.getLogger(__name__),
         lambda _: None,
         lambda _: None,
-        1,
-        False,
     )
+    worker.active_revision = 1
     extractor = TestExtractor(full_config, worker)
 
     with extractor:

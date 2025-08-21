@@ -61,8 +61,6 @@ class CheckinWorker:
         logger: Logger,
         on_revision_change: Callable[[int], None],
         on_fatal_error: Callable[[Exception], None],
-        active_revision: ConfigRevision,
-        retry_startup: bool = False,
     ) -> None:
         """
         Initialize the CheckinWorker.
@@ -75,8 +73,6 @@ class CheckinWorker:
                                                         the configuration revision changes.
             on_fatal_error: Callable[[Exception], None]: A trigger function to call when a fatal error occurs
                                                          such as a wrong CDF credentials.
-            active_revision (ConfigRevision): The initial config revision when the worker is initialized.
-            retry_startup (bool): Whether to retry reporting startup if it fails. Defaults to False.
         """
         self._cognite_client: CogniteClient = cognite_client
         self._integration: str = integration
@@ -84,9 +80,9 @@ class CheckinWorker:
         self._on_revision_change: Callable[[int], None] = on_revision_change
         self._on_fatal_error: Callable[[Exception], None] = on_fatal_error
         self._is_running: bool = False
-        self._retry_startup: bool = retry_startup
+        self._retry_startup: bool = False
         self._has_reported_startup: bool = False
-        self._active_revision: ConfigRevision = active_revision
+        self._active_revision: ConfigRevision = "local"
         self._errors: dict[str, Error] = {}
         self._task_updates: list[TaskUpdate] = []
 
@@ -99,6 +95,10 @@ class CheckinWorker:
     def active_revision(self, value: ConfigRevision) -> None:
         with self._lock:
             self._active_revision = value
+
+    def should_retry_startup(self) -> None:
+        """Set the worker to retry startup reporting."""
+        self._retry_startup = True
 
     def run_periodic_checkin(
         self, cancellation_token: CancellationToken, startup_request: StartupRequest, interval: float | None = None
