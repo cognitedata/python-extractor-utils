@@ -29,6 +29,7 @@ import sys
 import time
 from argparse import ArgumentParser, Namespace
 from dataclasses import dataclass
+from logging.handlers import NTEventLogHandler as WindowsEventHandler
 from multiprocessing import Event, Process, Queue
 from multiprocessing.synchronize import Event as MpEvent
 from pathlib import Path
@@ -215,6 +216,22 @@ class Runtime(Generic[ExtractorType]):
         console_handler.setFormatter(fmt)
 
         root.addHandler(console_handler)
+
+        if sys.platform == "win32":
+            try:
+                event_log_handler = WindowsEventHandler(self._extractor_class.NAME)
+
+                event_log_handler.setLevel(logging.INFO)
+                root.addHandler(event_log_handler)
+
+                self.logger.info("Windows Event Log handler enabled for startup.")
+            except ImportError:
+                self.logger.warning(
+                    "Failed to import the 'pywin32' package. This should install automatically on windows. "
+                    "Please try reinstalling to resolve this issue."
+                )
+            except Exception as e:
+                self.logger.warning(f"Failed to initialize Windows Event Log handler: {e}")
 
     def _start_cancellation_watcher(self, mp_cancel_event: MpEvent) -> None:
         """
