@@ -419,18 +419,7 @@ class LogConsoleHandlerConfig(ConfigModel):
     level: LogLevel
 
 
-class LogWindowsEventHandlerConfig(ConfigModel):
-    """
-    Configuration for a log handler that writes to the Windows Event Log.
-    """
-
-    type: Literal["windows-event-log"]
-    level: LogLevel
-
-
-LogHandlerConfig = Annotated[
-    LogFileHandlerConfig | LogConsoleHandlerConfig | LogWindowsEventHandlerConfig, Field(discriminator="type")
-]
+LogHandlerConfig = Annotated[LogFileHandlerConfig | LogConsoleHandlerConfig, Field(discriminator="type")]
 
 
 # Mypy BS

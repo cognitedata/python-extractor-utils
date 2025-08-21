@@ -45,12 +45,10 @@ The subclass should also define several class attributes:
 """
 
 import logging
-import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from functools import partial
-from logging.handlers import NTEventLogHandler as WindowsEventHandler
 from multiprocessing import Queue
 from multiprocessing.synchronize import Event as MpEvent
 from threading import RLock, Thread
@@ -69,7 +67,6 @@ from cognite.extractorutils.unstable.configuration.models import (
     ExtractorConfig,
     LogConsoleHandlerConfig,
     LogFileHandlerConfig,
-    LogWindowsEventHandlerConfig,
 )
 from cognite.extractorutils.unstable.core._dto import (
     CogniteModel,
@@ -247,27 +244,6 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                             sh.setFormatter(fmt)
                             sh.setLevel(level_for_handler)
                             root.addHandler(sh)
-
-                case LogWindowsEventHandlerConfig() as windows_event_log_handler:
-                    if sys.platform == "win32":
-                        try:
-                            wh = WindowsEventHandler(self.NAME)
-                            level_for_handler = _resolve_log_level(
-                                self.log_level_override
-                                if self.log_level_override
-                                else windows_event_log_handler.level.value
-                            )
-                            wh.setLevel(level_for_handler)
-                            wh.setFormatter(fmt)
-
-                            root.addHandler(wh)
-                        except ImportError:
-                            self._logger.warning(
-                                "Failed to import the 'pywin32' package. This should install automatically on windows."
-                                "Please try reinstalling to resolve this issue."
-                            )
-                    else:
-                        self._logger.warning("Windows Event Log handler is only available on Windows.")
 
     def __init_tasks__(self) -> None:
         """

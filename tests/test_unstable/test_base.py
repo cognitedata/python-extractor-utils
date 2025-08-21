@@ -1,17 +1,13 @@
 import logging
-from unittest.mock import MagicMock, patch
 
 import pytest
 
 from cognite.extractorutils.unstable.configuration.models import (
     ConnectionConfig,
-    ExtractorConfig,
     LogConsoleHandlerConfig,
-    LogHandlerConfig,
     LogLevel,
-    LogWindowsEventHandlerConfig,
 )
-from cognite.extractorutils.unstable.core.base import Extractor, FullConfig
+from cognite.extractorutils.unstable.core.base import FullConfig
 from cognite.extractorutils.unstable.core.checkin_worker import CheckinWorker
 from cognite.extractorutils.unstable.core.tasks import TaskContext
 
@@ -92,68 +88,3 @@ def test_log_level_override(
         assert log in console_output
     for log in unexpected_logs:
         assert log not in console_output
-
-
-class MockExtractorConfig(ExtractorConfig):
-    def __init__(self, handlers: list[LogHandlerConfig]) -> None:
-        super().__init__(log_handlers=handlers)
-
-
-def build_test_extractor(config: ExtractorConfig, connection_config: ConnectionConfig = None) -> Extractor:
-    if connection_config is None:
-        connection_config = MagicMock()
-
-    class TestExtractor(Extractor):
-        NAME = "Test Extractor"
-        EXTERNAL_ID = "test-extractor"
-        DESCRIPTION = "Test description"
-        VERSION = "1.0.0"
-        CONFIG_TYPE = type(config)
-
-    full_config = FullConfig(
-        connection_config=connection_config,
-        application_config=config,
-        current_config_revision="123",
-    )
-
-    worker = get_checkin_worker(connection_config)
-
-    return TestExtractor(full_config, worker)
-
-
-@patch("sys.platform", "win32")
-@patch("logging.getLogger")
-@patch("cognite.extractorutils.unstable.core.base.WindowsEventHandler")
-def test_windows_handler_on_windows(mock_nt_handler: MagicMock, mock_get_logger: MagicMock) -> None:
-    """Test Windows Event Log handler on Windows platform"""
-    mock_root_logger = MagicMock()
-    mock_get_logger.return_value = mock_root_logger
-    mock_handler_instance = MagicMock()
-    mock_nt_handler.return_value = mock_handler_instance
-
-    windows_handler_config = LogWindowsEventHandlerConfig(type="windows-event-log", level=LogLevel.INFO)
-    config = MockExtractorConfig([windows_handler_config])
-
-    extractor = build_test_extractor(config)
-
-    extractor._setup_logging()
-
-    mock_nt_handler.assert_called_once_with("Test Extractor")
-    mock_root_logger.addHandler.assert_called_with(mock_handler_instance)
-
-
-@patch("sys.platform", "linux")
-@patch("logging.getLogger")
-def test_windows_handler_on_non_windows(mock_get_logger: MagicMock) -> None:
-    """Test Windows Event Log handler on non-Windows platform"""
-    mock_root_logger = MagicMock()
-    mock_get_logger.return_value = mock_root_logger
-
-    windows_handler_config = LogWindowsEventHandlerConfig(type="windows-event-log", level=LogLevel.INFO)
-    config = MockExtractorConfig([windows_handler_config])
-
-    extractor = build_test_extractor(config)
-
-    extractor._setup_logging()
-
-    mock_root_logger.warning.assert_called_with("Windows Event Log handler is only available on Windows.")
