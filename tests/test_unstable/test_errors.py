@@ -24,8 +24,6 @@ def test_global_error(
         connection_config.get_cognite_client("testing"),
         connection_config.integration.external_id,
         logging.getLogger(__name__),
-        lambda _: None,
-        lambda _: None,
     )
     worker.active_revision = 1
     extractor = TestExtractor(
@@ -63,8 +61,6 @@ def test_instant_error(
         connection_config.get_cognite_client("testing"),
         connection_config.integration.external_id,
         logging.getLogger(__name__),
-        lambda _: None,
-        lambda _: None,
     )
     worker.active_revision = 1
     extractor = TestExtractor(
@@ -99,8 +95,6 @@ def test_task_error(
         connection_config.get_cognite_client("testing"),
         connection_config.integration.external_id,
         logging.getLogger(__name__),
-        lambda _: None,
-        lambda _: None,
     )
     worker.active_revision = 1
     extractor = TestExtractor(
@@ -150,8 +144,6 @@ def test_crashing_task(
         connection_config.get_cognite_client("testing"),
         connection_config.integration.external_id,
         logging.getLogger(__name__),
-        lambda _: None,
-        lambda _: None,
     )
     worker.active_revision = 1
     extractor = TestExtractor(
@@ -202,8 +194,6 @@ def test_reporting_errors(
         connection_config.get_cognite_client("testing"),
         connection_config.integration.external_id,
         logging.getLogger(__name__),
-        lambda _: None,
-        lambda _: None,
     )
     worker.active_revision = 1
     extractor = TestExtractor(
@@ -271,8 +261,6 @@ def test_conversion_to_external(connection_config: ConnectionConfig, application
         connection_config.get_cognite_client("testing"),
         connection_config.integration.external_id,
         logging.getLogger(__name__),
-        lambda _: None,
-        lambda _: None,
     )
     worker.active_revision = 1
     extractor = TestExtractor(

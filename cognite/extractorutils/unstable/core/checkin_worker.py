@@ -390,6 +390,7 @@ class CheckinWorker:
 
     def _wrap_checkin_like_request(self, request: Callable[[], Response]) -> bool:
         exception_to_report: Exception | None = None
+        requeue = False
         try:
             response = request()
             self._handle_checkin_response(response.json())
@@ -397,12 +398,13 @@ class CheckinWorker:
             if e.__cause__ is not None:
                 self._logger.error(str(e.__cause__))
             self._logger.critical("Could not connect to CDF. Please check your configuration.")
-            return True
+            requeue = True
 
         except CogniteAuthError as e:
             self._logger.error(str(e))
             self._logger.critical("Could not get an access token. Please check your configuration.")
             exception_to_report = e
+            requeue = True
 
         except CogniteAPIError as e:
             if e.code == 401:
@@ -417,15 +419,14 @@ class CheckinWorker:
 
             else:
                 self._logger.critical(f"Error while connecting to CDF {e!s}")
+            requeue = True
 
-            return True
         except Exception as e:
             self._logger.critical(f"Extractor could not connect to CDF {e!s}")
             exception_to_report = e
-            return True
+            requeue = True
 
         if exception_to_report is not None and self._on_fatal_error is not None:
             self._on_fatal_error(exception_to_report)
-            return True
 
-        return False
+        return requeue

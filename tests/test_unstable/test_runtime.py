@@ -219,17 +219,11 @@ def test_runtime_cancellation_propagates_to_extractor(
     child_holder = {}
     original_spawn = Runtime._spawn_extractor
 
-    def spy_spawn(self: Self, config: FullConfig) -> Process:
+    def spy_spawn(self: Self, config: FullConfig, checkin_worker: CheckinWorker) -> Process:
         p = original_spawn(
             self,
             config,
-            CheckinWorker(
-                connection_config.get_cognite_client("testing"),
-                connection_config.integration.external_id,
-                logging.getLogger(__name__),
-                lambda _: None,
-                lambda _: None,
-            ),
+            checkin_worker,
         )
         child_holder["proc"] = p
         return p

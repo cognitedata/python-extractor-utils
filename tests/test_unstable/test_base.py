@@ -65,8 +65,6 @@ def test_log_level_override(
         connection_config.get_cognite_client("testing"),
         connection_config.integration.external_id,
         logging.getLogger(__name__),
-        lambda _: None,
-        lambda _: None,
     )
     worker.active_revision = 1
     extractor = TestExtractor(full_config, worker)

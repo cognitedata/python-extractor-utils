@@ -33,8 +33,6 @@ def test_report_startup_request(
         cognite_client,
         connection_config.integration.external_id,
         logging.getLogger(__name__),
-        lambda _: None,
-        lambda _: None,
     )
     test_extractor = TestExtractor(
         FullConfig(
@@ -73,8 +71,6 @@ def test_flush_and_checkin(
         cognite_client,
         connection_config.integration.external_id,
         logging.getLogger(__name__),
-        lambda _: None,
-        lambda _: None,
     )
     worker._has_reported_startup = True
     test_extractor = TestExtractor(
@@ -123,8 +119,6 @@ def test_run_report_periodic(
         cognite_client,
         connection_config.integration.external_id,
         logging.getLogger(__name__),
-        lambda _: None,
-        lambda _: None,
     )
     test_extractor = TestExtractor(
         FullConfig(
@@ -181,8 +175,6 @@ def test_run_report_periodic_ensure_reorder(
         cognite_client,
         connection_config.integration.external_id,
         logging.getLogger(__name__),
-        lambda _: None,
-        lambda _: None,
     )
     test_extractor = TestExtractor(
         FullConfig(
@@ -258,8 +250,6 @@ def test_run_report_periodic_checkin(
         cognite_client,
         connection_config.integration.external_id,
         logging.getLogger(__name__),
-        lambda _: None,
-        lambda _: None,
     )
     test_extractor = TestExtractor(
         FullConfig(
@@ -298,6 +288,7 @@ def test_run_report_periodic_checkin(
         args=(cancellation_token, test_extractor._get_startup_request(), 5),
     )
     process.start()
+    process.join(timeout=5)
 
     attempts = 0
     while len(checkin_bag) < 2 and attempts < 10:
@@ -342,10 +333,9 @@ def test_on_fatal_hook_is_called(
         cognite_client,
         connection_config.integration.external_id,
         logging.getLogger(__name__),
-        lambda _: None,
-        on_fatal_hook,
     )
-    worker._retry_startup = True
+    worker.set_on_fatal_error_handler(on_fatal_hook)
+    worker.set_retry_startup(True)
     test_extractor = TestExtractor(
         FullConfig(
             connection_config=connection_config, application_config=application_config, current_config_revision=1
@@ -391,9 +381,8 @@ def test_on_revision_change_hook_is_called(
         cognite_client,
         connection_config.integration.external_id,
         logging.getLogger(__name__),
-        on_revision_change,
-        lambda _: None,
     )
+    worker.set_on_revision_change_handler(on_revision_change)
     test_extractor = TestExtractor(
         FullConfig(
             connection_config=connection_config, application_config=application_config, current_config_revision=1
@@ -407,7 +396,7 @@ def test_on_revision_change_hook_is_called(
     cancellation_token = CancellationToken()
     on_revision_change_value = 0
 
-    worker.should_retry_startup()
+    worker.set_retry_startup(True)
     worker.active_revision = 1
 
     process = Thread(
@@ -437,8 +426,6 @@ def test_run_report_periodic_checkin_requeue(
         cognite_client,
         connection_config.integration.external_id,
         logging.getLogger(__name__),
-        lambda _: None,
-        lambda _: None,
     )
     test_extractor = TestExtractor(
         FullConfig(
@@ -467,7 +454,7 @@ def test_run_report_periodic_checkin_requeue(
 
     process = Thread(
         target=worker.run_periodic_checkin,
-        args=(cancellation_token, test_extractor._get_startup_request(), 20),
+        args=(cancellation_token, test_extractor._get_startup_request(), 2),
     )
     process.start()
     process.join(timeout=2)
