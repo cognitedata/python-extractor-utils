@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 import time
@@ -17,6 +18,7 @@ from cognite.examples.unstable.extractors.simple_extractor.main import SimpleExt
 from cognite.extractorutils.unstable.configuration.exceptions import InvalidArgumentError
 from cognite.extractorutils.unstable.configuration.models import ConnectionConfig
 from cognite.extractorutils.unstable.core.base import ConfigRevision, FullConfig
+from cognite.extractorutils.unstable.core.checkin_worker import CheckinWorker
 from cognite.extractorutils.unstable.core.runtime import Runtime
 from test_unstable.conftest import TestConfig, TestExtractor
 
@@ -218,7 +220,17 @@ def test_runtime_cancellation_propagates_to_extractor(
     original_spawn = Runtime._spawn_extractor
 
     def spy_spawn(self: Self, config: FullConfig) -> Process:
-        p = original_spawn(self, config)
+        p = original_spawn(
+            self,
+            config,
+            CheckinWorker(
+                connection_config.get_cognite_client("testing"),
+                connection_config.integration.external_id,
+                logging.getLogger(__name__),
+                lambda _: None,
+                lambda _: None,
+            ),
+        )
         child_holder["proc"] = p
         return p
 

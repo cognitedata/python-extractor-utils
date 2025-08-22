@@ -80,8 +80,10 @@ def _extractor_process_entrypoint(
 ) -> None:
     logger = logging.getLogger(f"{extractor_class.EXTERNAL_ID}.runtime")
     checkin_worker.active_revision = config.current_config_revision
+    checkin_worker.set_on_fatal_error_handler(lambda _: on_fatal_error(controls))
+    checkin_worker.set_on_revision_change_handler(lambda _: on_revision_changed(controls))
     if config.application_config.retry_startup:
-        checkin_worker.should_retry_startup()
+        checkin_worker.set_retry_startup(config.application_config.retry_startup)
     extractor = extractor_class._init_from_runtime(config, checkin_worker)
     extractor._attach_runtime_controls(
         cancel_event=controls.cancel_event,
@@ -97,28 +99,26 @@ def _extractor_process_entrypoint(
         controls.message_queue.put(RuntimeMessage.RESTART)
 
 
-def on_revision_changed(message_queue: Queue, cancel_event: MpEvent | None) -> None:
+def on_revision_changed(controls: _RuntimeControls) -> None:
     """
     Handle a change in the configuration revision.
 
     Args:
-        message_queue(Queue): The runtime controls containing the message queue and cancellation event.
-        cancel_event(MpEvent): The event to signal cancellation of the current extractor process.
+        controls(_RuntimeControls): The runtime controls containing the message queue and cancellation event.
     """
-    message_queue.put(RuntimeMessage.RESTART)
-    if cancel_event is not None:
-        cancel_event.set()
+    controls.message_queue.put(RuntimeMessage.RESTART)
+    controls.cancel_event.set()
 
 
-def on_fatal_error(cancel_event: MpEvent | None) -> None:
+def on_fatal_error(controls: _RuntimeControls) -> None:
     """
     Handle a fatal error in the extractor.
 
     Args:
-        cancel_event(Event): The runtime controls containing the message queue and cancellation event.
+        logger(logging.Logger): The logger to use for logging messages.
+        controls(_RuntimeControls): The runtime controls containing the message queue and cancellation event.
     """
-    if cancel_event is not None:
-        cancel_event.set()
+    controls.cancel_event.set()
 
 
 class Runtime(Generic[ExtractorType]):
@@ -423,8 +423,6 @@ class Runtime(Generic[ExtractorType]):
             cognite_client,
             connection_config.integration.external_id,
             self.logger,
-            lambda _: on_revision_changed(self._message_queue, self._cancel_event),
-            lambda _: on_fatal_error(self._cancel_event),
         )
 
         while not self._cancellation_token.is_cancelled:

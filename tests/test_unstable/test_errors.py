@@ -26,9 +26,8 @@ def test_global_error(
         logging.getLogger(__name__),
         lambda _: None,
         lambda _: None,
-        1,
-        False,
     )
+    worker.active_revision = 1
     extractor = TestExtractor(
         FullConfig(
             connection_config=connection_config,
@@ -66,9 +65,8 @@ def test_instant_error(
         logging.getLogger(__name__),
         lambda _: None,
         lambda _: None,
-        1,
-        False,
     )
+    worker.active_revision = 1
     extractor = TestExtractor(
         FullConfig(
             connection_config=connection_config,
@@ -103,9 +101,8 @@ def test_task_error(
         logging.getLogger(__name__),
         lambda _: None,
         lambda _: None,
-        1,
-        False,
     )
+    worker.active_revision = 1
     extractor = TestExtractor(
         FullConfig(
             connection_config=connection_config,
@@ -155,9 +152,8 @@ def test_crashing_task(
         logging.getLogger(__name__),
         lambda _: None,
         lambda _: None,
-        1,
-        False,
     )
+    worker.active_revision = 1
     extractor = TestExtractor(
         FullConfig(
             connection_config=connection_config,
@@ -208,9 +204,8 @@ def test_reporting_errors(
         logging.getLogger(__name__),
         lambda _: None,
         lambda _: None,
-        1,
-        False,
     )
+    worker.active_revision = 1
     extractor = TestExtractor(
         FullConfig(
             connection_config=connection_config,
@@ -278,9 +273,8 @@ def test_conversion_to_external(connection_config: ConnectionConfig, application
         logging.getLogger(__name__),
         lambda _: None,
         lambda _: None,
-        1,
-        False,
     )
+    worker.active_revision = 1
     extractor = TestExtractor(
         FullConfig(
             connection_config=connection_config,
