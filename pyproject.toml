@@ -33,6 +33,7 @@ dependencies = [
     "pyhumps>=3.8.0",
     "croniter>=6.0.0",
     "jsonlines>=4.0.0",
+    "simple-winservice>=0.1.0 ; sys_platform == 'win32'",
 ]
 
 [project.urls]
@@ -40,9 +41,6 @@ repository = "https://github.com/cognitedata/python-extractor-utils"
 
 [project.optional-dependencies]
 experimental = ["cognite-sdk-experimental"]
-windows-service = [
-    "simple-winservice; sys_platform == 'win32'"
-]
 
 [tool.uv]
 dev-dependencies = [
