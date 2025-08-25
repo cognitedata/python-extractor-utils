@@ -407,12 +407,14 @@ class Runtime(Generic[ExtractorType]):
 
         self.logger.info(f"Started runtime with PID {os.getpid()}")
 
-        if args.service:
-            if sys.platform != "win32":
-                self.logger.critical("--service is only supported on Windows.")
-                sys.exit(1)
+        if args.service and sys.platform == "win32":
+            # Import here to avoid dependency on non-Windows systems
             try:
-                from simple_winservice import ServiceHandle, register_service, run_service
+                from simple_winservice import (  # type: ignore[import-not-found]
+                    ServiceHandle,
+                    register_service,
+                    run_service,
+                )
             except ImportError:
                 self.logger.critical("simple-winservice library is not installed.")
                 sys.exit(1)
@@ -437,6 +439,9 @@ class Runtime(Generic[ExtractorType]):
             register_service(service_main, self._extractor_class.NAME, cancel_service)
             run_service()
             return
+        else:
+            self.logger.critical("--service is only supported on Windows.")
+            sys.exit(1)
 
         self._main_runtime(args)
 
