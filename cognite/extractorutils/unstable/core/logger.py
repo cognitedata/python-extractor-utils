@@ -5,8 +5,12 @@ This class is subclassed by both the ``TaskContext`` and the ``Extractor`` base 
 for logging and error handling in extractors.
 """
 
+import datetime
+import os
 from abc import ABC, abstractmethod
 from logging import Logger, getLogger
+from logging.handlers import TimedRotatingFileHandler
+from pathlib import Path
 from traceback import format_exception
 from typing import Literal
 
@@ -296,3 +300,48 @@ class CogniteLogger(ABC):
             description=message,
             details=details,
         ).instant()
+
+
+class RobustFileHandler(TimedRotatingFileHandler):
+    """
+    A TimedRotatingFileHandler that gracefully handles directory/permission issues.
+
+    It can automatically create log directories and raise error to fallback to console logging
+    if the file cannot be created or accessed.
+    """
+
+    def __init__(
+        self,
+        filename: Path,
+        create_dirs: bool = True,
+        when: str = "h",
+        interval: int = 1,
+        backupCount: int = 0,
+        encoding: str | None = None,
+        delay: bool = False,
+        utc: bool = False,
+        atTime: datetime.time | None = None,
+        errors: str | None = None,
+    ) -> None:
+        self.create_dirs = create_dirs
+
+        if self.create_dirs:
+            directory = filename.parent
+            directory.mkdir(parents=True, exist_ok=True)
+            if not os.access(directory, os.W_OK):
+                raise PermissionError(f"Cannot write to directory: {directory}")
+
+        super().__init__(
+            filename,
+            when=when,
+            interval=interval,
+            backupCount=backupCount,
+            encoding=encoding,
+            delay=delay,
+            utc=utc,
+            atTime=atTime,
+            errors=errors,
+        )
+
+        self.stream.write("")
+        self.stream.flush()
