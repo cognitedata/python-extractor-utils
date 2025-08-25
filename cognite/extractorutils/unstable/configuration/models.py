@@ -5,7 +5,6 @@ Module containing pre-built models for common extractor configuration.
 import os
 import re
 from collections.abc import Iterator
-from dataclasses import dataclass, field
 from datetime import timedelta
 from enum import Enum
 from pathlib import Path
@@ -435,8 +434,7 @@ def _log_handler_default() -> list[LogHandlerConfig]:
     return [LogConsoleHandlerConfig(type="console", level=LogLevel.INFO)]
 
 
-@dataclass
-class RawDestinationConfig:
+class RawDestinationConfig(ConfigModel):
     """
     Configuration parameters for using Raw.
     """
@@ -445,27 +443,24 @@ class RawDestinationConfig:
     table: str
 
 
-@dataclass
 class RawStateStoreConfig(RawDestinationConfig):
     """
     Configuration of a state store based on CDF RAW.
     """
 
-    upload_interval: TimeIntervalConfig = field(default_factory=lambda: TimeIntervalConfig("30s"))
+    upload_interval: TimeIntervalConfig = Field(default_factory=lambda: TimeIntervalConfig("30s"))
 
 
-@dataclass
-class LocalStateStoreConfig:
+class LocalStateStoreConfig(ConfigModel):
     """
     Configuration of a state store using a local JSON file.
     """
 
     path: Path
-    save_interval: TimeIntervalConfig = field(default_factory=lambda: TimeIntervalConfig("30s"))
+    save_interval: TimeIntervalConfig = Field(default_factory=lambda: TimeIntervalConfig("30s"))
 
 
-@dataclass
-class StateStoreConfig:
+class StateStoreConfig(ConfigModel):
     """
     Configuration of the State Store, containing ``LocalStateStoreConfig`` or ``RawStateStoreConfig``.
     """
