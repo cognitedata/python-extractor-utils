@@ -45,6 +45,7 @@ class TestRobustFileHandler(unittest.TestCase):
                 backupCount=3,
                 create_dirs=False,
             )
+        self.assertFalse(os.path.exists(self.log_dir))
 
     @patch("pathlib.Path.mkdir")
     def test_permission_error(self, mock_mkdir: unittest.mock.MagicMock) -> None:
