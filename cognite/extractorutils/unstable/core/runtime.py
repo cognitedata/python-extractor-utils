@@ -439,7 +439,7 @@ class Runtime(Generic[ExtractorType]):
             register_service(service_main, self._extractor_class.NAME, cancel_service)
             run_service()
             return
-        else:
+        elif args.service and sys.platform != "win32":
             self.logger.critical("--service is only supported on Windows.")
             sys.exit(1)
 
