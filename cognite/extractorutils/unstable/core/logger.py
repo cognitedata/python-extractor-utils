@@ -325,27 +325,23 @@ class RobustFileHandler(TimedRotatingFileHandler):
     ) -> None:
         self.create_dirs = create_dirs
 
-        try:
-            if self.create_dirs:
-                directory = filename.parent
-                directory.mkdir(parents=True, exist_ok=True)
-                if not os.access(directory, os.W_OK):
-                    raise PermissionError(f"Cannot write to directory: {directory}")
+        if self.create_dirs:
+            directory = filename.parent
+            directory.mkdir(parents=True, exist_ok=True)
+            if not os.access(directory, os.W_OK):
+                raise PermissionError(f"Cannot write to directory: {directory}")
 
-            super().__init__(
-                filename,
-                when=when,
-                interval=interval,
-                backupCount=backupCount,
-                encoding=encoding,
-                delay=delay,
-                utc=utc,
-                atTime=atTime,
-                errors=errors,
-            )
+        super().__init__(
+            filename,
+            when=when,
+            interval=interval,
+            backupCount=backupCount,
+            encoding=encoding,
+            delay=delay,
+            utc=utc,
+            atTime=atTime,
+            errors=errors,
+        )
 
-            self.stream.write("")
-            self.stream.flush()
-
-        except (OSError, PermissionError) as e:
-            raise e
+        self.stream.write("")
+        self.stream.flush()
