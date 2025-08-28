@@ -307,17 +307,19 @@ def test_service_main_entrypoint(monkeypatch: MonkeyPatch, connection_config: Co
         runtime._cancellation_token.cancel()
 
     cancel_thread = Thread(target=cancel)
-    cancel_thread.start()
     from simple_winservice import ServiceHandle
 
     # Simulate service_main logic
     def service_main(handle: ServiceHandle, service_args: list[str]) -> None:
-        with patch("cognite.extractorutils.unstable.core.runtime.load_file", return_value=connection_config):
-            handle.event_log_info("Extractor Windows service is starting.")
-            runtime._main_runtime(args)
-            handle.event_log_info("Extractor Windows service is stopping.")
+        handle.event_log_info("Extractor Windows service is starting.")
+        runtime._main_runtime(args)
+        handle.event_log_info("Extractor Windows service is stopping.")
 
-    with patch("logging.Logger.info") as mock_logger_info:
+    cancel_thread.start()
+    with (
+        patch("cognite.extractorutils.unstable.core.runtime.load_file", return_value=connection_config),
+        patch("logging.Logger.info") as mock_logger_info,
+    ):
         service_main(handle, [])
         cancel_thread.join()
         handle.event_log_info.assert_any_call("Extractor Windows service is starting.")
@@ -325,7 +327,7 @@ def test_service_main_entrypoint(monkeypatch: MonkeyPatch, connection_config: Co
         # Assert that 'Shutting down runtime' was logged, confirming _main_runtime ran
         mock_logger_info.assert_any_call("Shutting down runtime")
 
-    assert runtime._cancellation_token.is_cancelled()
+    assert runtime._cancellation_token.is_cancelled
 
 
 @patch("sys.platform", "win32")
