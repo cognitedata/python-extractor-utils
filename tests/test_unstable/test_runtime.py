@@ -252,6 +252,84 @@ def test_runtime_cancellation_propagates_to_extractor(
     )
 
 
+def test_service_flag_non_windows(monkeypatch: MonkeyPatch) -> None:
+    runtime = Runtime(TestExtractor)
+    monkeypatch.setattr(sys, "platform", "linux")
+    with patch("argparse.ArgumentParser.parse_args") as mock_args:
+        mock_args.return_value = MagicMock(service=True, log_level="info")
+        with pytest.raises(SystemExit) as excinfo:
+            runtime.run()
+        assert excinfo.value.code == 1
+
+
+def test_service_flag_windows_import_error(monkeypatch: MonkeyPatch) -> None:
+    runtime = Runtime(TestExtractor)
+    monkeypatch.setattr(sys, "platform", "win32")
+    with patch("argparse.ArgumentParser.parse_args") as mock_args:
+        mock_args.return_value = MagicMock(service=True, log_level="info")
+        with patch.dict("sys.modules", {"simple_winservice": None}):
+            with pytest.raises(SystemExit) as excinfo:
+                runtime.run()
+            assert excinfo.value.code == 1
+
+
+def test_service_flag_windows_success(monkeypatch: MonkeyPatch) -> None:
+    runtime = Runtime(TestExtractor)
+    monkeypatch.setattr(sys, "platform", "win32")
+    with patch("argparse.ArgumentParser.parse_args") as mock_args:
+        mock_args.return_value = MagicMock(service=True, log_level="info")
+        mock_register = MagicMock()
+        mock_run = MagicMock()
+        mock_handle = MagicMock()
+        sys.modules["simple_winservice"] = MagicMock(
+            register_service=mock_register,
+            run_service=mock_run,
+            ServiceHandle=mock_handle,
+        )
+        with (
+            patch("simple_winservice.register_service", mock_register),
+            patch("simple_winservice.run_service", mock_run),
+        ):
+            runtime.run()
+            mock_register.assert_called()
+            mock_run.assert_called()
+
+
+def test_service_main_entrypoint(monkeypatch: MonkeyPatch, connection_config: ConnectionConfig) -> None:
+    runtime = Runtime(TestExtractor)
+    monkeypatch.setattr(sys, "platform", "win32")
+    args = MagicMock(service=True, log_level="info")
+    handle = MagicMock()
+
+    # Simulate cancellation after a short delay
+    def cancel() -> None:
+        time.sleep(0.5)
+        runtime._cancellation_token.cancel()
+
+    cancel_thread = Thread(target=cancel)
+    from simple_winservice import ServiceHandle
+
+    # Simulate service_main logic
+    def service_main(handle: ServiceHandle, service_args: list[str]) -> None:
+        handle.event_log_info("Extractor Windows service is starting.")
+        runtime._main_runtime(args)
+        handle.event_log_info("Extractor Windows service is stopping.")
+
+    cancel_thread.start()
+    with (
+        patch("cognite.extractorutils.unstable.core.runtime.load_file", return_value=connection_config),
+        patch("logging.Logger.info") as mock_logger_info,
+    ):
+        service_main(handle, [])
+        cancel_thread.join()
+        handle.event_log_info.assert_any_call("Extractor Windows service is starting.")
+        handle.event_log_info.assert_any_call("Extractor Windows service is stopping.")
+        # Assert that 'Shutting down runtime' was logged, confirming _main_runtime ran
+        mock_logger_info.assert_any_call("Shutting down runtime")
+
+    assert runtime._cancellation_token.is_cancelled
+
+
 @patch("sys.platform", "win32")
 @patch("cognite.extractorutils.unstable.core.runtime.Queue")
 @patch("cognite.extractorutils.unstable.core.runtime.WindowsEventHandler")
