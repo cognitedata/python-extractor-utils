@@ -321,12 +321,15 @@ def test_service_main_entrypoint(monkeypatch: MonkeyPatch) -> None:
         # Simulate service_main logic
         def service_main(handle: ServiceHandle, service_args: list[str]) -> None:
             handle.event_log_info("Extractor Windows service is starting.")
+            handle.event_log_info.assert_any_call("Extractor Windows service is starting.")
             runtime._main_runtime(args)
             handle.event_log_info("Extractor Windows service is stopping.")
 
         # Should not raise
         service_main(handle, [])
     cancel_thread.join()
+    handle.event_log_info.assert_any_call("Extractor Windows service is stopping.")
+    assert mock_main.call_count == 1
 
 
 @patch("sys.platform", "win32")
