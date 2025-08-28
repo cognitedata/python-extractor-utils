@@ -7,7 +7,6 @@ from multiprocessing import Process
 from pathlib import Path
 from random import randint
 from threading import Thread
-from typing import Any
 from unittest.mock import MagicMock, patch
 
 import pytest
@@ -296,7 +295,7 @@ def test_service_flag_windows_success(monkeypatch: MonkeyPatch) -> None:
             mock_run.assert_called()
 
 
-def test_service_main_entrypoint(monkeypatch: MonkeyPatch) -> None:
+def test_service_main_entrypoint(monkeypatch: MonkeyPatch, connection_config: ConnectionConfig) -> None:
     runtime = Runtime(TestExtractor)
     monkeypatch.setattr(sys, "platform", "win32")
     args = MagicMock(service=True, log_level="info")
@@ -309,27 +308,22 @@ def test_service_main_entrypoint(monkeypatch: MonkeyPatch) -> None:
 
     cancel_thread = Thread(target=cancel)
     cancel_thread.start()
-    with patch.object(runtime, "_main_runtime") as mock_main:
+    from simple_winservice import ServiceHandle
 
-        def main_side_effect(*_: Any) -> None:
-            time.sleep(1)
-
-        mock_main.side_effect = main_side_effect
-
-        from simple_winservice import ServiceHandle
-
-        # Simulate service_main logic
-        def service_main(handle: ServiceHandle, service_args: list[str]) -> None:
+    # Simulate service_main logic
+    def service_main(handle: ServiceHandle, service_args: list[str]) -> None:
+        with patch("cognite.extractorutils.unstable.core.runtime.load_file", return_value=connection_config):
             handle.event_log_info("Extractor Windows service is starting.")
-            handle.event_log_info.assert_any_call("Extractor Windows service is starting.")
             runtime._main_runtime(args)
             handle.event_log_info("Extractor Windows service is stopping.")
 
-        # Should not raise
+    with patch("logging.Logger.info") as mock_logger_info:
         service_main(handle, [])
-    cancel_thread.join()
-    handle.event_log_info.assert_any_call("Extractor Windows service is stopping.")
-    assert mock_main.call_count == 1
+        cancel_thread.join()
+        handle.event_log_info.assert_any_call("Extractor Windows service is starting.")
+        handle.event_log_info.assert_any_call("Extractor Windows service is stopping.")
+        # Assert that 'Shutting down runtime' was logged, confirming _main_runtime ran
+        mock_logger_info.assert_any_call("Shutting down runtime")
 
 
 @patch("sys.platform", "win32")
