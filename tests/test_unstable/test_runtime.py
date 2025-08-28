@@ -325,6 +325,8 @@ def test_service_main_entrypoint(monkeypatch: MonkeyPatch, connection_config: Co
         # Assert that 'Shutting down runtime' was logged, confirming _main_runtime ran
         mock_logger_info.assert_any_call("Shutting down runtime")
 
+    assert runtime._cancellation_token.is_cancelled()
+
 
 @patch("sys.platform", "win32")
 @patch("cognite.extractorutils.unstable.core.runtime.Queue")
