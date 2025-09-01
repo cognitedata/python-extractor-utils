@@ -24,6 +24,18 @@ from cognite.extractorutils.unstable.core.tasks import TaskContext
 from .conftest import TestConfig, TestExtractor
 
 
+def get_checkin_worker(connection_config: ConnectionConfig) -> CheckinWorker:
+    return CheckinWorker(
+        connection_config.get_cognite_client("testing"),
+        connection_config.integration.external_id,
+        logging.getLogger(__name__),
+        lambda _: None,
+        lambda _: None,
+        1,
+        False,
+    )
+
+
 @pytest.mark.parametrize(
     "config_level, override_level, expected_logs, unexpected_logs",
     [
@@ -71,15 +83,7 @@ def test_log_level_override(
         current_config_revision=1,
         log_level_override=override_level,
     )
-    worker = CheckinWorker(
-        connection_config.get_cognite_client("testing"),
-        connection_config.integration.external_id,
-        logging.getLogger(__name__),
-        lambda _: None,
-        lambda _: None,
-        1,
-        False,
-    )
+    worker = get_checkin_worker(connection_config)
     extractor = TestExtractor(full_config, worker)
 
     with extractor:
@@ -103,22 +107,6 @@ def local_state_file(tmp_path: Path) -> Path:
     The file and its parent directory are automatically cleaned up by pytest.
     """
     return tmp_path / "test_states.json"
-
-
-def get_checkin_worker(connection_config: ConnectionConfig) -> CheckinWorker:
-    """
-    Helper function to create a CheckinWorker instance for tests.
-    """
-    worker = CheckinWorker(
-        connection_config.get_cognite_client("testing"),
-        connection_config.integration.external_id,
-        logging.getLogger(__name__),
-        lambda _: None,
-        lambda _: None,
-        1,
-        False,
-    )
-    return worker
 
 
 def test_local_state_store_integration(local_state_file: Path, connection_config: ConnectionConfig) -> None:

@@ -29,6 +29,7 @@ import sys
 import time
 from argparse import ArgumentParser, Namespace
 from dataclasses import dataclass
+from logging.handlers import NTEventLogHandler as WindowsEventHandler
 from multiprocessing import Event, Process, Queue
 from multiprocessing.synchronize import Event as MpEvent
 from pathlib import Path
@@ -196,6 +197,11 @@ class Runtime(Generic[ExtractorType]):
             required=False,
             help="Set the current working directory for the extractor.",
         )
+        argparser.add_argument(
+            "--service",
+            action="store_true",
+            help="Run the extractor as a Windows service (only supported on Windows).",
+        )
 
         return argparser
 
@@ -215,6 +221,22 @@ class Runtime(Generic[ExtractorType]):
         console_handler.setFormatter(fmt)
 
         root.addHandler(console_handler)
+
+        if sys.platform == "win32":
+            try:
+                event_log_handler = WindowsEventHandler(self._extractor_class.NAME)
+
+                event_log_handler.setLevel(logging.INFO)
+                root.addHandler(event_log_handler)
+
+                self.logger.info("Windows Event Log handler enabled for startup.")
+            except ImportError:
+                self.logger.warning(
+                    "Failed to import the 'pywin32' package. This should install automatically on windows. "
+                    "Please try reinstalling to resolve this issue."
+                )
+            except Exception as e:
+                self.logger.warning(f"Failed to initialize Windows Event Log handler: {e}")
 
     def _start_cancellation_watcher(self, mp_cancel_event: MpEvent) -> None:
         """
@@ -402,6 +424,45 @@ class Runtime(Generic[ExtractorType]):
 
         self.logger.info(f"Started runtime with PID {os.getpid()}")
 
+        if args.service and sys.platform == "win32":
+            # Import here to avoid dependency on non-Windows systems
+            try:
+                from simple_winservice import (  # type: ignore[import-not-found]
+                    ServiceHandle,
+                    register_service,
+                    run_service,
+                )
+            except ImportError:
+                self.logger.critical("simple-winservice library is not installed.")
+                sys.exit(1)
+
+            # Cancellation function for the service
+            def cancel_service() -> None:
+                self.logger.info("Service cancellation requested.")
+                self._cancellation_token.cancel()
+
+            # Wrap the main runtime loop in a function for the service
+            def service_main(handle: ServiceHandle, service_args: list[str]) -> None:
+                handle.event_log_info("Extractor Windows service is starting.")
+                try:
+                    self._main_runtime(args)
+                except Exception as exc:
+                    handle.event_log_error(f"Service crashed: {exc}")
+                    self.logger.critical(f"Service crashed: {exc}", exc_info=True)
+                    sys.exit(1)
+                handle.event_log_info("Extractor Windows service is stopping.")
+
+            # Register and run the service
+            register_service(service_main, self._extractor_class.NAME, cancel_service)
+            run_service()
+            return
+        elif args.service and sys.platform != "win32":
+            self.logger.critical("--service is only supported on Windows.")
+            sys.exit(1)
+
+        self._main_runtime(args)
+
+    def _main_runtime(self, args: Namespace) -> None:
         try:
             self._try_set_cwd(args)
             connection_config = load_file(args.connection_config[0], ConnectionConfig)
