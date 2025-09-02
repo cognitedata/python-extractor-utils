@@ -59,10 +59,6 @@ class CheckinWorker:
         cognite_client: CogniteClient,
         integration: str,
         logger: Logger,
-        # on_revision_change: Callable[[int], None],
-        # on_fatal_error: Callable[[Exception], None],
-        # active_revision: ConfigRevision,
-        # retry_startup: bool = False,
     ) -> None:
         """
         Initialize the CheckinWorker.
