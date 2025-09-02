@@ -202,3 +202,14 @@ class TestExtractor(Extractor[TestConfig]):
             ctx.warning("This is a warning message.")
 
         self.add_task(StartupTask(name="log_task", target=log_messages_task))
+
+
+@pytest.fixture(autouse=True)
+def reset_singleton() -> Generator[None, None, None]:
+    """
+    This fixture ensures that the _statestore_singleton class
+    variable is reset, providing test isolation.
+    """
+    Extractor._statestore_singleton = None
+    yield
+    Extractor._statestore_singleton = None
