@@ -244,6 +244,7 @@ def test_reporting_errors(
     )
     process.start()
     process.join(timeout=5)
+    cancellation_token.cancel()
 
     res = extractor.cognite_client.get(
         f"/api/v1/projects/{extractor.cognite_client.config.project}/integrations/errors?integration={connection_config.integration.external_id}",

@@ -288,15 +288,14 @@ def test_run_report_periodic_checkin(
         args=(cancellation_token, test_extractor._get_startup_request(), 5),
     )
     process.start()
-    process.join(timeout=5)
 
     attempts = 0
     while len(checkin_bag) < 2 and attempts < 10:
         sleep(1)
         attempts += 1
-        continue
 
     cancellation_token.cancel()
+    process.join(timeout=5)
 
     assert len(task_events) == 2000
     assert len(error_list) == 2
@@ -405,6 +404,7 @@ def test_on_revision_change_hook_is_called(
     )
     process.start()
     process.join(timeout=5)
+    cancellation_token.cancel()
 
     assert on_revision_change_value == 2
 
