@@ -9,6 +9,7 @@ import pytest
 
 from cognite.client import CogniteClient
 from cognite.client.exceptions import CogniteNotFoundError
+from cognite.extractorutils.statestore.watermark import LocalStateStore, RawStateStore
 from cognite.extractorutils.unstable.configuration.models import (
     ConnectionConfig,
     LocalStateStoreConfig,
@@ -100,6 +101,15 @@ def test_log_level_override(
         assert log not in console_output
 
 
+def test_get_current_statestore_raises_before_start() -> None:
+    """
+    Tests that calling get_current_statestore before the extractor's
+    __enter__ method is called raises a ValueError.
+    """
+    with pytest.raises(ValueError, match="No state store singleton created. Have a state store been loaded?"):
+        TestExtractor.get_current_statestore()
+
+
 @pytest.fixture
 def local_state_file(tmp_path: Path) -> Path:
     """
@@ -129,8 +139,14 @@ def test_local_state_store_integration(local_state_file: Path, connection_config
     worker = get_checkin_worker(connection_config)
     extractor = TestExtractor(full_config, worker)
 
+    with pytest.raises(ValueError):
+        TestExtractor.get_current_statestore()
+
     with extractor:
-        state_store = extractor.state_store
+        state_store = TestExtractor.get_current_statestore()
+
+        assert isinstance(state_store, LocalStateStore)
+        assert state_store is extractor.state_store
 
         assert not local_state_file.exists()
         assert state_store.get_state("my-test-id") == (None, None)
@@ -195,8 +211,14 @@ def test_raw_state_store_integration(
     worker = get_checkin_worker(connection_config)
     extractor = TestExtractor(full_config, worker)
 
+    with pytest.raises(ValueError):
+        TestExtractor.get_current_statestore()
+
     with extractor:
-        state_store = extractor.state_store
+        state_store = TestExtractor.get_current_statestore()
+
+        assert isinstance(state_store, RawStateStore)
+        assert state_store is extractor.state_store
 
         assert state_store.get_state("my-test-id") == (None, None)
 
