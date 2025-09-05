@@ -396,7 +396,8 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self._setup_logging()
         self._start_time = datetime.now(tz=timezone.utc)
         Thread(target=self._run_checkin, name="ExtractorCheckin", daemon=True).start()
-        self.metrics_push_manager.start()
+        if self.metrics_config:
+            self.metrics_push_manager.start()
 
     def stop(self) -> None:
         """
@@ -405,7 +406,8 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         Instead of calling this method directly, it is recommended to use the context manager interface by using the
         ``with`` statement, which ensures proper cleanup on exit.
         """
-        self.metrics_push_manager.stop()
+        if self.metrics_config:
+            self.metrics_push_manager.stop()
         self.cancellation_token.cancel()
 
     def __enter__(self) -> Self:
