@@ -24,6 +24,7 @@ from cognite.client.credentials import (
 )
 from cognite.extractorutils.configtools._util import _load_certificate_data
 from cognite.extractorutils.exceptions import InvalidConfigError
+from cognite.extractorutils.util import EitherId
 
 __all__ = [
     "AuthenticationConfig",
@@ -36,6 +37,7 @@ __all__ = [
     "LogFileHandlerConfig",
     "LogHandlerConfig",
     "LogLevel",
+    "MetricsConfig",
     "ScheduleConfig",
     "TimeIntervalConfig",
 ]
@@ -420,6 +422,75 @@ class LogConsoleHandlerConfig(ConfigModel):
 
 
 LogHandlerConfig = Annotated[LogFileHandlerConfig | LogConsoleHandlerConfig, Field(discriminator="type")]
+
+
+class EitherIdConfig(ConfigModel):
+    """
+    Configuration parameter representing an ID in CDF, which can either be an external or internal ID.
+
+    An EitherId can only hold one ID type, not both.
+    """
+
+    id: int | None
+    external_id: str | None
+
+    @property
+    def either_id(self) -> EitherId:
+        """
+        Returns an EitherId object based on the current configuration.
+
+        Raises:
+            TypeError: If both id and external_id are None, or if both are set.
+        """
+        return EitherId(id=self.id, external_id=self.external_id)
+
+
+class _PushGatewayConfig(ConfigModel):
+    """
+    Configuration for pushing metrics to a Prometheus Push Gateway.
+    """
+
+    host: str
+    job_name: str
+    username: str | None
+    password: str | None
+
+    clear_after: TimeIntervalConfig | None
+    push_interval: TimeIntervalConfig = Field(default_factory=lambda: TimeIntervalConfig("30s"))
+
+
+class _PromServerConfig(ConfigModel):
+    """
+    Configuration for pushing metrics to a Prometheus server.
+    """
+
+    port: int = 9000
+    host: str = "0.0.0.0"
+
+
+class _CogniteMetricsConfig(ConfigModel):
+    """
+    Configuration for pushing metrics to Cognite Data Fusion.
+    """
+
+    external_id_prefix: str
+    asset_name: str | None
+    asset_external_id: str | None
+    data_set: EitherIdConfig | None = None
+
+    push_interval: TimeIntervalConfig = Field(default_factory=lambda: TimeIntervalConfig("30s"))
+
+
+class MetricsConfig(ConfigModel):
+    """
+    Destination(s) for metrics.
+
+    Including options for one or several Prometheus push gateways, and pushing as CDF Time Series.
+    """
+
+    push_gateways: list[_PushGatewayConfig] | None
+    cognite: _CogniteMetricsConfig | None
+    server: _PromServerConfig | None
 
 
 # Mypy BS

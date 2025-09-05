@@ -57,6 +57,7 @@ from cognite.extractorutils.unstable.configuration.models import ConnectionConfi
 from cognite.extractorutils.unstable.core._dto import Error
 from cognite.extractorutils.unstable.core.checkin_worker import CheckinWorker
 from cognite.extractorutils.unstable.core.errors import ErrorLevel
+from cognite.extractorutils.unstable.core.metrics import BaseMetrics
 from cognite.extractorutils.util import now
 
 from ._messaging import RuntimeMessage
@@ -74,9 +75,7 @@ class _RuntimeControls:
 
 
 def _extractor_process_entrypoint(
-    extractor_class: type[Extractor],
-    controls: _RuntimeControls,
-    config: FullConfig,
+    extractor_class: type[Extractor], controls: _RuntimeControls, config: FullConfig, metrics: BaseMetrics | None = None
 ) -> None:
     logger = logging.getLogger(f"{extractor_class.EXTERNAL_ID}.runtime")
     checkin_worker = CheckinWorker(
@@ -88,7 +87,10 @@ def _extractor_process_entrypoint(
         config.current_config_revision,
         config.application_config.retry_startup,
     )
-    extractor = extractor_class._init_from_runtime(config, checkin_worker)
+    # Initialize metrics if not provided by the extractor subclass
+    if not metrics:
+        metrics = BaseMetrics(extractor_name=extractor_class.NAME, extractor_version=extractor_class.VERSION)
+    extractor = extractor_class._init_from_runtime(config, checkin_worker, metrics)
     extractor._attach_runtime_controls(
         cancel_event=controls.cancel_event,
         message_queue=controls.message_queue,
@@ -138,11 +140,13 @@ class Runtime(Generic[ExtractorType]):
     def __init__(
         self,
         extractor: type[ExtractorType],
+        metrics: BaseMetrics | None = None,
     ) -> None:
         self._extractor_class = extractor
         self._cancellation_token = CancellationToken()
         self._cancellation_token.cancel_on_interrupt()
         self._message_queue: Queue[RuntimeMessage] = Queue()
+        self._metrics = metrics
         self.logger = logging.getLogger(f"{self._extractor_class.EXTERNAL_ID}.runtime")
         self._setup_logging()
 
@@ -270,7 +274,7 @@ class Runtime(Generic[ExtractorType]):
 
         process = Process(
             target=_extractor_process_entrypoint,
-            args=(self._extractor_class, controls, config),
+            args=(self._extractor_class, controls, config, self._metrics),
         )
 
         process.start()
