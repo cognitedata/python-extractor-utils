@@ -46,12 +46,12 @@ def test_safe_get(init_counter: None) -> None:
 
 # For testing CognitePusher
 class GaugeSetUp:
-    gauge = Gauge("gauge", "Test gauge")
+    gauge = Gauge("unstable_gauge", "Test gauge")
 
     @classmethod
     def init_gauge(self) -> None:
         if GaugeSetUp.gauge is None:
-            GaugeSetUp.gauge = Gauge("gauge", "Test gauge")
+            GaugeSetUp.gauge = Gauge("unstable_gauge", "Test gauge")
 
 
 def init_gauge() -> None:
