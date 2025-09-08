@@ -301,6 +301,9 @@ class Extractor(Generic[ConfigType], CogniteLogger):
     def _report_error(self, error: Error) -> None:
         self._checkin_worker.report_error(error)
 
+    def _try_report_error(self, error: Error) -> None:
+        self._checkin_worker.try_report_error(error)
+
     def _new_error(
         self,
         level: ErrorLevel,

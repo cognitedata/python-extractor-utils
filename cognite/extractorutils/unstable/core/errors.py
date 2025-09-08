@@ -90,7 +90,7 @@ class Error:
         self.end_time = self.start_time
 
         # Re-add in case the error has already been reported and dict cleared
-        self._extractor._report_error(self)
+        self._extractor._try_report_error(self)
 
     def finish(self) -> None:
         """
@@ -105,7 +105,7 @@ class Error:
         self.end_time = now()
 
         # Re-add in case the error has already been reported and dict cleared
-        self._extractor._report_error(self)
+        self._extractor._try_report_error(self)
 
     def __enter__(self) -> "Error":
         """

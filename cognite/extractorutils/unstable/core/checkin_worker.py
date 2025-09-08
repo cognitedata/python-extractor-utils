@@ -59,10 +59,6 @@ class CheckinWorker:
         cognite_client: CogniteClient,
         integration: str,
         logger: Logger,
-        on_revision_change: Callable[[int], None],
-        on_fatal_error: Callable[[Exception], None],
-        active_revision: ConfigRevision,
-        retry_startup: bool = False,
     ) -> None:
         """
         Initialize the CheckinWorker.
@@ -81,12 +77,12 @@ class CheckinWorker:
         self._cognite_client: CogniteClient = cognite_client
         self._integration: str = integration
         self._logger: Logger = logger
-        self._on_revision_change: Callable[[int], None] = on_revision_change
-        self._on_fatal_error: Callable[[Exception], None] = on_fatal_error
+        self._on_revision_change: Callable[[int], None] | None = None
+        self._on_fatal_error: Callable[[Exception], None] | None = None
         self._is_running: bool = False
-        self._retry_startup: bool = retry_startup
+        self._retry_startup: bool = False
         self._has_reported_startup: bool = False
-        self._active_revision: ConfigRevision = active_revision
+        self._active_revision: ConfigRevision = "local"
         self._errors: dict[str, Error] = {}
         self._task_updates: list[TaskUpdate] = []
 
@@ -99,6 +95,37 @@ class CheckinWorker:
     def active_revision(self, value: ConfigRevision) -> None:
         with self._lock:
             self._active_revision = value
+
+    def set_on_revision_change_handler(self, on_revision_change: Callable[[int], None]) -> None:
+        """
+        Set the handler for when the configuration revision changes.
+
+        This handler will be called with the new configuration revision when it changes.
+
+        Arguments:
+            on_revision_change (Callable[[int], None]): A callback to call when the configuration revision.
+        """
+        self._on_revision_change = on_revision_change
+
+    def set_on_fatal_error_handler(self, on_fatal_error: Callable[[Exception], None]) -> None:
+        """
+        Set the handler for when a fatal error occurs.
+
+        This handler will be called with the exception when a fatal error occurs, such as a wrong CDF credentials.
+
+        Arguments:
+            on_fatal_error (Callable[[Exception], None]): A callback to call when a fatal error occurs.
+        """
+        self._on_fatal_error = on_fatal_error
+
+    def set_retry_startup(self, retry_startup: bool) -> None:
+        """
+        Set whether to retry reporting startup if it fails.
+
+        Arguments:
+            retry_startup (bool): Whether to retry reporting startup if it fails.
+        """
+        self._retry_startup = retry_startup
 
     def run_periodic_checkin(
         self, cancellation_token: CancellationToken, startup_request: StartupRequest, interval: float | None = None
@@ -169,7 +196,13 @@ class CheckinWorker:
                 )
             elif self._active_revision < checkin_response.last_config_revision:
                 self._active_revision = checkin_response.last_config_revision
-                self._on_revision_change(checkin_response.last_config_revision)
+                if self._on_revision_change is not None:
+                    self._logger.info(
+                        "Remote config revision changed %s -> %s. The extractor will now use the new configuration.",
+                        self._active_revision,
+                        checkin_response.last_config_revision,
+                    )
+                    self._on_revision_change(checkin_response.last_config_revision)
 
     def flush(self, cancellation_token: CancellationToken) -> None:
         """
@@ -309,6 +342,17 @@ class CheckinWorker:
             else:
                 self._logger.warning(f"Error {error.external_id} already reported, skipping re-reporting.")
 
+    def try_report_error(self, error: Error) -> None:
+        """
+        This method will try to queue an error to be reported to the Integrations API.
+
+        Arguments:
+            error (Error): The error to report.
+        """
+        with self._lock:
+            if error.external_id not in self._errors:
+                self._errors[error.external_id] = error
+
     def report_task_start(self, name: str, message: MessageType | None = None, timestamp: int | None = None) -> None:
         """
         Queue task start to be reported to Integrations API.
@@ -341,6 +385,8 @@ class CheckinWorker:
             self._task_updates.extend(task_updates or [])
 
     def _wrap_checkin_like_request(self, request: Callable[[], Response]) -> bool:
+        exception_to_report: Exception | None = None
+        requeue = False
         try:
             response = request()
             self._handle_checkin_response(response.json())
@@ -348,12 +394,13 @@ class CheckinWorker:
             if e.__cause__ is not None:
                 self._logger.error(str(e.__cause__))
             self._logger.critical("Could not connect to CDF. Please check your configuration.")
-            return True
+            requeue = True
 
         except CogniteAuthError as e:
             self._logger.error(str(e))
             self._logger.critical("Could not get an access token. Please check your configuration.")
-            self._on_fatal_error(e)
+            exception_to_report = e
+            requeue = True
 
         except CogniteAPIError as e:
             if e.code == 401:
@@ -361,18 +408,21 @@ class CheckinWorker:
                     "Got a 401 error from CDF. Please check your configuration. "
                     "Make sure the credentials and project is correct."
                 )
-                self._on_fatal_error(e)
+                exception_to_report = e
 
             elif e.message:
                 self._logger.critical(str(e.message))
 
             else:
                 self._logger.critical(f"Error while connecting to CDF {e!s}")
+            requeue = True
 
-            return True
         except Exception as e:
             self._logger.critical(f"Extractor could not connect to CDF {e!s}")
-            self._on_fatal_error(e)
-            return True
+            exception_to_report = e
+            requeue = True
 
-        return False
+        if exception_to_report is not None and self._on_fatal_error is not None:
+            self._on_fatal_error(exception_to_report)
+
+        return requeue
