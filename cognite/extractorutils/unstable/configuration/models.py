@@ -10,6 +10,7 @@ from enum import Enum
 from pathlib import Path
 from typing import Annotated, Any, Literal, TypeVar
 
+import yaml
 from humps import kebabize
 from pydantic import BaseModel, ConfigDict, Field, GetCoreSchemaHandler
 from pydantic_core import CoreSchema, core_schema
@@ -425,6 +426,130 @@ LogHandlerConfig = Annotated[LogFileHandlerConfig | LogConsoleHandlerConfig, Fie
 # Mypy BS
 def _log_handler_default() -> list[LogHandlerConfig]:
     return [LogConsoleHandlerConfig(type="console", level=LogLevel.INFO)]
+
+
+class FileSizeConfig(yaml.YAMLObject):
+    """
+    Configuration parameter for setting a file size.
+    """
+
+    def __init__(self, expression: str) -> None:
+        self._bytes, self._expression = FileSizeConfig._parse_expression(expression)
+
+    @classmethod
+    def _parse_expression(cls, expression: str) -> tuple[int, str]:
+        # First, try to parse pure number and assume bytes
+        try:
+            return int(expression), f"{expression}s"
+        except ValueError:
+            pass
+
+        sizes = {
+            "kb": 1000,
+            "mb": 1_000_000,
+            "gb": 1_000_000_000,
+            "tb": 1_000_000_000_000,
+            "kib": 1024,
+            "mib": 1_048_576,
+            "gib": 1_073_741_824,
+            "tib": 1_099_511_627_776,
+        }
+        expression_lower = expression.lower()
+        for size in sizes:
+            if expression_lower.endswith(size):
+                return (
+                    int(float(expression_lower.replace(size, "")) * sizes[size]),
+                    expression,
+                )
+        else:
+            raise InvalidConfigError(f"Invalid unit for file size: {expression}. Valid units: {sizes.keys()}")
+
+    @property
+    def bytes(self) -> int:
+        """
+        File size in bytes.
+        """
+        return self._bytes
+
+    @property
+    def kilobytes(self) -> float:
+        """
+        File size in kilobytes.
+        """
+        return self._bytes / 1000
+
+    @property
+    def megabytes(self) -> float:
+        """
+        File size in megabytes.
+        """
+        return self._bytes / 1_000_000
+
+    @property
+    def gigabytes(self) -> float:
+        """
+        File size in gigabytes.
+        """
+        return self._bytes / 1_000_000_000
+
+    @property
+    def terabytes(self) -> float:
+        """
+        File size in terabytes.
+        """
+        return self._bytes / 1_000_000_000_000
+
+    @property
+    def kibibytes(self) -> float:
+        """
+        File size in kibibytes (1024 bytes).
+        """
+        return self._bytes / 1024
+
+    @property
+    def mebibytes(self) -> float:
+        """
+        File size in mebibytes (1024 kibibytes).
+        """
+        return self._bytes / 1_048_576
+
+    @property
+    def gibibytes(self) -> float:
+        """
+        File size in gibibytes (1024 mebibytes).
+        """
+        return self._bytes / 1_073_741_824
+
+    @property
+    def tebibytes(self) -> float:
+        """
+        File size in tebibytes (1024 gibibytes).
+        """
+        return self._bytes / 1_099_511_627_776
+
+    def __int__(self) -> int:
+        """
+        Returns the file size as bytes.
+        """
+        return int(self._bytes)
+
+    def __float__(self) -> float:
+        """
+        Returns the file size as bytes.
+        """
+        return float(self._bytes)
+
+    def __str__(self) -> str:
+        """
+        Returns the file size as a human readable string.
+        """
+        return self._expression
+
+    def __repr__(self) -> str:
+        """
+        Returns the file size as a human readable string.
+        """
+        return self._expression
 
 
 class ExtractorConfig(ConfigModel):
