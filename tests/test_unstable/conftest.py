@@ -1,6 +1,7 @@
 import gzip
 import json
 import os
+from collections import Counter
 from collections.abc import Callable, Generator
 from threading import RLock
 from time import sleep, time
@@ -21,6 +22,7 @@ from cognite.extractorutils.unstable.configuration.models import (
     _ClientCredentialsConfig,
 )
 from cognite.extractorutils.unstable.core.base import Extractor, StartupTask, TaskContext
+from cognite.extractorutils.unstable.core.metrics import BaseMetrics
 
 working_dir = os.getcwd()
 
@@ -202,3 +204,10 @@ class TestExtractor(Extractor[TestConfig]):
             ctx.warning("This is a warning message.")
 
         self.add_task(StartupTask(name="log_task", target=log_messages_task))
+
+
+class TestMetrics(BaseMetrics):
+    def __init__(self) -> None:
+        super().__init__(extractor_name=TestExtractor.NAME, extractor_version=TestExtractor.VERSION)
+
+        self.a_counter = Counter("my_extractor_example_counter", "An example counter")

@@ -19,7 +19,7 @@ from cognite.extractorutils.unstable.configuration.exceptions import InvalidArgu
 from cognite.extractorutils.unstable.configuration.models import ConnectionConfig
 from cognite.extractorutils.unstable.core.base import ConfigRevision, FullConfig
 from cognite.extractorutils.unstable.core.runtime import Runtime
-from test_unstable.conftest import TestConfig, TestExtractor
+from test_unstable.conftest import TestConfig, TestExtractor, TestMetrics
 
 
 @pytest.fixture
@@ -390,3 +390,13 @@ def test_logging_on_windows_with_import_error(
     )
 
     assert mock_root_logger.addHandler.call_count == 1
+
+
+def test_extractor_with_metrics() -> None:
+    runtime = Runtime(TestExtractor, metrics=TestMetrics)
+    assert isinstance(runtime._metrics, TestMetrics) or runtime._metrics == TestMetrics
+
+    # The metrics instance should be a singleton
+    another_runtime = Runtime(TestExtractor, metrics=TestMetrics)
+    assert another_runtime._metrics is runtime._metrics
+    assert isinstance(another_runtime._metrics, TestMetrics) or another_runtime._metrics == TestMetrics
