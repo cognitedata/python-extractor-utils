@@ -284,17 +284,16 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                 default_to_local=self.USE_DEFAULT_STATE_STORE,
                 cancellation_token=self.cancellation_token,
             )
+        elif self.USE_DEFAULT_STATE_STORE:
+            self.state_store = LocalStateStore("states.json", cancellation_token=self.cancellation_token)
         else:
-            self.state_store = (
-                LocalStateStore("states.json", cancellation_token=self.cancellation_token)
-                if self.USE_DEFAULT_STATE_STORE
-                else NoStateStore()
-            )
+            self.state_store = NoStateStore()
 
         try:
             self.state_store.initialize()
         except ValueError:
             self._logger.exception("Could not load state store, using an empty state store as default")
+            self.state_store = NoStateStore()
 
         Extractor._statestore_singleton = self.state_store
 

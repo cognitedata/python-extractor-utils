@@ -503,7 +503,7 @@ class StateStoreConfig(ConfigModel):
 
         if self.local:
             if self.local.path.is_dir():
-                raise ValueError(f"{self.local.path} is a directory, and not a file")
+                raise IsADirectoryError(f"{self.local.path}")
 
             return LocalStateStore(
                 file_path=str(self.local.path),
@@ -513,8 +513,8 @@ class StateStoreConfig(ConfigModel):
 
         if default_to_local:
             return LocalStateStore(file_path="states.json", cancellation_token=cancellation_token)
-        else:
-            return NoStateStore()
+
+        return NoStateStore()
 
 
 class ExtractorConfig(ConfigModel):
