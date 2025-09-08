@@ -189,7 +189,7 @@ def test_init_existing_all(MockCogniteClient: Mock) -> None:
 
 
 @patch("cognite.client.CogniteClient")
-def test_push(MockCogniteClient: Mock) -> None:
+def test_push_to_cognite(MockCogniteClient: Mock) -> None:
     init_gauge()
     client: CogniteClient = MockCogniteClient()
     pusher = CognitePusher(client, "pre_", push_interval=1)
@@ -199,7 +199,7 @@ def test_push(MockCogniteClient: Mock) -> None:
 
     client.time_series.data.insert_multiple.assert_called_once()
     for time_series in client.time_series.data.insert_multiple.call_args_list[0][0][0]:
-        if time_series["externalId"] == "pre_gauge":
+        if time_series["externalId"] == "pre_unstable_gauge":
             ts = time_series
             break
 
