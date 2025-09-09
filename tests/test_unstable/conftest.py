@@ -14,6 +14,7 @@ import requests_mock
 from cognite.client import CogniteClient
 from cognite.client.config import ClientConfig
 from cognite.client.credentials import OAuthClientCredentials
+from cognite.extractorutils.metrics import BaseMetrics
 from cognite.extractorutils.unstable.configuration.models import (
     ConnectionConfig,
     ExtractorConfig,
@@ -22,7 +23,6 @@ from cognite.extractorutils.unstable.configuration.models import (
     _ClientCredentialsConfig,
 )
 from cognite.extractorutils.unstable.core.base import Extractor, StartupTask, TaskContext
-from cognite.extractorutils.unstable.core.metrics import BaseMetrics
 
 working_dir = os.getcwd()
 

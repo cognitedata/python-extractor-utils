@@ -59,6 +59,7 @@ from humps import pascalize
 from typing_extensions import Self, assert_never
 
 from cognite.extractorutils._inner_util import _resolve_log_level
+from cognite.extractorutils.metrics import BaseMetrics
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.unstable.configuration.models import (
     ConfigRevision,
@@ -82,7 +83,6 @@ from cognite.extractorutils.unstable.core._messaging import RuntimeMessage
 from cognite.extractorutils.unstable.core.checkin_worker import CheckinWorker
 from cognite.extractorutils.unstable.core.errors import Error, ErrorLevel
 from cognite.extractorutils.unstable.core.logger import CogniteLogger, RobustFileHandler
-from cognite.extractorutils.unstable.core.metrics import BaseMetrics, MetricsPushManager
 from cognite.extractorutils.unstable.core.restart_policy import WHEN_CONTINUOUS_TASKS_CRASHES, RestartPolicy
 from cognite.extractorutils.unstable.core.tasks import ContinuousTask, ScheduledTask, StartupTask, Task, TaskContext
 from cognite.extractorutils.unstable.scheduling import TaskScheduler
@@ -170,10 +170,10 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self._start_time: datetime
         self._metrics: BaseMetrics | None = metrics
 
-        self.metrics_push_manager = MetricsPushManager(
-            self.metrics_config,  # type: ignore
-            self.cognite_client,
-            self.cancellation_token,
+        self.metrics_push_manager = (
+            self.metrics_config.create_manager(self.cognite_client, cancellation_token=self.cancellation_token)
+            if self.metrics_config
+            else None
         )
 
         self.__init_tasks__()
@@ -399,7 +399,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self._setup_logging()
         self._start_time = datetime.now(tz=timezone.utc)
         Thread(target=self._run_checkin, name="ExtractorCheckin", daemon=True).start()
-        if self.metrics_config:
+        if self.metrics_push_manager:
             self.metrics_push_manager.start()
 
     def stop(self) -> None:
@@ -409,7 +409,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         Instead of calling this method directly, it is recommended to use the context manager interface by using the
         ``with`` statement, which ensures proper cleanup on exit.
         """
-        if self.metrics_config:
+        if self.metrics_push_manager:
             self.metrics_push_manager.stop()
         self.cancellation_token.cancel()
 

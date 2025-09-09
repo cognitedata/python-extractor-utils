@@ -8,9 +8,11 @@ from collections.abc import Iterator
 from datetime import timedelta
 from enum import Enum
 from pathlib import Path
+from time import sleep
 from typing import Annotated, Any, Literal, TypeVar
 
 from humps import kebabize
+from prometheus_client import REGISTRY, start_http_server
 from pydantic import BaseModel, ConfigDict, Field, GetCoreSchemaHandler
 from pydantic_core import CoreSchema, core_schema
 from typing_extensions import assert_never
@@ -22,8 +24,11 @@ from cognite.client.credentials import (
     OAuthClientCertificate,
     OAuthClientCredentials,
 )
+from cognite.client.data_classes import Asset
 from cognite.extractorutils.configtools._util import _load_certificate_data
 from cognite.extractorutils.exceptions import InvalidConfigError
+from cognite.extractorutils.metrics import AbstractMetricsPusher, CognitePusher, PrometheusPusher
+from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.util import EitherId
 
 __all__ = [
@@ -481,6 +486,92 @@ class _CogniteMetricsConfig(ConfigModel):
     push_interval: TimeIntervalConfig = Field(default_factory=lambda: TimeIntervalConfig("30s"))
 
 
+class MetricsPushManager:
+    """
+    Manages the pushing of metrics to various backends.
+
+    Starts and stops pushers based on a given configuration.
+
+    Args:
+        metrics_config: Configuration for the metrics to be pushed.
+        cdf_client: The CDF tenant to upload time series to
+        cancellation_token: Event object to be used as a thread cancelation event
+    """
+
+    def __init__(
+        self,
+        metrics_config: "MetricsConfig",
+        cdf_client: CogniteClient,
+        cancellation_token: CancellationToken | None = None,
+    ) -> None:
+        """
+        Initialize the MetricsPushManager.
+        """
+        self.metrics_config = metrics_config
+        self.cdf_client = cdf_client
+        self.cancellation_token = cancellation_token
+        self.pushers: list[AbstractMetricsPusher] = []
+        self.clear_on_stop: dict[AbstractMetricsPusher, int] = {}
+
+    def start(self) -> None:
+        """
+        Start all metric pushers.
+        """
+        push_gateways = self.metrics_config.push_gateways or []
+        for counter, push_gateway in enumerate(push_gateways):
+            prometheus_pusher = PrometheusPusher(
+                job_name=push_gateway.job_name,
+                username=push_gateway.username,
+                password=push_gateway.password,
+                url=push_gateway.host,
+                push_interval=push_gateway.push_interval.seconds,
+                thread_name=f"MetricsPusher_{counter}",
+                cancellation_token=self.cancellation_token,
+            )
+            prometheus_pusher.start()
+            self.pushers.append(prometheus_pusher)
+            if push_gateway.clear_after is not None:
+                self.clear_on_stop[prometheus_pusher] = push_gateway.clear_after.seconds
+
+        if self.metrics_config.cognite:
+            asset = None
+            if self.metrics_config.cognite.asset_name and self.metrics_config.cognite.asset_external_id:
+                asset = Asset(
+                    name=self.metrics_config.cognite.asset_name,
+                    external_id=self.metrics_config.cognite.asset_external_id,
+                )
+            cognite_pusher = CognitePusher(
+                cdf_client=self.cdf_client,
+                external_id_prefix=self.metrics_config.cognite.external_id_prefix,
+                push_interval=self.metrics_config.cognite.push_interval.seconds,
+                asset=asset,
+                data_set=self.metrics_config.cognite.data_set.either_id
+                if self.metrics_config.cognite.data_set
+                else None,
+                thread_name="CogniteMetricsPusher",
+                cancellation_token=self.cancellation_token,
+            )
+            cognite_pusher.start()
+            self.pushers.append(cognite_pusher)
+
+        if self.metrics_config.server:
+            start_http_server(self.metrics_config.server.port, self.metrics_config.server.host, registry=REGISTRY)
+
+    def stop(self) -> None:
+        """
+        Stop all metric pushers.
+        """
+        for pusher in self.pushers:
+            pusher.stop()
+
+        # Clear Prometheus pushers gateways if required
+        if self.clear_on_stop:
+            wait_time = max(self.clear_on_stop.values())
+            sleep(wait_time)
+            for pusher in (p for p in self.clear_on_stop if isinstance(p, PrometheusPusher)):
+                pusher.clear_gateway()
+
+
 class MetricsConfig(ConfigModel):
     """
     Destination(s) for metrics.
@@ -491,6 +582,21 @@ class MetricsConfig(ConfigModel):
     push_gateways: list[_PushGatewayConfig] | None
     cognite: _CogniteMetricsConfig | None
     server: _PromServerConfig | None
+
+    def create_manager(
+        self, cdf_client: CogniteClient, cancellation_token: CancellationToken | None = None
+    ) -> MetricsPushManager:
+        """
+        Create a MetricsPushManager based on the current configuration.
+
+        Args:
+            cdf_client: An instance of CogniteClient to interact with CDF.
+            cancellation_token: Optional token to signal cancellation of metric pushing.
+
+        Returns:
+            MetricsPushManager: An instance of MetricsPushManager configured with the provided parameters.
+        """
+        return MetricsPushManager(self, cdf_client, cancellation_token)
 
 
 # Mypy BS

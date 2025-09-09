@@ -135,9 +135,6 @@ def test_extractor_with_metrics(
     assert another_extractor._metrics is extractor._metrics
     assert isinstance(another_extractor._metrics, TestMetrics) or another_extractor._metrics == TestMetrics
 
-    # Patch PrometheusPusher._push_to_server to count calls
-    from cognite.extractorutils.unstable.core.metrics import PrometheusPusher
-
     call_count = {"count": 0}
     original_push = PrometheusPusher._push_to_server
 
@@ -149,7 +146,9 @@ def test_extractor_with_metrics(
 
     try:
         with extractor:
-            pass
+            for pusher in extractor.metrics_push_manager.pushers:
+                assert pusher.thread is not None
+                assert pusher.thread.is_alive()
         assert call_count["count"] > 0
     finally:
         PrometheusPusher._push_to_server = original_push

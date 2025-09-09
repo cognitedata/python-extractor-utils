@@ -47,6 +47,7 @@ from cognite.client.exceptions import (
     CogniteAuthError,
     CogniteConnectionError,
 )
+from cognite.extractorutils.metrics import BaseMetrics
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.unstable.configuration.exceptions import InvalidArgumentError, InvalidConfigError
 from cognite.extractorutils.unstable.configuration.loaders import (
@@ -57,7 +58,6 @@ from cognite.extractorutils.unstable.configuration.models import ConnectionConfi
 from cognite.extractorutils.unstable.core._dto import Error
 from cognite.extractorutils.unstable.core.checkin_worker import CheckinWorker
 from cognite.extractorutils.unstable.core.errors import ErrorLevel
-from cognite.extractorutils.unstable.core.metrics import BaseMetrics
 from cognite.extractorutils.util import now
 
 from ._messaging import RuntimeMessage
