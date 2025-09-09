@@ -262,9 +262,9 @@ class PrometheusPusher(AbstractMetricsPusher):
 
     def _auth_handler(
         self, url: str, method: str, timeout: int, headers: list[tuple[str, str]], data: bytes
-    ) -> Callable[[], None]:
+    ) -> Callable:
         """
-        Returns a authentication handler against the Prometheus Pushgateway to use in the pushadd_to_gateway method.
+        Returns an authentication handler against the Prometheus Pushgateway to use in the pushadd_to_gateway method.
 
         Args:
             url:      Push gateway
@@ -274,7 +274,8 @@ class PrometheusPusher(AbstractMetricsPusher):
             data:     Data to send
 
         Returns:
-            prometheus_client.exposition.basic_auth_handler: A authentication handler based on this client.
+            Callable: An authentication handler function compatible with Prometheus client's pushadd_to_gateway.
+            Note: The returned callable may accept parameters such as url, method, timeout, headers, and data.
         """
         return basic_auth_handler(url, method, timeout, headers, data, self.username, self.password)
 
@@ -369,7 +370,7 @@ class CognitePusher(AbstractMetricsPusher):
                 data_set_id = dataset.id
 
         for metric in REGISTRY.collect():
-            if type(metric) is Metric and metric.type in ["gauge", "counter"]:
+            if isinstance(metric, Metric) and metric.type in ["gauge", "counter"]:
                 external_id = self.external_id_prefix + metric.name
 
                 time_series.append(
@@ -487,6 +488,5 @@ class MetricsPushManager:
         if self.clear_on_stop:
             wait_time = max(self.clear_on_stop.values())
             sleep(wait_time)
-            for pusher in self.clear_on_stop:
-                if isinstance(pusher, PrometheusPusher):
-                    pusher.clear_gateway()
+            for pusher in (p for p in self.clear_on_stop if isinstance(p, PrometheusPusher)):
+                pusher.clear_gateway()

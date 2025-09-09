@@ -27,6 +27,21 @@ def init_counter() -> None:
     my_class_counter = 0
 
 
+my_class_counter = 0
+
+
+class MyClass:
+    def __init__(self) -> None:
+        global my_class_counter
+        my_class_counter += 1
+
+
+class AnotherClass:
+    def __init__(self, value: int) -> None:
+        global my_class_counter
+        my_class_counter += value
+
+
 def test_safe_get(init_counter: None) -> None:
     assert my_class_counter == 0
 
@@ -56,21 +71,6 @@ class GaugeSetUp:
 
 def init_gauge() -> None:
     GaugeSetUp.init_gauge()
-
-
-my_class_counter = 0
-
-
-class MyClass:
-    def __init__(self) -> None:
-        global my_class_counter
-        my_class_counter += 1
-
-
-class AnotherClass:
-    def __init__(self, value: int) -> None:
-        global my_class_counter
-        my_class_counter += value
 
 
 def test_prometheus_normal_run(altered_metrics: ModuleType) -> None:
