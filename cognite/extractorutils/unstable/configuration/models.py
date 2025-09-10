@@ -10,7 +10,6 @@ from enum import Enum
 from pathlib import Path
 from typing import Annotated, Any, Literal, TypeVar
 
-import yaml
 from humps import kebabize
 from pydantic import BaseModel, ConfigDict, Field, GetCoreSchemaHandler
 from pydantic_core import CoreSchema, core_schema
@@ -428,22 +427,15 @@ def _log_handler_default() -> list[LogHandlerConfig]:
     return [LogConsoleHandlerConfig(type="console", level=LogLevel.INFO)]
 
 
-class FileSizeConfig(yaml.YAMLObject):
+class FileSizeConfig(ConfigModel):
     """
     Configuration parameter for setting a file size.
     """
 
-    def __init__(self, expression: str) -> None:
-        self._bytes, self._expression = FileSizeConfig._parse_expression(expression)
+    expression: str
 
-    @classmethod
-    def _parse_expression(cls, expression: str) -> tuple[int, str]:
-        # First, try to parse pure number and assume bytes
-        try:
-            return int(expression), f"{expression}s"
-        except ValueError:
-            pass
-
+    @staticmethod
+    def _parse_size_in_bytes(v: str) -> int:
         sizes = {
             "kb": 1000,
             "mb": 1_000_000,
@@ -454,15 +446,20 @@ class FileSizeConfig(yaml.YAMLObject):
             "gib": 1_073_741_824,
             "tib": 1_099_511_627_776,
         }
-        expression_lower = expression.lower()
+        try:
+            return int(v)
+        except ValueError:
+            pass
+        v_lower = v.lower().replace(" ", "")
         for size in sizes:
-            if expression_lower.endswith(size):
-                return (
-                    int(float(expression_lower.replace(size, "")) * sizes[size]),
-                    expression,
-                )
-        else:
-            raise InvalidConfigError(f"Invalid unit for file size: {expression}. Valid units: {sizes.keys()}")
+            if v_lower.endswith(size):
+                num = float(v_lower.replace(size, ""))
+                return int(num * sizes[size])
+        raise InvalidConfigError(f"Invalid unit for file size: {v}. Valid units: {sizes.keys()}")
+
+    @property
+    def _bytes(self) -> int:
+        return self._parse_size_in_bytes(self.expression)
 
     @property
     def bytes(self) -> int:
@@ -543,13 +540,13 @@ class FileSizeConfig(yaml.YAMLObject):
         """
         Returns the file size as a human readable string.
         """
-        return self._expression
+        return self.expression
 
     def __repr__(self) -> str:
         """
         Returns the file size as a human readable string.
         """
-        return self._expression
+        return self.expression
 
 
 class ExtractorConfig(ConfigModel):

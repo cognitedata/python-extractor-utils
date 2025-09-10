@@ -216,14 +216,14 @@ def test_from_env() -> None:
 
 
 def test_parse_file_size() -> None:
-    assert FileSizeConfig("154584").bytes == 154584
-    assert FileSizeConfig("1kB").bytes == 1000
-    assert FileSizeConfig("25MB").bytes == 25_000_000
-    assert FileSizeConfig("1kib").bytes == 1024
-    assert FileSizeConfig("2.7MiB").bytes == 2831155
-    assert FileSizeConfig("4 KB").bytes == 4000
+    assert FileSizeConfig(expression="154584").bytes == 154584
+    assert FileSizeConfig(expression="1kB").bytes == 1000
+    assert FileSizeConfig(expression="25MB").bytes == 25_000_000
+    assert FileSizeConfig(expression="1kib").bytes == 1024
+    assert FileSizeConfig(expression="2.7MiB").bytes == 2831155
+    assert FileSizeConfig(expression="4 KB").bytes == 4000
 
-    assert FileSizeConfig("4 KB").kilobytes == pytest.approx(4)
-    assert FileSizeConfig("453 kB").megabytes == pytest.approx(0.453)
-    assert FileSizeConfig("1543 kiB").kilobytes == pytest.approx(1580.032)
-    assert FileSizeConfig("14.5 mb").kilobytes == pytest.approx(14_500)
+    assert FileSizeConfig(expression="4 KB").kilobytes == pytest.approx(4)
+    assert FileSizeConfig(expression="453 kB").megabytes == pytest.approx(0.453)
+    assert FileSizeConfig(expression="1543 kiB").kilobytes == pytest.approx(1580.032)
+    assert FileSizeConfig(expression="14.5 mb").kilobytes == pytest.approx(14_500)
