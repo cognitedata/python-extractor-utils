@@ -47,14 +47,13 @@ The subclass should also define several class attributes:
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import is_dataclass
 from datetime import datetime, timezone
 from functools import partial
 from multiprocessing import Queue
 from multiprocessing.synchronize import Event as MpEvent
 from threading import RLock, Thread
 from types import TracebackType
-from typing import Any, Generic, TypeVar
+from typing import Generic, TypeVar
 
 from humps import pascalize
 from typing_extensions import Self, assert_never
@@ -73,7 +72,6 @@ from cognite.extractorutils.unstable.configuration.models import (
     ExtractorConfig,
     LogConsoleHandlerConfig,
     LogFileHandlerConfig,
-    StateStoreConfig,
 )
 from cognite.extractorutils.unstable.core._dto import (
     CogniteModel,
@@ -266,9 +264,8 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
         Either way, the state_store attribute is guaranteed to be set after calling this method.
         """
-
         state_store_config = self.application_config.state_store
-        
+
         if state_store_config:
             self.state_store = state_store_config.create_state_store(
                 cdf_client=self.cognite_client,
