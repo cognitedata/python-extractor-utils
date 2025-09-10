@@ -60,6 +60,11 @@ from typing_extensions import Self, assert_never
 
 from cognite.extractorutils._inner_util import _resolve_log_level
 from cognite.extractorutils.metrics import BaseMetrics
+from cognite.extractorutils.statestore import (
+    AbstractStateStore,
+    LocalStateStore,
+    NoStateStore,
+)
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.unstable.configuration.models import (
     ConfigRevision,
@@ -141,6 +146,8 @@ class Extractor(Generic[ConfigType], CogniteLogger):
     CONFIG_TYPE: type[ConfigType]
 
     RESTART_POLICY: RestartPolicy = WHEN_CONTINUOUS_TASKS_CRASHES
+    USE_DEFAULT_STATE_STORE: bool = True
+    _statestore_singleton: AbstractStateStore | None = None
 
     cancellation_token: CancellationToken
 
@@ -160,6 +167,8 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self.log_level_override = config.log_level_override
 
         self.cognite_client = self.connection_config.get_cognite_client(f"{self.EXTERNAL_ID}-{self.VERSION}")
+
+        self.state_store: AbstractStateStore
 
         self._checkin_lock = RLock()
         self._runtime_messages: Queue[RuntimeMessage] | None = None
@@ -258,6 +267,52 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                             sh.setFormatter(fmt)
                             sh.setLevel(level_for_handler)
                             root.addHandler(sh)
+
+    def _load_state_store(self) -> None:
+        """
+        Searches through the config object for a StateStoreConfig.
+
+        If found, it will use that configuration to generate a state store, if no such config is found it will either
+        create a LocalStateStore or a NoStateStore depending on whether the ``use_default_state_store`` argument to the
+        constructor was true or false.
+
+        Either way, the state_store attribute is guaranteed to be set after calling this method.
+        """
+        state_store_config = self.application_config.state_store
+
+        if state_store_config:
+            self.state_store = state_store_config.create_state_store(
+                cdf_client=self.cognite_client,
+                default_to_local=self.USE_DEFAULT_STATE_STORE,
+                cancellation_token=self.cancellation_token,
+            )
+        elif self.USE_DEFAULT_STATE_STORE:
+            self.state_store = LocalStateStore("states.json", cancellation_token=self.cancellation_token)
+        else:
+            self.state_store = NoStateStore()
+
+        try:
+            self.state_store.initialize()
+        except ValueError:
+            self._logger.exception("Could not load state store, using an empty state store as default")
+            self.state_store = NoStateStore()
+
+        Extractor._statestore_singleton = self.state_store
+
+    @classmethod
+    def get_current_statestore(cls) -> AbstractStateStore:
+        """
+        Get the current state store singleton.
+
+        Returns:
+            The current state store singleton
+
+        Raises:
+            ValueError: If no state store singleton has been created, meaning no state store has been loaded.
+        """
+        if Extractor._statestore_singleton is None:
+            raise ValueError("No state store singleton created. Have a state store been loaded?")
+        return Extractor._statestore_singleton
 
     def __init_tasks__(self) -> None:
         """
@@ -398,6 +453,10 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         """
         self._setup_logging()
         self._start_time = datetime.now(tz=timezone.utc)
+
+        self._load_state_store()
+        self.state_store.start()
+
         Thread(target=self._run_checkin, name="ExtractorCheckin", daemon=True).start()
         if self.metrics_push_manager:
             self.metrics_push_manager.start()
@@ -430,6 +489,10 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         Stop the extractor when exiting the context manager.
         """
         self.stop()
+
+        if self.state_store:
+            self.state_store.synchronize()
+
         self._checkin_worker.flush(self.cancellation_token)
         return exc_val is None
 

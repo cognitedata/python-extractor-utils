@@ -2,7 +2,7 @@ import gzip
 import json
 import os
 from collections import Counter
-from collections.abc import Callable, Generator
+from collections.abc import Callable, Generator, Iterator
 from threading import RLock
 from time import sleep, time
 from typing import Any
@@ -25,6 +25,17 @@ from cognite.extractorutils.unstable.configuration.models import (
 from cognite.extractorutils.unstable.core.base import Extractor, StartupTask, TaskContext
 
 working_dir = os.getcwd()
+
+
+@pytest.fixture(autouse=True)
+def reset_singleton() -> Iterator[None]:
+    """
+    This fixture ensures that the _statestore_singleton class
+    variable is reset, providing test isolation.
+    """
+    Extractor._statestore_singleton = None
+    yield
+    Extractor._statestore_singleton = None
 
 
 @pytest.fixture(autouse=True)
