@@ -267,17 +267,8 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         Either way, the state_store attribute is guaranteed to be set after calling this method.
         """
 
-        def recursive_find_state_store(d: dict[str, Any]) -> StateStoreConfig | None:
-            for k in d:
-                if is_dataclass(d[k]):
-                    res = recursive_find_state_store(d[k].__dict__)
-                    if res:
-                        return res
-                if isinstance(d[k], StateStoreConfig):
-                    return d[k]
-            return None
-
-        state_store_config = recursive_find_state_store(self.application_config.__dict__)
+        state_store_config = self.application_config.state_store
+        
         if state_store_config:
             self.state_store = state_store_config.create_state_store(
                 cdf_client=self.cognite_client,
