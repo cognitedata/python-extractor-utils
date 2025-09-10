@@ -24,6 +24,13 @@ from cognite.client.credentials import (
 )
 from cognite.extractorutils.configtools._util import _load_certificate_data
 from cognite.extractorutils.exceptions import InvalidConfigError
+from cognite.extractorutils.statestore import (
+    AbstractStateStore,
+    LocalStateStore,
+    NoStateStore,
+    RawStateStore,
+)
+from cognite.extractorutils.threading import CancellationToken
 
 __all__ = [
     "AuthenticationConfig",
@@ -427,11 +434,95 @@ def _log_handler_default() -> list[LogHandlerConfig]:
     return [LogConsoleHandlerConfig(type="console", level=LogLevel.INFO)]
 
 
+class RawDestinationConfig(ConfigModel):
+    """
+    Configuration parameters for using Raw.
+    """
+
+    database: str
+    table: str
+
+
+class RawStateStoreConfig(RawDestinationConfig):
+    """
+    Configuration of a state store based on CDF RAW.
+    """
+
+    upload_interval: TimeIntervalConfig = Field(default_factory=lambda: TimeIntervalConfig("30s"))
+
+
+class LocalStateStoreConfig(ConfigModel):
+    """
+    Configuration of a state store using a local JSON file.
+    """
+
+    path: Path
+    save_interval: TimeIntervalConfig = Field(default_factory=lambda: TimeIntervalConfig("30s"))
+
+
+class StateStoreConfig(ConfigModel):
+    """
+    Configuration of the State Store, containing ``LocalStateStoreConfig`` or ``RawStateStoreConfig``.
+    """
+
+    raw: RawStateStoreConfig | None = None
+    local: LocalStateStoreConfig | None = None
+
+    def create_state_store(
+        self,
+        cdf_client: CogniteClient | None = None,
+        default_to_local: bool = True,
+        cancellation_token: CancellationToken | None = None,
+    ) -> AbstractStateStore:
+        """
+        Create a state store object based on the config.
+
+        Args:
+            cdf_client: CogniteClient object to use in case of a RAW state store (ignored otherwise)
+            default_to_local: If true, return a LocalStateStore if no state store is configured. Otherwise return a
+                NoStateStore
+            cancellation_token: Cancellation token to pass to created state stores
+
+        Returns:
+            An (uninitialized) state store
+        """
+        if self.raw and self.local:
+            raise ValueError("Only one state store can be used simultaneously")
+
+        if self.raw:
+            if cdf_client is None:
+                raise TypeError("A cognite client object must be provided when state store is RAW")
+
+            return RawStateStore(
+                cdf_client=cdf_client,
+                database=self.raw.database,
+                table=self.raw.table,
+                save_interval=self.raw.upload_interval.seconds,
+                cancellation_token=cancellation_token,
+            )
+
+        if self.local:
+            if self.local.path.is_dir():
+                raise IsADirectoryError(self.local.path)
+
+            return LocalStateStore(
+                file_path=str(self.local.path),
+                save_interval=self.local.save_interval.seconds,
+                cancellation_token=cancellation_token,
+            )
+
+        if default_to_local:
+            return LocalStateStore(file_path="states.json", cancellation_token=cancellation_token)
+
+        return NoStateStore()
+
+
 class ExtractorConfig(ConfigModel):
     """
     Base class for application configuration for extractors.
     """
 
+    state_store: StateStoreConfig | None = None
     log_handlers: list[LogHandlerConfig] = Field(default_factory=_log_handler_default)
     retry_startup: bool = True
 
