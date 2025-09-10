@@ -26,15 +26,13 @@ from .conftest import TestConfig, TestExtractor
 
 
 def get_checkin_worker(connection_config: ConnectionConfig) -> CheckinWorker:
-    return CheckinWorker(
+    worker = CheckinWorker(
         connection_config.get_cognite_client("testing"),
         connection_config.integration.external_id,
         logging.getLogger(__name__),
-        lambda _: None,
-        lambda _: None,
-        1,
-        False,
     )
+    worker.active_revision = 1
+    return worker
 
 
 @pytest.mark.parametrize(

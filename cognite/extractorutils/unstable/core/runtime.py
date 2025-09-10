@@ -77,17 +77,14 @@ def _extractor_process_entrypoint(
     extractor_class: type[Extractor],
     controls: _RuntimeControls,
     config: FullConfig,
+    checkin_worker: CheckinWorker,
 ) -> None:
     logger = logging.getLogger(f"{extractor_class.EXTERNAL_ID}.runtime")
-    checkin_worker = CheckinWorker(
-        config.connection_config.get_cognite_client(f"{extractor_class.EXTERNAL_ID}-{extractor_class.VERSION}"),
-        config.connection_config.integration.external_id,
-        logger,
-        lambda _: on_revision_changed(controls),
-        lambda _: on_fatal_error(controls),
-        config.current_config_revision,
-        config.application_config.retry_startup,
-    )
+    checkin_worker.active_revision = config.current_config_revision
+    checkin_worker.set_on_fatal_error_handler(lambda _: on_fatal_error(controls))
+    checkin_worker.set_on_revision_change_handler(lambda _: on_revision_changed(controls))
+    if config.application_config.retry_startup:
+        checkin_worker.set_retry_startup(config.application_config.retry_startup)
     extractor = extractor_class._init_from_runtime(config, checkin_worker)
     extractor._attach_runtime_controls(
         cancel_event=controls.cancel_event,
@@ -145,6 +142,7 @@ class Runtime(Generic[ExtractorType]):
         self._message_queue: Queue[RuntimeMessage] = Queue()
         self.logger = logging.getLogger(f"{self._extractor_class.EXTERNAL_ID}.runtime")
         self._setup_logging()
+        self._cancel_event: MpEvent | None = None
 
         self._cognite_client: CogniteClient
 
@@ -257,20 +255,20 @@ class Runtime(Generic[ExtractorType]):
     def _spawn_extractor(
         self,
         config: FullConfig,
+        checkin_worker: CheckinWorker,
     ) -> Process:
-        self._message_queue = Queue()
-        mp_cancel_event = Event()
+        self._cancel_event = Event()
 
-        self._start_cancellation_watcher(mp_cancel_event)
+        self._start_cancellation_watcher(self._cancel_event)
 
         controls = _RuntimeControls(
-            cancel_event=mp_cancel_event,
+            cancel_event=self._cancel_event,
             message_queue=self._message_queue,
         )
 
         process = Process(
             target=_extractor_process_entrypoint,
-            args=(self._extractor_class, controls, config),
+            args=(self._extractor_class, controls, config, checkin_worker),
         )
 
         process.start()
@@ -478,6 +476,15 @@ class Runtime(Generic[ExtractorType]):
         # exist yet, and I have not found a way to represent it in a generic way that isn't just an Any in disguise.
         application_config: Any
         config: tuple[Any, ConfigRevision] | None
+        cognite_client = connection_config.get_cognite_client(
+            f"{self._extractor_class.EXTERNAL_ID}-{self._extractor_class.VERSION}"
+        )
+
+        checkin_worker = CheckinWorker(
+            cognite_client,
+            connection_config.integration.external_id,
+            self.logger,
+        )
 
         while not self._cancellation_token.is_cancelled:
             config = self._safe_get_application_config(args, connection_config)
@@ -495,7 +502,8 @@ class Runtime(Generic[ExtractorType]):
                     application_config=application_config,
                     current_config_revision=current_config_revision,
                     log_level_override=args.log_level,
-                )
+                ),
+                checkin_worker,
             )
             process.join()
 
