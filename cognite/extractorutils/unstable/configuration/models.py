@@ -503,7 +503,7 @@ class StateStoreConfig(ConfigModel):
 
         if self.local:
             if self.local.path.is_dir():
-                raise IsADirectoryError(f"{self.local.path}")
+                raise IsADirectoryError(self.local.path)
 
             return LocalStateStore(
                 file_path=str(self.local.path),
