@@ -228,6 +228,9 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                     root.addHandler(sh)
 
                 case LogFileHandlerConfig() as file_handler:
+                    level_for_handler = _resolve_log_level(
+                        self.log_level_override if self.log_level_override else file_handler.level.value
+                    )
                     try:
                         fh = RobustFileHandler(
                             filename=file_handler.path,
@@ -235,9 +238,6 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                             utc=True,
                             backupCount=file_handler.retention,
                             create_dirs=True,
-                        )
-                        level_for_handler = _resolve_log_level(
-                            self.log_level_override if self.log_level_override else file_handler.level.value
                         )
                         fh.setLevel(level_for_handler)
                         fh.setFormatter(fmt)
