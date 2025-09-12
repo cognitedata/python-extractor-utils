@@ -12,12 +12,16 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
-## Next
+## 7.8.0
 
 ### Added
 
 * Ability for users to customize the working directory of the extractor using the `--cwd` flag in the CLI.
 * Added a new command-line argument, --log-level (-l) to allow users to override configured log levels for a single run.
+* Added a new --service CLI argument to allow users to run the application as a Windows service.
+
+### Fixed
+* Fixed encoding issue on Windows by enforcing UTF-8 for consistent behavior across platforms.
 
 ## 7.7.0
 
