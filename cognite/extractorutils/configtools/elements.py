@@ -605,6 +605,7 @@ class LoggingConfig:
                 when="midnight",
                 utc=True,
                 backupCount=self.file.retention,
+                encoding="utf-8",
             )
             file_handler.setLevel(self.file.level)
             file_handler.setFormatter(fmt)
