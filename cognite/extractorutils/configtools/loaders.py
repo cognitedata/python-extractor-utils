@@ -384,8 +384,13 @@ class ConfigResolver(Generic[CustomConfigClass]):
         self._cognite_client: CogniteClient | None = None
 
     def _reload_file(self) -> None:
-        with open(self.config_path, encoding="utf-8") as stream:
-            self._config_text = stream.read()
+        try:
+            with open(self.config_path, encoding="utf-8") as stream:
+                self._config_text = stream.read()
+        except UnicodeDecodeError as e:
+            _logger.info(f"Using locale default encoding : {e}")
+            with open(self.config_path) as stream:
+                self._config_text = stream.read()
 
     @property
     def cognite_client(self) -> CogniteClient | None:

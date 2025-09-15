@@ -713,3 +713,40 @@ file:
             assert "ΔΙΕΡΓΑΣΙΕΣ test log message" in content
     else:
         assert "ΔΙΕΡΓΑΣΙΕΣ test log message" in content
+
+
+def test_configresolver_fallback_encoding(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    config_path = tmp_path / "test_config_cp1252.yml"
+    content = """
+logger:
+    console:
+        level: INFO
+    file:
+        level: DEBUG
+        path: café.log
+
+cognite:
+    project: mathiaslohne-develop
+
+    idp-authentication:
+        client-id: abc123
+        secret: def567
+        token-url: https://get-a-token.com/token
+        scopes:
+            - https://api.cognitedata.com/.default
+"""
+    with open(config_path, "w", encoding="cp1252") as f:
+        f.write(content)
+
+    with (
+        patch("locale.getpreferredencoding", lambda *a, **kw: "cp1252"),
+        patch("builtins.open", new=patched_open),
+        caplog.at_level("INFO"),
+    ):
+        resolver = ConfigResolver(str(config_path), BaseConfig)
+        config = resolver.config
+
+        assert config.logger.file is not None
+        assert config.logger.file.path is not None
+        assert "café" in config.logger.file.path
+        assert any("Using locale default encoding" in r.message for r in caplog.records)
