@@ -12,13 +12,17 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import builtins
 import dataclasses
+import locale
 import logging
 import os
 import re
 from collections.abc import Generator
 from dataclasses import dataclass
 from pathlib import Path
+from typing import IO
+from unittest.mock import patch
 
 import pytest
 import yaml
@@ -654,3 +658,58 @@ def test_load_local_directory_fails() -> None:
         config.create_state_store()
 
     assert "is a directory, and not a file" in str(e.value)
+
+
+_original_open = builtins.open
+
+
+def patched_open(
+    file: str, mode: str = "r", encoding: str | None = None, *args: object, **kwargs: object
+) -> IO[str] | IO[bytes]:
+    if encoding is None:
+        encoding = locale.getpreferredencoding(False)
+    return _original_open(file, mode, *args, encoding=encoding, **kwargs)
+
+
+def test_encoding_issue_windows(tmp_path: Path) -> None:
+    # Simulate Windows locale encoding
+    with patch("locale.getpreferredencoding", lambda *a, **kw: "cp1252"), patch("builtins.open", new=patched_open):
+        resolver = ConfigResolver("tests/tests_unit/greek_dummy_config.yaml", BaseConfig)
+        config = resolver.config
+
+        assert config.logger.file is not None
+        assert config.logger.file.path is not None
+        assert "ΔΙΕΡΓΑΣΙΕΣ" in config.logger.file.path
+
+
+@pytest.mark.parametrize("encoding, error", [("utf-8", False), ("cp1252", True)])
+def test_loggingconfig_file_encoding(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, encoding: str, error: bool
+) -> None:
+    monkeypatch.setattr(locale, "getpreferredencoding", lambda: "cp1252")
+    log_path = tmp_path / "test_log.log"
+    logging_config = """
+console:
+    level: INFO
+file:
+    level: DEBUG
+    path: {log_path}
+    retention: 1
+"""
+    logging_config = load_yaml(logging_config.format(log_path=log_path), LoggingConfig)
+    logging_config.setup_logging()
+
+    logger = logging.getLogger()
+    logger.info("ΔΙΕΡΓΑΣΙΕΣ test log message")
+
+    # Flush all handlers to ensure log is written
+    for handler in logger.handlers:
+        handler.flush()
+
+    with open(log_path, encoding=encoding) as f:
+        content = f.read()
+    if error:
+        with pytest.raises(AssertionError):
+            assert "ΔΙΕΡΓΑΣΙΕΣ test log message" in content
+    else:
+        assert "ΔΙΕΡΓΑΣΙΕΣ test log message" in content
