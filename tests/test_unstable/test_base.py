@@ -6,11 +6,13 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
+import yaml
 
 from cognite.client import CogniteClient
 from cognite.client.exceptions import CogniteNotFoundError
 from cognite.extractorutils.metrics import PrometheusPusher
 from cognite.extractorutils.statestore.watermark import LocalStateStore, RawStateStore
+from cognite.extractorutils.unstable.configuration.loaders import load_file
 from cognite.extractorutils.unstable.configuration.models import (
     ConnectionConfig,
     LocalStateStoreConfig,
@@ -294,3 +296,37 @@ def test_extractor_with_metrics(
     finally:
         PrometheusPusher._push_to_server = original_push
     assert call_count["count"] > 0
+
+
+def test_pushgatewayconfig_none_credentials_from_yaml(tmp_path: Path) -> None:
+    yaml_config = {
+        "push_gateways": [
+            {
+                "host": "http://localhost:9091",
+                "job_name": "test-job",
+                "clear_after": None,
+            }
+        ],
+        "cognite": None,
+        "server": None,
+    }
+    yaml_file = tmp_path / "metrics_config.yaml"
+    with open(yaml_file, "w") as f:
+        yaml.dump(yaml_config, f)
+
+    metrics_config = load_file(yaml_file, MetricsConfig)
+
+    config = metrics_config.push_gateways[0]
+    pusher = PrometheusPusher(
+        job_name=config.job_name,
+        username=config.username,
+        password=config.password,
+        url=config.host,
+        push_interval=30,
+        thread_name="TestPusher",
+        cancellation_token=None,
+    )
+    assert pusher.username is None
+    assert pusher.password is None
+    assert pusher.url == "http://localhost:9091"
+    assert pusher.job_name == "test-job"

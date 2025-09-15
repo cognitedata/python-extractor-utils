@@ -442,8 +442,8 @@ class EitherIdConfig(ConfigModel):
     An EitherId can only hold one ID type, not both.
     """
 
-    id: int | None
-    external_id: str | None
+    id: int | None = None
+    external_id: str | None = None
 
     @property
     def either_id(self) -> EitherId:
@@ -463,8 +463,8 @@ class _PushGatewayConfig(ConfigModel):
 
     host: str
     job_name: str
-    username: str | None
-    password: str | None
+    username: str | None = None
+    password: str | None = None
 
     clear_after: TimeIntervalConfig | None
     push_interval: TimeIntervalConfig = Field(default_factory=lambda: TimeIntervalConfig("30s"))
@@ -485,8 +485,8 @@ class _CogniteMetricsConfig(ConfigModel):
     """
 
     external_id_prefix: str
-    asset_name: str | None
-    asset_external_id: str | None
+    asset_name: str | None = None
+    asset_external_id: str | None = None
     data_set: EitherIdConfig | None = None
 
     push_interval: TimeIntervalConfig = Field(default_factory=lambda: TimeIntervalConfig("30s"))
