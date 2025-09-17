@@ -38,15 +38,15 @@ from threading import Thread
 from typing import Any, Generic, TypeVar
 from uuid import uuid4
 
+from requests.exceptions import ConnectionError as RequestsConnectionError
+from typing_extensions import assert_never
+
 from cognite.client import CogniteClient
 from cognite.client.exceptions import (
     CogniteAPIError,
     CogniteAuthError,
     CogniteConnectionError,
 )
-from requests.exceptions import ConnectionError as RequestsConnectionError
-from typing_extensions import assert_never
-
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.unstable.configuration.exceptions import InvalidArgumentError, InvalidConfigError
 from cognite.extractorutils.unstable.configuration.loaders import (

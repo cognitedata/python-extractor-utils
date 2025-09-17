@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 import pytest
+
 from cognite.client import CogniteClient
 from cognite.client.config import ClientConfig
 from cognite.client.credentials import OAuthClientCredentials

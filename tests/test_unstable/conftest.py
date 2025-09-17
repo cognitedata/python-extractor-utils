@@ -1,10 +1,7 @@
 import gzip
 import json
 import os
-from pathlib import Path
-import shutil
 from collections.abc import Callable, Generator, Iterator
-import tempfile
 from threading import RLock
 from time import sleep, time
 from typing import Any
@@ -12,10 +9,10 @@ from uuid import uuid4
 
 import pytest
 import requests_mock
+
 from cognite.client import CogniteClient
 from cognite.client.config import ClientConfig
 from cognite.client.credentials import OAuthClientCredentials
-
 from cognite.extractorutils.unstable.configuration.models import (
     ConnectionConfig,
     ExtractorConfig,

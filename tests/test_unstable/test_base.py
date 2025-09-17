@@ -6,9 +6,9 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
+
 from cognite.client import CogniteClient
 from cognite.client.exceptions import CogniteNotFoundError
-
 from cognite.extractorutils.statestore.watermark import LocalStateStore, RawStateStore
 from cognite.extractorutils.unstable.configuration.models import (
     ConnectionConfig,
