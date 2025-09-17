@@ -384,8 +384,22 @@ class ConfigResolver(Generic[CustomConfigClass]):
         self._cognite_client: CogniteClient | None = None
 
     def _reload_file(self) -> None:
-        with open(self.config_path, encoding="utf-8") as stream:
-            self._config_text = stream.read()
+        try:
+            with open(self.config_path, encoding="utf-8") as stream:
+                self._config_text = stream.read()
+        except UnicodeDecodeError:
+            _logger.warning(
+                f"Config file '{self.config_path}' is not valid UTF-8. Falling back to system default encoding."
+            )
+            try:
+                with open(self.config_path) as stream:
+                    self._config_text = stream.read()
+            except Exception as e:
+                _logger.error(
+                    f"Failed to read '{self.config_path}' with both UTF-8 and system default encoding. "
+                    f"The file may be corrupt or in an unsupported format. Final error: {e}"
+                )
+                raise RuntimeError("Unable to read configuration file.") from e
 
     @property
     def cognite_client(self) -> CogniteClient | None:
