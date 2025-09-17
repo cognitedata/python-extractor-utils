@@ -466,7 +466,7 @@ class _PushGatewayConfig(ConfigModel):
     username: str | None = None
     password: str | None = None
 
-    clear_after: TimeIntervalConfig | None
+    clear_after: TimeIntervalConfig | None = None
     push_interval: TimeIntervalConfig = Field(default_factory=lambda: TimeIntervalConfig("30s"))
 
 
@@ -585,9 +585,9 @@ class MetricsConfig(ConfigModel):
     Including options for one or several Prometheus push gateways, and pushing as CDF Time Series.
     """
 
-    push_gateways: list[_PushGatewayConfig] | None
-    cognite: _CogniteMetricsConfig | None
-    server: _PromServerConfig | None
+    push_gateways: list[_PushGatewayConfig] | None = None
+    cognite: _CogniteMetricsConfig | None = None
+    server: _PromServerConfig | None = None
 
     def create_manager(
         self, cdf_client: CogniteClient, cancellation_token: CancellationToken | None = None

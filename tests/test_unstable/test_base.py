@@ -303,11 +303,6 @@ def test_pushgatewayconfig_none_credentials_from_yaml() -> None:
 push-gateways:
   - host: "http://localhost:9091"
     job_name: "test-job"
-    clear_after: null
-    username: null
-cognite: null
-server: null
-
 """
 
     stream = StringIO(config_str)
