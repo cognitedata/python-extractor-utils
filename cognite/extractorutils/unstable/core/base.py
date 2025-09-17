@@ -220,17 +220,13 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                 case LogConsoleHandlerConfig() as console_handler:
                     sh = logging.StreamHandler()
                     sh.setFormatter(fmt)
-                    level_for_handler = _resolve_log_level(
-                        self.log_level_override if self.log_level_override else console_handler.level.value
-                    )
+                    level_for_handler = _resolve_log_level(self.log_level_override or console_handler.level.value)
                     sh.setLevel(level_for_handler)
 
                     root.addHandler(sh)
 
                 case LogFileHandlerConfig() as file_handler:
-                    level_for_handler = _resolve_log_level(
-                        self.log_level_override if self.log_level_override else file_handler.level.value
-                    )
+                    level_for_handler = _resolve_log_level(self.log_level_override or file_handler.level.value)
                     try:
                         fh = RobustFileHandler(
                             filename=file_handler.path,

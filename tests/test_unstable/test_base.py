@@ -6,9 +6,9 @@ from collections.abc import Generator
 from pathlib import Path
 
 import pytest
-
 from cognite.client import CogniteClient
 from cognite.client.exceptions import CogniteNotFoundError
+
 from cognite.extractorutils.statestore.watermark import LocalStateStore, RawStateStore
 from cognite.extractorutils.unstable.configuration.models import (
     ConnectionConfig,
@@ -163,7 +163,7 @@ def test_local_state_store_integration(local_state_file: Path, connection_config
 
 
 @pytest.fixture(scope="function")
-def raw_db_table_name() -> str:
+def raw_db_table_name() -> tuple[str, str]:
     """Provides a unique database name for a single test function run."""
     test_id = random.randint(0, int(1e9))
     return f"test_db_{test_id}", f"test_table_{test_id}"
