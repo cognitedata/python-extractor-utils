@@ -3,16 +3,16 @@ import json
 import logging
 import random
 from collections.abc import Generator
+from io import StringIO
 from pathlib import Path
 
 import pytest
-import yaml
 
 from cognite.client import CogniteClient
 from cognite.client.exceptions import CogniteNotFoundError
 from cognite.extractorutils.metrics import PrometheusPusher
 from cognite.extractorutils.statestore.watermark import LocalStateStore, RawStateStore
-from cognite.extractorutils.unstable.configuration.loaders import load_file
+from cognite.extractorutils.unstable.configuration.loaders import ConfigFormat, load_io
 from cognite.extractorutils.unstable.configuration.models import (
     ConnectionConfig,
     LocalStateStoreConfig,
@@ -298,30 +298,26 @@ def test_extractor_with_metrics(
     assert call_count["count"] > 0
 
 
-def test_pushgatewayconfig_none_credentials_from_yaml(tmp_path: Path) -> None:
-    yaml_config = {
-        "push_gateways": [
-            {
-                "host": "http://localhost:9091",
-                "job_name": "test-job",
-                "clear_after": None,
-            }
-        ],
-        "cognite": None,
-        "server": None,
-    }
-    yaml_file = tmp_path / "metrics_config.yaml"
-    with open(yaml_file, "w") as f:
-        yaml.dump(yaml_config, f)
+def test_pushgatewayconfig_none_credentials_from_yaml() -> None:
+    config_str = """
+push-gateways:
+  - host: "http://localhost:9091"
+    job_name: "test-job"
+    clear_after: null
+    username: null
+cognite: null
+server: null
 
-    metrics_config = load_file(yaml_file, MetricsConfig)
+"""
 
-    config = metrics_config.push_gateways[0]
+    stream = StringIO(config_str)
+    config = load_io(stream, ConfigFormat.YAML, MetricsConfig)
+    metrics_config = config.push_gateways[0]
     pusher = PrometheusPusher(
-        job_name=config.job_name,
-        username=config.username,
-        password=config.password,
-        url=config.host,
+        job_name=metrics_config.job_name,
+        username=metrics_config.username,
+        password=metrics_config.password,
+        url=metrics_config.host,
         push_interval=30,
         thread_name="TestPusher",
         cancellation_token=None,
