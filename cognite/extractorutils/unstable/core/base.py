@@ -220,14 +220,13 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                 case LogConsoleHandlerConfig() as console_handler:
                     sh = logging.StreamHandler()
                     sh.setFormatter(fmt)
-                    level_for_handler = _resolve_log_level(
-                        self.log_level_override if self.log_level_override else console_handler.level.value
-                    )
+                    level_for_handler = _resolve_log_level(self.log_level_override or console_handler.level.value)
                     sh.setLevel(level_for_handler)
 
                     root.addHandler(sh)
 
                 case LogFileHandlerConfig() as file_handler:
+                    level_for_handler = _resolve_log_level(self.log_level_override or file_handler.level.value)
                     try:
                         fh = RobustFileHandler(
                             filename=file_handler.path,
@@ -236,23 +235,20 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                             backupCount=file_handler.retention,
                             create_dirs=True,
                         )
-                        level_for_handler = _resolve_log_level(
-                            self.log_level_override if self.log_level_override else file_handler.level.value
-                        )
                         fh.setLevel(level_for_handler)
                         fh.setFormatter(fmt)
 
                         root.addHandler(fh)
                     except (OSError, PermissionError) as e:
-                        self._logger.warning(
-                            f"Could not create or write to log file {file_handler.path}: {e}. "
-                            "Falling back to console logging."
-                        )
                         if not any(isinstance(h, logging.StreamHandler) for h in root.handlers):
                             sh = logging.StreamHandler()
                             sh.setFormatter(fmt)
                             sh.setLevel(level_for_handler)
                             root.addHandler(sh)
+                        self._logger.warning(
+                            f"Could not create or write to log file {file_handler.path}: {e}. "
+                            "Defaulted to console logging."
+                        )
 
     def _load_state_store(self) -> None:
         """
