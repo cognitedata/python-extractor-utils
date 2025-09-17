@@ -240,15 +240,15 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
                         root.addHandler(fh)
                     except (OSError, PermissionError) as e:
-                        self._logger.warning(
-                            f"Could not create or write to log file {file_handler.path}: {e}. "
-                            "Falling back to console logging."
-                        )
                         if not any(isinstance(h, logging.StreamHandler) for h in root.handlers):
                             sh = logging.StreamHandler()
                             sh.setFormatter(fmt)
                             sh.setLevel(level_for_handler)
                             root.addHandler(sh)
+                        self._logger.warning(
+                            f"Could not create or write to log file {file_handler.path}: {e}. "
+                            "Defaulted to console logging."
+                        )
 
     def _load_state_store(self) -> None:
         """

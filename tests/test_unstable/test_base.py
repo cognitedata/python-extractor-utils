@@ -14,6 +14,8 @@ from cognite.extractorutils.unstable.configuration.models import (
     ConnectionConfig,
     LocalStateStoreConfig,
     LogConsoleHandlerConfig,
+    LogFileHandlerConfig,
+    LogHandlerConfig,
     LogLevel,
     RawStateStoreConfig,
     StateStoreConfig,
@@ -36,32 +38,38 @@ def get_checkin_worker(connection_config: ConnectionConfig) -> CheckinWorker:
 
 
 @pytest.mark.parametrize(
-    "config_level, override_level, expected_logs, unexpected_logs",
+    "log_handlers, override_level, expected_logs, unexpected_logs",
     [
         (
-            "INFO",
+            [LogConsoleHandlerConfig(type="console", level=LogLevel("INFO"))],
             None,
             ["This is an info message.", "This is a warning message."],
             ["This is a debug message."],
         ),
         (
-            "INFO",
+            [LogConsoleHandlerConfig(type="console", level=LogLevel("INFO"))],
             "DEBUG",
             ["This is a debug message.", "This is an info message.", "This is a warning message."],
             [],
         ),
         (
-            "INFO",
+            [LogConsoleHandlerConfig(type="console", level=LogLevel("INFO"))],
             "WARNING",
             ["This is a warning message."],
             ["This is a debug message.", "This is an info message."],
+        ),
+        (
+            [LogFileHandlerConfig(type="file", level=LogLevel("INFO"), path=Path("non-existing/test.log"))],
+            "WARNING",
+            ["This is a warning message."],
+            ["Falling back to console logging.", "This is a debug message.", "This is an info message."],
         ),
     ],
 )
 def test_log_level_override(
     capsys: pytest.CaptureFixture[str],
     connection_config: ConnectionConfig,
-    config_level: str,
+    log_handlers: list[LogHandlerConfig],
     override_level: str | None,
     expected_logs: list[str],
     unexpected_logs: list[str],
@@ -73,7 +81,7 @@ def test_log_level_override(
     app_config = TestConfig(
         parameter_one=1,
         parameter_two="a",
-        log_handlers=[LogConsoleHandlerConfig(type="console", level=LogLevel(config_level))],
+        log_handlers=log_handlers,
     )
 
     full_config = FullConfig(

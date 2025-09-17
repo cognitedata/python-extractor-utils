@@ -37,29 +37,9 @@ def reset_singleton() -> Iterator[None]:
 
 
 @pytest.fixture(autouse=True)
-def reset_environment(test_dirs: list[str]) -> Generator[None, None, None]:
+def reset_environment() -> Generator[None, None, None]:
     yield
     os.chdir(working_dir)
-    # if len(test_dirs) > 0:
-    #     for tmp_dir in test_dirs:
-    #         os.chown(tmp_dir, os.getuid(), os.getgid())
-    #         shutil.rmtree(tmp_dir)
-
-
-@pytest.fixture
-def test_dirs() -> list[str]:  # list[tuple[Path, int, int]]:
-    return []
-    # tmp_dir = Path(f"{tempfile.gettempdir()}/{str(uuid4())!s}")
-    # os.mkdir(tmp_dir)
-    # stats = os.stat(tmp_dir)
-    # original_uid = stats.st_uid
-    # original_gid = stats.st_gid
-    # os.chown(tmp_dir, os.getuid(), os.getgid())
-    #
-    # yield (tmp_dir, original_uid, original_gid)
-    #
-    # os.chown(tmp_dir, original_uid, original_gid)
-    # shutil.rmtree(tmp_dir)
 
 
 @pytest.fixture
