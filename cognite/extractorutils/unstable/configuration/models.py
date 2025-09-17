@@ -8,7 +8,7 @@ from collections.abc import Iterator
 from datetime import timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Annotated, Any, Literal, TypeVar
+from typing import Annotated, Any, Literal, Self, TypeVar
 
 from humps import kebabize
 from pydantic import BaseModel, ConfigDict, Field, GetCoreSchemaHandler
@@ -404,6 +404,15 @@ class LogLevel(Enum):
     WARNING = "WARNING"
     INFO = "INFO"
     DEBUG = "DEBUG"
+
+    @classmethod
+    def _missing_(cls, value: object) -> Self:
+        if not isinstance(value, str):
+            raise ValueError(f"{value} is not a valid log level")
+        for member in cls:
+            if member.value == value.upper():
+                return member
+        raise ValueError(f"{value} is not a valid log level")
 
 
 class LogFileHandlerConfig(ConfigModel):
