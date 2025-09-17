@@ -749,4 +749,4 @@ cognite:
         assert config.logger.file is not None
         assert config.logger.file.path is not None
         assert "café" in config.logger.file.path
-        assert any("Using locale default encoding" in r.message for r in caplog.records)
+        assert any("Falling back to system default encoding." in r.message for r in caplog.records)
