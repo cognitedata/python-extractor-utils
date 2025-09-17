@@ -4,18 +4,11 @@ Module containing pre-built models for common extractor configuration.
 
 import os
 import re
-import sys
 from collections.abc import Iterator
 from datetime import timedelta
 from enum import Enum
 from pathlib import Path
 from typing import Annotated, Any, Literal, TypeVar
-
-# Check if python >= 3.11 for Self
-if tuple(map(int, sys.version.split(".")[:2])) >= (3, 11):
-    from typing import Self
-else:
-    from typing_extensions import Self
 
 from humps import kebabize
 from pydantic import BaseModel, ConfigDict, Field, GetCoreSchemaHandler
@@ -413,7 +406,7 @@ class LogLevel(Enum):
     DEBUG = "DEBUG"
 
     @classmethod
-    def _missing_(cls, value: object) -> Self:
+    def _missing_(cls, value: object) -> "LogLevel":
         if not isinstance(value, str):
             raise ValueError(f"{value} is not a valid log level")
         for member in cls:
