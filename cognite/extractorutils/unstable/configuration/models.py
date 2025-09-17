@@ -4,11 +4,18 @@ Module containing pre-built models for common extractor configuration.
 
 import os
 import re
+import sys
 from collections.abc import Iterator
 from datetime import timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Annotated, Any, Literal, Self, TypeVar
+from typing import Annotated, Any, Literal, TypeVar
+
+# Check if python >= 3.11 for Self
+if tuple(map(int, sys.version.split(".")[:2])) >= (3, 11):
+    from typing import Self
+else:
+    from typing_extensions import Self
 
 from humps import kebabize
 from pydantic import BaseModel, ConfigDict, Field, GetCoreSchemaHandler
