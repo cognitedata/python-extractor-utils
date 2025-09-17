@@ -186,8 +186,8 @@ class Runtime(Generic[ExtractorType]):
             choices=["debug", "info", "warning", "error", "critical"],
             type=str,
             required=False,
-            default="info",
-            help="Set the logging level for the runtime. Default is 'info'.",
+            default=None,
+            help="Set the logging level for the runtime.",
         )
         argparser.add_argument(
             "--skip-init-checks",
