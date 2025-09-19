@@ -434,15 +434,39 @@ def _log_handler_default() -> list[LogHandlerConfig]:
     return [LogConsoleHandlerConfig(type="console", level=LogLevel.INFO)]
 
 
-class FileSizeConfig(ConfigModel):
+class FileSizeConfig:
     """
     Configuration parameter for setting a file size.
     """
 
-    expression: str
+    def __init__(self, expression: str) -> None:
+        self._bytes, self._expression = FileSizeConfig._parse_expression(expression)
 
-    @staticmethod
-    def _parse_size_in_bytes(v: str) -> int:
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source_type: Any, handler: GetCoreSchemaHandler) -> CoreSchema:  # noqa: ANN401
+        """
+        Pydantic hook to define how this class should be serialized/deserialized.
+
+        This allows the class to be used as a field in Pydantic models.
+        """
+        return core_schema.no_info_after_validator_function(cls, handler(str | int))
+
+    def __eq__(self, other: object) -> bool:
+        """
+        Two FileSizeConfig objects are equal if they have the same number of bytes.
+        """
+        if not isinstance(other, FileSizeConfig):
+            return NotImplemented
+        return self._bytes == other._bytes
+
+    def __hash__(self) -> int:
+        """
+        Hash function for FileSizeConfig based on the number of bytes.
+        """
+        return hash(self._bytes)
+
+    @classmethod
+    def _parse_expression(cls, expression: str) -> tuple[int, str]:
         sizes = {
             "kb": 1000,
             "mb": 1_000_000,
@@ -454,19 +478,15 @@ class FileSizeConfig(ConfigModel):
             "tib": 1_099_511_627_776,
         }
         try:
-            return int(v)
+            return int(expression), expression
         except ValueError:
             pass
-        v_lower = v.lower().replace(" ", "")
+        expression_lower = expression.lower().replace(" ", "")
         for size in sizes:
-            if v_lower.endswith(size):
-                num = float(v_lower.replace(size, ""))
-                return int(num * sizes[size])
-        raise InvalidConfigError(f"Invalid unit for file size: {v}. Valid units: {sizes.keys()}")
-
-    @property
-    def _bytes(self) -> int:
-        return self._parse_size_in_bytes(self.expression)
+            if expression_lower.endswith(size):
+                num = float(expression_lower.replace(size, ""))
+                return int(num * sizes[size]), expression
+        raise InvalidConfigError(f"Invalid unit for file size: {expression}. Valid units: {sizes.keys()}")
 
     @property
     def bytes(self) -> int:
@@ -547,13 +567,13 @@ class FileSizeConfig(ConfigModel):
         """
         Returns the file size as a human readable string.
         """
-        return self.expression
+        return self._expression
 
     def __repr__(self) -> str:
         """
         Returns the file size as a human readable string.
         """
-        return self.expression
+        return self._expression
 
 
 class RawDestinationConfig(ConfigModel):

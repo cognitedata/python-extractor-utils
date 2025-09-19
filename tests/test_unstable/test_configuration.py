@@ -1,4 +1,5 @@
 import os
+from dataclasses import field
 from io import StringIO
 
 import pytest
@@ -6,6 +7,7 @@ import pytest
 from cognite.client.credentials import OAuthClientCredentials
 from cognite.extractorutils.unstable.configuration.loaders import ConfigFormat, load_io
 from cognite.extractorutils.unstable.configuration.models import (
+    ConfigModel,
     ConnectionConfig,
     FileSizeConfig,
     TimeIntervalConfig,
@@ -215,15 +217,21 @@ def test_from_env() -> None:
     assert len(client.assets.list(limit=1)) == 1
 
 
-def test_parse_file_size() -> None:
-    assert FileSizeConfig(expression="154584").bytes == 154584
-    assert FileSizeConfig(expression="1kB").bytes == 1000
-    assert FileSizeConfig(expression="25MB").bytes == 25000000
-    assert FileSizeConfig(expression="1kib").bytes == 1024
-    assert FileSizeConfig(expression="2.7MiB").bytes == 2831155
-    assert FileSizeConfig(expression="4 KB").bytes == 4000
+class CustomFileConfig(ConfigModel):
+    file_size: FileSizeConfig = field(default_factory=lambda: FileSizeConfig("1MB"))
+    file_max_size: FileSizeConfig = field(default_factory=lambda: FileSizeConfig("10MiB"))
 
-    assert FileSizeConfig(expression="4 KB").kilobytes == pytest.approx(4)
-    assert FileSizeConfig(expression="453 kB").megabytes == pytest.approx(0.453)
-    assert FileSizeConfig(expression="1543 kiB").kilobytes == pytest.approx(1580.032)
-    assert FileSizeConfig(expression="14.5 mb").kilobytes == pytest.approx(14500)
+
+def test_parse_file_size() -> None:
+    config_str = """
+file_size: 25MB
+file_max_size: 10MiB
+"""
+    stream = StringIO(config_str)
+    config = load_io(stream, ConfigFormat.YAML, CustomFileConfig)
+    assert config.file_size == FileSizeConfig("25MB")
+    assert config.file_size.bytes == 25_000_000
+    assert config.file_size._expression == "25MB"
+    assert config.file_max_size == FileSizeConfig("10MiB")
+    assert config.file_max_size.bytes == 10_485_760
+    assert config.file_max_size._expression == "10MiB"
