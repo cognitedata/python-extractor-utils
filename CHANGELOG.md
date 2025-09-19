@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.8.1
+
+### Fixed
+
+* Fixed file reading by falling back to system encoding if UTF-8 fails.
+
 ## 7.8.0
 
 ### Added
