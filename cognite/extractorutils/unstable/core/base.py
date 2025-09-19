@@ -59,6 +59,7 @@ from humps import pascalize
 from typing_extensions import Self, assert_never
 
 from cognite.extractorutils._inner_util import _resolve_log_level
+from cognite.extractorutils.metrics import BaseMetrics
 from cognite.extractorutils.statestore import (
     AbstractStateStore,
     LocalStateStore,
@@ -72,6 +73,7 @@ from cognite.extractorutils.unstable.configuration.models import (
     ExtractorConfig,
     LogConsoleHandlerConfig,
     LogFileHandlerConfig,
+    MetricsConfig,
 )
 from cognite.extractorutils.unstable.core._dto import (
     CogniteModel,
@@ -116,11 +118,13 @@ class FullConfig(Generic[_T]):
         application_config: _T,
         current_config_revision: ConfigRevision,
         log_level_override: str | None = None,
+        metrics_config: MetricsConfig | None = None,
     ) -> None:
         self.connection_config = connection_config
         self.application_config = application_config
         self.current_config_revision: ConfigRevision = current_config_revision
         self.log_level_override = log_level_override
+        self.metrics_config = metrics_config
 
 
 class Extractor(Generic[ConfigType], CogniteLogger):
@@ -147,7 +151,9 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
     cancellation_token: CancellationToken
 
-    def __init__(self, config: FullConfig[ConfigType], checkin_worker: CheckinWorker) -> None:
+    def __init__(
+        self, config: FullConfig[ConfigType], checkin_worker: CheckinWorker, metrics: BaseMetrics | None = None
+    ) -> None:
         self._logger = logging.getLogger(f"{self.EXTERNAL_ID}.main")
         self._checkin_worker = checkin_worker
 
@@ -156,6 +162,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
         self.connection_config = config.connection_config
         self.application_config = config.application_config
+        self.metrics_config = config.metrics_config
         self.current_config_revision: ConfigRevision = config.current_config_revision
         self.log_level_override = config.log_level_override
 
@@ -170,6 +177,13 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
         self._tasks: list[Task] = []
         self._start_time: datetime
+        self._metrics: BaseMetrics | None = metrics
+
+        self.metrics_push_manager = (
+            self.metrics_config.create_manager(self.cognite_client, cancellation_token=self.cancellation_token)
+            if self.metrics_config
+            else None
+        )
 
         self.__init_tasks__()
 
@@ -367,8 +381,10 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self.cancellation_token.cancel()
 
     @classmethod
-    def _init_from_runtime(cls, config: FullConfig[ConfigType], checkin_worker: CheckinWorker) -> Self:
-        return cls(config, checkin_worker)
+    def _init_from_runtime(
+        cls, config: FullConfig[ConfigType], checkin_worker: CheckinWorker, metrics: BaseMetrics
+    ) -> Self:
+        return cls(config, checkin_worker, metrics)
 
     def add_task(self, task: Task) -> None:
         """
@@ -438,6 +454,8 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self.state_store.start()
 
         Thread(target=self._run_checkin, name="ExtractorCheckin", daemon=True).start()
+        if self.metrics_push_manager:
+            self.metrics_push_manager.start()
 
     def stop(self) -> None:
         """
@@ -446,6 +464,8 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         Instead of calling this method directly, it is recommended to use the context manager interface by using the
         ``with`` statement, which ensures proper cleanup on exit.
         """
+        if self.metrics_push_manager:
+            self.metrics_push_manager.stop()
         self.cancellation_token.cancel()
 
     def __enter__(self) -> Self:

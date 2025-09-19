@@ -3,13 +3,16 @@ import json
 import logging
 import random
 from collections.abc import Generator
+from io import StringIO
 from pathlib import Path
 
 import pytest
 
 from cognite.client import CogniteClient
 from cognite.client.exceptions import CogniteNotFoundError
+from cognite.extractorutils.metrics import CognitePusher, PrometheusPusher
 from cognite.extractorutils.statestore.watermark import LocalStateStore, RawStateStore
+from cognite.extractorutils.unstable.configuration.loaders import ConfigFormat, load_io
 from cognite.extractorutils.unstable.configuration.models import (
     ConnectionConfig,
     LocalStateStoreConfig,
@@ -17,14 +20,19 @@ from cognite.extractorutils.unstable.configuration.models import (
     LogFileHandlerConfig,
     LogHandlerConfig,
     LogLevel,
+    MetricsConfig,
     RawStateStoreConfig,
     StateStoreConfig,
+    TimeIntervalConfig,
+    _CogniteMetricsConfig,
+    _PromServerConfig,
+    _PushGatewayConfig,
 )
 from cognite.extractorutils.unstable.core.base import FullConfig
 from cognite.extractorutils.unstable.core.checkin_worker import CheckinWorker
 from cognite.extractorutils.unstable.core.tasks import TaskContext
 
-from .conftest import TestConfig, TestExtractor
+from .conftest import TestConfig, TestExtractor, TestMetrics
 
 
 def get_checkin_worker(connection_config: ConnectionConfig) -> CheckinWorker:
@@ -236,3 +244,99 @@ def test_raw_state_store_integration(
     new_extractor = TestExtractor(full_config, worker)
     with new_extractor:
         assert new_extractor.state_store.get_state("my-test-id") == (1, 5)
+
+
+@pytest.mark.parametrize("metrics_type", ["prometheus", "cognite"])
+def test_extractor_with_metrics_pushers(connection_config: ConnectionConfig, metrics_type: str) -> None:
+    override_level = "INFO"
+    app_config = TestConfig(parameter_one=1, parameter_two="a")
+    call_count = {"count": 0}
+
+    if metrics_type == "prometheus":
+        metrics_config = MetricsConfig(
+            server=_PromServerConfig(host="localhost", port=9090),
+            cognite=None,
+            push_gateways=[
+                _PushGatewayConfig(
+                    host="localhost",
+                    job_name="test-job",
+                    username=None,
+                    password=None,
+                    clear_after=None,
+                    push_interval=TimeIntervalConfig("30s"),
+                )
+            ],
+        )
+        pusher_cls = PrometheusPusher
+
+        def counting_push(self: PrometheusPusher) -> None:
+            call_count["count"] += 1
+            return original_push(self)
+
+        original_push = pusher_cls._push_to_server
+    else:
+        metrics_config = MetricsConfig(
+            server=None,
+            cognite=_CogniteMetricsConfig(
+                external_id_prefix="extractor_test",
+                asset_name="Extractor Test Metrics",
+                asset_external_id="extractor_testcognite_assets",
+                data_set=None,
+            ),
+            push_gateways=None,
+        )
+        pusher_cls = CognitePusher
+
+        def counting_push(self: CognitePusher) -> None:
+            call_count["count"] += 1
+            return None
+
+        original_push = pusher_cls._push_to_server
+
+    full_config = FullConfig(
+        connection_config=connection_config,
+        application_config=app_config,
+        current_config_revision=1,
+        log_level_override=override_level,
+        metrics_config=metrics_config,
+    )
+    worker = get_checkin_worker(connection_config)
+    extractor = TestExtractor(full_config, worker, metrics=TestMetrics)
+    assert isinstance(extractor._metrics, TestMetrics) or extractor._metrics == TestMetrics
+
+    with contextlib.ExitStack() as stack:
+        stack.enter_context(contextlib.suppress(Exception))
+        pusher_cls._push_to_server = counting_push
+        try:
+            with extractor:
+                for pusher in extractor.metrics_push_manager.pushers:
+                    assert pusher.thread is not None
+                    assert pusher.thread.is_alive()
+        finally:
+            pusher_cls._push_to_server = original_push
+    assert call_count["count"] > 0
+
+
+def test_pushgatewayconfig_none_credentials_from_yaml() -> None:
+    config_str = """
+push-gateways:
+  - host: "http://localhost:9091"
+    job_name: "test-job"
+"""
+
+    stream = StringIO(config_str)
+    config = load_io(stream, ConfigFormat.YAML, MetricsConfig)
+    metrics_config = config.push_gateways[0]
+    pusher = PrometheusPusher(
+        job_name=metrics_config.job_name,
+        username=metrics_config.username,
+        password=metrics_config.password,
+        url=metrics_config.host,
+        push_interval=30,
+        thread_name="TestPusher",
+        cancellation_token=None,
+    )
+    assert pusher.username is None
+    assert pusher.password is None
+    assert pusher.url == "http://localhost:9091"
+    assert pusher.job_name == "test-job"
