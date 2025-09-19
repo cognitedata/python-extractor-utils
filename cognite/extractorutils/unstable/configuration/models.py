@@ -405,6 +405,15 @@ class LogLevel(Enum):
     INFO = "INFO"
     DEBUG = "DEBUG"
 
+    @classmethod
+    def _missing_(cls, value: object) -> "LogLevel":
+        if not isinstance(value, str):
+            raise ValueError(f"{value} is not a valid log level")
+        for member in cls:
+            if member.value == value.upper():
+                return member
+        raise ValueError(f"{value} is not a valid log level")
+
 
 class LogFileHandlerConfig(ConfigModel):
     """

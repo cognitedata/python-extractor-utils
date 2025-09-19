@@ -7,6 +7,7 @@ from cognite.client.credentials import OAuthClientCredentials
 from cognite.extractorutils.unstable.configuration.loaders import ConfigFormat, load_io
 from cognite.extractorutils.unstable.configuration.models import (
     ConnectionConfig,
+    LogLevel,
     TimeIntervalConfig,
     _ClientCredentialsConfig,
 )
@@ -212,3 +213,14 @@ def test_from_env() -> None:
 
     # Check that the produces cogniteclient object is valid
     assert len(client.assets.list(limit=1)) == 1
+
+
+def test_setting_log_level_from_any_case() -> None:
+    log_level = LogLevel("DEBUG")
+    assert log_level == LogLevel.DEBUG
+
+    log_level = LogLevel("debug")
+    assert log_level == LogLevel.DEBUG
+
+    with pytest.raises(ValueError):
+        LogLevel("not-a-log-level")
