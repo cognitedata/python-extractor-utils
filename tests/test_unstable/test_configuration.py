@@ -10,6 +10,7 @@ from cognite.extractorutils.unstable.configuration.models import (
     ConfigModel,
     ConnectionConfig,
     FileSizeConfig,
+    LogLevel,
     TimeIntervalConfig,
     _ClientCredentialsConfig,
 )
@@ -235,3 +236,14 @@ file_max_size: 10MiB
     assert config.file_max_size == FileSizeConfig("10MiB")
     assert config.file_max_size.bytes == 10_485_760
     assert config.file_max_size._expression == "10MiB"
+
+
+def test_setting_log_level_from_any_case() -> None:
+    log_level = LogLevel("DEBUG")
+    assert log_level == LogLevel.DEBUG
+
+    log_level = LogLevel("debug")
+    assert log_level == LogLevel.DEBUG
+
+    with pytest.raises(ValueError):
+        LogLevel("not-a-log-level")
