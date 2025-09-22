@@ -1,8 +1,8 @@
 import os
-from dataclasses import field
 from io import StringIO
 
 import pytest
+from pydantic import Field
 
 from cognite.client.credentials import OAuthClientCredentials
 from cognite.extractorutils.unstable.configuration.loaders import ConfigFormat, load_io
@@ -218,8 +218,8 @@ def test_from_env() -> None:
 
 
 class CustomFileConfig(ConfigModel):
-    file_size: FileSizeConfig = field(default_factory=lambda: FileSizeConfig("1MB"))
-    file_max_size: FileSizeConfig = field(default_factory=lambda: FileSizeConfig("10MiB"))
+    file_size: FileSizeConfig = Field(default_factory=lambda: FileSizeConfig("1MB"))
+    file_max_size: FileSizeConfig = Field(default_factory=lambda: FileSizeConfig("10MiB"))
 
 
 def test_parse_file_size() -> None:
