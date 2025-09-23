@@ -1,6 +1,7 @@
 import gzip
 import json
 import os
+from collections import Counter
 from collections.abc import Callable, Generator, Iterator
 from threading import RLock
 from time import sleep, time
@@ -13,6 +14,7 @@ import requests_mock
 from cognite.client import CogniteClient
 from cognite.client.config import ClientConfig
 from cognite.client.credentials import OAuthClientCredentials
+from cognite.extractorutils.metrics import BaseMetrics
 from cognite.extractorutils.unstable.configuration.models import (
     ConnectionConfig,
     ExtractorConfig,
@@ -213,3 +215,10 @@ class TestExtractor(Extractor[TestConfig]):
             ctx.warning("This is a warning message.")
 
         self.add_task(StartupTask(name="log_task", target=log_messages_task))
+
+
+class TestMetrics(BaseMetrics):
+    def __init__(self) -> None:
+        super().__init__(extractor_name=TestExtractor.NAME, extractor_version=TestExtractor.VERSION)
+
+        self.a_counter = Counter("my_extractor_example_counter", "An example counter")
