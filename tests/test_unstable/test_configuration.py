@@ -235,7 +235,36 @@ file_max_size: 10MiB
     assert config.file_size._expression == "25MB"
     assert config.file_max_size == FileSizeConfig("10MiB")
     assert config.file_max_size.bytes == 10_485_760
-    assert config.file_max_size._expression == "10MiB"
+
+
+def test_file_size_config_default_values() -> None:
+    config = CustomFileConfig()
+    assert config.file_size == FileSizeConfig("1MB")
+    assert config.file_max_size == FileSizeConfig("10MiB")
+    assert config.file_size.bytes == 1_000_000
+    assert config.file_max_size.bytes == 10_485_760
+
+
+def test_file_size_config_partial_fields() -> None:
+    config_str = """
+file_size: 5MB
+"""
+    stream = StringIO(config_str)
+    config = load_io(stream, ConfigFormat.YAML, CustomFileConfig)
+    assert config.file_size == FileSizeConfig("5MB")
+    assert config.file_max_size == FileSizeConfig("10MiB")
+
+
+def test_file_size_config_equality() -> None:
+    file_size_1 = FileSizeConfig("2000MB")
+    file_size_2 = FileSizeConfig("2GB")
+    file_size_3 = FileSizeConfig("1GB")
+
+    assert file_size_1.bytes == 2_000_000_000
+    assert file_size_2.bytes == 2_000_000_000
+    assert file_size_3.bytes == 1_000_000_000
+    assert file_size_1 == file_size_2
+    assert file_size_3 != file_size_1
 
 
 def test_setting_log_level_from_any_case() -> None:
