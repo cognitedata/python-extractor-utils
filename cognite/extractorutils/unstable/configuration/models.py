@@ -662,16 +662,32 @@ class FileSizeConfig:
             "gib": 1_073_741_824,
             "tib": 1_099_511_627_776,
         }
+
+        expression_normalized = expression.strip().lower()
         try:
-            return int(expression), expression
+            num_value = float(expression_normalized)
+            return int(num_value), expression
         except ValueError:
             pass
-        expression_lower = expression.lower().replace(" ", "")
-        for size in sizes:
-            if expression_lower.endswith(size):
-                num = float(expression_lower.replace(size, ""))
-                return int(num * sizes[size]), expression
-        raise InvalidConfigError(f"Invalid unit for file size: {expression}. Valid units: {sizes.keys()}")
+
+        match = re.match(r"^([0-9]*\.?[0-9]+)\s*([a-zA-Z]*)$", expression_normalized)
+        if not match:
+            raise InvalidConfigError(f"Invalid file size format: '{expression}'. Must start with a number.")
+
+        num_str, unit_str = match.groups()
+        try:
+            num_value = float(num_str)
+        except ValueError as e:
+            raise InvalidConfigError(f"Invalid numeric value in file size: '{num_str}'") from e
+
+        if not unit_str:
+            return int(num_value), expression
+
+        unit_lower = unit_str.lower()
+        if unit_lower in sizes:
+            return int(num_value * sizes[unit_lower]), expression
+
+        raise InvalidConfigError(f"Invalid unit for file size: '{unit_str}'. Valid units: {list(sizes.keys())}")
 
     @property
     def bytes(self) -> int:
