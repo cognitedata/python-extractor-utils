@@ -2,11 +2,15 @@ import os
 from io import StringIO
 
 import pytest
+from pydantic import Field
 
 from cognite.client.credentials import OAuthClientCredentials
+from cognite.extractorutils.exceptions import InvalidConfigError
 from cognite.extractorutils.unstable.configuration.loaders import ConfigFormat, load_io
 from cognite.extractorutils.unstable.configuration.models import (
+    ConfigModel,
     ConnectionConfig,
+    FileSizeConfig,
     LogLevel,
     TimeIntervalConfig,
     _ClientCredentialsConfig,
@@ -213,6 +217,81 @@ def test_from_env() -> None:
 
     # Check that the produces cogniteclient object is valid
     assert len(client.assets.list(limit=1)) == 1
+
+
+class CustomFileConfig(ConfigModel):
+    file_size: FileSizeConfig = Field(default_factory=lambda: FileSizeConfig("1MB"))
+    file_max_size: FileSizeConfig = Field(default_factory=lambda: FileSizeConfig("10MiB"))
+
+
+def test_parse_file_size() -> None:
+    config_str = """
+file_size: 25MB
+file_max_size: 10MiB
+"""
+    stream = StringIO(config_str)
+    config = load_io(stream, ConfigFormat.YAML, CustomFileConfig)
+    assert config.file_size == FileSizeConfig("25MB")
+    assert config.file_size.bytes == 25_000_000
+    assert config.file_size._expression == "25MB"
+    assert config.file_max_size == FileSizeConfig("10MiB")
+    assert config.file_max_size.bytes == 10_485_760
+
+
+def test_file_size_config_default_values() -> None:
+    config = CustomFileConfig()
+    assert config.file_size == FileSizeConfig("1MB")
+    assert config.file_max_size == FileSizeConfig("10MiB")
+    assert config.file_size.bytes == 1_000_000
+    assert config.file_max_size.bytes == 10_485_760
+
+
+def test_file_size_config_partial_fields() -> None:
+    config_str = """
+file_size: 5MB
+"""
+    stream = StringIO(config_str)
+    config = load_io(stream, ConfigFormat.YAML, CustomFileConfig)
+    assert config.file_size == FileSizeConfig("5MB")
+    assert config.file_max_size == FileSizeConfig("10MiB")
+
+
+def test_file_size_config_equality() -> None:
+    file_size_1 = FileSizeConfig("2000MB")
+    file_size_2 = FileSizeConfig("2GB")
+    file_size_3 = FileSizeConfig("1GB")
+
+    assert file_size_1.bytes == 2_000_000_000
+    assert file_size_2.bytes == 2_000_000_000
+    assert file_size_3.bytes == 1_000_000_000
+    assert file_size_1 == file_size_2
+    assert file_size_3 != file_size_1
+
+
+@pytest.mark.parametrize(
+    "expression", ["12.3kbkb", "10XY", "abcMB", "5.5.5GB", "MB", "", " ", "10 M B", "10MB extra", "tenMB"]
+)
+def test_file_size_config_invalid(expression: str) -> None:
+    with pytest.raises(InvalidConfigError):
+        FileSizeConfig(expression)
+
+
+@pytest.mark.parametrize(
+    "expression, value",
+    [
+        ("10MB", 10_000_000),
+        ("1GB", 1_000_000_000),
+        ("512KiB", 524_288),
+        ("2.5TB", 2_500_000_000_000),
+        ("100", 100),
+        ("0.5MiB", 524_288),
+        ("1.2GB", 1_200_000_000),
+    ],
+)
+def test_file_size_config_valid(expression: str, value: int) -> None:
+    config = FileSizeConfig(expression)
+    assert config._expression == expression
+    assert config.bytes == value
 
 
 def test_setting_log_level_from_any_case() -> None:

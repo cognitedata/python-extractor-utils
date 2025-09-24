@@ -619,6 +619,164 @@ def _log_handler_default() -> list[LogHandlerConfig]:
     return [LogConsoleHandlerConfig(type="console", level=LogLevel.INFO)]
 
 
+class FileSizeConfig:
+    """
+    Configuration parameter for setting a file size.
+    """
+
+    def __init__(self, expression: str) -> None:
+        self._bytes, self._expression = FileSizeConfig._parse_expression(expression)
+
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source_type: Any, handler: GetCoreSchemaHandler) -> CoreSchema:  # noqa: ANN401
+        """
+        Pydantic hook to define how this class should be serialized/deserialized.
+
+        This allows the class to be used as a field in Pydantic models.
+        """
+        return core_schema.no_info_after_validator_function(cls, handler(str | int))
+
+    def __eq__(self, other: object) -> bool:
+        """
+        Two FileSizeConfig objects are equal if they have the same number of bytes.
+        """
+        if not isinstance(other, FileSizeConfig):
+            return NotImplemented
+        return self._bytes == other._bytes
+
+    def __hash__(self) -> int:
+        """
+        Hash function for FileSizeConfig based on the number of bytes.
+        """
+        return hash(self._bytes)
+
+    @classmethod
+    def _parse_expression(cls, expression: str) -> tuple[int, str]:
+        sizes = {
+            "kb": 1000,
+            "mb": 1_000_000,
+            "gb": 1_000_000_000,
+            "tb": 1_000_000_000_000,
+            "kib": 1024,
+            "mib": 1_048_576,
+            "gib": 1_073_741_824,
+            "tib": 1_099_511_627_776,
+        }
+
+        expression_normalized = expression.strip().lower()
+        try:
+            num_value = float(expression_normalized)
+            return int(num_value), expression
+        except ValueError:
+            pass
+
+        match = re.match(r"^([0-9]*\.?[0-9]+)\s*([a-zA-Z]*)$", expression_normalized)
+        if not match:
+            raise InvalidConfigError(f"Invalid file size format: '{expression}'. Must start with a number.")
+
+        num_str, unit_str = match.groups()
+        try:
+            num_value = float(num_str)
+        except ValueError as e:
+            raise InvalidConfigError(f"Invalid numeric value in file size: '{num_str}'") from e
+
+        if not unit_str:
+            return int(num_value), expression
+
+        unit_lower = unit_str.lower()
+        if unit_lower in sizes:
+            return int(num_value * sizes[unit_lower]), expression
+
+        raise InvalidConfigError(f"Invalid unit for file size: '{unit_str}'. Valid units: {list(sizes.keys())}")
+
+    @property
+    def bytes(self) -> int:
+        """
+        File size in bytes.
+        """
+        return self._bytes
+
+    @property
+    def kilobytes(self) -> float:
+        """
+        File size in kilobytes.
+        """
+        return self._bytes / 1000
+
+    @property
+    def megabytes(self) -> float:
+        """
+        File size in megabytes.
+        """
+        return self._bytes / 1_000_000
+
+    @property
+    def gigabytes(self) -> float:
+        """
+        File size in gigabytes.
+        """
+        return self._bytes / 1_000_000_000
+
+    @property
+    def terabytes(self) -> float:
+        """
+        File size in terabytes.
+        """
+        return self._bytes / 1_000_000_000_000
+
+    @property
+    def kibibytes(self) -> float:
+        """
+        File size in kibibytes (1024 bytes).
+        """
+        return self._bytes / 1024
+
+    @property
+    def mebibytes(self) -> float:
+        """
+        File size in mebibytes (1024 kibibytes).
+        """
+        return self._bytes / 1_048_576
+
+    @property
+    def gibibytes(self) -> float:
+        """
+        File size in gibibytes (1024 mebibytes).
+        """
+        return self._bytes / 1_073_741_824
+
+    @property
+    def tebibytes(self) -> float:
+        """
+        File size in tebibytes (1024 gibibytes).
+        """
+        return self._bytes / 1_099_511_627_776
+
+    def __int__(self) -> int:
+        """
+        Returns the file size as bytes.
+        """
+        return int(self._bytes)
+
+    def __float__(self) -> float:
+        """
+        Returns the file size as bytes.
+        """
+        return float(self._bytes)
+
+    def __str__(self) -> str:
+        """
+        Returns the file size as a human readable string.
+        """
+        return self._expression
+
+    def __repr__(self) -> str:
+        """
+        Returns the file size as a human readable string.
+        """
+        return self._expression
+
+
 class RawDestinationConfig(ConfigModel):
     """
     Configuration parameters for using Raw.
