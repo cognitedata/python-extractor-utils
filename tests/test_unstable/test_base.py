@@ -249,7 +249,6 @@ def test_raw_state_store_integration(
 @pytest.mark.parametrize("metrics_type", ["prometheus", "cognite"])
 def test_extractor_with_metrics_pushers(connection_config: ConnectionConfig, metrics_type: str) -> None:
     override_level = "INFO"
-    app_config = TestConfig(parameter_one=1, parameter_two="a")
     call_count = {"count": 0}
 
     if metrics_type == "prometheus":
@@ -293,12 +292,17 @@ def test_extractor_with_metrics_pushers(connection_config: ConnectionConfig, met
 
         original_push = pusher_cls._push_to_server
 
+    app_config = TestConfig(
+        parameter_one=1,
+        parameter_two="a",
+        metrics=metrics_config,
+    )
+
     full_config = FullConfig(
         connection_config=connection_config,
         application_config=app_config,
         current_config_revision=1,
         log_level_override=override_level,
-        metrics_config=metrics_config,
     )
     worker = get_checkin_worker(connection_config)
     extractor = TestExtractor(full_config, worker, metrics=TestMetrics)

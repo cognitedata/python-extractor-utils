@@ -866,6 +866,7 @@ class ExtractorConfig(ConfigModel):
     """
 
     state_store: StateStoreConfig | None = None
+    metrics: MetricsConfig | None = None
     log_handlers: list[LogHandlerConfig] = Field(default_factory=_log_handler_default)
     retry_startup: bool = True
 
