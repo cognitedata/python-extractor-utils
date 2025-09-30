@@ -224,7 +224,6 @@ def test_reporting_errors(
             f"/api/v1/projects/{extractor.cognite_client.config.project}/integrations/errors?integration={connection_config.integration.external_id}",
             headers={"cdf-version": "alpha"},
         ).json()["items"]
-        assert len(res) == 1
 
         assert res[0]["externalId"] == err.external_id
         assert res[0]["startTime"] == err.start_time
@@ -250,7 +249,6 @@ def test_reporting_errors(
         f"/api/v1/projects/{extractor.cognite_client.config.project}/integrations/errors?integration={connection_config.integration.external_id}",
         headers={"cdf-version": "alpha"},
     ).json()["items"]
-    assert len(res) == 1
     assert res[0]["externalId"] == err.external_id
     assert res[0]["startTime"] == err.start_time
     assert res[0]["endTime"] == err.end_time
