@@ -127,6 +127,7 @@ def test_load_cdf_config_initial_empty(connection_config: ConnectionConfig) -> N
         headers={"cdf-version": "alpha"},
     ).json()
 
+    assert len(errors["items"]) == 1
     assert "No configuration found for the given integration" in errors["items"][0]["description"]
 
 
