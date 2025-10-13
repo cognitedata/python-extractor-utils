@@ -121,7 +121,6 @@ def test_load_cdf_config_initial_empty(connection_config: ConnectionConfig) -> N
     assert config.parameter_one == 123
     assert config.parameter_two == "abc"
 
-    # There should be one error reported from initially attempting to run without a config
     errors = cognite_client.get(
         url=f"/api/v1/projects/{cognite_client.config.project}/integrations/errors",
         params={"integration": connection_config.integration.external_id},

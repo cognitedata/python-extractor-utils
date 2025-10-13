@@ -73,7 +73,6 @@ from cognite.extractorutils.unstable.configuration.models import (
     ExtractorConfig,
     LogConsoleHandlerConfig,
     LogFileHandlerConfig,
-    MetricsConfig,
 )
 from cognite.extractorutils.unstable.core._dto import (
     CogniteModel,
@@ -118,13 +117,11 @@ class FullConfig(Generic[_T]):
         application_config: _T,
         current_config_revision: ConfigRevision,
         log_level_override: str | None = None,
-        metrics_config: MetricsConfig | None = None,
     ) -> None:
         self.connection_config = connection_config
         self.application_config = application_config
         self.current_config_revision: ConfigRevision = current_config_revision
         self.log_level_override = log_level_override
-        self.metrics_config = metrics_config
 
 
 class Extractor(Generic[ConfigType], CogniteLogger):
@@ -162,7 +159,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
         self.connection_config = config.connection_config
         self.application_config = config.application_config
-        self.metrics_config = config.metrics_config
+        self.metrics_config = config.application_config.metrics
         self.current_config_revision: ConfigRevision = config.current_config_revision
         self.log_level_override = config.log_level_override
 
