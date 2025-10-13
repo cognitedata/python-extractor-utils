@@ -225,7 +225,6 @@ def test_reporting_errors(
             headers={"cdf-version": "alpha"},
         ).json()["items"]
         assert len(res) == 1
-
         assert res[0]["externalId"] == err.external_id
         assert res[0]["startTime"] == err.start_time
         assert res[0]["description"] == err.description
