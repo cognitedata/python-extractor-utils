@@ -29,6 +29,7 @@ from cognite.extractorutils.uploader import (
     SequenceUploadQueue,
     TimeSeriesUploadQueue,
 )
+from cognite.extractorutils.uploader.time_series import MAX_DATAPOINT_STRING_BYTES
 
 
 @patch("cognite.client.CogniteClient")
@@ -151,7 +152,10 @@ def test_ts_uploader_discard(MockCogniteClient: Mock) -> None:
     queue.add_to_upload_queue(
         id=1, datapoints=[(start + 5, 5), (start + 1, math.inf), (start + 2, -math.inf), (start + 6, 6)]
     )
-    queue.add_to_upload_queue(id=3, datapoints=[(start + 7, "str1"), (start + 9, ("t" * 300)), (start + 8, "str2")])
+    queue.add_to_upload_queue(
+        id=3,
+        datapoints=[(start + 7, "str1"), (start + 9, ("t" * (MAX_DATAPOINT_STRING_BYTES + 1))), (start + 8, "str2")],
+    )
 
     time.sleep(2.1)
 

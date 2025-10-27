@@ -53,7 +53,7 @@ from cognite.extractorutils.uploader._metrics import (
 from cognite.extractorutils.util import EitherId, cognite_exceptions, retry
 
 MIN_DATAPOINT_TIMESTAMP = -2208988800000
-MAX_DATAPOINT_STRING_LENGTH = 255
+MAX_DATAPOINT_STRING_BYTES = 1023
 MAX_DATAPOINT_VALUE = 1e100
 MIN_DATAPOINT_VALUE = -1e100
 
@@ -154,7 +154,7 @@ class BaseTimeSeriesUploadQueue(AbstractUploadQueue, Generic[IdType]):
                 math.isnan(value) or math.isinf(value) or value > MAX_DATAPOINT_VALUE or value < MIN_DATAPOINT_VALUE
             )
         elif isinstance(value, str):
-            return len(value) <= MAX_DATAPOINT_STRING_LENGTH
+            return len(value.encode("utf-8")) <= MAX_DATAPOINT_STRING_BYTES
         return not isinstance(value, datetime)
 
     def _is_datapoint_valid(
