@@ -1,15 +1,18 @@
 import os
 from io import StringIO
+from unittest.mock import Mock
 
 import pytest
 from pydantic import Field
 
 from cognite.client.credentials import OAuthClientCredentials
+from cognite.client.data_classes import DataSet
 from cognite.extractorutils.exceptions import InvalidConfigError
 from cognite.extractorutils.unstable.configuration.loaders import ConfigFormat, load_io
 from cognite.extractorutils.unstable.configuration.models import (
     ConfigModel,
     ConnectionConfig,
+    EitherIdConfig,
     FileSizeConfig,
     LogLevel,
     TimeIntervalConfig,
@@ -303,3 +306,86 @@ def test_setting_log_level_from_any_case() -> None:
 
     with pytest.raises(ValueError):
         LogLevel("not-a-log-level")
+
+
+@pytest.mark.parametrize(
+    "data_set_external_id,data_set_config,expected_call,expected_result_attrs,should_return_none",
+    [
+        # Test with data_set_external_id provided
+        (
+            "test-dataset",
+            None,
+            {"external_id": "test-dataset"},
+            {"external_id": "test-dataset", "name": "Test Dataset"},
+            False,
+        ),
+        # Test with data_set config using internal ID
+        (
+            None,
+            EitherIdConfig(id=12345),
+            {"id": 12345, "external_id": None},
+            {"id": 12345, "name": "Test Dataset"},
+            False,
+        ),
+        # Test with data_set config using external ID
+        (
+            None,
+            EitherIdConfig(external_id="config-dataset"),
+            {"id": None, "external_id": "config-dataset"},
+            {"external_id": "config-dataset", "name": "Config Dataset"},
+            False,
+        ),
+        # Test that data_set_external_id takes priority over data_set
+        (
+            "priority-dataset",
+            EitherIdConfig(external_id="should-be-ignored"),
+            {"external_id": "priority-dataset"},
+            {"external_id": "priority-dataset", "name": "Priority Dataset"},
+            False,
+        ),
+    ],
+)
+def test_get_data_set_various_configurations(
+    data_set_external_id: str | None,
+    data_set_config: EitherIdConfig | None,
+    expected_call: dict | None,
+    expected_result_attrs: dict | None,
+    should_return_none: bool,
+) -> None:
+    """Test get_data_set method with various configuration scenarios."""
+    mock_client = Mock()
+
+    config_kwargs = {
+        "project": "test-project",
+        "base_url": "https://test.com",
+        "integration": {"external_id": "test-integration"},
+        "authentication": {
+            "type": "client-credentials",
+            "client_id": "test-id",
+            "client_secret": "test-secret",
+            "token_url": "https://token.com",
+            "scopes": "scope1 scope2",
+        },
+    }
+
+    if data_set_external_id:
+        config_kwargs["data_set_external_id"] = data_set_external_id
+    if data_set_config:
+        config_kwargs["data_set"] = data_set_config
+
+    config = ConnectionConfig(**config_kwargs)
+
+    if not should_return_none:
+        mock_dataset = DataSet(**expected_result_attrs)
+        mock_client.data_sets.retrieve.return_value = mock_dataset
+
+    result = config.get_data_set(mock_client)
+
+    if should_return_none:
+        assert result is None
+        mock_client.data_sets.retrieve.assert_not_called()
+    else:
+        assert result is not None
+        for attr, value in expected_result_attrs.items():
+            assert getattr(result, attr) == value
+        mock_client.data_sets.retrieve.assert_called_once_with(**expected_call)
