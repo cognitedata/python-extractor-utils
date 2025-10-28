@@ -15,12 +15,13 @@ from cognite.client.data_classes import StatusCode
 from cognite.client.data_classes.data_modeling import NodeApply, NodeId
 from cognite.client.data_classes.data_modeling.extractor_extensions.v1 import CogniteExtractorTimeSeriesApply
 from cognite.client.exceptions import CogniteAPIError, CogniteNotFoundError
-from cognite.extractorutils.uploader.time_series import CDMTimeSeriesUploadQueue
-
-MIN_DATAPOINT_TIMESTAMP = -2208988800000
-MAX_DATAPOINT_STRING_LENGTH = 255
-MAX_DATAPOINT_VALUE = 1e100
-MIN_DATAPOINT_VALUE = -1e100
+from cognite.extractorutils.uploader.time_series import (
+    MAX_DATAPOINT_STRING_BYTES,
+    MAX_DATAPOINT_VALUE,
+    MIN_DATAPOINT_TIMESTAMP,
+    MIN_DATAPOINT_VALUE,
+    CDMTimeSeriesUploadQueue,
+)
 
 
 @pytest.fixture
@@ -197,7 +198,7 @@ def test_cdm_queue_discards_invalid_values(set_upload_test: tuple[CogniteClient,
     bad_val_inf = (now + 1_000, float("inf"))
     bad_val_max = (now + 1_000, MAX_DATAPOINT_VALUE * 10)
     bad_val_min = (now + 1_000, MIN_DATAPOINT_VALUE * 10)
-    too_long_str = (now + 2_000, "x" * (MAX_DATAPOINT_STRING_LENGTH + 1))
+    too_long_str = (now + 2_000, "x" * (MAX_DATAPOINT_STRING_BYTES + 1))
     valid_temp_str_dp = (now + 3_000, "valid_short_string")
 
     queue.add_to_upload_queue(

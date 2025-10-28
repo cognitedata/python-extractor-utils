@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.9.0
+
+### Changed
+
+* Updated string time series datapoints maximum size to be constrained by UTF-8 encoded bytes count instead of string length when using upload queue(s), aligning with the API behavior changes.
+
 ## 7.8.1
 
 ### Fixed
