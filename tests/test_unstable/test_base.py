@@ -7,10 +7,13 @@ from io import StringIO
 from pathlib import Path
 
 import pytest
-
 from cognite.client import CogniteClient
 from cognite.client.exceptions import CogniteNotFoundError
+<<<<<<< Updated upstream
 from cognite.extractorutils.metrics import CognitePusher, PrometheusPusher
+=======
+
+>>>>>>> Stashed changes
 from cognite.extractorutils.statestore.watermark import LocalStateStore, RawStateStore
 from cognite.extractorutils.unstable.configuration.loaders import ConfigFormat, load_io
 from cognite.extractorutils.unstable.configuration.models import (

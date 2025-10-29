@@ -55,6 +55,7 @@ from threading import RLock, Thread
 from types import TracebackType
 from typing import Generic, TypeVar
 
+from cognite.client import CogniteClient
 from humps import pascalize
 from typing_extensions import Self, assert_never
 
@@ -152,7 +153,11 @@ class Extractor(Generic[ConfigType], CogniteLogger):
     cancellation_token: CancellationToken
 
     def __init__(
+<<<<<<< Updated upstream
         self, config: FullConfig[ConfigType], checkin_worker: CheckinWorker, metrics: BaseMetrics | None = None
+=======
+        self, config: FullConfig[ConfigType], checkin_worker: CheckinWorker, cognite_client: CogniteClient
+>>>>>>> Stashed changes
     ) -> None:
         self._logger = logging.getLogger(f"{self.EXTERNAL_ID}.main")
         self._checkin_worker = checkin_worker
@@ -166,7 +171,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self.current_config_revision: ConfigRevision = config.current_config_revision
         self.log_level_override = config.log_level_override
 
-        self.cognite_client = self.connection_config.get_cognite_client(f"{self.EXTERNAL_ID}-{self.VERSION}")
+        self.cognite_client = cognite_client
 
         self.state_store: AbstractStateStore
 
@@ -382,9 +387,15 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
     @classmethod
     def _init_from_runtime(
+<<<<<<< Updated upstream
         cls, config: FullConfig[ConfigType], checkin_worker: CheckinWorker, metrics: BaseMetrics
     ) -> Self:
         return cls(config, checkin_worker, metrics)
+=======
+        cls, config: FullConfig[ConfigType], checkin_worker: CheckinWorker, cognite_client: CogniteClient
+    ) -> Self:
+        return cls(config, checkin_worker, cognite_client)
+>>>>>>> Stashed changes
 
     def add_task(self, task: Task) -> None:
         """

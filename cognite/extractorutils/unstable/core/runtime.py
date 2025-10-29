@@ -79,7 +79,11 @@ def _extractor_process_entrypoint(
     controls: _RuntimeControls,
     config: FullConfig,
     checkin_worker: CheckinWorker,
+<<<<<<< Updated upstream
     metrics: BaseMetrics | None = None,
+=======
+    cognite_client: CogniteClient,
+>>>>>>> Stashed changes
 ) -> None:
     logger = logging.getLogger(f"{extractor_class.EXTERNAL_ID}.runtime")
     checkin_worker.active_revision = config.current_config_revision
@@ -87,9 +91,13 @@ def _extractor_process_entrypoint(
     checkin_worker.set_on_revision_change_handler(lambda _: on_revision_changed(controls))
     if config.application_config.retry_startup:
         checkin_worker.set_retry_startup(config.application_config.retry_startup)
+<<<<<<< Updated upstream
     if not metrics:
         metrics = BaseMetrics(extractor_name=extractor_class.NAME, extractor_version=extractor_class.VERSION)
     extractor = extractor_class._init_from_runtime(config, checkin_worker, metrics)
+=======
+    extractor = extractor_class._init_from_runtime(config, checkin_worker, cognite_client)
+>>>>>>> Stashed changes
     extractor._attach_runtime_controls(
         cancel_event=controls.cancel_event,
         message_queue=controls.message_queue,
@@ -262,6 +270,7 @@ class Runtime(Generic[ExtractorType]):
         self,
         config: FullConfig,
         checkin_worker: CheckinWorker,
+        cognite_client: CogniteClient,
     ) -> Process:
         self._cancel_event = Event()
 
@@ -274,7 +283,11 @@ class Runtime(Generic[ExtractorType]):
 
         process = Process(
             target=_extractor_process_entrypoint,
+<<<<<<< Updated upstream
             args=(self._extractor_class, controls, config, checkin_worker, self._metrics),
+=======
+            args=(self._extractor_class, controls, config, checkin_worker, cognite_client),
+>>>>>>> Stashed changes
         )
 
         process.start()
@@ -510,6 +523,7 @@ class Runtime(Generic[ExtractorType]):
                     log_level_override=args.log_level,
                 ),
                 checkin_worker,
+                cognite_client,
             )
             process.join()
 
