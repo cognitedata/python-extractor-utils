@@ -13,6 +13,7 @@ from cognite.extractorutils.unstable.configuration.models import (
     ConfigModel,
     ConnectionConfig,
     EitherIdConfig,
+    ExtractorConfig,
     FileSizeConfig,
     LogLevel,
     TimeIntervalConfig,
@@ -343,6 +344,14 @@ def test_setting_log_level_from_any_case() -> None:
             {"external_id": "priority-dataset", "name": "Priority Dataset"},
             False,
         ),
+        # Test with neither data_set_external_id nor data_set provided
+        (
+            None,
+            None,
+            {},
+            {},
+            True,
+        ),
     ],
 )
 def test_get_data_set_various_configurations(
@@ -353,33 +362,20 @@ def test_get_data_set_various_configurations(
     should_return_none: bool,
 ) -> None:
     """Test get_data_set method with various configuration scenarios."""
+    extractor_config = ExtractorConfig(
+        retry_startup=False,
+        data_set_external_id=data_set_external_id,
+        data_set=data_set_config,
+    )
+
+    # Create a mock client instead of using a real one
     mock_client = Mock()
-
-    config_kwargs = {
-        "project": "test-project",
-        "base_url": "https://test.com",
-        "integration": {"external_id": "test-integration"},
-        "authentication": {
-            "type": "client-credentials",
-            "client_id": "test-id",
-            "client_secret": "test-secret",
-            "token_url": "https://token.com",
-            "scopes": "scope1 scope2",
-        },
-    }
-
-    if data_set_external_id:
-        config_kwargs["data_set_external_id"] = data_set_external_id
-    if data_set_config:
-        config_kwargs["data_set"] = data_set_config
-
-    config = ConnectionConfig(**config_kwargs)
 
     if not should_return_none:
         mock_dataset = DataSet(**expected_result_attrs)
         mock_client.data_sets.retrieve.return_value = mock_dataset
 
-    result = config.get_data_set(mock_client)
+    result = extractor_config.get_data_set(mock_client)
 
     if should_return_none:
         assert result is None
