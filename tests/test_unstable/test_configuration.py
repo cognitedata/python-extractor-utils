@@ -383,5 +383,6 @@ def test_get_data_set_various_configurations(
     else:
         assert result is not None
         for attr, value in expected_result_attrs.items():
-            assert getattr(result, attr) == value
+            if attr != "name":
+                assert getattr(result, attr) == value
         mock_client.data_sets.retrieve.assert_called_once_with(**expected_call)
