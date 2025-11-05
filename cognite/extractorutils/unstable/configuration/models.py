@@ -24,7 +24,7 @@ from cognite.client.credentials import (
     OAuthClientCertificate,
     OAuthClientCredentials,
 )
-from cognite.client.data_classes import Asset
+from cognite.client.data_classes import Asset, DataSet
 from cognite.extractorutils.configtools._util import _load_certificate_data
 from cognite.extractorutils.exceptions import InvalidConfigError
 from cognite.extractorutils.metrics import AbstractMetricsPusher, CognitePusher, PrometheusPusher
@@ -246,6 +246,27 @@ class IntegrationConfig(ConfigModel):
     external_id: str
 
 
+class EitherIdConfig(ConfigModel):
+    """
+    Configuration parameter representing an ID in CDF, which can either be an external or internal ID.
+
+    An EitherId can only hold one ID type, not both.
+    """
+
+    id: int | None = None
+    external_id: str | None = None
+
+    @property
+    def either_id(self) -> EitherId:
+        """
+        Returns an EitherId object based on the current configuration.
+
+        Raises:
+            TypeError: If both id and external_id are None, or if both are set.
+        """
+        return EitherId(id=self.id, external_id=self.external_id)
+
+
 class ConnectionConfig(ConfigModel):
     """
     Configuration for connecting to a Cognite Data Fusion project.
@@ -442,27 +463,6 @@ class LogConsoleHandlerConfig(ConfigModel):
 
 
 LogHandlerConfig = Annotated[LogFileHandlerConfig | LogConsoleHandlerConfig, Field(discriminator="type")]
-
-
-class EitherIdConfig(ConfigModel):
-    """
-    Configuration parameter representing an ID in CDF, which can either be an external or internal ID.
-
-    An EitherId can only hold one ID type, not both.
-    """
-
-    id: int | None = None
-    external_id: str | None = None
-
-    @property
-    def either_id(self) -> EitherId:
-        """
-        Returns an EitherId object based on the current configuration.
-
-        Raises:
-            TypeError: If both id and external_id are None, or if both are set.
-        """
-        return EitherId(id=self.id, external_id=self.external_id)
 
 
 class _PushGatewayConfig(ConfigModel):
@@ -869,6 +869,30 @@ class ExtractorConfig(ConfigModel):
     metrics: MetricsConfig | None = None
     log_handlers: list[LogHandlerConfig] = Field(default_factory=_log_handler_default)
     retry_startup: bool = True
+    upload_queue_size: int = 50_000
+    data_set: EitherIdConfig | None = None
+    data_set_external_id: str | None = None
+
+    def get_data_set(self, cdf_client: CogniteClient) -> DataSet | None:
+        """
+        Retrieves the DataSet object based on the configuration.
+
+        Args:
+            cdf_client: An instance of CogniteClient to use for retrieving the DataSet.
+
+        Returns:
+            DataSet object if data_set, data_set_id, or data_set_external_id is provided; otherwise None.
+        """
+        if self.data_set_external_id:
+            return cdf_client.data_sets.retrieve(external_id=self.data_set_external_id)
+
+        if not self.data_set:
+            return None
+
+        return cdf_client.data_sets.retrieve(
+            id=self.data_set.either_id.internal_id,
+            external_id=self.data_set.either_id.external_id,
+        )
 
 
 ConfigType = TypeVar("ConfigType", bound=ExtractorConfig)
