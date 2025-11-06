@@ -12,6 +12,13 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+
+## 7.10.0
+
+### Added
+
+* Added support for dataset, dataset_external_id and upload_queue_size in the Extractor Base Config.
+
 ## 7.9.0
 
 ### Changed
