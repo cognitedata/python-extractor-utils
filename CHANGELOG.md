@@ -13,6 +13,13 @@ Changes are grouped as follows
 - `Security` in case of vulnerabilities.
 
 
+## 7.11.0
+
+### Fixed
+
+* Removed manual setting of `is_uploaded` property on `CogniteExtractorFileApply` objects during file upload to allow SDK to manage upload status.
+
+
 ## 7.10.0
 
 ### Added

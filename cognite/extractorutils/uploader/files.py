@@ -520,9 +520,6 @@ class IOFileUploadQueue(AbstractUploadQueue):
                 else:
                     self._upload_bytes(size, file, file_meta)
 
-                if isinstance(file_meta, CogniteExtractorFileApply):
-                    file_meta.is_uploaded = True
-
             if self.post_upload_function:
                 try:
                     self.post_upload_function([file_meta])
