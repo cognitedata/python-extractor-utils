@@ -13,7 +13,7 @@ Changes are grouped as follows
 - `Security` in case of vulnerabilities.
 
 
-## 7.11.0
+## 7.10.1
 
 ### Fixed
 
