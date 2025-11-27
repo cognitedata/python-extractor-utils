@@ -16,12 +16,16 @@ import math
 import time
 from datetime import datetime, timezone
 from io import BytesIO
-from typing import Any
+from typing import Any, BinaryIO
 from unittest.mock import Mock, patch
 
 from httpx import URL, Request
 
-from cognite.client.data_classes import Event, Row
+from cognite.client.data_classes import Event, FileMetadata, Row
+from cognite.client.data_classes.data_modeling.extractor_extensions.v1 import (
+    CogniteExtractorFileApply,
+)
+from cognite.client.testing import CogniteClientMock
 from cognite.extractorutils.uploader import (
     EventUploadQueue,
     IOFileUploadQueue,
@@ -300,3 +304,40 @@ def test_mock_private_link_upload(MockCogniteClient: Mock) -> None:
     response: Request = queue._get_file_upload_request(mock_download_url, mock_stream, len(bytes_))
 
     assert response.url.netloc == base_url.netloc
+
+
+@patch("cognite.client.CogniteClient")
+def test_manually_set_is_uploaded(mock_client: CogniteClientMock) -> None:
+    mock_client.config.max_workers = 4
+
+    queue = IOFileUploadQueue(
+        cdf_client=mock_client,
+        max_queue_size=10,
+    )
+
+    file_apply = CogniteExtractorFileApply(
+        external_id="test-file",
+        name="test-file.txt",
+        space="test-space",
+    )
+
+    # Record the initial state of is_uploaded
+    initial_is_uploaded = file_apply.is_uploaded
+
+    def read_file() -> BinaryIO:
+        return BytesIO(b"test content")
+
+    # Mock the upload methods
+    with patch.object(queue, "_upload_bytes"), patch.object(queue, "_upload_only_metadata") as mock_upload_metadata:
+        mock_file_metadata = Mock(spec=FileMetadata)
+        mock_file_metadata.mime_type = "text/plain"
+        mock_upload_metadata.return_value = (mock_file_metadata, "https://upload.url")
+
+        with queue:
+            queue.add_io_to_upload_queue(file_apply, read_file)
+            queue.upload()
+
+    # Verify that is_uploaded was NOT manually changed by the uploader
+    assert file_apply.is_uploaded == initial_is_uploaded, (
+        "is_uploaded should not be manually changed by the uploader, it should be managed by the SDK"
+    )
