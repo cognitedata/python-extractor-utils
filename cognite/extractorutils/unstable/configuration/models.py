@@ -51,6 +51,7 @@ __all__ = [
     "MetricsConfig",
     "ScheduleConfig",
     "TimeIntervalConfig",
+    "WithDataSetId",
 ]
 
 
@@ -619,6 +620,32 @@ def _log_handler_default() -> list[LogHandlerConfig]:
     return [LogConsoleHandlerConfig(type="console", level=LogLevel.INFO)]
 
 
+class WithDataSetId(ConfigModel):
+    """
+    Base class for configuration models that include a data set reference.
+    """
+
+    data_set: EitherIdConfig | None = None
+
+    def get_data_set(self, cdf_client: CogniteClient) -> DataSet | None:
+        """
+        Retrieves the DataSet object based on the configuration.
+
+        Args:
+            cdf_client: An instance of CogniteClient to use for retrieving the DataSet.
+
+        Returns:
+            DataSet object if data_set is provided; otherwise None.
+        """
+        if not self.data_set:
+            return None
+
+        return cdf_client.data_sets.retrieve(
+            id=self.data_set.either_id.internal_id,
+            external_id=self.data_set.either_id.external_id,
+        )
+
+
 class FileSizeConfig:
     """
     Configuration parameter for setting a file size.
@@ -868,31 +895,6 @@ class ExtractorConfig(ConfigModel):
     state_store: StateStoreConfig | None = None
     metrics: MetricsConfig | None = None
     log_handlers: list[LogHandlerConfig] = Field(default_factory=_log_handler_default)
-    retry_startup: bool = True
-    upload_queue_size: int = 50_000
-    data_set: EitherIdConfig | None = None
-    data_set_external_id: str | None = None
-
-    def get_data_set(self, cdf_client: CogniteClient) -> DataSet | None:
-        """
-        Retrieves the DataSet object based on the configuration.
-
-        Args:
-            cdf_client: An instance of CogniteClient to use for retrieving the DataSet.
-
-        Returns:
-            DataSet object if data_set, data_set_id, or data_set_external_id is provided; otherwise None.
-        """
-        if self.data_set_external_id:
-            return cdf_client.data_sets.retrieve(external_id=self.data_set_external_id)
-
-        if not self.data_set:
-            return None
-
-        return cdf_client.data_sets.retrieve(
-            id=self.data_set.either_id.internal_id,
-            external_id=self.data_set.either_id.external_id,
-        )
 
 
 ConfigType = TypeVar("ConfigType", bound=ExtractorConfig)

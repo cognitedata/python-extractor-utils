@@ -85,8 +85,7 @@ def _extractor_process_entrypoint(
     checkin_worker.active_revision = config.current_config_revision
     checkin_worker.set_on_fatal_error_handler(lambda _: on_fatal_error(controls))
     checkin_worker.set_on_revision_change_handler(lambda _: on_revision_changed(controls))
-    if config.application_config.retry_startup:
-        checkin_worker.set_retry_startup(config.application_config.retry_startup)
+    checkin_worker.set_retry_startup(extractor_class.RETRY_STARTUP)
     if not metrics:
         metrics = BaseMetrics(extractor_name=extractor_class.NAME, extractor_version=extractor_class.VERSION)
     extractor = extractor_class._init_from_runtime(config, checkin_worker, metrics)

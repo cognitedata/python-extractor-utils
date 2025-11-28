@@ -142,6 +142,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
     CONFIG_TYPE: type[ConfigType]
 
+    RETRY_STARTUP: bool = True
     RESTART_POLICY: RestartPolicy = WHEN_CONTINUOUS_TASKS_CRASHES
     USE_DEFAULT_STATE_STORE: bool = True
     _statestore_singleton: AbstractStateStore | None = None

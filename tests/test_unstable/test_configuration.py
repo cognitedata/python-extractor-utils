@@ -13,10 +13,10 @@ from cognite.extractorutils.unstable.configuration.models import (
     ConfigModel,
     ConnectionConfig,
     EitherIdConfig,
-    ExtractorConfig,
     FileSizeConfig,
     LogLevel,
     TimeIntervalConfig,
+    WithDataSetId,
     _ClientCredentialsConfig,
 )
 
@@ -310,19 +310,10 @@ def test_setting_log_level_from_any_case() -> None:
 
 
 @pytest.mark.parametrize(
-    "data_set_external_id,data_set_config,expected_call,expected_result_attrs,should_return_none",
+    "data_set_config,expected_call,expected_result_attrs,should_return_none",
     [
-        # Test with data_set_external_id provided
-        (
-            "test-dataset",
-            None,
-            {"external_id": "test-dataset"},
-            {"external_id": "test-dataset", "name": "Test Dataset"},
-            False,
-        ),
         # Test with data_set config using internal ID
         (
-            None,
             EitherIdConfig(id=12345),
             {"id": 12345, "external_id": None},
             {"id": 12345, "name": "Test Dataset"},
@@ -330,23 +321,13 @@ def test_setting_log_level_from_any_case() -> None:
         ),
         # Test with data_set config using external ID
         (
-            None,
             EitherIdConfig(external_id="config-dataset"),
             {"id": None, "external_id": "config-dataset"},
             {"external_id": "config-dataset", "name": "Config Dataset"},
             False,
         ),
-        # Test that data_set_external_id takes priority over data_set
+        # Test with data_set not provided
         (
-            "priority-dataset",
-            EitherIdConfig(external_id="should-be-ignored"),
-            {"external_id": "priority-dataset"},
-            {"external_id": "priority-dataset", "name": "Priority Dataset"},
-            False,
-        ),
-        # Test with neither data_set_external_id nor data_set provided
-        (
-            None,
             None,
             {},
             {},
@@ -354,17 +335,14 @@ def test_setting_log_level_from_any_case() -> None:
         ),
     ],
 )
-def test_get_data_set_various_configurations(
-    data_set_external_id: str | None,
+def test_with_data_set_id_various_configurations(
     data_set_config: EitherIdConfig | None,
     expected_call: dict | None,
     expected_result_attrs: dict | None,
     should_return_none: bool,
 ) -> None:
-    """Test get_data_set method with various configuration scenarios."""
-    extractor_config = ExtractorConfig(
-        retry_startup=False,
-        data_set_external_id=data_set_external_id,
+    """Test WithDataSetId.get_data_set method with various configuration scenarios."""
+    with_data_set_config = WithDataSetId(
         data_set=data_set_config,
     )
 
@@ -375,7 +353,7 @@ def test_get_data_set_various_configurations(
         mock_dataset = DataSet(**expected_result_attrs)
         mock_client.data_sets.retrieve.return_value = mock_dataset
 
-    result = extractor_config.get_data_set(mock_client)
+    result = with_data_set_config.get_data_set(mock_client)
 
     if should_return_none:
         assert result is None
