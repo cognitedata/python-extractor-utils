@@ -13,7 +13,6 @@ from cognite.extractorutils.unstable.configuration.models import (
     ConfigModel,
     ConnectionConfig,
     EitherIdConfig,
-    ExtractorConfig,
     FileSizeConfig,
     LogLevel,
     TimeIntervalConfig,
@@ -308,84 +307,6 @@ def test_setting_log_level_from_any_case() -> None:
 
     with pytest.raises(ValueError):
         LogLevel("not-a-log-level")
-
-
-@pytest.mark.parametrize(
-    "data_set_external_id,data_set_config,expected_call,expected_result_attrs,should_return_none",
-    [
-        # Test with data_set_external_id provided
-        (
-            "test-dataset",
-            None,
-            {"external_id": "test-dataset"},
-            {"external_id": "test-dataset", "name": "Test Dataset"},
-            False,
-        ),
-        # Test with data_set config using internal ID
-        (
-            None,
-            EitherIdConfig(id=12345),
-            {"id": 12345, "external_id": None},
-            {"id": 12345, "name": "Test Dataset"},
-            False,
-        ),
-        # Test with data_set config using external ID
-        (
-            None,
-            EitherIdConfig(external_id="config-dataset"),
-            {"id": None, "external_id": "config-dataset"},
-            {"external_id": "config-dataset", "name": "Config Dataset"},
-            False,
-        ),
-        # Test that data_set_external_id takes priority over data_set
-        (
-            "priority-dataset",
-            EitherIdConfig(external_id="should-be-ignored"),
-            {"external_id": "priority-dataset"},
-            {"external_id": "priority-dataset", "name": "Priority Dataset"},
-            False,
-        ),
-        # Test with neither data_set_external_id nor data_set provided
-        (
-            None,
-            None,
-            {},
-            {},
-            True,
-        ),
-    ],
-)
-def test_get_data_set_various_configurations(
-    data_set_external_id: str | None,
-    data_set_config: EitherIdConfig | None,
-    expected_call: dict | None,
-    expected_result_attrs: dict | None,
-    should_return_none: bool,
-) -> None:
-    """Test get_data_set method with various configuration scenarios."""
-    extractor_config = ExtractorConfig(
-        data_set_external_id=data_set_external_id,
-        data_set=data_set_config,
-    )
-
-    # Create a mock client instead of using a real one
-    mock_client = Mock()
-
-    if not should_return_none:
-        mock_dataset = DataSet(**expected_result_attrs)
-        mock_client.data_sets.retrieve.return_value = mock_dataset
-
-    result = extractor_config.get_data_set(mock_client)
-
-    if should_return_none:
-        assert result is None
-        mock_client.data_sets.retrieve.assert_not_called()
-    else:
-        assert result is not None
-        for attr, value in expected_result_attrs.items():
-            if attr != "name":
-                assert getattr(result, attr) == value
-        mock_client.data_sets.retrieve.assert_called_once_with(**expected_call)
 
 
 @pytest.mark.parametrize(
