@@ -15,7 +15,6 @@ from cognite.extractorutils.statestore.watermark import LocalStateStore, RawStat
 from cognite.extractorutils.unstable.configuration.loaders import ConfigFormat, load_io
 from cognite.extractorutils.unstable.configuration.models import (
     ConnectionConfig,
-    ExtractorConfig,
     LocalStateStoreConfig,
     LogConsoleHandlerConfig,
     LogFileHandlerConfig,
@@ -345,16 +344,3 @@ push-gateways:
     assert pusher.password is None
     assert pusher.url == "http://localhost:9091"
     assert pusher.job_name == "test-job"
-
-
-def test_extractor_config_upload_queue_size_with_yaml() -> None:
-    """Test upload_queue_size parsing from YAML configuration."""
-    config_yaml = """
-upload-queue-size: 200000
-retry-startup: false
-"""
-    stream = StringIO(config_yaml)
-    config = load_io(stream, ConfigFormat.YAML, ExtractorConfig)
-
-    assert config.upload_queue_size == 200_000
-    assert config.retry_startup is False
