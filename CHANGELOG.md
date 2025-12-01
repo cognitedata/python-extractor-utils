@@ -13,6 +13,13 @@ Changes are grouped as follows
 - `Security` in case of vulnerabilities.
 
 
+## 7.11.0
+
+### Changed
+
+* Remove extractor specific config from the base config.
+
+
 ## 7.10.1
 
 ### Fixed
