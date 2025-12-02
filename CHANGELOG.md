@@ -17,7 +17,7 @@ Changes are grouped as follows
 
 ### Changed
 
-* Remove extractor specific config from the base config.
+* In the `unstable` package: Remove `upload-queue-size`, `retry_startup` and dataset releated config from the base `ExtractorConfig`.
 
 
 ## 7.10.1
