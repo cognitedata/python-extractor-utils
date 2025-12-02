@@ -13,6 +13,13 @@ Changes are grouped as follows
 - `Security` in case of vulnerabilities.
 
 
+## 7.11.0
+
+### Changed
+
+* In the `unstable` package: Remove `upload-queue-size`, `retry_startup` and dataset releated config from the base `ExtractorConfig`.
+
+
 ## 7.10.1
 
 ### Fixed
