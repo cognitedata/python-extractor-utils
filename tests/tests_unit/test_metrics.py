@@ -21,8 +21,8 @@ import pytest
 from prometheus_client import Gauge
 
 from cognite.client import CogniteClient
-from cognite.client.data_classes import Asset, TimeSeries
-from cognite.client.exceptions import CogniteDuplicatedError, CogniteNotFoundError
+from cognite.client.data_classes import Asset
+from cognite.client.exceptions import CogniteDuplicatedError
 from cognite.extractorutils import metrics
 from cognite.extractorutils.metrics import CognitePusher, safe_get
 
@@ -121,9 +121,9 @@ def test_clear(altered_metrics: ModuleType) -> None:
 # CognitePusher test
 @patch("cognite.client.CogniteClient")
 def test_init_empty_cdf(MockCogniteClient: Mock) -> None:
+    """Test that initialization sets up asset but doesn't create timeseries (created on-demand)."""
     init_gauge()
     client = MockCogniteClient()
-    client.time_series.retrieve_multiple = Mock(side_effect=CogniteNotFoundError([{"externalId": "pre_gauge"}]))
 
     return_asset = Asset(id=123, external_id="asset", name="asset")
     new_asset = Asset(external_id="asset", name="asset")
@@ -132,26 +132,19 @@ def test_init_empty_cdf(MockCogniteClient: Mock) -> None:
 
     pusher = CognitePusher(client, external_id_prefix="pre_", asset=new_asset, push_interval=1)
 
-    # Assert time series created
-    # Hacky assert_called_once_with as the TimeSeries object is not the same obj, just equal content
-    client.time_series.create.assert_called_once()
-    print(client.time_series.create.call_args_list)
-    assert (
-        client.time_series.create.call_args_list[0][0][0][0].dump()
-        == TimeSeries(
-            external_id="pre_gauge", name="gauge", legacy_name="pre_gauge", description="Test gauge", asset_id=123
-        ).dump()
-    )
-
     # Assert asset created
     client.assets.create.assert_called_once_with(new_asset)
+
+    # Verify that upload_queue exists
+    assert hasattr(pusher, "upload_queue")
+    assert pusher._asset_id == 123
 
 
 @patch("cognite.client.CogniteClient")
 def test_init_existing_asset(MockCogniteClient: Mock) -> None:
+    """Test that initialization retrieves existing asset."""
     init_gauge()
     client = MockCogniteClient()
-    client.time_series.retrieve_multiple = Mock(side_effect=CogniteNotFoundError([{"externalId": "pre_gauge"}]))
 
     return_asset = Asset(id=123, external_id="assetid", name="asset")
     new_asset = Asset(external_id="assetid", name="asset")
@@ -161,23 +154,10 @@ def test_init_existing_asset(MockCogniteClient: Mock) -> None:
 
     pusher = CognitePusher(client, external_id_prefix="pre_", asset=new_asset, push_interval=1)
 
-    # Assert time series created
-    # Hacky assert_called_once_with as the TimeSeries object is not the same obj, just equal content
-    client.time_series.create.assert_called_once()
-    assert (
-        client.time_series.create.call_args_list[0][0][0][0].dump()
-        == TimeSeries(
-            external_id="pre_gauge",
-            name="gauge",
-            legacy_name="pre_gauge",
-            description="Test gauge",
-            asset_id=123,
-        ).dump()
-    )
-
-    # Assert asset created
+    # Assert asset retrieved
     client.assets.create.assert_called_once_with(new_asset)
     client.assets.retrieve.assert_called_once_with(external_id="assetid")
+    assert pusher._asset_id == 123
 
 
 @patch("cognite.client.CogniteClient")
