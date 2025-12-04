@@ -21,6 +21,51 @@ from cognite.extractorutils.metrics import CognitePusher
 logger = logging.getLogger(__name__)
 
 
+def assert_timeseries_exists(
+    client: CogniteClient,
+    external_id: str,
+    expected_name: str | None = None,
+    expected_description: str | None = None,
+) -> None:
+    """
+    Assert that a timeseries exists in CDF with the expected properties.
+
+    Args:
+        client: CogniteClient instance
+        external_id: External ID of the timeseries
+        expected_name: Expected name of the timeseries (optional)
+        expected_description: Expected description of the timeseries (optional)
+    """
+    ts = client.time_series.retrieve(external_id=external_id)
+    assert ts is not None, f"Timeseries {external_id} was not created"
+    if expected_name is not None:
+        assert ts.name == expected_name, f"Expected name '{expected_name}', got '{ts.name}'"
+    if expected_description is not None:
+        assert ts.description == expected_description, (
+            f"Expected description '{expected_description}', got '{ts.description}'"
+        )
+
+
+def assert_datapoint_value(
+    client: CogniteClient,
+    external_id: str,
+    expected_value: float,
+) -> None:
+    """
+    Assert that a timeseries has datapoints with the expected value.
+
+    Args:
+        client: CogniteClient instance
+        external_id: External ID of the timeseries
+        expected_value: Expected value of the first datapoint
+    """
+    datapoints = client.time_series.data.retrieve(external_id=external_id, start="1h-ago", end="now", limit=10)
+    assert len(datapoints) > 0, f"No datapoints found for timeseries {external_id}"
+    assert datapoints.value[0] == pytest.approx(expected_value), (
+        f"Expected value {expected_value}, got {datapoints.value[0]}"
+    )
+
+
 @pytest.fixture
 def test_prefix() -> str:
     """Generate a unique prefix for this test run to avoid conflicts."""
@@ -121,37 +166,17 @@ def test_cognite_pusher_with_late_registered_metrics(
 
     time.sleep(2)
 
-    early_ts = client.time_series.retrieve(external_id=early_external_id)
-    assert early_ts is not None, f"Early metric timeseries {early_external_id} was not created"
-    assert early_ts.name == early_gauge_name
-    assert early_ts.description == "A metric registered before CognitePusher init"
-
-    late_gauge_ts = client.time_series.retrieve(external_id=late_gauge_external_id)
-    assert late_gauge_ts is not None, f"Late gauge timeseries {late_gauge_external_id} was not created"
-    assert late_gauge_ts.name == late_gauge_name
-    assert late_gauge_ts.description == "A metric registered AFTER CognitePusher init (like python_gc)"
-
-    late_counter_ts = client.time_series.retrieve(external_id=late_counter_external_id)
-    assert late_counter_ts is not None, f"Late counter timeseries {late_counter_external_id} was not created"
-    assert late_counter_ts.name == late_counter_name
-
-    early_datapoints = client.time_series.data.retrieve(
-        external_id=early_external_id, start="1h-ago", end="now", limit=10
+    assert_timeseries_exists(
+        client, early_external_id, early_gauge_name, "A metric registered before CognitePusher init"
     )
-    assert len(early_datapoints) > 0, "No datapoints for early metric"
-    assert early_datapoints.value[0] == pytest.approx(42.0)
-
-    late_gauge_datapoints = client.time_series.data.retrieve(
-        external_id=late_gauge_external_id, start="1h-ago", end="now", limit=10
+    assert_timeseries_exists(
+        client, late_gauge_external_id, late_gauge_name, "A metric registered AFTER CognitePusher init (like python_gc)"
     )
-    assert len(late_gauge_datapoints) > 0, "No datapoints for late gauge metric"
-    assert late_gauge_datapoints.value[0] == pytest.approx(99.0)
+    assert_timeseries_exists(client, late_counter_external_id, late_counter_name)
 
-    late_counter_datapoints = client.time_series.data.retrieve(
-        external_id=late_counter_external_id, start="1h-ago", end="now", limit=10
-    )
-    assert len(late_counter_datapoints) > 0, "No datapoints for late counter metric"
-    assert late_counter_datapoints.value[0] == pytest.approx(5.0)
+    assert_datapoint_value(client, early_external_id, 42.0)
+    assert_datapoint_value(client, late_gauge_external_id, 99.0)
+    assert_datapoint_value(client, late_counter_external_id, 5.0)
 
     pusher.stop()
 
@@ -188,14 +213,8 @@ def test_cognite_pusher_stop_uploads_late_metrics(
 
     time.sleep(2)
 
-    late_ts = client.time_series.retrieve(external_id=late_external_id)
-    assert late_ts is not None, f"Late metric {late_external_id} was not created during shutdown"
-
-    late_datapoints = client.time_series.data.retrieve(
-        external_id=late_external_id, start="1h-ago", end="now", limit=10
-    )
-    assert len(late_datapoints) > 0, "No datapoints for late metric after shutdown"
-    assert late_datapoints.value[0] == pytest.approx(123.0)
+    assert_timeseries_exists(client, late_external_id)
+    assert_datapoint_value(client, late_external_id, 123.0)
 
 
 def test_cognite_pusher_multiple_pushes_with_late_metrics(
@@ -228,8 +247,7 @@ def test_cognite_pusher_multiple_pushes_with_late_metrics(
     pusher._push_to_server()
     time.sleep(1)
 
-    initial_ts = client.time_series.retrieve(external_id=initial_external_id)
-    assert initial_ts is not None
+    assert_timeseries_exists(client, initial_external_id)
 
     late_metric_name = f"later_{random.randint(0, 2**31)}"
     late_metric = metrics_registry(Gauge(late_metric_name, "Late metric added between pushes"))
@@ -242,13 +260,7 @@ def test_cognite_pusher_multiple_pushes_with_late_metrics(
     pusher._push_to_server()
     time.sleep(2)
 
-    late_ts = client.time_series.retrieve(external_id=late_external_id)
-    assert late_ts is not None, "Late metric was not created on second push"
-
-    late_datapoints = client.time_series.data.retrieve(
-        external_id=late_external_id, start="1h-ago", end="now", limit=10
-    )
-    assert len(late_datapoints) > 0
-    assert late_datapoints.value[0] == pytest.approx(20.0)
+    assert_timeseries_exists(client, late_external_id)
+    assert_datapoint_value(client, late_external_id, 20.0)
 
     pusher.stop()

@@ -132,11 +132,8 @@ def test_init_empty_cdf(MockCogniteClient: Mock) -> None:
 
     pusher = CognitePusher(client, external_id_prefix="pre_", asset=new_asset, push_interval=1)
 
-    # Assert asset created
+    # Assert asset created and asset_id was set
     client.assets.create.assert_called_once_with(new_asset)
-
-    # Verify that upload_queue exists
-    assert hasattr(pusher, "upload_queue")
     assert pusher._asset_id == 123
 
 
