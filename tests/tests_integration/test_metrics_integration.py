@@ -6,8 +6,8 @@ after initialization (like python_gc_* and python_info metrics from Prometheus).
 """
 
 import logging
-import random
 import time
+import uuid
 from collections.abc import Callable, Generator
 from typing import Any
 
@@ -105,7 +105,7 @@ def assert_datapoint_value(
 @pytest.fixture
 def test_prefix() -> str:
     """Generate a unique prefix for this test run to avoid conflicts."""
-    test_id = random.randint(0, 2**31)
+    test_id = uuid.uuid4().hex[:8]
     return f"integration_test_{test_id}_"
 
 
@@ -167,7 +167,7 @@ def test_cognite_pusher_with_late_registered_metrics(
     """
     client, test_prefix, created_external_ids = cognite_pusher_test
 
-    early_gauge_name = f"early_gauge_{random.randint(0, 2**31)}"
+    early_gauge_name = f"early_gauge_{uuid.uuid4().hex[:8]}"
     early_gauge = metrics_registry(Gauge(early_gauge_name, "A metric registered before CognitePusher init"))
     early_gauge.set(42.0)
 
@@ -180,13 +180,13 @@ def test_cognite_pusher_with_late_registered_metrics(
         push_interval=60,
     )
 
-    late_gauge_name = f"late_gauge_{random.randint(0, 2**31)}"
+    late_gauge_name = f"late_gauge_{uuid.uuid4().hex[:8]}"
     late_gauge = metrics_registry(
         Gauge(late_gauge_name, "A metric registered AFTER CognitePusher init (like python_gc)")
     )
     late_gauge.set(99.0)
 
-    late_counter_name = f"late_counter_{random.randint(0, 2**31)}"
+    late_counter_name = f"late_counter_{uuid.uuid4().hex[:8]}"
     late_counter = metrics_registry(
         Counter(late_counter_name, "A counter registered AFTER CognitePusher init (like python_info)")
     )
@@ -240,7 +240,7 @@ def test_cognite_pusher_stop_uploads_late_metrics(
         push_interval=60,
     )
 
-    late_metric_name = f"shutdown_metric_{random.randint(0, 2**31)}"
+    late_metric_name = f"shutdown_metric_{uuid.uuid4().hex[:8]}"
     late_metric = metrics_registry(Gauge(late_metric_name, "A metric registered after init, uploaded during shutdown"))
     late_metric.set(123.0)
 
@@ -269,7 +269,7 @@ def test_cognite_pusher_multiple_pushes_with_late_metrics(
     """
     client, test_prefix, created_external_ids = cognite_pusher_test
 
-    initial_metric_name = f"initial_{random.randint(0, 2**31)}"
+    initial_metric_name = f"initial_{uuid.uuid4().hex[:8]}"
     initial_metric = metrics_registry(Gauge(initial_metric_name, "Initial metric"))
     initial_metric.set(10.0)
 
@@ -287,7 +287,7 @@ def test_cognite_pusher_multiple_pushes_with_late_metrics(
 
     assert_timeseries_exists(client, initial_external_id)
 
-    late_metric_name = f"later_{random.randint(0, 2**31)}"
+    late_metric_name = f"later_{uuid.uuid4().hex[:8]}"
     late_metric = metrics_registry(Gauge(late_metric_name, "Late metric added between pushes"))
     late_metric.set(20.0)
 
