@@ -21,7 +21,7 @@ import pytest
 from prometheus_client import Gauge
 
 from cognite.client import CogniteClient
-from cognite.client.data_classes import Asset, TimeSeries
+from cognite.client.data_classes import Asset
 from cognite.client.exceptions import CogniteDuplicatedError, CogniteNotFoundError
 from cognite.extractorutils import metrics
 from cognite.extractorutils.metrics import CognitePusher, safe_get
@@ -121,9 +121,9 @@ def test_clear(altered_metrics: ModuleType) -> None:
 # CognitePusher test
 @patch("cognite.client.CogniteClient")
 def test_init_empty_cdf(MockCogniteClient: Mock) -> None:
+    """Test that initialization sets up asset but doesn't create timeseries (created on-demand)."""
     init_gauge()
     client = MockCogniteClient()
-    client.time_series.retrieve_multiple = Mock(side_effect=CogniteNotFoundError([{"externalId": "pre_gauge"}]))
 
     return_asset = Asset(id=123, external_id="asset", name="asset")
     new_asset = Asset(external_id="asset", name="asset")
@@ -132,26 +132,16 @@ def test_init_empty_cdf(MockCogniteClient: Mock) -> None:
 
     pusher = CognitePusher(client, external_id_prefix="pre_", asset=new_asset, push_interval=1)
 
-    # Assert time series created
-    # Hacky assert_called_once_with as the TimeSeries object is not the same obj, just equal content
-    client.time_series.create.assert_called_once()
-    print(client.time_series.create.call_args_list)
-    assert (
-        client.time_series.create.call_args_list[0][0][0][0].dump()
-        == TimeSeries(
-            external_id="pre_gauge", name="gauge", legacy_name="pre_gauge", description="Test gauge", asset_id=123
-        ).dump()
-    )
-
-    # Assert asset created
+    # Assert asset created and asset_id was set
     client.assets.create.assert_called_once_with(new_asset)
+    assert pusher._asset_id == 123
 
 
 @patch("cognite.client.CogniteClient")
 def test_init_existing_asset(MockCogniteClient: Mock) -> None:
+    """Test that initialization retrieves existing asset."""
     init_gauge()
     client = MockCogniteClient()
-    client.time_series.retrieve_multiple = Mock(side_effect=CogniteNotFoundError([{"externalId": "pre_gauge"}]))
 
     return_asset = Asset(id=123, external_id="assetid", name="asset")
     new_asset = Asset(external_id="assetid", name="asset")
@@ -161,23 +151,10 @@ def test_init_existing_asset(MockCogniteClient: Mock) -> None:
 
     pusher = CognitePusher(client, external_id_prefix="pre_", asset=new_asset, push_interval=1)
 
-    # Assert time series created
-    # Hacky assert_called_once_with as the TimeSeries object is not the same obj, just equal content
-    client.time_series.create.assert_called_once()
-    assert (
-        client.time_series.create.call_args_list[0][0][0][0].dump()
-        == TimeSeries(
-            external_id="pre_gauge",
-            name="gauge",
-            legacy_name="pre_gauge",
-            description="Test gauge",
-            asset_id=123,
-        ).dump()
-    )
-
-    # Assert asset created
+    # Assert asset retrieved
     client.assets.create.assert_called_once_with(new_asset)
     client.assets.retrieve.assert_called_once_with(external_id="assetid")
+    assert pusher._asset_id == 123
 
 
 @patch("cognite.client.CogniteClient")
@@ -219,6 +196,40 @@ def test_push(MockCogniteClient: Mock) -> None:
     assert ts is not None
     assert abs(timestamp - ts["datapoints"][0][0]) < 100  # less than 100 ms
     assert ts["datapoints"][0][1] == pytest.approx(5)
+
+
+@patch("cognite.client.CogniteClient")
+def test_push_creates_missing_timeseries(MockCogniteClient: Mock) -> None:
+    """Test that push logic creates missing time series when enabled."""
+    init_gauge()
+    client: CogniteClient = MockCogniteClient()
+
+    # Create a mock CogniteNotFoundError with not_found and failed attributes
+    not_found_error = CogniteNotFoundError([{"externalId": "pre_gauge"}])
+    not_found_error.not_found = [{"externalId": "pre_gauge"}]
+    not_found_error.failed = []
+
+    # Simulate CogniteNotFoundError on first push, then success on retry
+    client.time_series.data.insert_multiple.side_effect = [
+        not_found_error,
+        None,  # Success on retry
+    ]
+
+    pusher = CognitePusher(client, "pre_", push_interval=1)
+
+    GaugeSetUp.gauge.set(5)
+    pusher._push_to_server()
+
+    # Assert that we tried to create the timeseries
+    client.time_series.create.assert_called_once()
+    created_ts_list = client.time_series.create.call_args[0][0]
+    assert len(created_ts_list) == 1
+    assert created_ts_list[0].external_id == "pre_gauge"
+    assert created_ts_list[0].name == "gauge"
+    assert created_ts_list[0].description == "Test gauge"
+
+    # Assert that insert_multiple was called twice (initial attempt + retry)
+    assert client.time_series.data.insert_multiple.call_count == 2
 
 
 # MetricsUtils test
