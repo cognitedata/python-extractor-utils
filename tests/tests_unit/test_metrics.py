@@ -22,7 +22,7 @@ from prometheus_client import Gauge
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset
-from cognite.client.exceptions import CogniteDuplicatedError
+from cognite.client.exceptions import CogniteDuplicatedError, CogniteNotFoundError
 from cognite.extractorutils import metrics
 from cognite.extractorutils.metrics import CognitePusher, safe_get
 
@@ -196,6 +196,40 @@ def test_push(MockCogniteClient: Mock) -> None:
     assert ts is not None
     assert abs(timestamp - ts["datapoints"][0][0]) < 100  # less than 100 ms
     assert ts["datapoints"][0][1] == pytest.approx(5)
+
+
+@patch("cognite.client.CogniteClient")
+def test_push_creates_missing_timeseries(MockCogniteClient: Mock) -> None:
+    """Test that push logic creates missing time series when enabled."""
+    init_gauge()
+    client: CogniteClient = MockCogniteClient()
+
+    # Create a mock CogniteNotFoundError with not_found and failed attributes
+    not_found_error = CogniteNotFoundError([{"externalId": "pre_gauge"}])
+    not_found_error.not_found = [{"externalId": "pre_gauge"}]
+    not_found_error.failed = []
+
+    # Simulate CogniteNotFoundError on first push, then success on retry
+    client.time_series.data.insert_multiple.side_effect = [
+        not_found_error,
+        None,  # Success on retry
+    ]
+
+    pusher = CognitePusher(client, "pre_", push_interval=1)
+
+    GaugeSetUp.gauge.set(5)
+    pusher._push_to_server()
+
+    # Assert that we tried to create the timeseries
+    client.time_series.create.assert_called_once()
+    created_ts_list = client.time_series.create.call_args[0][0]
+    assert len(created_ts_list) == 1
+    assert created_ts_list[0].external_id == "pre_gauge"
+    assert created_ts_list[0].name == "gauge"
+    assert created_ts_list[0].description == "Test gauge"
+
+    # Assert that insert_multiple was called twice (initial attempt + retry)
+    assert client.time_series.data.insert_multiple.call_count == 2
 
 
 # MetricsUtils test

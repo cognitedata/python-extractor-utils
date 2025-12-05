@@ -16,9 +16,45 @@ from prometheus_client import Counter, Gauge
 from prometheus_client.core import REGISTRY
 
 from cognite.client import CogniteClient
+from cognite.client.exceptions import CogniteNotFoundError
 from cognite.extractorutils.metrics import CognitePusher
 
 logger = logging.getLogger(__name__)
+
+
+def poll_for_condition(condition: Callable[[], bool], timeout: int = 10, interval: float = 0.5) -> None:
+    """
+    Poll a condition function until it returns True or timeout is reached.
+
+    Args:
+        condition: A callable that returns True when the condition is met
+        timeout: Maximum time to wait in seconds
+        interval: Time to wait between checks in seconds
+    """
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        if condition():
+            return
+        time.sleep(interval)
+    pytest.fail(f"Condition not met within {timeout} seconds.")
+
+
+def timeseries_exist(client: CogniteClient, external_ids: list[str]) -> bool:
+    """
+    Check if all specified timeseries exist in CDF.
+
+    Args:
+        client: CogniteClient instance
+        external_ids: List of external IDs to check
+
+    Returns:
+        True if all timeseries exist, False otherwise
+    """
+    try:
+        client.time_series.retrieve_multiple(external_ids=external_ids, ignore_unknown_ids=False)
+        return True
+    except CogniteNotFoundError:
+        return False
 
 
 def assert_timeseries_exists(
@@ -164,7 +200,9 @@ def test_cognite_pusher_with_late_registered_metrics(
     # This should create timeseries for ALL metrics (early + late)
     pusher._push_to_server()
 
-    time.sleep(2)
+    poll_for_condition(
+        lambda: timeseries_exist(client, [early_external_id, late_gauge_external_id, late_counter_external_id])
+    )
 
     assert_timeseries_exists(
         client, early_external_id, early_gauge_name, "A metric registered before CognitePusher init"
@@ -211,7 +249,7 @@ def test_cognite_pusher_stop_uploads_late_metrics(
 
     pusher.stop()
 
-    time.sleep(2)
+    poll_for_condition(lambda: timeseries_exist(client, [late_external_id]))
 
     assert_timeseries_exists(client, late_external_id)
     assert_datapoint_value(client, late_external_id, 123.0)
@@ -245,7 +283,7 @@ def test_cognite_pusher_multiple_pushes_with_late_metrics(
     )
 
     pusher._push_to_server()
-    time.sleep(1)
+    poll_for_condition(lambda: timeseries_exist(client, [initial_external_id]))
 
     assert_timeseries_exists(client, initial_external_id)
 
@@ -258,7 +296,7 @@ def test_cognite_pusher_multiple_pushes_with_late_metrics(
 
     initial_metric.set(11.0)
     pusher._push_to_server()
-    time.sleep(2)
+    poll_for_condition(lambda: timeseries_exist(client, [late_external_id]))
 
     assert_timeseries_exists(client, late_external_id)
     assert_datapoint_value(client, late_external_id, 20.0)
