@@ -303,10 +303,11 @@ def test_extractor_with_metrics_pushers(connection_config: ConnectionConfig, met
         application_config=app_config,
         current_config_revision=1,
         log_level_override=override_level,
+        metrics_class=TestMetrics,
     )
     worker = get_checkin_worker(connection_config)
-    extractor = TestExtractor(full_config, worker, metrics=TestMetrics)
-    assert isinstance(extractor._metrics, TestMetrics) or extractor._metrics == TestMetrics
+    extractor = TestExtractor(full_config, worker)
+    assert isinstance(extractor.metrics, TestMetrics)
 
     with contextlib.ExitStack() as stack:
         stack.enter_context(contextlib.suppress(Exception))

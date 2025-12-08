@@ -1,7 +1,7 @@
+import contextlib
 import gzip
 import json
 import os
-from collections import Counter
 from collections.abc import Callable, Generator, Iterator
 from threading import RLock
 from time import sleep, time
@@ -10,6 +10,8 @@ from uuid import uuid4
 
 import pytest
 import requests_mock
+from prometheus_client import REGISTRY
+from prometheus_client.core import Counter
 
 from cognite.client import CogniteClient
 from cognite.client.config import ClientConfig
@@ -30,12 +32,31 @@ working_dir = os.getcwd()
 @pytest.fixture(autouse=True)
 def reset_singleton() -> Iterator[None]:
     """
-    This fixture ensures that the _statestore_singleton class
-    variable is reset, providing test isolation.
+    This fixture ensures that the _statestore_singleton and _metrics_singleton
+    class variables are reset, and Prometheus collectors are unregistered,
+    providing test isolation.
     """
+    # Clean up before test
     Extractor._statestore_singleton = None
+    Extractor._metrics_singleton = None
+
+    # Unregister all collectors to prevent "Duplicated timeseries" errors
+    collectors = list(REGISTRY._collector_to_names.keys())
+    for collector in collectors:
+        with contextlib.suppress(Exception):
+            REGISTRY.unregister(collector)
+
     yield
+
+    # Clean up after test
     Extractor._statestore_singleton = None
+    Extractor._metrics_singleton = None
+
+    # Unregister all collectors again
+    collectors = list(REGISTRY._collector_to_names.keys())
+    for collector in collectors:
+        with contextlib.suppress(Exception):
+            REGISTRY.unregister(collector)
 
 
 @pytest.fixture(autouse=True)

@@ -79,16 +79,13 @@ def _extractor_process_entrypoint(
     controls: _RuntimeControls,
     config: FullConfig,
     checkin_worker: CheckinWorker,
-    metrics: BaseMetrics | None = None,
 ) -> None:
     logger = logging.getLogger(f"{extractor_class.EXTERNAL_ID}.runtime")
     checkin_worker.active_revision = config.current_config_revision
     checkin_worker.set_on_fatal_error_handler(lambda _: on_fatal_error(controls))
     checkin_worker.set_on_revision_change_handler(lambda _: on_revision_changed(controls))
     checkin_worker.set_retry_startup(extractor_class.RETRY_STARTUP)
-    if not metrics:
-        metrics = BaseMetrics(extractor_name=extractor_class.NAME, extractor_version=extractor_class.VERSION)
-    extractor = extractor_class._init_from_runtime(config, checkin_worker, metrics)
+    extractor = extractor_class._init_from_runtime(config, checkin_worker)
     extractor._attach_runtime_controls(
         cancel_event=controls.cancel_event,
         message_queue=controls.message_queue,
@@ -138,13 +135,13 @@ class Runtime(Generic[ExtractorType]):
     def __init__(
         self,
         extractor: type[ExtractorType],
-        metrics: BaseMetrics | None = None,
+        metrics: type[BaseMetrics] | None = None,
     ) -> None:
         self._extractor_class = extractor
         self._cancellation_token = CancellationToken()
         self._cancellation_token.cancel_on_interrupt()
         self._message_queue: Queue[RuntimeMessage] = Queue()
-        self._metrics = metrics
+        self._metrics_class = metrics
         self.logger = logging.getLogger(f"{self._extractor_class.EXTERNAL_ID}.runtime")
         self._setup_logging()
         self._cancel_event: MpEvent | None = None
@@ -273,7 +270,7 @@ class Runtime(Generic[ExtractorType]):
 
         process = Process(
             target=_extractor_process_entrypoint,
-            args=(self._extractor_class, controls, config, checkin_worker, self._metrics),
+            args=(self._extractor_class, controls, config, checkin_worker),
         )
 
         process.start()
@@ -507,6 +504,7 @@ class Runtime(Generic[ExtractorType]):
                     application_config=application_config,
                     current_config_revision=current_config_revision,
                     log_level_override=args.log_level,
+                    metrics_class=self._metrics_class,
                 ),
                 checkin_worker,
             )
