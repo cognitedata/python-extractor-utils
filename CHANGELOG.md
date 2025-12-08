@@ -12,6 +12,11 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.11.1
+
+### Fixed
+
+* `CognitePusher` now automatically creates timeseries for late-registered metrics (e.g., python_gc_*, python_info), preventing "Time series not found" errors during shutdown.
 
 ## 7.11.0
 
