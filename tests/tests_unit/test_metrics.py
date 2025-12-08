@@ -12,13 +12,16 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import contextlib
 import time
+from collections.abc import Generator
 from types import ModuleType
 from unittest.mock import Mock, patch
 
 import arrow
 import pytest
 from prometheus_client import Gauge
+from prometheus_client.core import REGISTRY
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset
@@ -34,6 +37,43 @@ def altered_metrics() -> ModuleType:
     altered_metrics.delete_from_gateway = Mock()
     altered_metrics.pushadd_to_gateway = Mock()
     return altered_metrics
+
+
+@pytest.fixture(autouse=True, scope="function")
+def cleanup_registry() -> Generator[None, None, None]:
+    """
+    Cleanup fixture that removes extractor-specific metrics from REGISTRY after each test.
+
+    This prevents metric pollution between tests. We keep Python default metrics
+    (python_gc_*, python_info) and the test gauge, but remove metrics from BaseMetrics
+    and upload queue metrics that pollute the registry.
+    """
+    yield
+
+    from prometheus_client import Metric
+
+    metrics_to_remove = []
+    for collector in list(REGISTRY._collector_to_names.keys()):
+        with contextlib.suppress(Exception):
+            for metric in collector.collect():
+                if (isinstance(metric, Metric) and metric.name.startswith("cognite_")) or (
+                    (
+                        metric.name.endswith("_start_time")
+                        or metric.name.endswith("_finish_time")
+                        or metric.name.endswith("_num_threads")
+                        or metric.name.endswith("_memory_bytes")
+                        or metric.name.endswith("_memory_bytes_available")
+                        or metric.name.endswith("_cpu_percent")
+                        or metric.name.endswith("_info")
+                    )
+                    and not metric.name.startswith("python_")
+                ):
+                    metrics_to_remove.append(collector)
+                    break
+
+    for collector in metrics_to_remove:
+        with contextlib.suppress(Exception):
+            REGISTRY.unregister(collector)
 
 
 # For testing CognitePusher
@@ -188,7 +228,7 @@ def test_push(MockCogniteClient: Mock) -> None:
 
     client.time_series.data.insert_multiple.assert_called_once()
     for time_series in client.time_series.data.insert_multiple.call_args_list[0][0][0]:
-        if time_series["externalId"] == "pre_gauge":
+        if time_series.get("externalId") == "pre_gauge":
             ts = time_series
             break
 

@@ -280,31 +280,11 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
         Reuses existing singleton if available to avoid Prometheus registry conflicts.
         """
-        if Extractor._metrics_singleton is not None:
-            return Extractor._metrics_singleton
-
         if metrics_class and issubclass(metrics_class, BaseMetrics):
             metrics_instance = safe_get(metrics_class)
         else:
             metrics_instance = safe_get(BaseMetrics, extractor_name=self.EXTERNAL_ID, extractor_version=self.VERSION)
-
-        Extractor._metrics_singleton = metrics_instance
         return metrics_instance
-
-    @classmethod
-    def get_current_metrics(cls) -> BaseMetrics:
-        """
-        Get the current metrics singleton.
-
-        Returns:
-            The current metrics singleton
-
-        Raises:
-            ValueError: If no metrics singleton has been created, meaning no metrics have been initialized.
-        """
-        if Extractor._metrics_singleton is None:
-            raise ValueError("No metrics singleton created. Have metrics been initialized?")
-        return Extractor._metrics_singleton
 
     def _load_state_store(self) -> None:
         """
