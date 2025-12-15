@@ -1,4 +1,3 @@
-import contextlib
 import gzip
 import json
 import os
@@ -10,13 +9,11 @@ from uuid import uuid4
 
 import pytest
 import requests_mock
-from prometheus_client import REGISTRY
 from prometheus_client.core import Counter
 
 from cognite.client import CogniteClient
 from cognite.client.config import ClientConfig
 from cognite.client.credentials import OAuthClientCredentials
-from cognite.extractorutils import metrics
 from cognite.extractorutils.metrics import BaseMetrics
 from cognite.extractorutils.unstable.configuration.models import (
     ConnectionConfig,
@@ -31,35 +28,18 @@ working_dir = os.getcwd()
 
 
 @pytest.fixture(autouse=True)
-def reset_singleton() -> Iterator[None]:
+def reset_extractor_singleton() -> Iterator[None]:
     """
-    This fixture ensures that the _statestore_singleton and _metrics_singleton
-    class variables are reset, and Prometheus collectors are unregistered,
-    providing test isolation.
+    This fixture ensures that the Extractor._statestore_singleton is reset,
+    providing test isolation for extractor-specific state.
     """
     # Clean up before test
     Extractor._statestore_singleton = None
-    Extractor._metrics_singleton = None
-    metrics._metrics_singularities.clear()
-
-    # Unregister all collectors to prevent "Duplicated timeseries" errors
-    collectors = list(REGISTRY._collector_to_names.keys())
-    for collector in collectors:
-        with contextlib.suppress(Exception):
-            REGISTRY.unregister(collector)
 
     yield
 
     # Clean up after test
     Extractor._statestore_singleton = None
-    Extractor._metrics_singleton = None
-    metrics._metrics_singularities.clear()
-
-    # Unregister all collectors again
-    collectors = list(REGISTRY._collector_to_names.keys())
-    for collector in collectors:
-        with contextlib.suppress(Exception):
-            REGISTRY.unregister(collector)
 
 
 @pytest.fixture(autouse=True)

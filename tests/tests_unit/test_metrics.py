@@ -12,59 +12,29 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
-import contextlib
 import time
-from collections.abc import Generator
 from types import ModuleType
 from unittest.mock import Mock, patch
 
 import arrow
 import pytest
 from prometheus_client import Gauge
-from prometheus_client.core import REGISTRY
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset
 from cognite.client.exceptions import CogniteDuplicatedError, CogniteNotFoundError
-from cognite.extractorutils import metrics
 from cognite.extractorutils.metrics import CognitePusher, safe_get
 
 
 # For testing PrometheusPusher
 @pytest.fixture
 def altered_metrics() -> ModuleType:
+    from cognite.extractorutils import metrics
+
     altered_metrics = metrics
     altered_metrics.delete_from_gateway = Mock()
     altered_metrics.pushadd_to_gateway = Mock()
     return altered_metrics
-
-
-@pytest.fixture(autouse=True)
-def reset_singleton() -> Generator[None, None, None]:
-    """
-    This fixture ensures that the _metrics_singleton
-    class variables are reset, and Prometheus collectors are unregistered,
-    providing test isolation.
-    """
-    # Clean up before test
-    metrics._metrics_singularities.clear()
-
-    # Unregister all collectors to prevent "Duplicated timeseries" errors
-    collectors = list(REGISTRY._collector_to_names.keys())
-    for collector in collectors:
-        with contextlib.suppress(Exception):
-            REGISTRY.unregister(collector)
-
-    yield
-
-    # Clean up after test
-    metrics._metrics_singularities.clear()
-
-    # Unregister all collectors again
-    collectors = list(REGISTRY._collector_to_names.keys())
-    for collector in collectors:
-        with contextlib.suppress(Exception):
-            REGISTRY.unregister(collector)
 
 
 # For testing CognitePusher
