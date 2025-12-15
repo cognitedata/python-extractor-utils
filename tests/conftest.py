@@ -1,6 +1,6 @@
 import contextlib
 import os
-from collections.abc import Generator, Iterator
+from collections.abc import Generator
 from dataclasses import dataclass
 from enum import Enum
 
@@ -19,7 +19,7 @@ NUM_EDGES = NUM_NODES // 100
 
 
 @pytest.fixture(autouse=True)
-def reset_singleton() -> Iterator[None]:
+def reset_singleton() -> Generator[None, None, None]:
     """
     This fixture ensures that the _metrics_singularities
     class variables are reset, and Prometheus collectors are unregistered,

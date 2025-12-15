@@ -28,17 +28,13 @@ working_dir = os.getcwd()
 
 
 @pytest.fixture(autouse=True)
-def reset_extractor_singleton() -> Iterator[None]:
+def reset_singleton() -> Iterator[None]:
     """
-    This fixture ensures that the Extractor._statestore_singleton is reset,
-    providing test isolation for extractor-specific state.
+    This fixture ensures that the _statestore_singleton class
+    variable is reset, providing test isolation.
     """
-    # Clean up before test
     Extractor._statestore_singleton = None
-
     yield
-
-    # Clean up after test
     Extractor._statestore_singleton = None
 
 
