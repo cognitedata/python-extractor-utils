@@ -22,6 +22,11 @@ The subclass should also define several class attributes:
         another_parameter: int
         schedule: ScheduleConfig
 
+    class MyMetrics(BaseMetrics):
+        def __init__(self, extractor_name: str, extractor_version: str):
+            super().__init__(extractor_name, extractor_version)
+            self.custom_counter = Counter("custom_counter", "A custom counter")
+
     class MyExtractor(Extractor[MyConfig]):
         NAME = "My Extractor"
         EXTERNAL_ID = "my-extractor"
@@ -29,6 +34,9 @@ The subclass should also define several class attributes:
         VERSION = "1.0.0"
 
         CONFIG_TYPE = MyConfig
+
+        # Override metrics type annotation for IDE support
+        metrics: MyMetrics
 
         def __init_tasks__(self) -> None:
             self.add_task(
@@ -42,6 +50,8 @@ The subclass should also define several class attributes:
 
         def my_task_function(self, task_context: TaskContext) -> None:
             task_context.logger.info("Running my task")
+            # IDE will now autocomplete custom_counter
+            self.metrics.custom_counter.inc()
 """
 
 import logging
@@ -123,7 +133,7 @@ class FullConfig(Generic[_T]):
         self.application_config = application_config
         self.current_config_revision: ConfigRevision = current_config_revision
         self.log_level_override = log_level_override
-        self.metrics_class = metrics_class
+        self.metrics_class: type[BaseMetrics] | None = metrics_class
 
 
 class Extractor(Generic[ConfigType], CogniteLogger):
@@ -148,7 +158,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
     RESTART_POLICY: RestartPolicy = WHEN_CONTINUOUS_TASKS_CRASHES
     USE_DEFAULT_STATE_STORE: bool = True
     _statestore_singleton: AbstractStateStore | None = None
-    _metrics_singleton: BaseMetrics
+    _metrics_singleton: BaseMetrics | None = None
 
     cancellation_token: CancellationToken
 
@@ -270,32 +280,11 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
         Reuses existing singleton if available to avoid Prometheus registry conflicts.
         """
-        if Extractor._metrics_singleton is not None:
-            self.metrics = Extractor._metrics_singleton
-            return self.metrics
-
-        if metrics_class:
-            self.metrics = safe_get(metrics_class)
+        if metrics_class and issubclass(metrics_class, BaseMetrics):
+            metrics_instance = safe_get(metrics_class)
         else:
-            self.metrics = BaseMetrics(extractor_name=self.EXTERNAL_ID, extractor_version=self.VERSION)
-
-        Extractor._metrics_singleton = self.metrics
-        return self.metrics
-
-    @classmethod
-    def get_current_metrics(cls) -> BaseMetrics:
-        """
-        Get the current metrics singleton.
-
-        Returns:
-            The current metrics singleton
-
-        Raises:
-            ValueError: If no metrics singleton has been created, meaning no metrics have been initialized.
-        """
-        if Extractor._metrics_singleton is None:
-            raise ValueError("No metrics singleton created. Have metrics been initialized?")
-        return Extractor._metrics_singleton
+            metrics_instance = safe_get(BaseMetrics, extractor_name=self.EXTERNAL_ID, extractor_version=self.VERSION)
+        return metrics_instance
 
     def _load_state_store(self) -> None:
         """

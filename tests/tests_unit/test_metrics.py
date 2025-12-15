@@ -12,13 +12,16 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import contextlib
 import time
+from collections.abc import Generator
 from types import ModuleType
 from unittest.mock import Mock, patch
 
 import arrow
 import pytest
 from prometheus_client import Gauge
+from prometheus_client.core import REGISTRY
 
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset
@@ -34,6 +37,34 @@ def altered_metrics() -> ModuleType:
     altered_metrics.delete_from_gateway = Mock()
     altered_metrics.pushadd_to_gateway = Mock()
     return altered_metrics
+
+
+@pytest.fixture(autouse=True)
+def reset_singleton() -> Generator[None, None, None]:
+    """
+    This fixture ensures that the _metrics_singleton
+    class variables are reset, and Prometheus collectors are unregistered,
+    providing test isolation.
+    """
+    # Clean up before test
+    metrics._metrics_singularities.clear()
+
+    # Unregister all collectors to prevent "Duplicated timeseries" errors
+    collectors = list(REGISTRY._collector_to_names.keys())
+    for collector in collectors:
+        with contextlib.suppress(Exception):
+            REGISTRY.unregister(collector)
+
+    yield
+
+    # Clean up after test
+    metrics._metrics_singularities.clear()
+
+    # Unregister all collectors again
+    collectors = list(REGISTRY._collector_to_names.keys())
+    for collector in collectors:
+        with contextlib.suppress(Exception):
+            REGISTRY.unregister(collector)
 
 
 # For testing CognitePusher
@@ -179,11 +210,12 @@ def test_init_existing_all(MockCogniteClient: Mock) -> None:
 
 @patch("cognite.client.CogniteClient")
 def test_push(MockCogniteClient: Mock) -> None:
-    init_gauge()
+    gauge = Gauge("gauge", "Test gauge")
+
     client: CogniteClient = MockCogniteClient()
     pusher = CognitePusher(client, "pre_", push_interval=1)
 
-    GaugeSetUp.gauge.set(5)
+    gauge.set(5)
     pusher._push_to_server()
 
     client.time_series.data.insert_multiple.assert_called_once()
@@ -201,7 +233,7 @@ def test_push(MockCogniteClient: Mock) -> None:
 @patch("cognite.client.CogniteClient")
 def test_push_creates_missing_timeseries(MockCogniteClient: Mock) -> None:
     """Test that push logic creates missing time series when enabled."""
-    init_gauge()
+    gauge = Gauge("gauge", "Test gauge")
     client: CogniteClient = MockCogniteClient()
 
     # Create a mock CogniteNotFoundError with not_found and failed attributes
@@ -217,7 +249,7 @@ def test_push_creates_missing_timeseries(MockCogniteClient: Mock) -> None:
 
     pusher = CognitePusher(client, "pre_", push_interval=1)
 
-    GaugeSetUp.gauge.set(5)
+    gauge.set(5)
     pusher._push_to_server()
 
     # Assert that we tried to create the timeseries
