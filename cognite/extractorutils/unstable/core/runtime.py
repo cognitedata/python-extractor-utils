@@ -474,6 +474,14 @@ class Runtime(Generic[ExtractorType]):
         if not args.skip_init_checks and not self._verify_connection_config(connection_config):
             sys.exit(1)
 
+        if self._metrics_class is not None and (
+            not isinstance(self._metrics_class, type) or not issubclass(self._metrics_class, BaseMetrics)
+        ):
+            self.logger.critical(
+                "The provided metrics class does not inherit from BaseMetrics. Metrics will not be collected."
+            )
+            sys.exit(1)
+
         # This has to be Any. We don't know the type of the extractors' config at type checking since the self doesn't
         # exist yet, and I have not found a way to represent it in a generic way that isn't just an Any in disguise.
         application_config: Any

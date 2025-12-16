@@ -15,6 +15,7 @@ from _pytest.monkeypatch import MonkeyPatch
 from typing_extensions import Self
 
 from cognite.examples.unstable.extractors.simple_extractor.main import SimpleExtractor
+from cognite.extractorutils.metrics import BaseMetrics
 from cognite.extractorutils.unstable.configuration.exceptions import InvalidArgumentError
 from cognite.extractorutils.unstable.configuration.models import ConnectionConfig
 from cognite.extractorutils.unstable.core.base import ConfigRevision, FullConfig
@@ -502,3 +503,47 @@ def test_extractor_with_metrics(
     assert "METRICS_TEST: Counter value is 2" in combined, (
         f"Expected metrics counter to be 2 in child process.\nCaptured output:\n{combined}"
     )
+
+
+class InvalidMetrics:
+    """A dummy metrics class that does not inherit from BaseMetrics."""
+
+    pass
+
+
+@pytest.mark.parametrize(
+    "metrics_input, should_raise",
+    [
+        (TestMetrics, False),
+        (TestMetrics(), True),
+        (InvalidMetrics, True),
+        (None, False),
+    ],
+)
+def test_metrics_class_validation_parametrized(metrics_input: type[BaseMetrics] | None, should_raise: bool) -> None:
+    """
+    Combined parameterized test for metrics class validation behavior.
+    For cases that should not raise, we only assert the runtime stored the value.
+    For invalid cases we assert _main_runtime exits with SystemExit(1).
+    """
+    runtime = Runtime(TestExtractor, metrics=metrics_input)
+
+    if should_raise:
+        mock_connection_config = MagicMock()
+        args = MagicMock(
+            connection_config=[Path("dummy.yaml")],
+            force_local_config=None,
+            cwd=None,
+            skip_init_checks=True,
+            log_level="info",
+        )
+
+        with (
+            patch("cognite.extractorutils.unstable.core.runtime.load_file", return_value=mock_connection_config),
+            pytest.raises(SystemExit) as excinfo,
+        ):
+            runtime._main_runtime(args)
+
+        assert excinfo.value.code == 1
+    else:
+        assert runtime._metrics_class is metrics_input

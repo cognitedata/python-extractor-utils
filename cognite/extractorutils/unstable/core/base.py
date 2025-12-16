@@ -279,7 +279,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
         Reuses existing singleton if available to avoid Prometheus registry conflicts.
         """
-        if metrics_class and issubclass(metrics_class, BaseMetrics):
+        if metrics_class:
             metrics_instance = safe_get(metrics_class)
         else:
             metrics_instance = safe_get(BaseMetrics, extractor_name=self.EXTERNAL_ID, extractor_version=self.VERSION)
