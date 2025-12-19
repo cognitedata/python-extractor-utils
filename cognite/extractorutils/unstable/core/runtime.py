@@ -47,7 +47,7 @@ from cognite.client.exceptions import (
     CogniteAuthError,
     CogniteConnectionError,
 )
-from cognite.extractorutils.metrics import BaseMetrics
+from cognite.extractorutils.metrics import BaseMetrics, MetricsType
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.unstable.configuration.exceptions import InvalidArgumentError, InvalidConfigError
 from cognite.extractorutils.unstable.configuration.loaders import (
@@ -135,7 +135,7 @@ class Runtime(Generic[ExtractorType]):
     def __init__(
         self,
         extractor: type[ExtractorType],
-        metrics: type[BaseMetrics] | None = None,
+        metrics: type[MetricsType] | None = None,
     ) -> None:
         self._extractor_class = extractor
         self._cancellation_token = CancellationToken()

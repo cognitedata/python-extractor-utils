@@ -69,7 +69,7 @@ from humps import pascalize
 from typing_extensions import Self, assert_never
 
 from cognite.extractorutils._inner_util import _resolve_log_level
-from cognite.extractorutils.metrics import BaseMetrics, safe_get
+from cognite.extractorutils.metrics import BaseMetrics, MetricsType, safe_get
 from cognite.extractorutils.statestore import (
     AbstractStateStore,
     LocalStateStore,
@@ -127,13 +127,13 @@ class FullConfig(Generic[_T]):
         application_config: _T,
         current_config_revision: ConfigRevision,
         log_level_override: str | None = None,
-        metrics_class: type[BaseMetrics] | None = None,
+        metrics_class: type[MetricsType] | None = None,
     ) -> None:
         self.connection_config = connection_config
         self.application_config = application_config
         self.current_config_revision: ConfigRevision = current_config_revision
         self.log_level_override = log_level_override
-        self.metrics_class: type[BaseMetrics] | None = metrics_class
+        self.metrics_class: type[MetricsType] | None = metrics_class
 
 
 class Extractor(Generic[ConfigType], CogniteLogger):
@@ -273,17 +273,15 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                             "Defaulted to console logging."
                         )
 
-    def _load_metrics(self, metrics_class: type[BaseMetrics] | None = None) -> BaseMetrics:
+    def _load_metrics(self, metrics_class: type[MetricsType] | None = None) -> MetricsType | BaseMetrics:
         """
         Loads metrics based on the provided metrics class.
 
         Reuses existing singleton if available to avoid Prometheus registry conflicts.
         """
         if metrics_class:
-            metrics_instance = safe_get(metrics_class)
-        else:
-            metrics_instance = safe_get(BaseMetrics, extractor_name=self.EXTERNAL_ID, extractor_version=self.VERSION)
-        return metrics_instance
+            return safe_get(metrics_class)
+        return safe_get(BaseMetrics, extractor_name=self.EXTERNAL_ID, extractor_version=self.VERSION)
 
     def _load_state_store(self) -> None:
         """
