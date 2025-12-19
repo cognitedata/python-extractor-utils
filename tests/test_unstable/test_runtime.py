@@ -520,7 +520,9 @@ class InvalidMetrics:
         (None, False),
     ],
 )
-def test_metrics_class_validation_parametrized(metrics_input: type[BaseMetrics] | None, should_raise: bool) -> None:
+def test_metrics_class_validation_parametrized(
+    caplog: pytest.LogCaptureFixture, metrics_input: type[BaseMetrics] | None, should_raise: bool
+) -> None:
     """
     Combined parameterized test for metrics class validation behavior.
     For cases that should not raise, we only assert the runtime stored the value.
@@ -545,5 +547,31 @@ def test_metrics_class_validation_parametrized(metrics_input: type[BaseMetrics] 
             runtime._main_runtime(args)
 
         assert excinfo.value.code == 1
+        assert any(
+            "The provided metrics class does not inherit from BaseMetrics" in record.message
+            for record in caplog.records
+        ), f"Expected critical log not found. Captured logs: {[r.message for r in caplog.records]}"
     else:
         assert runtime._metrics_class is metrics_input
+
+
+def test_type_checker_would_catch_invalid_metrics() -> None:
+    """
+    This test validates that the type signature itself is correct and would
+    provide IDE/linter feedback to developers.
+    """
+    from typing import get_type_hints
+
+    hints = get_type_hints(Runtime.__init__)
+    assert "metrics" in hints
+    metrics_type_str = str(hints["metrics"])
+
+    # Verify it expects a type/class, not an instance
+    assert "type[" in metrics_type_str or "Type[" in metrics_type_str, (
+        f"Expected metrics parameter to be type[...], got: {metrics_type_str}"
+    )
+
+    # Verify None is allowed (Optional)
+    assert "None" in metrics_type_str or "| None" in metrics_type_str, (
+        f"Expected metrics parameter to be Optional, got: {metrics_type_str}"
+    )
