@@ -572,6 +572,7 @@ def test_type_checker_would_catch_invalid_metrics() -> None:
     )
 
     # Verify None is allowed (Optional)
-    assert "None" in metrics_type_str or "| None" in metrics_type_str, (
+    # Python 3.10 uses typing.Optional[X], 3.10+ can use X | None
+    assert any(pattern in metrics_type_str for pattern in ["None", "| None", "Optional"]), (
         f"Expected metrics parameter to be Optional, got: {metrics_type_str}"
     )
