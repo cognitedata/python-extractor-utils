@@ -12,6 +12,14 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+
+## 7.11.2
+
+### Fixed
+
+* In the `unstable` package: Fixed a metrics pickling error — the runtime no longer passes a `Metrics` instance; extractors are now responsible for creating and managing their own `Metrics` instance.
+
+
 ## 7.11.1
 
 ### Fixed
