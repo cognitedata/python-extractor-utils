@@ -47,7 +47,7 @@ from cognite.client.exceptions import (
     CogniteAuthError,
     CogniteConnectionError,
 )
-from cognite.extractorutils.metrics import BaseMetrics
+from cognite.extractorutils.metrics import BaseMetrics, MetricsType
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.unstable.configuration.exceptions import InvalidArgumentError, InvalidConfigError
 from cognite.extractorutils.unstable.configuration.loaders import (
@@ -79,16 +79,13 @@ def _extractor_process_entrypoint(
     controls: _RuntimeControls,
     config: FullConfig,
     checkin_worker: CheckinWorker,
-    metrics: BaseMetrics | None = None,
 ) -> None:
     logger = logging.getLogger(f"{extractor_class.EXTERNAL_ID}.runtime")
     checkin_worker.active_revision = config.current_config_revision
     checkin_worker.set_on_fatal_error_handler(lambda _: on_fatal_error(controls))
     checkin_worker.set_on_revision_change_handler(lambda _: on_revision_changed(controls))
     checkin_worker.set_retry_startup(extractor_class.RETRY_STARTUP)
-    if not metrics:
-        metrics = BaseMetrics(extractor_name=extractor_class.NAME, extractor_version=extractor_class.VERSION)
-    extractor = extractor_class._init_from_runtime(config, checkin_worker, metrics)
+    extractor = extractor_class._init_from_runtime(config, checkin_worker)
     extractor._attach_runtime_controls(
         cancel_event=controls.cancel_event,
         message_queue=controls.message_queue,
@@ -138,13 +135,13 @@ class Runtime(Generic[ExtractorType]):
     def __init__(
         self,
         extractor: type[ExtractorType],
-        metrics: BaseMetrics | None = None,
+        metrics: type[MetricsType] | None = None,
     ) -> None:
         self._extractor_class = extractor
         self._cancellation_token = CancellationToken()
         self._cancellation_token.cancel_on_interrupt()
         self._message_queue: Queue[RuntimeMessage] = Queue()
-        self._metrics = metrics
+        self._metrics_class = metrics
         self.logger = logging.getLogger(f"{self._extractor_class.EXTERNAL_ID}.runtime")
         self._setup_logging()
         self._cancel_event: MpEvent | None = None
@@ -273,7 +270,7 @@ class Runtime(Generic[ExtractorType]):
 
         process = Process(
             target=_extractor_process_entrypoint,
-            args=(self._extractor_class, controls, config, checkin_worker, self._metrics),
+            args=(self._extractor_class, controls, config, checkin_worker),
         )
 
         process.start()
@@ -477,6 +474,14 @@ class Runtime(Generic[ExtractorType]):
         if not args.skip_init_checks and not self._verify_connection_config(connection_config):
             sys.exit(1)
 
+        if self._metrics_class is not None and (
+            not isinstance(self._metrics_class, type) or not issubclass(self._metrics_class, BaseMetrics)
+        ):
+            self.logger.critical(
+                "The provided metrics class does not inherit from BaseMetrics. Metrics will not be collected."
+            )
+            sys.exit(1)
+
         # This has to be Any. We don't know the type of the extractors' config at type checking since the self doesn't
         # exist yet, and I have not found a way to represent it in a generic way that isn't just an Any in disguise.
         application_config: Any
@@ -507,6 +512,7 @@ class Runtime(Generic[ExtractorType]):
                     application_config=application_config,
                     current_config_revision=current_config_revision,
                     log_level_override=args.log_level,
+                    metrics_class=self._metrics_class,
                 ),
                 checkin_worker,
             )

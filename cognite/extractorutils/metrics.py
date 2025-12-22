@@ -458,3 +458,6 @@ class CognitePusher(AbstractMetricsPusher):
         self._push_to_server()
         self.upload_queue.stop()
         self.cancellation_token.cancel()
+
+
+MetricsType = TypeVar("MetricsType", bound=BaseMetrics)

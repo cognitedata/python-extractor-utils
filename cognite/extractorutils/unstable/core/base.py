@@ -22,6 +22,11 @@ The subclass should also define several class attributes:
         another_parameter: int
         schedule: ScheduleConfig
 
+    class MyMetrics(BaseMetrics):
+        def __init__(self, extractor_name: str, extractor_version: str):
+            super().__init__(extractor_name, extractor_version)
+            self.custom_counter = Counter("custom_counter", "A custom counter")
+
     class MyExtractor(Extractor[MyConfig]):
         NAME = "My Extractor"
         EXTERNAL_ID = "my-extractor"
@@ -29,6 +34,9 @@ The subclass should also define several class attributes:
         VERSION = "1.0.0"
 
         CONFIG_TYPE = MyConfig
+
+        # Override metrics type annotation for IDE support
+        metrics: MyMetrics
 
         def __init_tasks__(self) -> None:
             self.add_task(
@@ -42,6 +50,8 @@ The subclass should also define several class attributes:
 
         def my_task_function(self, task_context: TaskContext) -> None:
             task_context.logger.info("Running my task")
+            # IDE will now autocomplete custom_counter
+            self.metrics.custom_counter.inc()
 """
 
 import logging
@@ -59,7 +69,7 @@ from humps import pascalize
 from typing_extensions import Self, assert_never
 
 from cognite.extractorutils._inner_util import _resolve_log_level
-from cognite.extractorutils.metrics import BaseMetrics
+from cognite.extractorutils.metrics import BaseMetrics, MetricsType, safe_get
 from cognite.extractorutils.statestore import (
     AbstractStateStore,
     LocalStateStore,
@@ -117,11 +127,13 @@ class FullConfig(Generic[_T]):
         application_config: _T,
         current_config_revision: ConfigRevision,
         log_level_override: str | None = None,
+        metrics_class: type[MetricsType] | None = None,
     ) -> None:
         self.connection_config = connection_config
         self.application_config = application_config
         self.current_config_revision: ConfigRevision = current_config_revision
         self.log_level_override = log_level_override
+        self.metrics_class: type[MetricsType] | None = metrics_class
 
 
 class Extractor(Generic[ConfigType], CogniteLogger):
@@ -149,9 +161,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
     cancellation_token: CancellationToken
 
-    def __init__(
-        self, config: FullConfig[ConfigType], checkin_worker: CheckinWorker, metrics: BaseMetrics | None = None
-    ) -> None:
+    def __init__(self, config: FullConfig[ConfigType], checkin_worker: CheckinWorker) -> None:
         self._logger = logging.getLogger(f"{self.EXTERNAL_ID}.main")
         self._checkin_worker = checkin_worker
 
@@ -175,7 +185,8 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
         self._tasks: list[Task] = []
         self._start_time: datetime
-        self._metrics: BaseMetrics | None = metrics
+
+        self.metrics: BaseMetrics = self._load_metrics(config.metrics_class)
 
         self.metrics_push_manager = (
             self.metrics_config.create_manager(self.cognite_client, cancellation_token=self.cancellation_token)
@@ -261,6 +272,16 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                             f"Could not create or write to log file {file_handler.path}: {e}. "
                             "Defaulted to console logging."
                         )
+
+    def _load_metrics(self, metrics_class: type[MetricsType] | None = None) -> MetricsType | BaseMetrics:
+        """
+        Loads metrics based on the provided metrics class.
+
+        Reuses existing singleton if available to avoid Prometheus registry conflicts.
+        """
+        if metrics_class:
+            return safe_get(metrics_class)
+        return safe_get(BaseMetrics, extractor_name=self.EXTERNAL_ID, extractor_version=self.VERSION)
 
     def _load_state_store(self) -> None:
         """
@@ -379,10 +400,8 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self.cancellation_token.cancel()
 
     @classmethod
-    def _init_from_runtime(
-        cls, config: FullConfig[ConfigType], checkin_worker: CheckinWorker, metrics: BaseMetrics
-    ) -> Self:
-        return cls(config, checkin_worker, metrics)
+    def _init_from_runtime(cls, config: FullConfig[ConfigType], checkin_worker: CheckinWorker) -> Self:
+        return cls(config, checkin_worker)
 
     def add_task(self, task: Task) -> None:
         """

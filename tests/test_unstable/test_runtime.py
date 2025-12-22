@@ -15,12 +15,39 @@ from _pytest.monkeypatch import MonkeyPatch
 from typing_extensions import Self
 
 from cognite.examples.unstable.extractors.simple_extractor.main import SimpleExtractor
+from cognite.extractorutils.metrics import BaseMetrics
 from cognite.extractorutils.unstable.configuration.exceptions import InvalidArgumentError
 from cognite.extractorutils.unstable.configuration.models import ConnectionConfig
 from cognite.extractorutils.unstable.core.base import ConfigRevision, FullConfig
 from cognite.extractorutils.unstable.core.checkin_worker import CheckinWorker
 from cognite.extractorutils.unstable.core.runtime import Runtime
+from cognite.extractorutils.unstable.core.tasks import StartupTask, TaskContext
 from test_unstable.conftest import TestConfig, TestExtractor, TestMetrics
+
+
+class MetricsTestExtractor(SimpleExtractor):
+    """Custom extractor for testing metrics in multiprocessing context."""
+
+    def __init_tasks__(self) -> None:
+        super().__init_tasks__()
+
+        def test_metrics_task(context: TaskContext) -> None:
+            # Increment counter twice
+            self.metrics.a_counter.inc()
+            self.metrics.a_counter.inc()
+
+            # Log the counter value so we can verify it in output
+            counter_value = self.metrics.a_counter._value.get()
+            context.info(f"METRICS_TEST: Counter value is {counter_value}")
+
+        # Add startup task to test metrics
+        self.add_task(
+            StartupTask(
+                name="test-metrics",
+                description="Test metrics increment",
+                target=test_metrics_task,
+            )
+        )
 
 
 @pytest.fixture
@@ -396,11 +423,156 @@ def test_logging_on_windows_with_import_error(
     assert mock_root_logger.addHandler.call_count == 1
 
 
-def test_extractor_with_metrics() -> None:
-    runtime = Runtime(TestExtractor, metrics=TestMetrics)
-    assert isinstance(runtime._metrics, TestMetrics) or runtime._metrics == TestMetrics
+def test_extractor_with_metrics(
+    connection_config: ConnectionConfig, tmp_path: Path, monkeypatch: MonkeyPatch, capfd: pytest.CaptureFixture[str]
+) -> None:
+    """
+    Test metrics_class is properly passed through Runtime to child process.
+    This test verifies multiprocessing integration with metrics and counter increments.
+    """
+    cfg_dir = Path("cognite/examples/unstable/extractors/simple_extractor/config")
+    base_conn = cfg_dir / "connection_config.yaml"
+    base_app = cfg_dir / "config.yaml"
 
-    # The metrics instance should be a singleton
-    another_runtime = Runtime(TestExtractor, metrics=TestMetrics)
-    assert another_runtime._metrics is runtime._metrics
-    assert isinstance(another_runtime._metrics, TestMetrics) or another_runtime._metrics == TestMetrics
+    conn_file = tmp_path / f"test-{randint(0, 1000000)}-connection_config.yaml"
+    _write_conn_from_fixture(base_conn, conn_file, connection_config)
+
+    app_file = tmp_path / f"test-{randint(0, 1000000)}-config.yaml"
+    app_file.write_text(base_app.read_text(encoding="utf-8"))
+
+    argv = [
+        "simple-extractor",
+        "--cwd",
+        str(tmp_path),
+        "-c",
+        conn_file.name,
+        "-f",
+        app_file.name,
+        "--skip-init-checks",
+        "-l",
+        "info",
+    ]
+
+    monkeypatch.setattr(sys, "argv", argv)
+
+    runtime = Runtime(MetricsTestExtractor, metrics=TestMetrics)
+
+    # Verify runtime stores metrics class
+    assert runtime._metrics_class is TestMetrics, "Runtime should store TestMetrics class"
+
+    child_holder = {}
+    original_spawn = Runtime._spawn_extractor
+
+    def spy_spawn(self: Self, config: FullConfig, checkin_worker: CheckinWorker) -> Process:
+        assert config.metrics_class is TestMetrics, "FullConfig should carry TestMetrics class"
+
+        p = original_spawn(
+            self,
+            config,
+            checkin_worker,
+        )
+        child_holder["proc"] = p
+        return p
+
+    monkeypatch.setattr(Runtime, "_spawn_extractor", spy_spawn, raising=True)
+
+    t = Thread(target=runtime.run, name="RuntimeMain")
+    t.start()
+
+    start = time.time()
+    while "proc" not in child_holder and time.time() - start < 10:
+        time.sleep(0.05)
+
+    assert "proc" in child_holder, "Extractor process was not spawned in time."
+    proc = child_holder["proc"]
+
+    time.sleep(1.5)  # Give more time for the startup task to run
+
+    runtime._cancellation_token.cancel()
+
+    t.join(timeout=30)
+    assert not t.is_alive(), "Runtime did not shut down within timeout after cancellation."
+
+    proc.join(timeout=0)
+    assert not proc.is_alive(), "Extractor process is still alive"
+
+    out, err = capfd.readouterr()
+    combined = (out or "") + (err or "")
+
+    # Verify metrics counter was incremented
+    assert "METRICS_TEST: Counter value is 2" in combined, (
+        f"Expected metrics counter to be 2 in child process.\nCaptured output:\n{combined}"
+    )
+
+
+class InvalidMetrics:
+    """A dummy metrics class that does not inherit from BaseMetrics."""
+
+    pass
+
+
+@pytest.mark.parametrize(
+    "metrics_input, should_raise",
+    [
+        (TestMetrics, False),
+        (TestMetrics(), True),
+        (InvalidMetrics, True),
+        (None, False),
+    ],
+)
+def test_metrics_class_validation_parametrized(
+    caplog: pytest.LogCaptureFixture, metrics_input: type[BaseMetrics] | None, should_raise: bool
+) -> None:
+    """
+    Combined parameterized test for metrics class validation behavior.
+    For cases that should not raise, we only assert the runtime stored the value.
+    For invalid cases we assert _main_runtime exits with SystemExit(1).
+    """
+    runtime = Runtime(TestExtractor, metrics=metrics_input)
+
+    if should_raise:
+        mock_connection_config = MagicMock()
+        args = MagicMock(
+            connection_config=[Path("dummy.yaml")],
+            force_local_config=None,
+            cwd=None,
+            skip_init_checks=True,
+            log_level="info",
+        )
+
+        with (
+            patch("cognite.extractorutils.unstable.core.runtime.load_file", return_value=mock_connection_config),
+            pytest.raises(SystemExit) as excinfo,
+        ):
+            runtime._main_runtime(args)
+
+        assert excinfo.value.code == 1
+        assert any(
+            "The provided metrics class does not inherit from BaseMetrics" in record.message
+            for record in caplog.records
+        ), f"Expected critical log not found. Captured logs: {[r.message for r in caplog.records]}"
+    else:
+        assert runtime._metrics_class is metrics_input
+
+
+def test_type_checker_would_catch_invalid_metrics() -> None:
+    """
+    This test validates that the type signature itself is correct and would
+    provide IDE/linter feedback to developers.
+    """
+    from typing import get_type_hints
+
+    hints = get_type_hints(Runtime.__init__)
+    assert "metrics" in hints
+    metrics_type_str = str(hints["metrics"])
+
+    # Verify it expects a type/class, not an instance
+    assert "type[" in metrics_type_str or "Type[" in metrics_type_str, (
+        f"Expected metrics parameter to be type[...], got: {metrics_type_str}"
+    )
+
+    # Verify None is allowed (Optional)
+    # Python 3.10 uses typing.Optional[X], 3.10+ can use X | None
+    assert any(pattern in metrics_type_str for pattern in ["None", "| None", "Optional"]), (
+        f"Expected metrics parameter to be Optional, got: {metrics_type_str}"
+    )

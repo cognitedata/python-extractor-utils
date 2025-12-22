@@ -1,7 +1,6 @@
 import gzip
 import json
 import os
-from collections import Counter
 from collections.abc import Callable, Generator, Iterator
 from threading import RLock
 from time import sleep, time
@@ -10,6 +9,7 @@ from uuid import uuid4
 
 import pytest
 import requests_mock
+from prometheus_client.core import Counter
 
 from cognite.client import CogniteClient
 from cognite.client.config import ClientConfig

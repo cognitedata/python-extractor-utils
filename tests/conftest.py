@@ -5,15 +5,45 @@ from dataclasses import dataclass
 from enum import Enum
 
 import pytest
+from prometheus_client.core import REGISTRY
 
 from cognite.client import CogniteClient
 from cognite.client.config import ClientConfig
 from cognite.client.credentials import OAuthClientCredentials
 from cognite.client.data_classes.data_modeling import NodeId
 from cognite.client.exceptions import CogniteAPIError, CogniteNotFoundError
+from cognite.extractorutils import metrics
 
 NUM_NODES = 5000
 NUM_EDGES = NUM_NODES // 100
+
+
+@pytest.fixture(autouse=True)
+def reset_singleton() -> Generator[None, None, None]:
+    """
+    This fixture ensures that the _metrics_singularities
+    class variables are reset, and Prometheus collectors are unregistered,
+    providing test isolation.
+    """
+    # Clean up before test
+    metrics._metrics_singularities.clear()
+
+    # Unregister all collectors to prevent "Duplicated timeseries" errors
+    collectors = list(REGISTRY._collector_to_names.keys())
+    for collector in collectors:
+        with contextlib.suppress(Exception):
+            REGISTRY.unregister(collector)
+
+    yield
+
+    # Clean up after test
+    metrics._metrics_singularities.clear()
+
+    # Unregister all collectors again
+    collectors = list(REGISTRY._collector_to_names.keys())
+    for collector in collectors:
+        with contextlib.suppress(Exception):
+            REGISTRY.unregister(collector)
 
 
 class ETestType(Enum):

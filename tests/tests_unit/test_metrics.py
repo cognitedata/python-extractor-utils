@@ -23,13 +23,14 @@ from prometheus_client import Gauge
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset
 from cognite.client.exceptions import CogniteDuplicatedError, CogniteNotFoundError
-from cognite.extractorutils import metrics
 from cognite.extractorutils.metrics import CognitePusher, safe_get
 
 
 # For testing PrometheusPusher
 @pytest.fixture
 def altered_metrics() -> ModuleType:
+    from cognite.extractorutils import metrics
+
     altered_metrics = metrics
     altered_metrics.delete_from_gateway = Mock()
     altered_metrics.pushadd_to_gateway = Mock()
@@ -179,11 +180,12 @@ def test_init_existing_all(MockCogniteClient: Mock) -> None:
 
 @patch("cognite.client.CogniteClient")
 def test_push(MockCogniteClient: Mock) -> None:
-    init_gauge()
+    gauge = Gauge("gauge", "Test gauge")
+
     client: CogniteClient = MockCogniteClient()
     pusher = CognitePusher(client, "pre_", push_interval=1)
 
-    GaugeSetUp.gauge.set(5)
+    gauge.set(5)
     pusher._push_to_server()
 
     client.time_series.data.insert_multiple.assert_called_once()
@@ -201,7 +203,7 @@ def test_push(MockCogniteClient: Mock) -> None:
 @patch("cognite.client.CogniteClient")
 def test_push_creates_missing_timeseries(MockCogniteClient: Mock) -> None:
     """Test that push logic creates missing time series when enabled."""
-    init_gauge()
+    gauge = Gauge("gauge", "Test gauge")
     client: CogniteClient = MockCogniteClient()
 
     # Create a mock CogniteNotFoundError with not_found and failed attributes
@@ -217,7 +219,7 @@ def test_push_creates_missing_timeseries(MockCogniteClient: Mock) -> None:
 
     pusher = CognitePusher(client, "pre_", push_interval=1)
 
-    GaugeSetUp.gauge.set(5)
+    gauge.set(5)
     pusher._push_to_server()
 
     # Assert that we tried to create the timeseries
