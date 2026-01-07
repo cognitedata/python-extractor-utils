@@ -13,6 +13,12 @@ Changes are grouped as follows
 - `Security` in case of vulnerabilities.
 
 
+## 7.11.3
+
+### Fixed
+* In the `unstable` package: Fixed `handle.set_service_running()` call to report service status to Windows Service Control Manager
+
+
 ## 7.11.2
 
 ### Fixed

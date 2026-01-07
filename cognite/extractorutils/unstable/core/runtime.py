@@ -444,6 +444,7 @@ class Runtime(Generic[ExtractorType]):
             # Wrap the main runtime loop in a function for the service
             def service_main(handle: ServiceHandle, service_args: list[str]) -> None:
                 handle.event_log_info("Extractor Windows service is starting.")
+                handle.set_service_running()
                 try:
                     self._main_runtime(args)
                 except Exception as exc:

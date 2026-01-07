@@ -343,6 +343,7 @@ def test_service_main_entrypoint(monkeypatch: MonkeyPatch, connection_config: Co
     # Simulate service_main logic
     def service_main(handle: ServiceHandle, service_args: list[str]) -> None:
         handle.event_log_info("Extractor Windows service is starting.")
+        handle.set_service_running()
         runtime._main_runtime(args)
         handle.event_log_info("Extractor Windows service is stopping.")
 
@@ -354,6 +355,7 @@ def test_service_main_entrypoint(monkeypatch: MonkeyPatch, connection_config: Co
         service_main(handle, [])
         cancel_thread.join()
         handle.event_log_info.assert_any_call("Extractor Windows service is starting.")
+        handle.set_service_running.assert_called_once()
         handle.event_log_info.assert_any_call("Extractor Windows service is stopping.")
         # Assert that 'Shutting down runtime' was logged, confirming _main_runtime ran
         mock_logger_info.assert_any_call("Shutting down runtime")
