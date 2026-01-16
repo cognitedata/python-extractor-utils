@@ -177,7 +177,7 @@ def test_crashing_task(
     assert len(worker._errors) == 1
 
     error = next(iter(worker._errors.values()))
-    assert error.description == "Task TestTask crashed unexpectedly"
+    assert error.description == "Task TestTask failed unexpectedly"
     assert error.level == ErrorLevel.fatal
 
     # Make sure error was recorded as a task error

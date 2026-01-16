@@ -13,6 +13,12 @@ Changes are grouped as follows
 - `Security` in case of vulnerabilities.
 
 
+## 7.11.4
+
+### Fixed
+* In the `unstable` package: Improved error logging and error messages when config revision changes are detected
+
+
 ## 7.11.3
 
 ### Fixed

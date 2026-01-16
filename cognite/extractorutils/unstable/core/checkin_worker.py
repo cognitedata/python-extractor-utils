@@ -195,7 +195,6 @@ class CheckinWorker:
                     "and configured to use remote config for the new config to take effect.",
                 )
             elif self._active_revision < checkin_response.last_config_revision:
-                self._active_revision = checkin_response.last_config_revision
                 if self._on_revision_change is not None:
                     self._logger.info(
                         "Remote config revision changed %s -> %s. The extractor will now use the new configuration.",
@@ -203,6 +202,7 @@ class CheckinWorker:
                         checkin_response.last_config_revision,
                     )
                     self._on_revision_change(checkin_response.last_config_revision)
+                self._active_revision = checkin_response.last_config_revision
 
     def flush(self, cancellation_token: CancellationToken) -> None:
         """

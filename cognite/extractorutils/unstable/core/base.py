@@ -427,9 +427,9 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                 target(task_context)
 
             except Exception as e:
-                # Task crashed, record it as a fatal error
+                # Task failed, record it as a fatal error
                 task_context.exception(
-                    f"Task {task.name} crashed unexpectedly",
+                    f"Task {task.name} failed unexpectedly",
                     e,
                     level=ErrorLevel.fatal,
                 )

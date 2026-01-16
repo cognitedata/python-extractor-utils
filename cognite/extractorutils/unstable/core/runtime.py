@@ -337,6 +337,7 @@ class Runtime(Generic[ExtractorType]):
                     # Same error as before, no need to log it again
                     self._cancellation_token.wait(randint(1, self.RETRY_CONFIG_INTERVAL))
                     continue
+                self.logger.error(error_message)
                 prev_error = error_message
 
                 ts = now()
