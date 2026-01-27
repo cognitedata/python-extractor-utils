@@ -12,6 +12,11 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.11.5
+
+### Fixed
+* Updated max single-chunk file size to 5000 MiB from 5 GiB. The earlier limit used to cause issues with Azure Blob Storage.
+
 
 ## 7.11.4
 
