@@ -59,10 +59,11 @@ from cognite.extractorutils.util import cognite_exceptions, retry
 _QUEUES: int = 0
 _QUEUES_LOCK: threading.RLock = threading.RLock()
 
-# 5 GiB
-_MAX_SINGLE_CHUNK_FILE_SIZE = 5 * 1024 * 1024 * 1024
+# 5000 MiB
+_MAX_SINGLE_CHUNK_FILE_SIZE = 5 * 1000 * 1024 * 1024
+
 # 4000 MiB
-_MAX_FILE_CHUNK_SIZE = 4 * 1024 * 1024 * 1000
+_MAX_FILE_CHUNK_SIZE = 4 * 1000 * 1024 * 1024
 
 _CDF_ALPHA_VERSION_HEADER = {"cdf-version": "alpha"}
 
