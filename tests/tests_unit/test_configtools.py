@@ -22,7 +22,7 @@ from collections.abc import Generator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import IO
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 import yaml
@@ -51,6 +51,7 @@ from cognite.extractorutils.configtools.elements import (
 from cognite.extractorutils.configtools.loaders import (
     ConfigResolver,
     compile_patterns,
+    load_yaml_dict,
 )
 from cognite.extractorutils.configtools.validators import matches_pattern, matches_patterns
 from cognite.extractorutils.exceptions import InvalidConfigError
@@ -750,3 +751,64 @@ cognite:
         assert config.logger.file.path is not None
         assert "café" in config.logger.file.path
         assert any("Falling back to system default encoding." in r.message for r in caplog.records)
+
+
+@pytest.mark.parametrize("auth_method", ["default", "client-secret"])
+def test_keyvault_config_env_var_expansion(monkeypatch: pytest.MonkeyPatch, auth_method: str) -> None:
+    monkeypatch.setenv("MY_KEYVAULT_NAME", "test-keyvault-from-env")
+
+    if auth_method == "default":
+        yaml_config = """
+            azure-keyvault:
+                keyvault-name: ${MY_KEYVAULT_NAME}
+                authentication-method: default
+
+            database:
+                password: !keyvault db-password
+        """
+    else:
+        monkeypatch.setenv("KV_CLIENT_ID", "client-id-123")
+        monkeypatch.setenv("KV_TENANT_ID", "tenant-id-456")
+        monkeypatch.setenv("KV_SECRET", "secret-789")
+        yaml_config = """
+            azure-keyvault:
+                keyvault-name: ${MY_KEYVAULT_NAME}
+                authentication-method: client-secret
+                client-id: ${KV_CLIENT_ID}
+                tenant-id: ${KV_TENANT_ID}
+                secret: ${KV_SECRET}
+
+            database:
+                password: !keyvault db-password
+        """
+
+    with (
+        patch("cognite.extractorutils.configtools.loaders.DefaultAzureCredential") as mock_default_cred,
+        patch("cognite.extractorutils.configtools.loaders.ClientSecretCredential") as mock_client_cred,
+        patch("cognite.extractorutils.configtools.loaders.SecretClient") as mock_secret_client,
+    ):
+        mock_client_instance = MagicMock()
+        mock_client_instance.get_secret.return_value = MagicMock(value="secret-from-keyvault")
+        mock_secret_client.return_value = mock_client_instance
+        mock_default_cred.return_value = MagicMock()
+        mock_client_cred.return_value = MagicMock()
+
+        config = load_yaml_dict(yaml_config)
+
+        mock_secret_client.assert_called_once()
+        call_kwargs = mock_secret_client.call_args[1]
+        assert call_kwargs["vault_url"] == "https://test-keyvault-from-env.vault.azure.net"
+
+        assert config["database"]["password"] == "secret-from-keyvault"
+
+        if auth_method == "default":
+            mock_default_cred.assert_called_once()
+            mock_client_cred.assert_not_called()
+
+        if auth_method == "client-secret":
+            mock_client_cred.assert_called_once_with(
+                tenant_id="tenant-id-456",
+                client_id="client-id-123",
+                client_secret="secret-789",
+            )
+            mock_default_cred.assert_not_called()
