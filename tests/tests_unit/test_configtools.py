@@ -812,3 +812,34 @@ def test_keyvault_config_env_var_expansion(monkeypatch: pytest.MonkeyPatch, auth
                 client_secret="secret-789",
             )
             mock_default_cred.assert_not_called()
+
+
+def test_keyvault_tag_without_config_raises_error() -> None:
+    yaml_config = """
+        database:
+            password: !keyvault db-password
+    """
+
+    with pytest.raises(InvalidConfigError) as e:
+        load_yaml_dict(yaml_config)
+    assert (
+        e.value.message
+        == "Attempted to load values from Azure key vault with no key vault configured. Include an `azure-keyvault` section in your config to use the !keyvault tag."
+    )
+
+
+def test_keyvault_client_secret_missing_raises_error() -> None:
+    yaml_config = """
+        azure-keyvault:
+            keyvault-name: test-keyvault-from-env
+            authentication-method: client-secret
+            client-id: client-id-123
+            tenant-id: tenant-id-456
+
+        database:
+            password: !keyvault db-password
+    """
+
+    with pytest.raises(InvalidConfigError) as e:
+        load_yaml_dict(yaml_config)
+    assert e.value.message == "Missing client secret parameters. client-id, tenant-id and client-secret are mandatory"
