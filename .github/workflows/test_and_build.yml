@@ -42,6 +42,7 @@ jobs:
           KEYVAULT_CLIENT_ID: ${{ secrets.KEYVAULT_CLIENT_ID }}
           KEYVAULT_TENANT_ID: ${{ secrets.KEYVAULT_TENANT_ID }}
           KEYVAULT_CLIENT_SECRET: ${{ secrets.KEYVAULT_CLIENT_SECRET }}
+          KEYVAULT_NAME: ${{ secrets.KEYVAULT_NAME }}
           COGNITE_PROJECT: extractor-tests
           COGNITE_BASE_URL: https://greenfield.cognitedata.com
           COGNITE_DEV_PROJECT: extractor-aws-dub-dev-testing

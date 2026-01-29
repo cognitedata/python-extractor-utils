@@ -9,7 +9,7 @@ azure-keyvault:
     client-id: ${KEYVAULT_CLIENT_ID}
     tenant-id: ${KEYVAULT_TENANT_ID}
     secret: ${KEYVAULT_CLIENT_SECRET}
-    keyvault-name: extractor-keyvault
+    keyvault-name: ${KEYVAULT_NAME}
 
 cognite:
   project: mathiaslohne-develop
