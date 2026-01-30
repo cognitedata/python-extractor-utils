@@ -1,6 +1,6 @@
 [project]
 name = "cognite-extractor-utils"
-version = "7.11.5"
+version = "7.11.6"
 description = "Utilities for easier development of extractors for CDF"
 authors = [
     {name = "Mathias Lohne", email = "mathias.lohne@cognite.com"}
