@@ -12,7 +12,7 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
-## 7.11.6
+## 7.12.0
 
 ### Added
 * In the `unstable` package: Add TaskThrottle helper class for limiting concurrent task execution with decorator and context manager support
