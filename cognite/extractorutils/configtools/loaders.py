@@ -78,8 +78,6 @@ class KeyVaultLoader:
         self.client: SecretClient | None = None
 
     def _init_client(self) -> None:
-        from dotenv import load_dotenv
-
         if not self.config:
             raise InvalidConfigError(
                 "Attempted to load values from Azure key vault with no key vault configured. "
@@ -108,20 +106,11 @@ class KeyVaultLoader:
 
             _logger.info("Using Azure ClientSecret credentials to access KeyVault")
 
-            env_file_found = load_dotenv("./.env", override=True)
-
-            if not env_file_found:
-                _logger.info(f"Local environment file not found at {Path.cwd() / '.env'}")
-
             if all(param in self.config for param in auth_parameters):
-                tenant_id = os.path.expandvars(self.config["tenant-id"])
-                client_id = os.path.expandvars(self.config["client-id"])
-                secret = os.path.expandvars(self.config["secret"])
-
                 credentials = ClientSecretCredential(
-                    tenant_id=tenant_id,
-                    client_id=client_id,
-                    client_secret=secret,
+                    tenant_id=self.config["tenant-id"],
+                    client_id=self.config["client-id"],
+                    client_secret=self.config["secret"],
                 )
             else:
                 raise InvalidConfigError(
@@ -184,6 +173,10 @@ def _load_yaml_dict_raw(
         # Ignoring types since the key can be None.
 
     SafeLoaderIgnoreUnknown.add_constructor(None, SafeLoaderIgnoreUnknown.ignore_unknown)  # type: ignore
+    if expand_envvars:
+        SafeLoaderIgnoreUnknown.add_implicit_resolver("!env", re.compile(r"\$\{([^}^{]+)\}"), None)
+        SafeLoaderIgnoreUnknown.add_constructor("!env", _env_constructor)
+
     initial_load = yaml.load(source, Loader=SafeLoaderIgnoreUnknown)  # noqa: S506
 
     if not isinstance(initial_load, dict):
