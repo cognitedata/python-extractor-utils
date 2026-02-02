@@ -16,6 +16,7 @@ Changes are grouped as follows
 
 ### Added
 * In the `unstable` package: Add TaskThrottle helper class for limiting concurrent task execution with decorator and context manager support
+* Add support for environment variable interpolation in keyvault config
 
 ## 7.11.5
 
