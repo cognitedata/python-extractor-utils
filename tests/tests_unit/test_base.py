@@ -23,6 +23,7 @@ from cognite.client import CogniteClient
 from cognite.client.data_classes import ExtractionPipeline, ExtractionPipelineRun
 from cognite.extractorutils import Extractor
 from cognite.extractorutils.configtools import BaseConfig, StateStoreConfig
+from cognite.extractorutils.exceptions import InvalidConfigError
 from cognite.extractorutils.statestore import LocalStateStore, NoStateStore
 
 
@@ -277,3 +278,17 @@ def test_report_run(get_client_mock: Callable[[], CogniteClient]) -> None:
 
     extractor.extraction_pipeline = None
     # assert False
+
+
+def test_enter_raises_on_invalid_config() -> None:
+    extractor = Extractor(
+        name="test_invalid_config",
+        description="description",
+        config_class=ConfigWithStates,
+        config_file_path="tests/tests_unit/dummyconfig.yaml",
+    )
+    with (
+        patch.object(extractor, "_initial_load_config", side_effect=InvalidConfigError("bad config")),
+        pytest.raises(InvalidConfigError, match="bad config"),
+    ):
+        extractor.__enter__()

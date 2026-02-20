@@ -19,7 +19,6 @@ Module containing the base class for extractors.
 import contextlib
 import logging
 import os
-import sys
 from collections.abc import Callable
 from dataclasses import is_dataclass
 from enum import Enum
@@ -38,7 +37,6 @@ from cognite.extractorutils.configtools import (
     ConfigResolver,
     StateStoreConfig,
 )
-from cognite.extractorutils.exceptions import InvalidConfigError
 from cognite.extractorutils.metrics import BaseMetrics
 from cognite.extractorutils.statestore import (
     AbstractStateStore,
@@ -315,14 +313,7 @@ class Extractor(Generic[CustomConfigClass]):
         else:
             dotenv_message = "No .env file imported when using Cognite Functions"
 
-        try:
-            self._initial_load_config(override_path=self.config_file_path)
-        except InvalidConfigError as e:
-            print(  # noqa: T201
-                "Critical error: Could not read config file", file=sys.stderr
-            )
-            print(str(e), file=sys.stderr)  # noqa: T201
-            sys.exit(1)
+        self._initial_load_config(override_path=self.config_file_path)
 
         if not self.configured_logger:
             self.config.logger.setup_logging()
