@@ -209,6 +209,7 @@ def test_run_report_periodic_reset_startup(
     process.join(timeout=3)
     cancellation_token.cancel()
 
+    cancellation_token = CancellationToken()
     process = Thread(
         target=worker.run_periodic_checkin,
         args=(cancellation_token, test_extractor._get_startup_request(), 2.0),

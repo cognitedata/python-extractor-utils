@@ -104,7 +104,9 @@ class CheckinWorker:
         due to changes in the config or the extractor just starting for the first time.
 
         """
-        self._has_reported_startup = False
+        with self._lock:
+            self._is_running = False
+            self._has_reported_startup = False
 
     def set_on_revision_change_handler(self, on_revision_change: Callable[[int], None]) -> None:
         """
