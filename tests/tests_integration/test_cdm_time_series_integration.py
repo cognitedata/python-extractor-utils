@@ -8,13 +8,13 @@ from typing import Literal
 
 import pytest
 from _pytest.logging import LogCaptureFixture
-from conftest import ETestType, ParamTest
-
 from cognite.client import CogniteClient
 from cognite.client.data_classes import StatusCode
 from cognite.client.data_classes.data_modeling import NodeApply, NodeId
 from cognite.client.data_classes.data_modeling.extractor_extensions.v1 import CogniteExtractorTimeSeriesApply
 from cognite.client.exceptions import CogniteAPIError, CogniteNotFoundError
+from conftest import ETestType, ParamTest
+
 from cognite.extractorutils.uploader.time_series import (
     MAX_DATAPOINT_STRING_BYTES,
     MAX_DATAPOINT_VALUE,

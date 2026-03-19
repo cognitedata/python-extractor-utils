@@ -10,6 +10,7 @@ from typing import TypeAlias
 from cognite.client.data_classes import Event as _Event
 from cognite.client.data_classes import Row as _Row
 from cognite.client.data_classes.data_modeling import NodeId
+
 from cognite.extractorutils.uploader.time_series import DataPoint
 
 

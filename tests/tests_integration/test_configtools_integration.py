@@ -19,6 +19,7 @@ from io import StringIO
 from cognite.client import CogniteClient
 from cognite.client.data_classes import DataSet, ExtractionPipelineConfigWrite, ExtractionPipelineWrite
 from cognite.client.exceptions import CogniteDuplicatedError
+
 from cognite.extractorutils.configtools import BaseConfig, load_yaml
 from cognite.extractorutils.configtools.loaders import ConfigResolver
 

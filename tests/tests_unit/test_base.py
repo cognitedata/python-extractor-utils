@@ -18,9 +18,9 @@ from textwrap import shorten
 from unittest.mock import Mock, patch
 
 import pytest
-
 from cognite.client import CogniteClient
 from cognite.client.data_classes import ExtractionPipeline, ExtractionPipelineRun
+
 from cognite.extractorutils import Extractor
 from cognite.extractorutils.configtools import BaseConfig, StateStoreConfig
 from cognite.extractorutils.statestore import LocalStateStore, NoStateStore

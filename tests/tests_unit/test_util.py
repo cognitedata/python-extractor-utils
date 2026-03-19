@@ -19,9 +19,9 @@ from unittest.mock import Mock, patch
 import httpx
 import pytest
 import requests
-
 from cognite.client.data_classes import Asset, TimeSeries
 from cognite.client.exceptions import CogniteAPIError, CogniteFileUploadError, CogniteNotFoundError
+
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.util import (
     EitherId,

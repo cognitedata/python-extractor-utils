@@ -8,10 +8,10 @@ from io import StringIO
 from pathlib import Path
 from typing import TextIO, TypeVar
 
-from pydantic import ValidationError
-
 from cognite.client import CogniteClient
 from cognite.client.exceptions import CogniteAPIError
+from pydantic import ValidationError
+
 from cognite.extractorutils.configtools.loaders import _load_yaml_dict_raw
 from cognite.extractorutils.exceptions import InvalidConfigError as OldInvalidConfigError
 from cognite.extractorutils.unstable.configuration.exceptions import InvalidConfigError

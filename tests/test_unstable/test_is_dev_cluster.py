@@ -1,7 +1,6 @@
 import os
 
 import pytest
-
 from cognite.client import CogniteClient
 
 

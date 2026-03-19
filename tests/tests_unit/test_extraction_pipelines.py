@@ -15,8 +15,8 @@
 import time
 
 import pytest
-
 from cognite.client.testing import monkeypatch_cognite_client
+
 from cognite.extractorutils.util import add_extraction_pipeline
 
 with monkeypatch_cognite_client() as m_client:

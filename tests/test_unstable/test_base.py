@@ -7,9 +7,9 @@ from io import StringIO
 from pathlib import Path
 
 import pytest
-
 from cognite.client import CogniteClient
 from cognite.client.exceptions import CogniteNotFoundError
+
 from cognite.extractorutils.metrics import CognitePusher, PrometheusPusher
 from cognite.extractorutils.statestore.watermark import LocalStateStore, RawStateStore
 from cognite.extractorutils.unstable.configuration.loaders import ConfigFormat, load_io
@@ -120,7 +120,7 @@ def test_get_current_statestore_raises_before_start() -> None:
     Tests that calling get_current_statestore before the extractor's
     __enter__ method is called raises a ValueError.
     """
-    with pytest.raises(ValueError, match="No state store singleton created. Have a state store been loaded?"):
+    with pytest.raises(ValueError, match=r"No state store singleton created. Have a state store been loaded\?"):
         TestExtractor.get_current_statestore()
 
 

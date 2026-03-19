@@ -28,11 +28,11 @@ from threading import Thread
 from types import TracebackType
 from typing import Any, Generic, Literal, TypeVar
 
-from dotenv import load_dotenv
-
 from cognite.client import CogniteClient
 from cognite.client.data_classes import ExtractionPipeline, ExtractionPipelineRun
 from cognite.client.exceptions import CogniteAPIError
+from dotenv import load_dotenv
+
 from cognite.extractorutils.configtools import (
     BaseConfig,
     ConfigResolver,

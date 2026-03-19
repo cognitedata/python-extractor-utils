@@ -16,10 +16,10 @@ from secrets import SystemRandom
 from threading import RLock
 from time import sleep
 
-from requests import Response
-
 from cognite.client import CogniteClient
 from cognite.client.exceptions import CogniteAPIError, CogniteAuthError, CogniteConnectionError
+from requests import Response
+
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.unstable.configuration.models import ConfigRevision
 from cognite.extractorutils.unstable.core._dto import (

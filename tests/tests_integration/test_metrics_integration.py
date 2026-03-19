@@ -12,11 +12,11 @@ from collections.abc import Callable, Generator
 from typing import Any
 
 import pytest
+from cognite.client import CogniteClient
+from cognite.client.exceptions import CogniteNotFoundError
 from prometheus_client import Counter, Gauge
 from prometheus_client.core import REGISTRY
 
-from cognite.client import CogniteClient
-from cognite.client.exceptions import CogniteNotFoundError
 from cognite.extractorutils.metrics import CognitePusher
 
 logger = logging.getLogger(__name__)

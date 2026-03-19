@@ -19,7 +19,7 @@ This module contains miscellaneous functions and classes.
 import io
 import logging
 import random
-from collections.abc import Callable, Generator, Iterable
+from collections.abc import Callable, Generator, Iterable, Sequence
 from datetime import datetime, timezone
 from functools import partial, wraps
 from io import RawIOBase
@@ -27,13 +27,13 @@ from threading import Thread
 from time import time
 from typing import Any, TypeVar
 
-from decorator import decorator
-
 from cognite.client import CogniteClient
 from cognite.client._api.assets import AssetsAPI
 from cognite.client._api.time_series import TimeSeriesAPI
 from cognite.client.data_classes import Asset, ExtractionPipelineRun, TimeSeries
 from cognite.client.exceptions import CogniteAPIError, CogniteException, CogniteFileUploadError, CogniteNotFoundError
+from decorator import decorator
+
 from cognite.extractorutils.threading import CancellationToken
 
 
@@ -400,8 +400,8 @@ def retry(
 
     @decorator
     def retry_decorator(f: Callable[..., _T2], *fargs: Any, **fkwargs: Any) -> _T2:  # noqa: ANN401
-        args = fargs if fargs else []
-        kwargs = fkwargs if fkwargs else {}
+        args: Sequence[Any] = fargs or []
+        kwargs: dict[str, Any] = fkwargs or {}
 
         return _retry_internal(
             partial(f, *args, **kwargs),

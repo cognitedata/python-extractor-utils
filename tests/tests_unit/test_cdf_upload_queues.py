@@ -19,13 +19,13 @@ from io import BytesIO
 from typing import Any, BinaryIO
 from unittest.mock import Mock, patch
 
-from httpx import URL, Request
-
 from cognite.client.data_classes import Event, FileMetadata, Row
 from cognite.client.data_classes.data_modeling.extractor_extensions.v1 import (
     CogniteExtractorFileApply,
 )
 from cognite.client.testing import CogniteClientMock
+from httpx import URL, Request
+
 from cognite.extractorutils.uploader import (
     EventUploadQueue,
     IOFileUploadQueue,

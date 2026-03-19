@@ -33,6 +33,7 @@ from cognite.client.data_classes.data_modeling import NodeId
 from cognite.client.data_classes.data_modeling.extractor_extensions.v1 import CogniteExtractorTimeSeriesApply
 from cognite.client.data_classes.data_modeling.instances import DirectRelationReference
 from cognite.client.exceptions import CogniteDuplicatedError, CogniteNotFoundError
+
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.uploader._base import (
     RETRIES,

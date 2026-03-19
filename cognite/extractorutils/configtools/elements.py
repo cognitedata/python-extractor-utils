@@ -28,9 +28,6 @@ from typing import Any
 from urllib.parse import urljoin, urlparse
 
 import yaml
-from prometheus_client import REGISTRY, start_http_server
-from typing_extensions import Self
-
 from cognite.client import ClientConfig, CogniteClient
 from cognite.client.credentials import (
     CredentialProvider,
@@ -38,6 +35,9 @@ from cognite.client.credentials import (
     OAuthClientCredentials,
 )
 from cognite.client.data_classes import Asset, DataSet, ExtractionPipeline
+from prometheus_client import REGISTRY, start_http_server
+from typing_extensions import Self
+
 from cognite.extractorutils._inner_util import resolve_log_level_for_httpx
 from cognite.extractorutils.configtools._util import _load_certificate_data
 from cognite.extractorutils.exceptions import InvalidConfigError
