@@ -1,0 +1,76 @@
+{
+    "$id": "log_handler_config.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "unevaluatedProperties": false,
+    "description": "Configuration of a log handler for an extractor.",
+    "discriminatorProp": "type",
+    "oneOf": [
+        {
+            "type": "object",
+            "description": "Configuration for a log handler that writes logs to a local file",
+            "unevaluatedProperties": false,
+            "title": "File",
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "const": "file",
+                    "description": "Type of log handler, must be 'file' for a log handler that writes logs to a local file"
+                },
+                "path": {
+                    "type": "string",
+                    "description": "File path to the log file to write logs to"
+                },
+                "retention": {
+                    "type": "integer",
+                    "description": "Number of log files to retain when rotating logs.",
+                    "default": 7
+                },
+                "level": {
+                    "type": "string",
+                    "description": "Select the verbosity level for console logging. To reduce the verbosity levels, use `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`.",
+                    "enum": [
+                        "DEBUG",
+                        "INFO",
+                        "WARNING",
+                        "ERROR",
+                        "CRITICAL"
+                    ]
+                }
+            },
+            "required": [
+                "type",
+                "path",
+                "level"
+            ]
+        },
+        {
+            "type": "object",
+            "description": "Configuration for a log handler that writes logs to the console",
+            "unevaluatedProperties": false,
+            "title": "Console",
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "const": "console",
+                    "description": "Type of log handler, must be 'console' for a log handler that writes logs to the console"
+                },
+                "level": {
+                    "type": "string",
+                    "description": "Select the verbosity level for console logging. To reduce the verbosity levels, use `DEBUG`, `INFO`, `WARNING`, `ERROR`, or `CRITICAL`.",
+                    "enum": [
+                        "DEBUG",
+                        "INFO",
+                        "WARNING",
+                        "ERROR",
+                        "CRITICAL"
+                    ]
+                }
+            },
+            "required": [
+                "type",
+                "level"
+            ]
+        }
+    ]
+}

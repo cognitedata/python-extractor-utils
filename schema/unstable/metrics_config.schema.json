@@ -1,0 +1,96 @@
+{
+    "$id": "metrics_config.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "unevaluatedProperties": false,
+    "description": "Configuration of metrics collection for an extractor",
+    "properties": {
+        "push-gateways": {
+            "type": "array",
+            "description": "List of Prometheus Push Gateways to push metrics to",
+            "items": {
+                "type": "object",
+                "unevaluatedProperties": false,
+                "properties": {
+                    "host": {
+                        "type": "string",
+                        "description": "Host of the Prometheus Push Gateway, e.g. 'pushgateway.example.com'"
+                    },
+                    "job-name": {
+                        "type": "string",
+                        "description": "Job name to use when pushing metrics to the Prometheus Push Gateway"
+                    },
+                    "username": {
+                        "type": "string",
+                        "description": "Username for authenticating with the Prometheus Push Gateway, if required"
+                    },
+                    "password": {
+                        "type": "string",
+                        "description": "Password for authenticating with the Prometheus Push Gateway, if required"
+                    },
+                    "clear-after": {
+                        "type": "string",
+                        "description": "Interval for clearing metrics from the Prometheus Push Gateway, on the form 12s, 15m, 1h, etc. If not specified, metrics will not be cleared from the Push Gateway."
+                    },
+                    "push-interval": {
+                        "type": "string",
+                        "description": "Interval for pushing metrics to the Prometheus Push Gateway, on the form 12s, 15m, 1h, etc.",
+                        "default": "30s"
+                    }
+                },
+                "required": [
+                    "host",
+                    "job-name"
+                ]
+            }
+        },
+        "cognite": {
+            "type": "object",
+            "unevaluatedProperties": false,
+            "description": "Configuration for pushing metrics to CDF Classic time-series",
+            "properties": {
+                "external-id-prefix": {
+                    "type": "string",
+                    "description": "Prefix on external ID used when creating CDF time series to store metrics."
+                },
+                "asset-name": {
+                    "type": "string",
+                    "description": "Enter the name for a CDF asset that will have all the metrics time series attached to it."
+                },
+                "asset-external-id": {
+                    "type": "string",
+                    "description": "Enter the external ID for a CDF asset with all the metrics time series attached to it."
+                },
+                "push-interval": {
+                    "type": "string",
+                    "description": "Enter the interval between each push to CDF, on the form 12s, 15m, 1h, etc.",
+                    "default": "30s"
+                },
+                "data-set": {
+                    "description": "The data set where the metrics will be created.",
+                    "$ref": "either_id.schema.json"
+                }
+            },
+            "required": [
+                "external-id-prefix"
+            ]
+        },
+        "server": {
+            "type": "object",
+            "unevaluatedProperties": false,
+            "description": "Configuration for exposing an HTTP server with Prometheus metrics for scraping.",
+            "properties": {
+                "host": {
+                    "type": "string",
+                    "description": "Host to run the Prometheus server on.",
+                    "default": "0.0.0.0"
+                },
+                "port": {
+                    "type": "integer",
+                    "description": "Port to run the Prometheus server on.",
+                    "default": 8080
+                }
+            }
+        }
+    }
+}
