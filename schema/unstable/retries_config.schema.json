@@ -18,7 +18,8 @@
         "timeout": {
             "type": "string",
             "description": "Timeout in seconds for each retry attempt, on the form 12s, 15m, 1h, etc.",
-            "default": "30s"
+            "default": "30s",
+            "pattern": "([0-9]+)[ \t]*(s|m|h|d)"
         }
     }
 }

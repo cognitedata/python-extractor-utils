@@ -62,6 +62,7 @@
                     "required": [
                         "type",
                         "client-id",
+                        "scopes",
                         "client-secret",
                         "token-url"
                     ]
@@ -97,7 +98,14 @@
                             "type": "string",
                             "description": "Password for the client certificate, if it is encrypted."
                         }
-                    }
+                    },
+                    "required": [
+                        "type",
+                        "client-id",
+                        "scopes",
+                        "path",
+                        "authority-url"
+                    ]
                 }
             ]
         },

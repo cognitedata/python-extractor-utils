@@ -30,12 +30,14 @@
                     },
                     "clear-after": {
                         "type": "string",
-                        "description": "Interval for clearing metrics from the Prometheus Push Gateway, on the form 12s, 15m, 1h, etc. If not specified, metrics will not be cleared from the Push Gateway."
+                        "description": "Interval for clearing metrics from the Prometheus Push Gateway, on the form 12s, 15m, 1h, etc. If not specified, metrics will not be cleared from the Push Gateway.",
+                        "pattern": "([0-9]+)[ \t]*(s|m|h|d)"
                     },
                     "push-interval": {
                         "type": "string",
                         "description": "Interval for pushing metrics to the Prometheus Push Gateway, on the form 12s, 15m, 1h, etc.",
-                        "default": "30s"
+                        "default": "30s",
+                        "pattern": "([0-9]+)[ \t]*(s|m|h|d)"
                     }
                 },
                 "required": [
@@ -64,7 +66,8 @@
                 "push-interval": {
                     "type": "string",
                     "description": "Enter the interval between each push to CDF, on the form 12s, 15m, 1h, etc.",
-                    "default": "30s"
+                    "default": "30s",
+                    "pattern": "([0-9]+)[ \t]*(s|m|h|d)"
                 },
                 "data-set": {
                     "description": "The data set where the metrics will be created.",
