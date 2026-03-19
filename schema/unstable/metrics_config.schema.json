@@ -37,7 +37,7 @@
                         "type": "string",
                         "description": "Interval for pushing metrics to the Prometheus Push Gateway, on the form 12s, 15m, 1h, etc.",
                         "default": "30s",
-                        "pattern": "([0-9]+)[ \t]*(s|m|h|d)"
+                        "pattern": "^([0-9]+)[ \t]*(s|m|h|d)$"
                     }
                 },
                 "required": [
@@ -67,7 +67,7 @@
                     "type": "string",
                     "description": "Enter the interval between each push to CDF, on the form 12s, 15m, 1h, etc.",
                     "default": "30s",
-                    "pattern": "([0-9]+)[ \t]*(s|m|h|d)"
+                    "pattern": "^([0-9]+)[ \t]*(s|m|h|d)$"
                 },
                 "data-set": {
                     "description": "The data set where the metrics will be created.",

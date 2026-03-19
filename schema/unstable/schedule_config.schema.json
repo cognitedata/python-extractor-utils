@@ -20,7 +20,7 @@
                 "expression": {
                     "type": "string",
                     "description": "Interval between task runs, on the form 12s, 15m, 1h, etc.",
-                    "pattern": "([0-9]+)[ \t]*(s|m|h|d)"
+                    "pattern": "^([0-9]+)[ \t]*(s|m|h|d)$"
                 }
             },
             "required": [

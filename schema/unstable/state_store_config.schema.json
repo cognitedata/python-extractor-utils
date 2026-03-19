@@ -29,7 +29,7 @@
                     "type": "string",
                     "description": "Interval for uploading state store data to CDF Raw, on the form 12s, 15m, 1h, etc.",
                     "default": "30s",
-                    "pattern": "([0-9]+)[ \t]*(s|m|h|d)"
+                    "pattern": "^([0-9]+)[ \t]*(s|m|h|d)$"
                 }
             },
             "required": [
@@ -57,7 +57,7 @@
                     "type": "string",
                     "description": "Interval for saving state store data to the local JSON file, on the form 12s, 15m, 1h, etc.",
                     "default": "30s",
-                    "pattern": "([0-9]+)[ \t]*(s|m|h|d)"
+                    "pattern": "^([0-9]+)[ \t]*(s|m|h|d)$"
                 }
             },
             "required": [
