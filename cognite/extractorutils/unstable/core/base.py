@@ -72,7 +72,6 @@ from cognite.extractorutils._inner_util import _resolve_log_level
 from cognite.extractorutils.metrics import BaseMetrics, MetricsType, safe_get
 from cognite.extractorutils.statestore import (
     AbstractStateStore,
-    LocalStateStore,
     NoStateStore,
 )
 from cognite.extractorutils.threading import CancellationToken
@@ -83,6 +82,7 @@ from cognite.extractorutils.unstable.configuration.models import (
     ExtractorConfig,
     LogConsoleHandlerConfig,
     LogFileHandlerConfig,
+    create_state_store,
 )
 from cognite.extractorutils.unstable.core._dto import (
     CogniteModel,
@@ -295,16 +295,12 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         """
         state_store_config = self.application_config.state_store
 
-        if state_store_config:
-            self.state_store = state_store_config.create_state_store(
-                cdf_client=self.cognite_client,
-                default_to_local=self.USE_DEFAULT_STATE_STORE,
-                cancellation_token=self.cancellation_token,
-            )
-        elif self.USE_DEFAULT_STATE_STORE:
-            self.state_store = LocalStateStore("states.json", cancellation_token=self.cancellation_token)
-        else:
-            self.state_store = NoStateStore()
+        self.state_store = create_state_store(
+            config=state_store_config,
+            cdf_client=self.cognite_client,
+            default_to_local=self.USE_DEFAULT_STATE_STORE,
+            cancellation_token=self.cancellation_token,
+        )
 
         try:
             self.state_store.initialize()

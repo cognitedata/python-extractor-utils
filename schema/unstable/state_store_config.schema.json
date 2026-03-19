@@ -1,0 +1,65 @@
+{
+    "$id": "state_store_config.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "unevaluatedProperties": false,
+    "description": "Configuration of a state store",
+    "discriminatorProp": "type",
+    "oneOf": [
+        {
+            "type": "object",
+            "description": "Configuration for a state store based on CDF Raw",
+            "unevaluatedProperties": false,
+            "title": "Raw",
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "const": "raw",
+                    "description": "Type of state store, must be 'raw' for a CDF Raw based state store"
+                },
+                "database": {
+                    "type": "string",
+                    "description": "Name of the database to use for the state store"
+                },
+                "table": {
+                    "type": "string",
+                    "description": "Name of the table to use for the state store"
+                },
+                "upload-interval": {
+                    "type": "string",
+                    "description": "Interval for uploading state store data to CDF Raw, on the form 12s, 15m, 1h, etc."
+                }
+            },
+            "required": [
+                "type",
+                "database",
+                "table"
+            ]
+        },
+        {
+            "type": "object",
+            "description": "Configuration for a state store based on a local JSON file",
+            "unevaluatedProperties": false,
+            "title": "Local",
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "const": "local",
+                    "description": "Type of state store, must be 'local' for a local JSON file based state store"
+                },
+                "path": {
+                    "type": "string",
+                    "description": "File path to the JSON file to use for the state store"
+                },
+                "save-interval": {
+                    "type": "string",
+                    "description": "Interval for saving state store data to the local JSON file, on the form 12s, 15m, 1h, etc."
+                }
+            },
+            "required": [
+                "type",
+                "path"
+            ]
+        }
+    ]
+}
