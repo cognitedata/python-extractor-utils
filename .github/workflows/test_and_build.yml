@@ -63,3 +63,24 @@ jobs:
 
       - name: Build docs
         run: cd docs && make html SPHINXBUILD="uv run sphinx-build"
+
+  test_schemas:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v6
+    - name: Install python
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.12'
+
+    - name: Install extractor uploader
+      env:
+        PYPI_ARTIFACTORY_USERNAME: ${{ secrets.ARTIFACTORY_READONLY_TOKEN_USER_PUBLIC_REPOS }}
+        PYPI_ARTIFACTORY_PASSWORD: ${{ secrets.ARTIFACTORY_READONLY_TOKEN_PUBLIC_REPOS }}
+      run: |
+        python -m pip install --upgrade pip
+        pip install cognite-extractor-publisher --extra-index-url "https://${PYPI_ARTIFACTORY_USERNAME}:${PYPI_ARTIFACTORY_PASSWORD}@cognite.jfrog.io/cognite/api/pypi/snakepit/simple"
+
+    - name: Test schemas
+      run: ./tests/test_schemas.sh
