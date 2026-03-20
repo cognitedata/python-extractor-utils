@@ -9,11 +9,11 @@ from uuid import uuid4
 
 import pytest
 import requests_mock
-from prometheus_client.core import Counter
-
 from cognite.client import CogniteClient
 from cognite.client.config import ClientConfig
 from cognite.client.credentials import OAuthClientCredentials
+from prometheus_client.core import Counter
+
 from cognite.extractorutils.metrics import BaseMetrics
 from cognite.extractorutils.unstable.configuration.models import (
     ConnectionConfig,

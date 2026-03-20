@@ -26,10 +26,10 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 import yaml
-from faker import Faker
-
 from cognite.client import CogniteClient
 from cognite.client.credentials import OAuthClientCredentials
+from faker import Faker
+
 from cognite.extractorutils.configtools import (
     BaseConfig,
     CogniteConfig,

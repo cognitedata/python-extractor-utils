@@ -11,12 +11,6 @@ from pathlib import Path
 from time import sleep
 from typing import Annotated, Any, Literal, TypeVar
 
-from humps import kebabize
-from prometheus_client import REGISTRY, start_http_server
-from pydantic import BaseModel, ConfigDict, Field, GetCoreSchemaHandler
-from pydantic_core import CoreSchema, core_schema
-from typing_extensions import assert_never
-
 from cognite.client import CogniteClient
 from cognite.client.config import ClientConfig
 from cognite.client.credentials import (
@@ -25,6 +19,12 @@ from cognite.client.credentials import (
     OAuthClientCredentials,
 )
 from cognite.client.data_classes import Asset, DataSet
+from humps import kebabize
+from prometheus_client import REGISTRY, start_http_server
+from pydantic import BaseModel, ConfigDict, Field, GetCoreSchemaHandler
+from pydantic_core import CoreSchema, core_schema
+from typing_extensions import assert_never
+
 from cognite.extractorutils.configtools._util import _load_certificate_data
 from cognite.extractorutils.exceptions import InvalidConfigError
 from cognite.extractorutils.metrics import AbstractMetricsPusher, CognitePusher, PrometheusPusher

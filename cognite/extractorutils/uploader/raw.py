@@ -22,9 +22,9 @@ from typing import Any
 
 import arrow
 from arrow import Arrow
-
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Row
+
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.uploader._base import (
     RETRIES,

@@ -23,6 +23,7 @@ from typing import Any
 from cognite.client import CogniteClient
 from cognite.client.data_classes.assets import Asset
 from cognite.client.exceptions import CogniteDuplicatedError
+
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.uploader._base import (
     RETRIES,

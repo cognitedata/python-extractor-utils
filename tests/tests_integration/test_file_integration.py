@@ -22,8 +22,6 @@ from typing import BinaryIO
 
 import jsonlines
 import pytest
-from conftest import ETestType, ParamTest
-
 from cognite.client import CogniteClient
 from cognite.client.data_classes import FileMetadata
 from cognite.client.data_classes.data_modeling import NodeId
@@ -31,6 +29,8 @@ from cognite.client.data_classes.data_modeling.extractor_extensions.v1 import (
     CogniteExtractorFile,
     CogniteExtractorFileApply,
 )
+from conftest import ETestType, ParamTest
+
 from cognite.extractorutils.uploader.files import (
     BytesUploadQueue,
     FileUploadQueue,

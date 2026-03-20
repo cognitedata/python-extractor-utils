@@ -48,13 +48,13 @@ from typing import Any, TypeVar
 
 import arrow
 import psutil
+from cognite.client import CogniteClient
+from cognite.client.data_classes import Asset, TimeSeries
+from cognite.client.exceptions import CogniteDuplicatedError
 from prometheus_client import Gauge, Info, Metric
 from prometheus_client.core import REGISTRY
 from prometheus_client.exposition import basic_auth_handler, delete_from_gateway, pushadd_to_gateway
 
-from cognite.client import CogniteClient
-from cognite.client.data_classes import Asset, TimeSeries
-from cognite.client.exceptions import CogniteDuplicatedError
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.uploader.time_series import DataPointList, TimeSeriesUploadQueue
 from cognite.extractorutils.util import EitherId

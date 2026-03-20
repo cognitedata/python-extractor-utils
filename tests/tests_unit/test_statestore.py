@@ -22,10 +22,10 @@ from decimal import Decimal
 from unittest.mock import Mock, patch
 
 import pytest
-
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Row
 from cognite.client.exceptions import CogniteAPIError
+
 from cognite.extractorutils.statestore import LocalHashStateStore, LocalStateStore, NoStateStore, RawStateStore
 from cognite.extractorutils.uploader import TimeSeriesUploadQueue
 

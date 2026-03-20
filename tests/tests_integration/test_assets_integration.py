@@ -16,10 +16,10 @@ import os
 import random
 
 import pytest
-from conftest import ETestType, ParamTest
-
 from cognite.client import CogniteClient
 from cognite.client.data_classes.assets import Asset
+from conftest import ETestType, ParamTest
+
 from cognite.extractorutils.uploader.assets import AssetUploadQueue
 
 

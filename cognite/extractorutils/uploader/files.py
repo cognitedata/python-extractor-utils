@@ -29,10 +29,6 @@ from typing import (
 )
 from urllib.parse import ParseResult, urlparse
 
-from h11._util import LocalProtocolError
-from httpx import URL, Client, Headers, Request, StreamConsumed, SyncByteStream
-from requests.utils import super_len
-
 from cognite.client import CogniteClient
 from cognite.client.data_classes import FileMetadata, FileMetadataUpdate
 from cognite.client.data_classes.data_modeling import NodeId
@@ -40,6 +36,10 @@ from cognite.client.data_classes.data_modeling.extractor_extensions.v1 import (
     CogniteExtractorFileApply,
 )
 from cognite.client.utils._identifier import IdentifierSequence
+from h11._util import LocalProtocolError
+from httpx import URL, Client, Headers, Request, StreamConsumed, SyncByteStream
+from requests.utils import super_len
+
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.uploader._base import (
     RETRIES,
@@ -383,7 +383,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
         self,
         file_meta: FileMetadataOrCogniteExtractorFile,
     ) -> None:
-        file_meta_response, url = self._upload_only_metadata(file_meta)
+        _file_meta_response, url = self._upload_only_metadata(file_meta)
 
         self._upload_only_file_reference(file_meta, url)
 

@@ -18,11 +18,11 @@ from unittest.mock import Mock, patch
 
 import arrow
 import pytest
-from prometheus_client import Gauge
-
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Asset
 from cognite.client.exceptions import CogniteDuplicatedError, CogniteNotFoundError
+from prometheus_client import Gauge
+
 from cognite.extractorutils.metrics import CognitePusher, safe_get
 
 

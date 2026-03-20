@@ -34,9 +34,9 @@ from azure.core.credentials import TokenCredential
 from azure.core.exceptions import HttpResponseError, ResourceNotFoundError, ServiceRequestError
 from azure.identity import ClientSecretCredential, DefaultAzureCredential
 from azure.keyvault.secrets import SecretClient
+from cognite.client import CogniteClient
 from yaml.scanner import ScannerError
 
-from cognite.client import CogniteClient
 from cognite.extractorutils.configtools._util import _to_snake_case
 from cognite.extractorutils.configtools.elements import (
     BaseConfig,

@@ -23,9 +23,9 @@ from dataclasses import dataclass, field
 from types import TracebackType
 from typing import Any, TypeVar
 
+from cognite.client import CogniteClient
 from more_itertools import peekable
 
-from cognite.client import CogniteClient
 from cognite.extractorutils.base import Extractor
 from cognite.extractorutils.configtools import BaseConfig, TimeIntervalConfig
 from cognite.extractorutils.metrics import BaseMetrics
@@ -176,7 +176,7 @@ class UploaderExtractor(Extractor[UploaderExtractorConfigClass]):
         """
         super().__enter__()
 
-        queue_config = self.config.queues if self.config.queues else QueueConfigClass()
+        queue_config = self.config.queues or QueueConfigClass()
         self.event_queue = EventUploadQueue(
             self.cognite_client,
             max_queue_size=queue_config.event_size,

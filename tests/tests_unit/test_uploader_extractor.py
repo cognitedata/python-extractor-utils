@@ -18,6 +18,7 @@ from unittest.mock import Mock, patch
 from cognite.client.data_classes import Row
 from cognite.client.data_classes.data_modeling import NodeApply, NodeId
 from cognite.client.data_classes.data_modeling.extractor_extensions.v1 import CogniteExtractorTimeSeriesApply
+
 from cognite.extractorutils.uploader import (
     CDMTimeSeriesUploadQueue,
     EventUploadQueue,

@@ -15,10 +15,10 @@ from types import TracebackType
 from typing import Any
 
 import orjson
-
 from cognite.client import CogniteClient
 from cognite.client.data_classes import Row
 from cognite.client.exceptions import CogniteAPIError
+
 from cognite.extractorutils._inner_util import _DecimalDecoder, _DecimalEncoder
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.util import cognite_exceptions, retry

@@ -20,8 +20,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from arrow import Arrow
-
 from cognite.client import CogniteClient
+
 from cognite.extractorutils._inner_util import _resolve_log_level
 from cognite.extractorutils.threading import CancellationToken
 

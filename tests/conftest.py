@@ -5,13 +5,13 @@ from dataclasses import dataclass
 from enum import Enum
 
 import pytest
-from prometheus_client.core import REGISTRY
-
 from cognite.client import CogniteClient
 from cognite.client.config import ClientConfig
 from cognite.client.credentials import OAuthClientCredentials
 from cognite.client.data_classes.data_modeling import NodeId
 from cognite.client.exceptions import CogniteAPIError, CogniteNotFoundError
+from prometheus_client.core import REGISTRY
+
 from cognite.extractorutils import metrics
 
 NUM_NODES = 5000

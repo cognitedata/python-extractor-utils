@@ -3,10 +3,10 @@ from io import StringIO
 from unittest.mock import Mock
 
 import pytest
-from pydantic import Field
-
 from cognite.client.credentials import OAuthClientCredentials
 from cognite.client.data_classes import DataSet
+from pydantic import Field
+
 from cognite.extractorutils.exceptions import InvalidConfigError
 from cognite.extractorutils.unstable.configuration.loaders import ConfigFormat, load_io
 from cognite.extractorutils.unstable.configuration.models import (
