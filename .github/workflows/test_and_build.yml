@@ -46,7 +46,7 @@ jobs:
           COGNITE_PROJECT: extractor-tests
           COGNITE_BASE_URL: https://greenfield.cognitedata.com
           COGNITE_DEV_PROJECT: extractor-aws-dub-dev-testing
-          COGNITE_DEV_BASE_URL: https://aws-dub-dev.cognitedata.com/
+          COGNITE_DEV_BASE_URL: https://aws-dub-dev.cognitedata.com
           COGNITE_DEV_TOKEN_SCOPES: https://aws-dub-dev.cognitedata.com/.default
           COGNITE_INTEGRATION: pythonutils-test
         run: |

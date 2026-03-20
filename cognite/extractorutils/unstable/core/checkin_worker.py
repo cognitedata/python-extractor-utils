@@ -96,6 +96,18 @@ class CheckinWorker:
         with self._lock:
             self._active_revision = value
 
+    def reset_startup(self) -> None:
+        """
+        Reset startup.
+
+        This will reset startup if and when the extractor restarts either
+        due to changes in the config or the extractor just starting for the first time.
+
+        """
+        with self._lock:
+            self._is_running = False
+            self._has_reported_startup = False
+
     def set_on_revision_change_handler(self, on_revision_change: Callable[[int], None]) -> None:
         """
         Set the handler for when the configuration revision changes.
