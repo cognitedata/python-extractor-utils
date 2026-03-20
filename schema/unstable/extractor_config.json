@@ -1,0 +1,22 @@
+{
+    "$id": "extractor_config.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "description": "Base extractor configuration object",
+    "unevaluatedProperties": false,
+    "properties": {
+        "state-store": {
+            "$ref": "state_store_config.schema.json"
+        },
+        "metrics": {
+            "$ref": "metrics_config.schema.json"
+        },
+        "log-handlers": {
+            "type": "array",
+            "description": "List of log handlers to use for logging from the extractor",
+            "items": {
+                "$ref": "log_handler_config.schema.json"
+            }
+        }
+    }
+}

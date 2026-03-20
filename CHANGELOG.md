@@ -12,6 +12,11 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.11.6
+
+### Fixed
+* Locked the SDK version to <8 since we don't (yet) support that. Moving to the new SDK as a base would require a breaking change and will be done in a major release.
+
 ## 7.11.5
 
 ### Fixed
