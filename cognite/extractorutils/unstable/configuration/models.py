@@ -150,7 +150,7 @@ class TimeIntervalConfig:
         except ValueError:
             pass
 
-        match = re.match(r"(\d+)[ \t]*(s|m|h|d)", expression)
+        match = re.match(r"^(\d+)[ \t]*(s|m|h|d)$", expression.strip())
         if not match:
             raise InvalidConfigError("Invalid interval pattern")
 
@@ -818,6 +818,7 @@ class RawStateStoreConfig(RawDestinationConfig):
     Configuration of a state store based on CDF RAW.
     """
 
+    type: Literal["raw"]
     upload_interval: TimeIntervalConfig = Field(default_factory=lambda: TimeIntervalConfig("30s"))
 
 
@@ -826,65 +827,60 @@ class LocalStateStoreConfig(ConfigModel):
     Configuration of a state store using a local JSON file.
     """
 
+    type: Literal["local"]
     path: Path
     save_interval: TimeIntervalConfig = Field(default_factory=lambda: TimeIntervalConfig("30s"))
 
 
-class StateStoreConfig(ConfigModel):
+StateStoreConfig = Annotated[RawStateStoreConfig | LocalStateStoreConfig, Field(discriminator="type")]
+
+
+def create_state_store(
+    config: StateStoreConfig | None,
+    cdf_client: CogniteClient | None = None,
+    default_to_local: bool = True,
+    cancellation_token: CancellationToken | None = None,
+) -> AbstractStateStore:
     """
-    Configuration of the State Store, containing ``LocalStateStoreConfig`` or ``RawStateStoreConfig``.
+    Create a state store object based on the config.
+
+    Args:
+        config: StateStoreConfig object defining the state store to create. If None, the behavior depends on the
+            default_to_local parameter.
+        cdf_client: CogniteClient object to use in case of a RAW state store (ignored otherwise)
+        default_to_local: If true, return a LocalStateStore if no state store is configured. Otherwise return a
+            NoStateStore
+        cancellation_token: Cancellation token to pass to created state stores
+
+    Returns:
+        An (uninitialized) state store
     """
+    if isinstance(config, RawStateStoreConfig):
+        if cdf_client is None:
+            raise TypeError("A cognite client object must be provided when state store is RAW")
 
-    raw: RawStateStoreConfig | None = None
-    local: LocalStateStoreConfig | None = None
+        return RawStateStore(
+            cdf_client=cdf_client,
+            database=config.database,
+            table=config.table,
+            save_interval=config.upload_interval.seconds,
+            cancellation_token=cancellation_token,
+        )
 
-    def create_state_store(
-        self,
-        cdf_client: CogniteClient | None = None,
-        default_to_local: bool = True,
-        cancellation_token: CancellationToken | None = None,
-    ) -> AbstractStateStore:
-        """
-        Create a state store object based on the config.
+    if isinstance(config, LocalStateStoreConfig):
+        if config.path.is_dir():
+            raise IsADirectoryError(config.path)
 
-        Args:
-            cdf_client: CogniteClient object to use in case of a RAW state store (ignored otherwise)
-            default_to_local: If true, return a LocalStateStore if no state store is configured. Otherwise return a
-                NoStateStore
-            cancellation_token: Cancellation token to pass to created state stores
+        return LocalStateStore(
+            file_path=str(config.path),
+            save_interval=config.save_interval.seconds,
+            cancellation_token=cancellation_token,
+        )
 
-        Returns:
-            An (uninitialized) state store
-        """
-        if self.raw and self.local:
-            raise ValueError("Only one state store can be used simultaneously")
+    if default_to_local:
+        return LocalStateStore(file_path="states.json", cancellation_token=cancellation_token)
 
-        if self.raw:
-            if cdf_client is None:
-                raise TypeError("A cognite client object must be provided when state store is RAW")
-
-            return RawStateStore(
-                cdf_client=cdf_client,
-                database=self.raw.database,
-                table=self.raw.table,
-                save_interval=self.raw.upload_interval.seconds,
-                cancellation_token=cancellation_token,
-            )
-
-        if self.local:
-            if self.local.path.is_dir():
-                raise IsADirectoryError(self.local.path)
-
-            return LocalStateStore(
-                file_path=str(self.local.path),
-                save_interval=self.local.save_interval.seconds,
-                cancellation_token=cancellation_token,
-            )
-
-        if default_to_local:
-            return LocalStateStore(file_path="states.json", cancellation_token=cancellation_token)
-
-        return NoStateStore()
+    return NoStateStore()
 
 
 class ExtractorConfig(ConfigModel):
@@ -895,6 +891,25 @@ class ExtractorConfig(ConfigModel):
     state_store: StateStoreConfig | None = None
     metrics: MetricsConfig | None = None
     log_handlers: list[LogHandlerConfig] = Field(default_factory=_log_handler_default)
+
+    def create_state_store(
+        self,
+        cdf_client: CogniteClient | None = None,
+        default_to_local: bool = True,
+        cancellation_token: CancellationToken | None = None,
+    ) -> AbstractStateStore:
+        """
+        Create a state store based on the configuration.
+
+        Args:
+            cdf_client: CogniteClient object to use in case of a RAW state store (ignored otherwise)
+            default_to_local: If true, return a LocalStateStore if no state store is configured. Otherwise return a
+                NoStateStore
+            cancellation_token: Cancellation token to pass to created state stores
+        Returns:
+            An (uninitialized) state store based on the configuration.
+        """
+        return create_state_store(self.state_store, cdf_client, default_to_local, cancellation_token)
 
 
 ConfigType = TypeVar("ConfigType", bound=ExtractorConfig)

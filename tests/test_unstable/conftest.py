@@ -151,7 +151,7 @@ def mock_startup_request(
 
         requests_mock.register_uri(
             method="POST",
-            url=f"{connection_config.base_url}api/v1/projects/{connection_config.project}/integrations/startup",
+            url=f"{connection_config.base_url}/api/v1/projects/{connection_config.project}/integrations/startup",
             json=json_callback,
             status_code=status_code,
         )
@@ -177,7 +177,7 @@ def mock_checkin_request(
 
         requests_mock.register_uri(
             method="POST",
-            url=f"{connection_config.base_url}api/v1/projects/{connection_config.project}/integrations/checkin",
+            url=f"{connection_config.base_url}/api/v1/projects/{connection_config.project}/integrations/checkin",
             json=json_callback,
             status_code=status_code,
         )

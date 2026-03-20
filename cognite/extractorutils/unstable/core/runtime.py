@@ -525,6 +525,8 @@ class Runtime(Generic[ExtractorType]):
                 message = self._message_queue.get_nowait()
                 match message:
                     case RuntimeMessage.RESTART:
+                        self.logger.info("Extractor restart detected. Restarting extractor.")
+                        checkin_worker.reset_startup()
                         continue
 
                     case _:

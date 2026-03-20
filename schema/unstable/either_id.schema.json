@@ -1,0 +1,17 @@
+{
+    "$id": "either_id.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "unevaluatedProperties": false,
+    "oneOf": [{ "required": ["id"] }, { "required": ["external-id"] }],
+    "properties": {
+        "id": {
+            "type": "integer",
+            "description": "Resource internal ID"
+        },
+        "external-id": {
+            "type": "string",
+            "description": "Resource external ID"
+        }
+    }
+}

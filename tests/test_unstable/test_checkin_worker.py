@@ -157,6 +157,71 @@ def test_run_report_periodic(
     assert "taskEvents" in checkin_bag[1]
 
 
+def test_run_report_periodic_reset_startup(
+    connection_config: ConnectionConfig,
+    application_config: TestConfig,
+    requests_mock: requests_mock.Mocker,
+    mock_checkin_request: Callable[[requests_mock.Mocker], None],
+    mock_startup_request: Callable[[requests_mock.Mocker], None],
+    faker: faker.Faker,
+    checkin_bag: list,
+) -> None:
+    requests_mock.real_http = True
+    mock_startup_request(requests_mock)
+    mock_checkin_request(requests_mock)
+    cognite_client = connection_config.get_cognite_client("test_checkin")
+    cancellation_token = CancellationToken()
+    worker = CheckinWorker(
+        cognite_client,
+        connection_config.integration.external_id,
+        logging.getLogger(__name__),
+    )
+
+    test_extractor = TestExtractor(
+        FullConfig(
+            connection_config=connection_config, application_config=application_config, current_config_revision=1
+        ),
+        worker,
+    )
+    test_extractor._start_time = datetime.fromtimestamp(int(now() / 1000), tz=timezone.utc)
+    message_queue: Queue = Queue()
+    mp_cancel_event = Event()
+    test_extractor._attach_runtime_controls(cancel_event=mp_cancel_event, message_queue=message_queue)
+
+    worker.report_task_end("task1", faker.sentence())
+    worker.report_task_start("task1", faker.sentence())
+    worker.report_error(
+        Error(
+            level=ErrorLevel.error,
+            description=faker.sentence(),
+            task_name="task1",
+            extractor=test_extractor,
+            details=None,
+        )
+    )
+
+    process = Thread(
+        target=worker.run_periodic_checkin,
+        args=(cancellation_token, test_extractor._get_startup_request(), 2.0),
+    )
+    process.start()
+    worker.reset_startup()
+    process.join(timeout=3)
+    cancellation_token.cancel()
+
+    cancellation_token = CancellationToken()
+    process = Thread(
+        target=worker.run_periodic_checkin,
+        args=(cancellation_token, test_extractor._get_startup_request(), 2.0),
+    )
+    process.start()
+    worker.reset_startup()
+    process.join(timeout=3)
+    cancellation_token.cancel()
+
+    assert len(checkin_bag) >= 3
+
+
 def test_run_report_periodic_ensure_reorder(
     connection_config: ConnectionConfig,
     application_config: TestConfig,

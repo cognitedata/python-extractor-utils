@@ -1,0 +1,53 @@
+{
+    "$id": "schedule_config.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "unevaluatedProperties": false,
+    "description": "Configuration for scheduling task runs",
+    "discriminatorProp": "type",
+    "oneOf": [
+        {
+            "type": "object",
+            "description": "Configuration for a schedule that runs at a fixed interval",
+            "unevaluatedProperties": false,
+            "title": "Interval",
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "const": "interval",
+                    "description": "Type of schedule, must be 'interval' for a schedule that runs at a fixed interval"
+                },
+                "expression": {
+                    "type": "string",
+                    "description": "Interval between task runs, on the form 12s, 15m, 1h, etc.",
+                    "pattern": "^([0-9]+)[ \t]*(s|m|h|d)$"
+                }
+            },
+            "required": [
+                "type",
+                "expression"
+            ]
+        },
+        {
+            "type": "object",
+            "description": "Configuration for a schedule that runs according to a cron expression",
+            "unevaluatedProperties": false,
+            "title": "Cron",
+            "properties": {
+                "type": {
+                    "type": "string",
+                    "const": "cron",
+                    "description": "Type of schedule, must be 'cron' for a schedule that runs according to a cron expression"
+                },
+                "expression": {
+                    "type": "string",
+                    "description": "Cron expression defining when to run the task, on the form '0 0 * * *' (every day at midnight), '*/15 * * * *' (every 15 minutes), etc."
+                }
+            },
+            "required": [
+                "type",
+                "expression"
+            ]
+        }
+    ]
+}

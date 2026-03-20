@@ -22,7 +22,6 @@ from cognite.extractorutils.unstable.configuration.models import (
     LogLevel,
     MetricsConfig,
     RawStateStoreConfig,
-    StateStoreConfig,
     TimeIntervalConfig,
     _CogniteMetricsConfig,
     _PromServerConfig,
@@ -141,7 +140,7 @@ def test_local_state_store_integration(local_state_file: Path, connection_config
         parameter_one=1,
         parameter_two="a",
         log_handlers=[LogConsoleHandlerConfig(type="console", level=LogLevel("INFO"))],
-        state_store=StateStoreConfig(local=LocalStateStoreConfig(path=local_state_file)),
+        state_store=LocalStateStoreConfig(type="local", path=local_state_file),
     )
 
     full_config = FullConfig(
@@ -213,7 +212,7 @@ def test_raw_state_store_integration(
         parameter_one=1,
         parameter_two="a",
         log_handlers=[LogConsoleHandlerConfig(type="console", level=LogLevel("INFO"))],
-        state_store=StateStoreConfig(raw=RawStateStoreConfig(database=db_name, table=table_name)),
+        state_store=RawStateStoreConfig(type="raw", database=db_name, table=table_name),
     )
 
     full_config = FullConfig(
