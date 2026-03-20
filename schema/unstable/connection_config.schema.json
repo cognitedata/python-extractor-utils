@@ -14,8 +14,18 @@
             "description": "CDF base URL used for the connection, for example https://api.cognitedata.com or https://az-eastus-1.cognitedata.com"
         },
         "integration": {
-            "type": "string",
-            "description": "Name of the integration to use for remote config and status reporting."
+            "type": "object",
+            "description": "Name of the integration to use for remote config and status reporting.",
+            "unevaluatedProperties": false,
+            "properties": {
+                "external-id": {
+                    "type": "string",
+                    "description": "External ID of the integration to use for remote config and status reporting."
+                }
+            },
+            "required": [
+                "external-id"
+            ]
         },
         "authentication": {
             "type": "object",

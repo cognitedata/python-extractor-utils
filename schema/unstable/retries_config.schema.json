@@ -7,8 +7,9 @@
     "properties": {
         "max-retries": {
             "type": "integer",
-            "description": "Maximum number of retries before giving up",
-            "default": 10
+            "description": "Maximum number of retries before giving up. Setting to -1 will retry indefinitely.",
+            "default": 10,
+            "minimum": -1
         },
         "max-backoff": {
             "type": "string",
