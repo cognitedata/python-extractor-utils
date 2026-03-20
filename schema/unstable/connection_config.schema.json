@@ -1,0 +1,152 @@
+{
+    "$id": "connection_config.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "unevaluatedProperties": false,
+    "description": "Configuration for a connection to a data source or destination",
+    "properties": {
+        "project": {
+            "type": "string",
+            "description": "CDF project used for the connection."
+        },
+        "base-url": {
+            "type": "string",
+            "description": "CDF base URL used for the connection, for example https://api.cognitedata.com or https://az-eastus-1.cognitedata.com"
+        },
+        "integration": {
+            "type": "object",
+            "description": "Name of the integration to use for remote config and status reporting.",
+            "unevaluatedProperties": false,
+            "properties": {
+                "external-id": {
+                    "type": "string",
+                    "description": "External ID of the integration to use for remote config and status reporting."
+                }
+            },
+            "required": [
+                "external-id"
+            ]
+        },
+        "authentication": {
+            "type": "object",
+            "unevaluatedProperties": false,
+            "description": "Authentication configuration for the CDF connection.",
+            "discriminatorProp": "type",
+            "oneOf": [
+                {
+                    "type": "object",
+                    "description": "Configuration for connecting to CDF using client credentials.",
+                    "unevaluatedProperties": false,
+                    "title": "Client Credentials",
+                    "properties": {
+                        "type": {
+                            "type": "string",
+                            "const": "client-credentials",
+                            "description": "Type of authentication, must be 'client-credentials' for connecting to CDF using client credentials."
+                        },
+                        "client-id": {
+                            "type": "string",
+                            "description": "Client ID"
+                        },
+                        "scopes": {
+                            "type": "string",
+                            "description": "Space separated list of scopes to request when obtaining access tokens, for example https://api.cognitedata.com/.default."
+                        },
+                        "client-secret": {
+                            "type": "string",
+                            "description": "Client secret"
+                        },
+                        "token-url": {
+                            "type": "string",
+                            "description": "Token URL for obtaining access tokens, for example https://login.microsoftonline.com/{tenant-id}/oauth2/v2.0/token"
+                        },
+                        "resource": {
+                            "type": "string",
+                            "description": "Resource identifier passed along with token requests."
+                        },
+                        "audience": {
+                            "type": "string",
+                            "description": "Audience identifier passed along with token requests."
+                        }
+                    },
+                    "required": [
+                        "type",
+                        "client-id",
+                        "scopes",
+                        "client-secret",
+                        "token-url"
+                    ]
+                },
+                {
+                    "type": "object",
+                    "description": "Configuration for connecting to CDF using a certificate.",
+                    "unevaluatedProperties": false,
+                    "title": "Client Certificate",
+                    "properties": {
+                        "type": {
+                            "type": "string",
+                            "const": "client-certificate",
+                            "description": "Type of authentication, must be 'client-certificate' for connecting to CDF using a client certificate."
+                        },
+                        "client-id": {
+                            "type": "string",
+                            "description": "Client ID"
+                        },
+                        "scopes": {
+                            "type": "string",
+                            "description": "Space separated list of scopes to request when obtaining access tokens, for example https://api.cognitedata.com/.default."
+                        },
+                        "path": {
+                            "type": "string",
+                            "description": "Path to the client certificate file."
+                        },
+                        "authority-url": {
+                            "type": "string",
+                            "description": "Authority URL for obtaining access tokens."
+                        },
+                        "password": {
+                            "type": "string",
+                            "description": "Password for the client certificate, if it is encrypted."
+                        }
+                    },
+                    "required": [
+                        "type",
+                        "client-id",
+                        "scopes",
+                        "path",
+                        "authority-url"
+                    ]
+                }
+            ]
+        },
+        "connection": {
+            "type": "object",
+            "description": "Additional configuration for the connection.",
+            "unevaluatedProperties": false,
+            "properties": {
+                "retries": {
+                    "$ref": "retries_config.schema.json"
+                },
+                "ssl-certificates": {
+                    "type": "object",
+                    "description": "Configuration for SSL certificates to use for the connection.",
+                    "unevaluatedProperties": false,
+                    "properties": {
+                        "verify": {
+                            "type": "boolean",
+                            "description": "Whether to verify SSL certificates for the connection.",
+                            "default": true
+                        },
+                        "allow-list": {
+                            "type": "array",
+                            "description": "List of SSL certificate thumbprints to allow for the connection, even if they are not valid according to the system's certificate store.",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

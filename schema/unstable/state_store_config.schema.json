@@ -27,7 +27,9 @@
                 },
                 "upload-interval": {
                     "type": "string",
-                    "description": "Interval for uploading state store data to CDF Raw, on the form 12s, 15m, 1h, etc."
+                    "description": "Interval for uploading state store data to CDF Raw, on the form 12s, 15m, 1h, etc.",
+                    "default": "30s",
+                    "pattern": "^([0-9]+)[ \t]*(s|m|h|d)$"
                 }
             },
             "required": [
@@ -53,7 +55,9 @@
                 },
                 "save-interval": {
                     "type": "string",
-                    "description": "Interval for saving state store data to the local JSON file, on the form 12s, 15m, 1h, etc."
+                    "description": "Interval for saving state store data to the local JSON file, on the form 12s, 15m, 1h, etc.",
+                    "default": "30s",
+                    "pattern": "^([0-9]+)[ \t]*(s|m|h|d)$"
                 }
             },
             "required": [

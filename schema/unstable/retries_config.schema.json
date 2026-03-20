@@ -1,0 +1,26 @@
+{
+    "$id": "retries_config.schema.json",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "type": "object",
+    "unevaluatedProperties": false,
+    "description": "Configuration for retries",
+    "properties": {
+        "max-retries": {
+            "type": "integer",
+            "description": "Maximum number of retries before giving up. Setting to -1 will retry indefinitely.",
+            "default": 10,
+            "minimum": -1
+        },
+        "max-backoff": {
+            "type": "string",
+            "description": "Maximum delay between retries, on the form 12s, 15m, 1h, etc.",
+            "default": "30s"
+        },
+        "timeout": {
+            "type": "string",
+            "description": "Timeout in seconds for each retry attempt, on the form 12s, 15m, 1h, etc.",
+            "default": "30s",
+            "pattern": "^([0-9]+)[ \t]*(s|m|h|d)$"
+        }
+    }
+}

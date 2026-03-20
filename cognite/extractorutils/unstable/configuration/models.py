@@ -150,7 +150,7 @@ class TimeIntervalConfig:
         except ValueError:
             pass
 
-        match = re.match(r"(\d+)[ \t]*(s|m|h|d)", expression)
+        match = re.match(r"^(\d+)[ \t]*(s|m|h|d)$", expression.strip())
         if not match:
             raise InvalidConfigError("Invalid interval pattern")
 
