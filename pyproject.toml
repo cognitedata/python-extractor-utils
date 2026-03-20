@@ -123,8 +123,5 @@ only-include = ["cognite"]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[dependency-groups]
-dev = []
-
 [project.scripts]
 simple-extractor = "cognite.examples.unstable.extractors.simple_extractor.main:main"
