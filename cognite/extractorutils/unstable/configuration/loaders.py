@@ -6,7 +6,7 @@ import json
 from enum import Enum
 from io import StringIO
 from pathlib import Path
-from typing import TextIO, TypeVar
+from typing import Any, TextIO, TypeVar
 
 from cognite.client import CogniteClient
 from cognite.client.exceptions import CogniteAPIError
@@ -36,13 +36,14 @@ class ConfigFormat(Enum):
     YAML = "yaml"
 
 
-def load_file(path: Path, schema: type[_T]) -> _T:
+def load_file(path: Path, schema: type[_T], context: dict[str, Any] | None = None) -> _T:
     """
     Load a configuration file from the given path and parse it into the specified schema.
 
     Args:
         path: Path to the configuration file.
         schema: The schema class to parse the configuration into.
+        context: Optional context to pass to the schema during validation.
 
     Returns:
         An instance of the schema populated with the configuration data.
@@ -58,7 +59,7 @@ def load_file(path: Path, schema: type[_T]) -> _T:
         raise InvalidConfigError(f"Unknown file type {path.suffix}")
 
     with open(path) as stream:
-        return load_io(stream, file_format, schema)
+        return load_io(stream, file_format, schema, context=context if context is not None else {})
 
 
 def load_from_cdf(
@@ -108,7 +109,7 @@ def load_from_cdf(
         raise new_e from e
 
 
-def load_io(stream: TextIO, file_format: ConfigFormat, schema: type[_T]) -> _T:
+def load_io(stream: TextIO, file_format: ConfigFormat, schema: type[_T], context: dict[str, Any] | None = None) -> _T:
     """
     Load a configuration from a stream (e.g., file or string) and parse it into the specified schema.
 
@@ -116,6 +117,7 @@ def load_io(stream: TextIO, file_format: ConfigFormat, schema: type[_T]) -> _T:
         stream: A text stream containing the configuration data.
         file_format: The format of the configuration data.
         schema: The schema class to parse the configuration into.
+        context: Optional context to pass to the schema during validation.
 
     Returns:
         An instance of the schema populated with the configuration data.
@@ -134,7 +136,7 @@ def load_io(stream: TextIO, file_format: ConfigFormat, schema: type[_T]) -> _T:
         if "key-vault" in data:
             data.pop("key-vault")
 
-    return load_dict(data, schema)
+    return load_dict(data, schema, context=context if context is not None else {})
 
 
 def _make_loc_str(loc: tuple) -> str:
@@ -155,13 +157,14 @@ def _make_loc_str(loc: tuple) -> str:
     return loc_str
 
 
-def load_dict(data: dict, schema: type[_T]) -> _T:
+def load_dict(data: dict, schema: type[_T], context: dict[str, Any] | None = None) -> _T:
     """
     Load a configuration from a dictionary and parse it into the specified schema.
 
     Args:
         data: A dictionary containing the configuration data.
         schema: The schema class to parse the configuration into.
+        context: Optional context to pass to the schema during validation.
 
     Returns:
         An instance of the schema populated with the configuration data.
@@ -170,10 +173,11 @@ def load_dict(data: dict, schema: type[_T]) -> _T:
         InvalidConfigError: If the configuration is invalid.
     """
     try:
-        return schema.model_validate(data)
+        return schema.model_validate(data, context=context if context is not None else {})
 
     except ValidationError as e:
         messages = []
+        # TODO: Check why there's an extra .
         for err in e.errors():
             loc = err.get("loc")
             if loc is None:
