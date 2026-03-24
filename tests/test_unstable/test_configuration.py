@@ -9,7 +9,8 @@ from cognite.client.credentials import OAuthClientCredentials
 from cognite.client.data_classes import DataSet
 from pydantic import Field, ValidationInfo, field_validator, model_validator
 
-from cognite.extractorutils.unstable.configuration.exceptions import InvalidConfigError
+from cognite.extractorutils.exceptions import InvalidConfigError
+from cognite.extractorutils.unstable.configuration.exceptions import InvalidConfigError as UnstableInvalidConfigError
 from cognite.extractorutils.unstable.configuration.loaders import ConfigFormat, load_io
 from cognite.extractorutils.unstable.configuration.models import (
     ConfigModel,
@@ -298,7 +299,7 @@ def test_file_size_config_equality() -> None:
     assert file_size_3 != file_size_1
 
 
-class Instance(ConfigModel):
+class Source(ConfigModel):
     name: str
     option: str
 
@@ -320,7 +321,7 @@ class TaskConfig(ConfigModel):
 
 
 class TestRemoteConfig(ExtractorConfig):
-    sources: list[Instance]
+    sources: list[Source]
     tasks: list[TaskConfig]
 
     @model_validator(mode="before")
@@ -336,7 +337,7 @@ class TestRemoteConfig(ExtractorConfig):
 def test_config_with_context() -> None:
     stream = StringIO(TEST_REMOTE_CONFIG)
     with pytest.raises(
-        InvalidConfigError,
+        UnstableInvalidConfigError,
         match=re.escape("Invalid config: 'ghi' is not defined in the list of sources: tasks[2].source"),
     ):
         load_io(stream, ConfigFormat.YAML, TestRemoteConfig)
