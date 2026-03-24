@@ -59,11 +59,15 @@ def load_file(path: Path, schema: type[_T], context: dict[str, Any] | None = Non
         raise InvalidConfigError(f"Unknown file type {path.suffix}")
 
     with open(path) as stream:
-        return load_io(stream, file_format, schema, context=context if context is not None else {})
+        return load_io(stream, file_format, schema, context=context)
 
 
 def load_from_cdf(
-    cognite_client: CogniteClient, external_id: str, schema: type[_T], revision: int | None = None
+    cognite_client: CogniteClient,
+    external_id: str,
+    schema: type[_T],
+    revision: int | None = None,
+    context: dict[str, Any] | None = None,
 ) -> tuple[_T, int]:
     """
     Load a configuration from a CDF integration using the provided external ID and schema.
@@ -73,6 +77,7 @@ def load_from_cdf(
         external_id: The external ID of the integration to load configuration from.
         schema: The schema class to parse the configuration into.
         revision: the specific revision of the configuration to load, otherwise get the latest.
+        context: Optional context to pass to the schema during validation.
 
     Returns:
         A tuple containing the parsed configuration instance and the revision number.
@@ -98,7 +103,7 @@ def load_from_cdf(
     data = response.json()
 
     try:
-        return load_io(StringIO(data["config"]), ConfigFormat.YAML, schema), data["revision"]
+        return load_io(StringIO(data["config"]), ConfigFormat.YAML, schema, context), data["revision"]
 
     except InvalidConfigError as e:
         e.attempted_revision = data["revision"]
@@ -136,7 +141,7 @@ def load_io(stream: TextIO, file_format: ConfigFormat, schema: type[_T], context
         if "key-vault" in data:
             data.pop("key-vault")
 
-    return load_dict(data, schema, context=context if context is not None else {})
+    return load_dict(data, schema, context=context)
 
 
 def _make_loc_str(loc: tuple) -> str:
@@ -177,7 +182,6 @@ def load_dict(data: dict, schema: type[_T], context: dict[str, Any] | None = Non
 
     except ValidationError as e:
         messages = []
-        # TODO: Check why there's an extra .
         for err in e.errors():
             loc = err.get("loc")
             if loc is None:

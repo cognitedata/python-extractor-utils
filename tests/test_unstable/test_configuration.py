@@ -315,7 +315,7 @@ class TaskConfig(ConfigModel):
     def validate_instance(cls, value: str, info: ValidationInfo) -> str:
         source_names = (info.context or {}).get("source_names", [])
         if value not in source_names:
-            raise ValueError(f"'{value}' is not defined in the list of sources.")
+            raise ValueError(f"'{value}' is not defined in the list of sources")
         return value
 
 
@@ -337,7 +337,7 @@ def test_config_with_context() -> None:
     stream = StringIO(TEST_REMOTE_CONFIG)
     with pytest.raises(
         InvalidConfigError,
-        match=re.escape("Invalid config: 'ghi' is not defined in the list of sources.: tasks[2].source"),
+        match=re.escape("Invalid config: 'ghi' is not defined in the list of sources: tasks[2].source"),
     ):
         load_io(stream, ConfigFormat.YAML, TestRemoteConfig)
 
