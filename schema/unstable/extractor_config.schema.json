@@ -3,7 +3,6 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "type": "object",
     "description": "Base extractor configuration object",
-    "unevaluatedProperties": false,
     "properties": {
         "state-store": {
             "$ref": "state_store_config.schema.json"
