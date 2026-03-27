@@ -77,7 +77,7 @@ def load_from_cdf(
         external_id: The external ID of the integration to load configuration from.
         schema: The schema class to parse the configuration into.
         revision: the specific revision of the configuration to load, otherwise get the latest.
-        context: Optional context to pass to the schema during validation.
+        context: Optional Pydantic validation context; see ``load_dict`` for semantics.
 
     Returns:
         A tuple containing the parsed configuration instance and the revision number.
