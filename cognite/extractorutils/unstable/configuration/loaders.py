@@ -43,7 +43,7 @@ def load_file(path: Path, schema: type[_T], context: dict[str, Any] | None = Non
     Args:
         path: Path to the configuration file.
         schema: The schema class to parse the configuration into.
-        context: Optional context to pass to the schema during validation.
+        context: Optional Pydantic validation context; see ``load_dict`` for semantics.
 
     Returns:
         An instance of the schema populated with the configuration data.
