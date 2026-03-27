@@ -169,7 +169,13 @@ def load_dict(data: dict, schema: type[_T], context: dict[str, Any] | None = Non
     Args:
         data: A dictionary containing the configuration data.
         schema: The schema class to parse the configuration into.
-        context: Optional context to pass to the schema during validation.
+        context: Optional Pydantic validation context: forwarded to
+            ``schema.model_validate(..., context=...)`` and exposed to validators as
+            ``ValidationInfo.context``. Pydantic reuses one dict for the entire validation
+            run, so validators can add or change keys to pass data to validators that run
+            later (for example a model validator stashing derived data for nested field
+            validators). The dict you pass in is therefore mutated in place; pass a fresh
+            dict if you need the original object unchanged after load.
 
     Returns:
         An instance of the schema populated with the configuration data.
