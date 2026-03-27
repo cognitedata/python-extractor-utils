@@ -122,7 +122,7 @@ def load_io(stream: TextIO, file_format: ConfigFormat, schema: type[_T], context
         stream: A text stream containing the configuration data.
         file_format: The format of the configuration data.
         schema: The schema class to parse the configuration into.
-        context: Optional context to pass to the schema during validation.
+        context: Optional Pydantic validation context; see ``load_dict`` for semantics.
 
     Returns:
         An instance of the schema populated with the configuration data.
