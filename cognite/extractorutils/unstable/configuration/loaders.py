@@ -6,7 +6,7 @@ import json
 from enum import Enum
 from io import StringIO
 from pathlib import Path
-from typing import TextIO, TypeVar
+from typing import Any, TextIO, TypeVar
 
 from cognite.client import CogniteClient
 from cognite.client.exceptions import CogniteAPIError
@@ -36,13 +36,14 @@ class ConfigFormat(Enum):
     YAML = "yaml"
 
 
-def load_file(path: Path, schema: type[_T]) -> _T:
+def load_file(path: Path, schema: type[_T], context: dict[str, Any] | None = None) -> _T:
     """
     Load a configuration file from the given path and parse it into the specified schema.
 
     Args:
         path: Path to the configuration file.
         schema: The schema class to parse the configuration into.
+        context: Optional Pydantic validation context; see ``load_dict`` for semantics.
 
     Returns:
         An instance of the schema populated with the configuration data.
@@ -58,11 +59,15 @@ def load_file(path: Path, schema: type[_T]) -> _T:
         raise InvalidConfigError(f"Unknown file type {path.suffix}")
 
     with open(path) as stream:
-        return load_io(stream, file_format, schema)
+        return load_io(stream, file_format, schema, context=context)
 
 
 def load_from_cdf(
-    cognite_client: CogniteClient, external_id: str, schema: type[_T], revision: int | None = None
+    cognite_client: CogniteClient,
+    external_id: str,
+    schema: type[_T],
+    revision: int | None = None,
+    context: dict[str, Any] | None = None,
 ) -> tuple[_T, int]:
     """
     Load a configuration from a CDF integration using the provided external ID and schema.
@@ -72,6 +77,7 @@ def load_from_cdf(
         external_id: The external ID of the integration to load configuration from.
         schema: The schema class to parse the configuration into.
         revision: the specific revision of the configuration to load, otherwise get the latest.
+        context: Optional Pydantic validation context; see ``load_dict`` for semantics.
 
     Returns:
         A tuple containing the parsed configuration instance and the revision number.
@@ -97,7 +103,7 @@ def load_from_cdf(
     data = response.json()
 
     try:
-        return load_io(StringIO(data["config"]), ConfigFormat.YAML, schema), data["revision"]
+        return load_io(StringIO(data["config"]), ConfigFormat.YAML, schema, context), data["revision"]
 
     except InvalidConfigError as e:
         e.attempted_revision = data["revision"]
@@ -108,7 +114,7 @@ def load_from_cdf(
         raise new_e from e
 
 
-def load_io(stream: TextIO, file_format: ConfigFormat, schema: type[_T]) -> _T:
+def load_io(stream: TextIO, file_format: ConfigFormat, schema: type[_T], context: dict[str, Any] | None = None) -> _T:
     """
     Load a configuration from a stream (e.g., file or string) and parse it into the specified schema.
 
@@ -116,6 +122,7 @@ def load_io(stream: TextIO, file_format: ConfigFormat, schema: type[_T]) -> _T:
         stream: A text stream containing the configuration data.
         file_format: The format of the configuration data.
         schema: The schema class to parse the configuration into.
+        context: Optional Pydantic validation context; see ``load_dict`` for semantics.
 
     Returns:
         An instance of the schema populated with the configuration data.
@@ -134,7 +141,7 @@ def load_io(stream: TextIO, file_format: ConfigFormat, schema: type[_T]) -> _T:
         if "key-vault" in data:
             data.pop("key-vault")
 
-    return load_dict(data, schema)
+    return load_dict(data, schema, context=context)
 
 
 def _make_loc_str(loc: tuple) -> str:
@@ -155,13 +162,20 @@ def _make_loc_str(loc: tuple) -> str:
     return loc_str
 
 
-def load_dict(data: dict, schema: type[_T]) -> _T:
+def load_dict(data: dict, schema: type[_T], context: dict[str, Any] | None = None) -> _T:
     """
     Load a configuration from a dictionary and parse it into the specified schema.
 
     Args:
         data: A dictionary containing the configuration data.
         schema: The schema class to parse the configuration into.
+        context: Optional Pydantic validation context: forwarded to
+            ``schema.model_validate(..., context=...)`` and exposed to validators as
+            ``ValidationInfo.context``. Pydantic reuses one dict for the entire validation
+            run, so validators can add or change keys to pass data to validators that run
+            later (for example a model validator stashing derived data for nested field
+            validators). The dict you pass in is therefore mutated in place; pass a fresh
+            dict if you need the original object unchanged after load.
 
     Returns:
         An instance of the schema populated with the configuration data.
@@ -170,7 +184,7 @@ def load_dict(data: dict, schema: type[_T]) -> _T:
         InvalidConfigError: If the configuration is invalid.
     """
     try:
-        return schema.model_validate(data)
+        return schema.model_validate(data, context=context if context is not None else {})
 
     except ValidationError as e:
         messages = []
