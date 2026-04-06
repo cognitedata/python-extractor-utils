@@ -334,7 +334,8 @@ class Runtime(Generic[ExtractorType]):
             except Exception as e:
                 error_message = str(e)
                 if error_message == prev_error:
-                    # Same error as before, no need to log it again
+                    # Log the error again to make sure it is not missed
+                    self.logger.error(f"{error_message}")
                     self._cancellation_token.wait(randint(1, self.RETRY_CONFIG_INTERVAL))
                     continue
                 self.logger.error(error_message)
