@@ -298,9 +298,7 @@ class Runtime(Generic[ExtractorType]):
                 raise InvalidConfigError(str(e)) from e
 
         else:
-            self.logger.info(
-                f"Loading application config from CDF for integration: {connection_config.integration.external_id}"
-            )
+            self.logger.info("Loading application config from CDF")
 
             application_config, current_config_revision = load_from_cdf(
                 self._cognite_client,
@@ -337,7 +335,7 @@ class Runtime(Generic[ExtractorType]):
                 error_message = str(e)
                 if error_message == prev_error:
                     # Log the error again to make sure it is not missed
-                    self.logger.error(f"{error_message}")
+                    self.logger.error(error_message)
                     self._cancellation_token.wait(randint(1, self.RETRY_CONFIG_INTERVAL))
                     continue
                 self.logger.error(error_message)
