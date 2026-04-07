@@ -888,7 +888,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
         Resolve id of assets if specified, for use in sequence creation.
         """
         assets = set(self.sequence_asset_external_ids.values())
-        assets.discard(None)  # type: ignore  # safeguard, remove Nones if any
+        assets.discard(None)  # safeguard, remove Nones if any
 
         if len(assets) > 0:
             try:
@@ -908,7 +908,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
         Resolve id of datasets if specified, for use in sequence creation.
         """
         datasets = set(self.sequence_dataset_external_ids.values())
-        datasets.discard(None)  # type: ignore  # safeguard, remove Nones if any
+        datasets.discard(None)  # safeguard, remove Nones if any
 
         if len(datasets) > 0:
             try:

@@ -343,5 +343,7 @@ class RobustFileHandler(TimedRotatingFileHandler):
             errors=errors,
         )
 
-        self.stream.write("")
-        self.stream.flush()
+        # FileHandler leaves stream unset until first emit when delay=True; typeshed types it as optional.
+        if self.stream is not None:
+            self.stream.write("")
+            self.stream.flush()
