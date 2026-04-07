@@ -298,7 +298,9 @@ class Runtime(Generic[ExtractorType]):
                 raise InvalidConfigError(str(e)) from e
 
         else:
-            self.logger.info("Loading application config from CDF")
+            self.logger.info(
+                f"Loading application config from CDF for integration: {connection_config.integration.external_id}"
+            )
 
             application_config, current_config_revision = load_from_cdf(
                 self._cognite_client,
