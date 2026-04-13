@@ -333,9 +333,10 @@ class Runtime(Generic[ExtractorType]):
 
             except Exception as e:
                 error_message = str(e)
-                self.logger.error(f"{error_message}")
+                self.logger.error(error_message)
                 if error_message == prev_error:
-                    # Wait and retry if the error is the same as the previous one
+                    # Back off with a random delay in [1, RETRY_CONFIG_INTERVAL] seconds so retries are spread over time
+                    # to reduce synchronized retries / thundering herd when loading config fails.
                     self._cancellation_token.wait(randint(1, self.RETRY_CONFIG_INTERVAL))
                     continue
                 prev_error = error_message
