@@ -1,22 +1,27 @@
 import os
+import re
 from io import StringIO
+from typing import Any
 from unittest.mock import Mock
 
 import pytest
 from cognite.client.credentials import OAuthClientCredentials
 from cognite.client.data_classes import DataSet
-from pydantic import Field
+from pydantic import Field, ValidationInfo, field_validator, model_validator
 
 from cognite.extractorutils.exceptions import InvalidConfigError
+from cognite.extractorutils.unstable.configuration.exceptions import InvalidConfigError as UnstableInvalidConfigError
 from cognite.extractorutils.unstable.configuration.loaders import ConfigFormat, load_io
 from cognite.extractorutils.unstable.configuration.models import (
     ConfigModel,
     ConnectionConfig,
     EitherIdConfig,
+    ExtractorConfig,
     FileSizeConfig,
     LogLevel,
     TimeIntervalConfig,
     WithDataSetId,
+    _ClientCertificateConfig,
     _ClientCredentialsConfig,
 )
 
@@ -137,6 +142,25 @@ connection:
     - thumbprint1
     - thumbprint2
 """
+TEST_REMOTE_CONFIG = """
+---
+sources:
+- name: abc
+  option: option1
+
+- name: def
+  option: option2
+
+tasks:
+- name: task1
+  source: abc
+
+- name: task2
+  source: def
+
+- name: task3
+  source: ghi
+"""
 
 
 @pytest.mark.parametrize("config_str", [CONFIG_EXAMPLE_ONLY_REQUIRED, CONFIG_EXAMPLE_ONLY_REQUIRED2])
@@ -148,6 +172,7 @@ def test_load_from_io(config_str: str) -> None:
     assert config.base_url == "https://baseurl.com"
     assert config.integration.external_id == "test-pipeline"
     assert config.authentication.type == "client-credentials"
+    assert isinstance(config.authentication, _ClientCredentialsConfig)
     assert config.authentication.client_secret == "very_secret123"
     assert list(config.authentication.scopes) == ["scopea", "scopeb"]
 
@@ -165,6 +190,7 @@ def test_full_config_client_credentials(config_str: str) -> None:
 
     assert config.authentication.type == "client-credentials"
     assert config.authentication.client_id == "testid"
+    assert isinstance(config.authentication, _ClientCredentialsConfig)
     assert config.authentication.client_secret == "very_secret123"
     assert config.authentication.token_url == "https://get-a-token.com/token"
     assert list(config.authentication.scopes) == ["scopea", "scopeb"]
@@ -192,6 +218,7 @@ def test_full_config_client_certificates(config_str: str) -> None:
 
     assert config.authentication.type == "client-certificate"
     assert config.authentication.client_id == "testid"
+    assert isinstance(config.authentication, _ClientCertificateConfig)
     assert config.authentication.password == "very-strong-password"
     assert config.authentication.path.as_posix() == "/path/to/cert.pem"
     assert config.authentication.authority_url == "https://you-are-authorized.com"
@@ -270,6 +297,50 @@ def test_file_size_config_equality() -> None:
     assert file_size_3.bytes == 1_000_000_000
     assert file_size_1 == file_size_2
     assert file_size_3 != file_size_1
+
+
+class Source(ConfigModel):
+    name: str
+    option: str
+
+
+class TaskConfig(ConfigModel):
+    name: str
+    source: str
+
+    @field_validator(
+        "source",
+        mode="after",
+    )
+    @classmethod
+    def validate_instance(cls, value: str, info: ValidationInfo) -> str:
+        source_names = (info.context or {}).get("source_names", [])
+        if value not in source_names:
+            raise ValueError(f"'{value}' is not defined in the list of sources")
+        return value
+
+
+class TestRemoteConfig(ExtractorConfig):
+    sources: list[Source]
+    tasks: list[TaskConfig]
+
+    @model_validator(mode="before")
+    @classmethod
+    def map_instances(cls, data: dict[str, Any], validation_info: ValidationInfo) -> dict[str, Any]:
+        if validation_info.context is not None:
+            validation_info.context.update(
+                {"source_names": [source["name"] for source in data.get("sources", [])]},
+            )
+        return data
+
+
+def test_config_with_context() -> None:
+    stream = StringIO(TEST_REMOTE_CONFIG)
+    with pytest.raises(
+        UnstableInvalidConfigError,
+        match=re.escape("Invalid config: 'ghi' is not defined in the list of sources: tasks[2].source"),
+    ):
+        load_io(stream, ConfigFormat.YAML, TestRemoteConfig)
 
 
 @pytest.mark.parametrize(

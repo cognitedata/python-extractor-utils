@@ -12,6 +12,11 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.12.1
+
+### Added
+* In the `unstable` package: Adds context to the config validation layer. This also allows us to customize validation.
+
 ## 7.12.0
 
 ### Added
