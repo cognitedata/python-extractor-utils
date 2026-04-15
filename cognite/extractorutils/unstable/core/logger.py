@@ -343,5 +343,6 @@ class RobustFileHandler(TimedRotatingFileHandler):
             errors=errors,
         )
 
-        self.stream.write("")
-        self.stream.flush()
+        # Ensure the log file path exists and is writable. Using touch validates when
+        # delay=True, because FileHandler does not open the stream until the first emit.
+        filename.touch()
