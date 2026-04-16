@@ -13,10 +13,10 @@ will load the value from the `COGNITE_CLIENT_SECRET` environment variable into t
 url: http://my-host.com/api/endpoint?secret=${MY_SECRET_TOKEN}
 ```
 
-:::info Note
+<Info>
 Implicit substitutions only work for unquoted value strings. For quoted strings, use the `!env` tag to activate environment substitution:
 
 ```yaml
 url: !env 'http://my-host.com/api/endpoint?secret=${MY_SECRET_TOKEN}'
 ```
-:::
+</Info>
