@@ -12,6 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import contextlib
 import io
 import os
 import pathlib
@@ -23,12 +24,15 @@ from typing import BinaryIO
 import jsonlines
 import pytest
 from cognite.client import CogniteClient
+from cognite.client.config import ClientConfig
+from cognite.client.credentials import OAuthClientCredentials
 from cognite.client.data_classes import FileMetadata
 from cognite.client.data_classes.data_modeling import NodeId
 from cognite.client.data_classes.data_modeling.extractor_extensions.v1 import (
     CogniteExtractorFile,
     CogniteExtractorFileApply,
 )
+from cognite.client.exceptions import CogniteNotFoundError
 from conftest import ETestType, ParamTest
 
 from cognite.extractorutils.uploader.files import (
@@ -399,3 +403,69 @@ def test_update_files(set_upload_test: tuple[CogniteClient, ParamTest]) -> None:
     file = client.files.retrieve(external_id=test_parameter.external_ids[0])
     assert file.source == "some-source"
     assert file.directory == "/some/directory"
+
+
+_ZERO_BYTE_CLUSTERS = [
+    pytest.param(
+        "extractor-bluefield-testing",
+        "https://bluefield.cognitedata.com",
+        id="azure-bluefield",
+    ),
+    pytest.param(
+        "extractor-aws-dub-dev-testing",
+        "https://aws-dub-dev.cognitedata.com",
+        id="aws-dub-dev",
+    ),
+]
+
+
+def _build_cognite_client(project: str, base_url: str) -> CogniteClient:
+    token_url = os.environ["COGNITE_TOKEN_URL"]
+    client_id = os.environ["COGNITE_CLIENT_ID"]
+    client_secret = os.environ["COGNITE_CLIENT_SECRET"]
+    scopes = [f"{base_url}/.default"]
+
+    return CogniteClient(
+        ClientConfig(
+            project=project,
+            base_url=base_url,
+            credentials=OAuthClientCredentials(token_url, client_id, client_secret, scopes),
+            client_name="extractor-utils-zero-byte-test",
+        )
+    )
+
+
+@pytest.mark.parametrize(("project", "base_url"), _ZERO_BYTE_CLUSTERS)
+def test_zero_byte_file_upload_across_clusters(project: str, base_url: str) -> None:
+    # AWS S3 presigned URL signs `content-type` — empty-file PUT must include it for AWS clusters
+    # or will get 403 from S3 and a failed upload, while Azure does not require it and will succeed either way.
+    # This test ensures that the zero-byte file upload logic works across both types of clusters.
+    client = _build_cognite_client(project, base_url)
+
+    external_id = f"util_integration_zero_byte_{random.randint(0, 2**31)}"
+    current_dir = pathlib.Path(__file__).parent.resolve()
+    empty_file = current_dir.joinpath("empty_file.txt")
+    assert empty_file.stat().st_size == 0, "empty_file.txt must be zero bytes"
+
+    queue = FileUploadQueue(cdf_client=client, overwrite_existing=True, max_queue_size=1)
+    queue.add_to_upload_queue(
+        file_meta=FileMetadata(
+            external_id=external_id,
+            name=external_id,
+            mime_type="text/plain",
+        ),
+        file_name=empty_file,
+    )
+
+    try:
+        queue.upload()
+
+        assert queue.errors == [], f"Zero-byte upload failed on {project} ({base_url}) with errors: {queue.errors}"
+
+        retrieved = client.files.retrieve(external_id=external_id)
+        assert retrieved is not None, f"File metadata not found on {project}"
+        assert retrieved.name == external_id
+        assert retrieved.mime_type == "text/plain"
+    finally:
+        with contextlib.suppress(CogniteNotFoundError):
+            client.files.delete(external_id=external_id)
