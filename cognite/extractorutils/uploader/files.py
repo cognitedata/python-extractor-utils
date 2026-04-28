@@ -513,6 +513,11 @@ class IOFileUploadQueue(AbstractUploadQueue):
             read_file: Callable[[], BinaryIO],
             file_meta: FileMetadataOrCogniteExtractorFile,
         ) -> None:
+            # Default to `application/octet-stream` so uploads succeed
+            # regardless of cluster when the caller didn't supply a mime type.
+            if file_meta.mime_type is None:
+                file_meta.mime_type = "application/octet-stream"
+
             with read_file() as file:
                 size = super_len(file)
                 if size == 0:
