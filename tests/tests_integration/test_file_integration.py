@@ -433,7 +433,7 @@ def _build_cluster_client(project: str, base_url: str) -> CogniteClient:
     cognite_token_url = os.environ["COGNITE_TOKEN_URL"]
     cognite_client_id = os.environ["COGNITE_CLIENT_ID"]
     cognite_client_secret = os.environ["COGNITE_CLIENT_SECRET"]
-    cognite_project_scopes = os.environ["COGNITE_TOKEN_SCOPES"].split(",")
+    cognite_project_scopes = [f"{base_url.rstrip('/')}/.default"]
     client_config = ClientConfig(
         project=project,
         base_url=base_url,
