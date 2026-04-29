@@ -161,7 +161,7 @@ def test_load_cdf_config_initial_empty(connection_config: ConnectionConfig) -> N
 def test_load_cdf_config_invalid_config_revision_attributed(connection_config: ConnectionConfig) -> None:
     """
     When a config exists in CDF but fails validation, the error reported to Odin
-    must carry type='config' and configRevision pointing to the failing revision.
+    must carry type config and the failing revision (errors list uses activeConfigRevision).
     """
     cognite_client = connection_config.get_cognite_client(f"{TestExtractor.EXTERNAL_ID}-{TestExtractor.VERSION}")
     # Post a config that will fail validation (missing required fields)
@@ -195,6 +195,7 @@ def test_load_cdf_config_invalid_config_revision_attributed(connection_config: C
     ).json()
 
     assert len(errors["items"]) >= 1
+    assert errors["items"][0].get("type") == "config"
     assert errors["items"][0].get("activeConfigRevision") == 1
 
 
