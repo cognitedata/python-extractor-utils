@@ -16,7 +16,7 @@ from typing_extensions import Self
 
 from cognite.examples.unstable.extractors.simple_extractor.main import SimpleExtractor
 from cognite.extractorutils.metrics import BaseMetrics
-from cognite.extractorutils.unstable.configuration.exceptions import InvalidArgumentError
+from cognite.extractorutils.unstable.configuration.exceptions import InvalidArgumentError, InvalidConfigError
 from cognite.extractorutils.unstable.configuration.models import ConnectionConfig
 from cognite.extractorutils.unstable.core.base import ConfigRevision, FullConfig
 from cognite.extractorutils.unstable.core.checkin_worker import CheckinWorker
@@ -156,6 +156,46 @@ def test_load_cdf_config_initial_empty(connection_config: ConnectionConfig) -> N
 
     assert len(errors["items"]) == 1
     assert "No configuration found for the given integration" in errors["items"][0]["description"]
+
+
+def test_load_cdf_config_invalid_config_revision_attributed(connection_config: ConnectionConfig) -> None:
+    """
+    When a config exists in CDF but fails validation, the error reported to Odin
+    must carry type='config' and configRevision pointing to the failing revision.
+    """
+    cognite_client = connection_config.get_cognite_client(f"{TestExtractor.EXTERNAL_ID}-{TestExtractor.VERSION}")
+    # Post a config that will fail validation (missing required fields)
+    cognite_client.post(
+        url=f"/api/v1/projects/{cognite_client.config.project}/odin/config",
+        json={
+            "externalId": connection_config.integration.external_id,
+            "config": "parameter-one: 123\n",  # missing parameter_two
+        },
+        headers={"cdf-version": "alpha"},
+    )
+
+    runtime = Runtime(TestExtractor)
+    runtime._cognite_client = cognite_client
+    runtime.RETRY_CONFIG_INTERVAL = 1
+
+    def cancel_after_delay() -> None:
+        time.sleep(5)
+        runtime._cancellation_token.cancel()
+
+    Thread(target=cancel_after_delay, daemon=True).start()
+    runtime._safe_get_application_config(
+        args=Namespace(force_local_config=None),
+        connection_config=connection_config,
+    )
+
+    errors = cognite_client.get(
+        url=f"/api/v1/projects/{cognite_client.config.project}/integrations/errors",
+        params={"integration": connection_config.integration.external_id},
+        headers={"cdf-version": "alpha"},
+    ).json()
+
+    assert len(errors["items"]) >= 1
+    assert errors["items"][0].get("activeConfigRevision") == 1
 
 
 def test_verify_connection_config(connection_config: ConnectionConfig) -> None:
