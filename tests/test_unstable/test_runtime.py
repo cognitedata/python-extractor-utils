@@ -173,6 +173,14 @@ def test_load_cdf_config_invalid_config_revision_attributed(connection_config: C
         },
         headers={"cdf-version": "alpha"},
     )
+    # Same revision the runtime sees when loading from CDF (see load_from_cdf).
+    response = cognite_client.get(
+        url=f"/api/v1/projects/{cognite_client.config.project}/odin/config",
+        params={"integration": connection_config.integration.external_id},
+        headers={"cdf-version": "alpha"},
+    ).json()
+    expected_revision = response["revision"]
+    assert expected_revision is not None
 
     runtime = Runtime(TestExtractor)
     runtime._cognite_client = cognite_client
@@ -196,7 +204,7 @@ def test_load_cdf_config_invalid_config_revision_attributed(connection_config: C
 
     assert len(errors["items"]) >= 1
     assert errors["items"][0].get("type") == "config"
-    assert errors["items"][0].get("configRevision") == 1
+    assert errors["items"][0].get("activeConfigRevision") == expected_revision
 
 
 def test_verify_connection_config(connection_config: ConnectionConfig) -> None:
