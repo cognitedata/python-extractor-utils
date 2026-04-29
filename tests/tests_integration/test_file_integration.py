@@ -416,10 +416,15 @@ _CLUSTERS = [
         "https://aws-dub-dev.cognitedata.com",
         id="aws-dub-dev",
     ),
+    # pytest.param(
+    #     "extractor-gc-bru-dev-003-testing",
+    #     "https://gc-bru-dev-003.cognitedata.com",
+    #     id="gcs-bru-dev-003",
+    # ),
     pytest.param(
-        "extractor-gc-bru-dev-003-testing",
-        "https://gc-bru-dev-003.cognitedata.com",
-        id="gcs-bru-dev-003",
+        "extractor-tests",
+        "https://greenfield.cognitedata.com",
+        id="greenfield",
     ),
 ]
 
