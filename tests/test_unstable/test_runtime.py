@@ -196,7 +196,7 @@ def test_load_cdf_config_invalid_config_revision_attributed(connection_config: C
 
     assert len(errors["items"]) >= 1
     assert errors["items"][0].get("type") == "config"
-    assert errors["items"][0].get("activeConfigRevision") == 1
+    assert errors["items"][0].get("configRevision") == 1
 
 
 def test_verify_connection_config(connection_config: ConnectionConfig) -> None:
