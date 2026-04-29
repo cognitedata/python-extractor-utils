@@ -16,7 +16,7 @@ from typing_extensions import Self
 
 from cognite.examples.unstable.extractors.simple_extractor.main import SimpleExtractor
 from cognite.extractorutils.metrics import BaseMetrics
-from cognite.extractorutils.unstable.configuration.exceptions import InvalidArgumentError, InvalidConfigError
+from cognite.extractorutils.unstable.configuration.exceptions import InvalidArgumentError
 from cognite.extractorutils.unstable.configuration.models import ConnectionConfig
 from cognite.extractorutils.unstable.core.base import ConfigRevision, FullConfig
 from cognite.extractorutils.unstable.core.checkin_worker import CheckinWorker
