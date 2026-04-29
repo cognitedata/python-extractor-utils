@@ -12,6 +12,7 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+import contextlib
 import io
 import os
 import pathlib
@@ -23,12 +24,15 @@ from typing import BinaryIO
 import jsonlines
 import pytest
 from cognite.client import CogniteClient
+from cognite.client.config import ClientConfig
+from cognite.client.credentials import OAuthClientCredentials
 from cognite.client.data_classes import FileMetadata
 from cognite.client.data_classes.data_modeling import NodeId
 from cognite.client.data_classes.data_modeling.extractor_extensions.v1 import (
     CogniteExtractorFile,
     CogniteExtractorFileApply,
 )
+from cognite.client.exceptions import CogniteNotFoundError
 from conftest import ETestType, ParamTest
 
 from cognite.extractorutils.uploader.files import (
@@ -399,3 +403,161 @@ def test_update_files(set_upload_test: tuple[CogniteClient, ParamTest]) -> None:
     file = client.files.retrieve(external_id=test_parameter.external_ids[0])
     assert file.source == "some-source"
     assert file.directory == "/some/directory"
+
+
+_CLUSTERS = [
+    pytest.param(
+        "extractor-bluefield-testing",
+        "https://bluefield.cognitedata.com",
+        id="azure-bluefield",
+    ),
+    pytest.param(
+        "extractor-aws-dub-dev-testing",
+        "https://aws-dub-dev.cognitedata.com",
+        id="aws-dub-dev",
+    ),
+    pytest.param(
+        "extractor-gc-bru-dev-003-testing",
+        "https://gc-bru-dev-003.cognitedata.com",
+        id="gcs-bru-dev-003",
+    ),
+]
+
+# Size big enough to trigger multipart upload when paired with the chunk-size
+# overrides below (10 MB > 6 MB single-chunk threshold).
+_BIG_FILE_BYTES = b"large" * 2_000_000
+_MULTIPART_CHUNK_SIZE = 6_000_000
+
+
+def _build_cluster_client(project: str, base_url: str) -> CogniteClient:
+    cognite_token_url = os.environ["COGNITE_TOKEN_URL"]
+    cognite_client_id = os.environ["COGNITE_CLIENT_ID"]
+    cognite_client_secret = os.environ["COGNITE_CLIENT_SECRET"]
+    cognite_project_scopes = os.environ["COGNITE_TOKEN_SCOPES"].split(",")
+    client_config = ClientConfig(
+        project=project,
+        base_url=base_url,
+        credentials=OAuthClientCredentials(
+            cognite_token_url,
+            cognite_client_id,
+            cognite_client_secret,
+            cognite_project_scopes,
+        ),
+        client_name="extractor-utils-integration-tests",
+    )
+    return CogniteClient(client_config)
+
+
+def _safe_delete_file(client: CogniteClient, external_id: str) -> None:
+    with contextlib.suppress(CogniteNotFoundError):
+        client.files.delete(external_id=external_id)
+
+
+@pytest.mark.parametrize(("project", "base_url"), _CLUSTERS)
+@pytest.mark.parametrize(
+    "mime_type",
+    [
+        pytest.param("text/plain", id="with-mime"),
+        pytest.param(None, id="without-mime"),
+    ],
+)
+def test_some_size_file_upload_across_clusters(project: str, base_url: str, mime_type: str | None) -> None:
+    client = _build_cluster_client(project, base_url)
+    external_id = f"util_some_size_{'mime' if mime_type else 'nomime'}_{random.randint(0, 2**31)}"
+    _safe_delete_file(client, external_id)
+    try:
+        queue = BytesUploadQueue(cdf_client=client, overwrite_existing=True, max_queue_size=1)
+        queue.add_to_upload_queue(
+            content=b"hello world",
+            file_meta=FileMetadata(
+                external_id=external_id,
+                name=external_id,
+                mime_type=mime_type,
+            ),
+        )
+        queue.upload()
+
+        await_is_uploaded_status(client, external_id=external_id)
+        retrieved = client.files.retrieve(external_id=external_id)
+        assert retrieved is not None
+        assert retrieved.uploaded is True
+        if mime_type is not None:
+            assert retrieved.mime_type == mime_type
+        downloaded = client.files.download_bytes(external_id=external_id)
+        assert downloaded == b"hello world"
+    finally:
+        _safe_delete_file(client, external_id)
+
+
+@pytest.mark.parametrize(("project", "base_url"), _CLUSTERS)
+@pytest.mark.parametrize(
+    "mime_type",
+    [
+        pytest.param("text/plain", id="with-mime"),
+        pytest.param(None, id="without-mime"),
+    ],
+)
+def test_zero_size_file_upload_across_clusters(project: str, base_url: str, mime_type: str | None) -> None:
+    client = _build_cluster_client(project, base_url)
+    external_id = f"util_zero_size_{'mime' if mime_type else 'nomime'}_{random.randint(0, 2**31)}"
+    current_dir = pathlib.Path(__file__).parent.resolve()
+    empty_file = current_dir.joinpath("empty_file.txt")
+    _safe_delete_file(client, external_id)
+    try:
+        queue = FileUploadQueue(cdf_client=client, overwrite_existing=True, max_queue_size=1)
+        queue.add_to_upload_queue(
+            file_meta=FileMetadata(
+                external_id=external_id,
+                name=external_id,
+                mime_type=mime_type,
+            ),
+            file_name=empty_file,
+        )
+        queue.upload()
+
+        retrieved = client.files.retrieve(external_id=external_id)
+        assert retrieved is not None
+        assert retrieved.name == external_id
+        if mime_type is not None:
+            assert retrieved.mime_type == mime_type
+    finally:
+        _safe_delete_file(client, external_id)
+
+
+@pytest.mark.parametrize(("project", "base_url"), _CLUSTERS)
+@pytest.mark.parametrize(
+    "mime_type",
+    [
+        pytest.param("application/octet-stream", id="with-mime"),
+        pytest.param(None, id="without-mime"),
+    ],
+)
+def test_big_file_multipart_upload_across_clusters(project: str, base_url: str, mime_type: str | None) -> None:
+    client = _build_cluster_client(project, base_url)
+    external_id = f"util_big_size_{'mime' if mime_type else 'nomime'}_{random.randint(0, 2**31)}"
+    _safe_delete_file(client, external_id)
+    try:
+        queue = BytesUploadQueue(cdf_client=client, overwrite_existing=True, max_queue_size=1)
+        queue.max_file_chunk_size = _MULTIPART_CHUNK_SIZE
+        queue.max_single_chunk_file_size = _MULTIPART_CHUNK_SIZE
+
+        queue.add_to_upload_queue(
+            content=_BIG_FILE_BYTES,
+            file_meta=FileMetadata(
+                external_id=external_id,
+                name=external_id,
+                mime_type=mime_type,
+            ),
+        )
+        queue.upload()
+
+        await_is_uploaded_status(client, external_id=external_id)
+        retrieved = client.files.retrieve(external_id=external_id)
+        assert retrieved is not None
+        assert retrieved.uploaded is True
+        if mime_type is not None:
+            assert retrieved.mime_type == mime_type
+        downloaded = client.files.download_bytes(external_id=external_id)
+        assert len(downloaded) == len(_BIG_FILE_BYTES)
+    finally:
+        _safe_delete_file(client, external_id)
