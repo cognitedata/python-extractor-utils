@@ -405,7 +405,7 @@ def test_update_files(set_upload_test: tuple[CogniteClient, ParamTest]) -> None:
     assert file.directory == "/some/directory"
 
 
-_ZERO_BYTE_CLUSTERS = [
+_CLUSTERS = [
     pytest.param(
         "extractor-bluefield-testing",
         "https://bluefield.cognitedata.com",
@@ -416,56 +416,146 @@ _ZERO_BYTE_CLUSTERS = [
         "https://aws-dub-dev.cognitedata.com",
         id="aws-dub-dev",
     ),
+    pytest.param(
+        "extractor-tests",
+        "https://greenfield.cognitedata.com",
+        id="greenfield",
+    ),
 ]
 
-
-def _build_cognite_client(project: str, base_url: str) -> CogniteClient:
-    token_url = os.environ["COGNITE_TOKEN_URL"]
-    client_id = os.environ["COGNITE_CLIENT_ID"]
-    client_secret = os.environ["COGNITE_CLIENT_SECRET"]
-    scopes = [f"{base_url}/.default"]
-
-    return CogniteClient(
-        ClientConfig(
-            project=project,
-            base_url=base_url,
-            credentials=OAuthClientCredentials(token_url, client_id, client_secret, scopes),
-            client_name="extractor-utils-zero-byte-test",
-        )
-    )
+_BIG_FILE_BYTES = b"large" * 2_000_000
+_MULTIPART_CHUNK_SIZE = 6_000_000
 
 
-@pytest.mark.parametrize(("project", "base_url"), _ZERO_BYTE_CLUSTERS)
-def test_zero_byte_file_upload_across_clusters(project: str, base_url: str) -> None:
-    # AWS S3 presigned URL signs `content-type` — empty-file PUT must include it for AWS clusters
-    # or will get 403 from S3 and a failed upload, while Azure does not require it and will succeed either way.
-    # This test ensures that the zero-byte file upload logic works across both types of clusters.
-    client = _build_cognite_client(project, base_url)
-
-    external_id = f"util_integration_zero_byte_{random.randint(0, 2**31)}"
-    current_dir = pathlib.Path(__file__).parent.resolve()
-    empty_file = current_dir.joinpath("empty_file.txt")
-    assert empty_file.stat().st_size == 0, "empty_file.txt must be zero bytes"
-
-    queue = FileUploadQueue(cdf_client=client, overwrite_existing=True, max_queue_size=1)
-    queue.add_to_upload_queue(
-        file_meta=FileMetadata(
-            external_id=external_id,
-            name=external_id,
-            mime_type="text/plain",
+def _build_cluster_client(project: str, base_url: str) -> CogniteClient:
+    cognite_token_url = os.environ["COGNITE_TOKEN_URL"]
+    cognite_client_id = os.environ["COGNITE_CLIENT_ID"]
+    cognite_client_secret = os.environ["COGNITE_CLIENT_SECRET"]
+    cognite_project_scopes = [f"{base_url.rstrip('/')}/.default"]
+    client_config = ClientConfig(
+        project=project,
+        base_url=base_url,
+        credentials=OAuthClientCredentials(
+            cognite_token_url,
+            cognite_client_id,
+            cognite_client_secret,
+            cognite_project_scopes,
         ),
-        file_name=empty_file,
+        client_name="extractor-utils-integration-tests",
     )
+    return CogniteClient(client_config)
 
+
+def _safe_delete_file(client: CogniteClient, external_id: str) -> None:
+    with contextlib.suppress(CogniteNotFoundError):
+        client.files.delete(external_id=external_id)
+
+
+@pytest.mark.parametrize(("project", "base_url"), _CLUSTERS)
+@pytest.mark.parametrize(
+    "mime_type",
+    [
+        pytest.param("text/plain", id="with-mime"),
+        pytest.param(None, id="without-mime"),
+    ],
+)
+def test_some_size_file_upload_across_clusters(project: str, base_url: str, mime_type: str | None) -> None:
+    client = _build_cluster_client(project, base_url)
+    external_id = f"util_some_size_{'mime' if mime_type else 'nomime'}_{random.randint(0, 2**31)}"
+    _safe_delete_file(client, external_id)
     try:
+        queue = BytesUploadQueue(cdf_client=client, overwrite_existing=True, max_queue_size=1)
+        queue.add_to_upload_queue(
+            content=b"hello world",
+            file_meta=FileMetadata(
+                external_id=external_id,
+                name=external_id,
+                mime_type=mime_type,
+            ),
+        )
         queue.upload()
 
-        assert queue.errors == [], f"Zero-byte upload failed on {project} ({base_url}) with errors: {queue.errors}"
+        await_is_uploaded_status(client, external_id=external_id)
+        retrieved = client.files.retrieve(external_id=external_id)
+        assert retrieved is not None
+        assert retrieved.uploaded is True
+        if mime_type is not None:
+            assert retrieved.mime_type == mime_type
+        downloaded = client.files.download_bytes(external_id=external_id)
+        assert downloaded == b"hello world"
+    finally:
+        _safe_delete_file(client, external_id)
+
+
+@pytest.mark.parametrize(("project", "base_url"), _CLUSTERS)
+@pytest.mark.parametrize(
+    "mime_type",
+    [
+        pytest.param("text/plain", id="with-mime"),
+        pytest.param(None, id="without-mime"),
+    ],
+)
+def test_zero_size_file_upload_across_clusters(project: str, base_url: str, mime_type: str | None) -> None:
+    client = _build_cluster_client(project, base_url)
+    external_id = f"util_zero_size_{'mime' if mime_type else 'nomime'}_{random.randint(0, 2**31)}"
+    current_dir = pathlib.Path(__file__).parent.resolve()
+    empty_file = current_dir.joinpath("empty_file.txt")
+    _safe_delete_file(client, external_id)
+    try:
+        queue = FileUploadQueue(cdf_client=client, overwrite_existing=True, max_queue_size=1)
+        queue.add_to_upload_queue(
+            file_meta=FileMetadata(
+                external_id=external_id,
+                name=external_id,
+                mime_type=mime_type,
+            ),
+            file_name=empty_file,
+        )
+        queue.upload()
 
         retrieved = client.files.retrieve(external_id=external_id)
-        assert retrieved is not None, f"File metadata not found on {project}"
+        assert retrieved is not None
         assert retrieved.name == external_id
-        assert retrieved.mime_type == "text/plain"
+        if mime_type is not None:
+            assert retrieved.mime_type == mime_type
     finally:
-        with contextlib.suppress(CogniteNotFoundError):
-            client.files.delete(external_id=external_id)
+        _safe_delete_file(client, external_id)
+
+
+@pytest.mark.parametrize(("project", "base_url"), _CLUSTERS)
+@pytest.mark.parametrize(
+    "mime_type",
+    [
+        pytest.param("application/octet-stream", id="with-mime"),
+        pytest.param(None, id="without-mime"),
+    ],
+)
+def test_big_file_multipart_upload_across_clusters(project: str, base_url: str, mime_type: str | None) -> None:
+    client = _build_cluster_client(project, base_url)
+    external_id = f"util_big_size_{'mime' if mime_type else 'nomime'}_{random.randint(0, 2**31)}"
+    _safe_delete_file(client, external_id)
+    try:
+        queue = BytesUploadQueue(cdf_client=client, overwrite_existing=True, max_queue_size=1)
+        queue.max_file_chunk_size = _MULTIPART_CHUNK_SIZE
+        queue.max_single_chunk_file_size = _MULTIPART_CHUNK_SIZE
+
+        queue.add_to_upload_queue(
+            content=_BIG_FILE_BYTES,
+            file_meta=FileMetadata(
+                external_id=external_id,
+                name=external_id,
+                mime_type=mime_type,
+            ),
+        )
+        queue.upload()
+
+        await_is_uploaded_status(client, external_id=external_id)
+        retrieved = client.files.retrieve(external_id=external_id)
+        assert retrieved is not None
+        assert retrieved.uploaded is True
+        if mime_type is not None:
+            assert retrieved.mime_type == mime_type
+        downloaded = client.files.download_bytes(external_id=external_id)
+        assert len(downloaded) == len(_BIG_FILE_BYTES)
+    finally:
+        _safe_delete_file(client, external_id)
