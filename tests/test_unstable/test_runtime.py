@@ -194,7 +194,7 @@ def test_load_cdf_config_invalid_config_revision_attributed(connection_config: C
             "extractor": {"externalId": TestExtractor.EXTERNAL_ID, "version": TestExtractor.VERSION},
             "tasks": [{"name": "startup-task", "type": "batch"}],
             "timestamp": int(time.time() * 1000),
-            "activeConfigRevision": 1,
+            "activeConfigRevision": expected_revision,
         },
         headers={"cdf-version": "alpha"},
     )
