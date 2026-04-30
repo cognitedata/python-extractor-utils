@@ -342,6 +342,7 @@ class Runtime(Generic[ExtractorType]):
                 prev_error = error_message
 
                 ts = now()
+                revision = e.attempted_revision if isinstance(e, InvalidConfigError) else None
                 error = Error(
                     external_id=str(uuid4()),
                     level=ErrorLevel.fatal,
@@ -350,8 +351,8 @@ class Runtime(Generic[ExtractorType]):
                     description=error_message,
                     details=None,
                     task=None,
-                    type="config" if isinstance(e, InvalidConfigError) and e.attempted_revision is not None else None,
-                    config_revision=e.attempted_revision if isinstance(e, InvalidConfigError) else None,
+                    type="config" if revision is not None else None,
+                    config_revision=revision,
                 )
 
                 self._cognite_client.post(

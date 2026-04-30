@@ -186,7 +186,8 @@ def test_load_cdf_config_invalid_config_revision_attributed(connection_config: C
     assert expected_revision is not None
 
     # Odin only exposes activeConfigRevision on listed errors when the integration has
-    # config_type set (startup reported). Align with odin/tests/test_checkin.py::test_specify_revision.
+    # config_type set (startup reported). Set activeConfigRevision to the expected failing
+    # revision so the test verifies Odin correctly maps the error's configRevision field.
     cognite_client.post(
         url=f"/api/v1/projects/{cognite_client.config.project}/odin/startup",
         json={
@@ -194,7 +195,7 @@ def test_load_cdf_config_invalid_config_revision_attributed(connection_config: C
             "extractor": {"externalId": TestExtractor.EXTERNAL_ID, "version": TestExtractor.VERSION},
             "tasks": [{"name": "startup-task", "type": "batch"}],
             "timestamp": int(time.time() * 1000),
-            "activeConfigRevision": expected_revision,
+            "activeConfigRevision": expected_revision,  # Match the failing config revision
         },
         headers={"cdf-version": "alpha"},
     )
