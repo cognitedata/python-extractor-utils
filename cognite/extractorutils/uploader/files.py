@@ -440,7 +440,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
 
         for url in upload_urls:
             chunks.next_chunk()
-            resp = self._httpx_client.send(self._get_file_upload_request(url, chunks, len(chunks), file_meta.mime_type))
+            resp = self._httpx_client.send(self._get_file_upload_request(url, chunks, len(chunks), mime_type=None))
             resp.raise_for_status()
 
         completed_headers = (
