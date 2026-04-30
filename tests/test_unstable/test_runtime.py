@@ -162,6 +162,9 @@ def test_load_cdf_config_invalid_config_revision_attributed(connection_config: C
     """
     When a config exists in CDF but fails validation, the error reported to Odin
     must carry type config and the failing revision (errors list uses activeConfigRevision).
+
+    Startup is reported first so the integration has config_type set; otherwise Odin's
+    error list maps activeConfigRevision to null even when configRevision was accepted on check-in.
     """
     cognite_client = connection_config.get_cognite_client(f"{TestExtractor.EXTERNAL_ID}-{TestExtractor.VERSION}")
     # Post a config that will fail validation (missing required fields)
@@ -182,6 +185,20 @@ def test_load_cdf_config_invalid_config_revision_attributed(connection_config: C
     expected_revision = response["revision"]
     assert expected_revision is not None
 
+    # Odin only exposes activeConfigRevision on listed errors when the integration has
+    # config_type set (startup reported). Align with odin/tests/test_checkin.py::test_specify_revision.
+    cognite_client.post(
+        url=f"/api/v1/projects/{cognite_client.config.project}/odin/startup",
+        json={
+            "externalId": connection_config.integration.external_id,
+            "extractor": {"externalId": TestExtractor.EXTERNAL_ID, "version": TestExtractor.VERSION},
+            "tasks": [{"name": "startup-task", "type": "batch"}],
+            "timestamp": int(time.time() * 1000),
+            "activeConfigRevision": 1,
+        },
+        headers={"cdf-version": "alpha"},
+    )
+
     runtime = Runtime(TestExtractor)
     runtime._cognite_client = cognite_client
     runtime.RETRY_CONFIG_INTERVAL = 1
@@ -197,7 +214,7 @@ def test_load_cdf_config_invalid_config_revision_attributed(connection_config: C
     )
 
     errors = cognite_client.get(
-        url=f"/api/v1/projects/{cognite_client.config.project}/integrations/errors",
+        url=f"/api/v1/projects/{cognite_client.config.project}/odin/errors",
         params={"integration": connection_config.integration.external_id},
         headers={"cdf-version": "alpha"},
     ).json()

@@ -358,7 +358,7 @@ class Runtime(Generic[ExtractorType]):
                     f"/api/v1/projects/{self._cognite_client.config.project}/odin/checkin",
                     json={
                         "externalId": connection_config.integration.external_id,
-                        "errors": [error.model_dump(mode="json")],
+                        "errors": [error.model_dump(mode="json", by_alias=True)],
                     },
                     headers={"cdf-version": "alpha"},
                 )
