@@ -440,6 +440,8 @@ class IOFileUploadQueue(AbstractUploadQueue):
 
         for url in upload_urls:
             chunks.next_chunk()
+            # PUT requests for a multi-part upload should NOT have a Content-Type request header.
+            # This can interfere with the upload in certain clusters and can cause 403.
             resp = self._httpx_client.send(self._get_file_upload_request(url, chunks, len(chunks), mime_type=None))
             resp.raise_for_status()
 
