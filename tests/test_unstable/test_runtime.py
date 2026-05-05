@@ -205,7 +205,7 @@ def test_load_cdf_config_invalid_config_revision_attributed(connection_config: C
     runtime.RETRY_CONFIG_INTERVAL = 1
 
     def cancel_after_delay() -> None:
-        time.sleep(5)
+        time.sleep(2)
         runtime._cancellation_token.cancel()
 
     Thread(target=cancel_after_delay, daemon=True).start()
