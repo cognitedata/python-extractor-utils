@@ -342,8 +342,8 @@ class Runtime(Generic[ExtractorType]):
                 prev_error = error_message
 
                 ts = now()
-                is_config_error = isinstance(e, InvalidConfigError)
-                revision = e.attempted_revision if is_config_error else None
+                config_exc = e if isinstance(e, InvalidConfigError) else None
+                revision = config_exc.attempted_revision if config_exc is not None else None
                 error = Error(
                     external_id=str(uuid4()),
                     level=ErrorLevel.fatal,
@@ -352,7 +352,7 @@ class Runtime(Generic[ExtractorType]):
                     description=error_message,
                     details=None,
                     task=None,
-                    type="config" if is_config_error else None,
+                    type="config" if config_exc is not None else None,
                     config_revision=revision,
                 )
 
