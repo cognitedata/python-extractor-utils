@@ -392,7 +392,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
         resp = self._httpx_client.send(self._get_file_upload_request(url, file, size, file_meta.mime_type))
         resp.raise_for_status()
 
-    def _prepare_request_data_for_empty_file(self, url_str: str) -> Request:
+    def _prepare_request_data_for_empty_file(self, url_str: str, mime_type: str | None = None) -> Request:
         FILE_SIZE = 0  # this path is only entered for an empty file
         EMPTY_CONTENT = ""
 
@@ -417,10 +417,13 @@ class IOFileUploadQueue(AbstractUploadQueue):
             }
         )
 
+        if mime_type is not None:
+            headers.update({"Content-Type": mime_type})
+
         return Request(method="PUT", url=upload_url, headers=headers, content=EMPTY_CONTENT)
 
     def _upload_only_file_reference(self, file_meta: FileMetadataOrCogniteExtractorFile, url_str: str) -> None:
-        request_data = self._prepare_request_data_for_empty_file(url_str)
+        request_data = self._prepare_request_data_for_empty_file(url_str, file_meta.mime_type)
         resp = self._httpx_client.send(request_data)
         resp.raise_for_status()
 
@@ -437,7 +440,9 @@ class IOFileUploadQueue(AbstractUploadQueue):
 
         for url in upload_urls:
             chunks.next_chunk()
-            resp = self._httpx_client.send(self._get_file_upload_request(url, chunks, len(chunks), file_meta.mime_type))
+            # PUT requests for a multi-part upload should NOT have a Content-Type request header.
+            # This can interfere with the upload in certain clusters and can cause 403.
+            resp = self._httpx_client.send(self._get_file_upload_request(url, chunks, len(chunks), mime_type=None))
             resp.raise_for_status()
 
         completed_headers = (
@@ -510,6 +515,11 @@ class IOFileUploadQueue(AbstractUploadQueue):
             read_file: Callable[[], BinaryIO],
             file_meta: FileMetadataOrCogniteExtractorFile,
         ) -> None:
+            # Default to `application/octet-stream` so uploads succeed
+            # regardless of cluster when the caller didn't supply a mime type.
+            if file_meta.mime_type is None:
+                file_meta.mime_type = "application/octet-stream"
+
             with read_file() as file:
                 size = super_len(file)
                 if size == 0:
