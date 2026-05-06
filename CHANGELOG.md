@@ -12,6 +12,11 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.12.2
+
+### Fixed
+* Add `Content-Type` header when uploading zero byte files and remove `mime-type` from multipart uploads to avoid upload failures.
+
 ## 7.12.1
 
 ### Added
