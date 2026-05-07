@@ -12,7 +12,7 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
-## 7.12.2
+## 7.12.3
 
 ### Fixed
 * In the `unstable` package: Fixed invalid remote config errors reporting the wrong (or missing) config revision to Odin
