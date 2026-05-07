@@ -17,6 +17,11 @@ Changes are grouped as follows
 ### Fixed
 * In the `unstable` package: Fixed invalid remote config errors reporting the wrong (or missing) config revision to Odin
 
+## 7.12.2
+
+### Fixed
+* Fixed 403 errors when uploading zero-byte files and multipart files on certain CDF clusters.
+
 ## 7.12.1
 
 ### Added
