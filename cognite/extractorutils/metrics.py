@@ -59,7 +59,7 @@ from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.uploader.time_series import DataPointList, TimeSeriesUploadQueue
 from cognite.extractorutils.util import EitherId
 
-_metrics_singularities = {}
+_metrics_singularities: dict[type[Any], Any] = {}
 
 
 T = TypeVar("T")
