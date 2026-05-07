@@ -1,3 +1,4 @@
+import logging
 import os
 import sys
 import time
@@ -578,3 +579,65 @@ def test_type_checker_would_catch_invalid_metrics() -> None:
     assert any(pattern in metrics_type_str for pattern in ["None", "| None", "Optional"]), (
         f"Expected metrics parameter to be Optional, got: {metrics_type_str}"
     )
+
+
+def test_bootstrap_file_logging_creates_file(tmp_path: Path) -> None:
+    """Bootstrap file handler creates the log file and its parent directory."""
+    runtime = Runtime(TestExtractor)
+    log_file = tmp_path / "logs" / "bootstrap.log"
+
+    runtime._setup_bootstrap_file_logging(log_file)
+
+    assert log_file.exists(), "Bootstrap log file should have been created"
+
+    root = logging.getLogger()
+    bootstrap_handlers = [h for h in root.handlers if hasattr(h, "baseFilename") and "bootstrap" in h.baseFilename]
+    assert len(bootstrap_handlers) == 1, "Exactly one bootstrap file handler should be attached"
+
+    # Cleanup: remove the handler so it doesn't leak into other tests
+    for h in bootstrap_handlers:
+        h.close()
+        root.removeHandler(h)
+
+
+def test_bootstrap_file_logging_skipped_for_non_path(caplog: pytest.LogCaptureFixture) -> None:
+    """_setup_bootstrap_file_logging is a no-op when passed None or a non-Path value."""
+    runtime = Runtime(TestExtractor)
+    initial_handler_count = len(logging.getLogger().handlers)
+
+    runtime._setup_bootstrap_file_logging(None)
+    assert len(logging.getLogger().handlers) == initial_handler_count
+
+    runtime._setup_bootstrap_file_logging("not-a-path")
+    assert len(logging.getLogger().handlers) == initial_handler_count
+
+
+def test_bootstrap_file_logging_warns_on_permission_error(tmp_path: Path, caplog: pytest.LogCaptureFixture) -> None:
+    """A permission error during bootstrap file creation is caught and logged as a warning."""
+    runtime = Runtime(TestExtractor)
+    log_file = tmp_path / "bootstrap.log"
+
+    with (
+        patch("cognite.extractorutils.unstable.core.runtime.RobustFileHandler", side_effect=PermissionError("denied")),
+        caplog.at_level(logging.WARNING),
+    ):
+        runtime._setup_bootstrap_file_logging(log_file)
+
+    assert any("Could not set up bootstrap file logging" in r.message for r in caplog.records)
+
+
+@pytest.mark.parametrize(
+    "extra_args,expected_path",
+    [
+        ([], Path("logs/bootstrap.log")),
+        (["--bootstrap-log-file", "custom.log"], Path("custom.log")),
+    ],
+    ids=["default", "custom_path"],
+)
+def test_bootstrap_log_file_in_argparser(extra_args: list[str], expected_path: Path) -> None:
+    """--bootstrap-log-file argument accepts default and custom paths."""
+    runtime = Runtime(TestExtractor)
+    parser = runtime._create_argparser()
+
+    args = parser.parse_args(["-c", "connection.yaml", *extra_args])
+    assert args.bootstrap_log_file == expected_path

@@ -235,6 +235,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
         # Remove any previous logging handlers
         for handler in root.handlers:
+            handler.close()
             root.removeHandler(handler)
 
         # Define new handlers

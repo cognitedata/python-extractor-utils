@@ -887,8 +887,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
         """
         Resolve id of assets if specified, for use in sequence creation.
         """
-        assets = set(self.sequence_asset_external_ids.values())
-        assets.discard(None)  # safeguard, remove Nones if any
+        assets = {asset for asset in self.sequence_asset_external_ids.values() if asset is not None}
 
         if len(assets) > 0:
             try:
@@ -907,8 +906,7 @@ class SequenceUploadQueue(AbstractUploadQueue):
         """
         Resolve id of datasets if specified, for use in sequence creation.
         """
-        datasets = set(self.sequence_dataset_external_ids.values())
-        datasets.discard(None)  # safeguard, remove Nones if any
+        datasets = {dataset for dataset in self.sequence_dataset_external_ids.values() if dataset is not None}
 
         if len(datasets) > 0:
             try:
