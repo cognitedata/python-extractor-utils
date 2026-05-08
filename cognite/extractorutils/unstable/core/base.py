@@ -234,7 +234,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         fmt.converter = time.gmtime
 
         # Remove any previous logging handlers
-        for handler in root.handlers:
+        for handler in root.handlers[:]:
             handler.close()
             root.removeHandler(handler)
 

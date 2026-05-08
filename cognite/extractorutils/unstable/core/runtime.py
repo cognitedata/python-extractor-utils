@@ -286,6 +286,7 @@ class Runtime(Generic[ExtractorType]):
             # The console handler retains its explicit INFO level, so the console
             # output is unaffected.
             root.setLevel(logging.DEBUG)
+            logging.getLogger("requests_oauthlib.oauth2_session").setLevel(logging.INFO)
             root.addHandler(fh)
 
             self.logger.info(f"Bootstrap file logging active: {path.resolve()}")
