@@ -523,9 +523,6 @@ class Runtime(Generic[ExtractorType]):
     def _main_runtime(self, args: Namespace) -> None:
         try:
             self._try_set_cwd(args)
-            # Bootstrap file logging must be started after CWD is set so that relative paths resolve
-            # correctly, and before the application-config retry loop so crashes during that phase are
-            # captured in the file.
             self._setup_bootstrap_file_logging(getattr(args, "bootstrap_log_file", None))
             connection_config = load_file(args.connection_config[0], ConnectionConfig)
         except InvalidConfigError as e:
