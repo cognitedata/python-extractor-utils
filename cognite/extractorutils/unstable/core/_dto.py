@@ -57,6 +57,8 @@ class Error(WithExternalId):
     start_time: int
     end_time: int | None
     task: str | None
+    type: Literal["config"] | None = None
+    config_revision: int | None = None
 
     @classmethod
     def from_internal(cls, error: InternalError) -> "Error":
