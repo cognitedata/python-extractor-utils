@@ -159,6 +159,73 @@ def test_load_cdf_config_initial_empty(connection_config: ConnectionConfig) -> N
     assert "No configuration found for the given integration" in errors["items"][0]["description"]
 
 
+def test_load_cdf_config_invalid_config_revision_attributed(connection_config: ConnectionConfig) -> None:
+    """
+    When a config exists in CDF but fails validation, the error reported to Odin
+    must carry type config and the failing revision (errors list uses activeConfigRevision).
+
+    Startup is reported first so the integration has config_type set; otherwise Odin's
+    error list maps activeConfigRevision to null even when configRevision was accepted on check-in.
+    """
+    cognite_client = connection_config.get_cognite_client(f"{TestExtractor.EXTERNAL_ID}-{TestExtractor.VERSION}")
+    # Post a config that will fail validation (missing required fields)
+    cognite_client.post(
+        url=f"/api/v1/projects/{cognite_client.config.project}/odin/config",
+        json={
+            "externalId": connection_config.integration.external_id,
+            "config": "parameter-one: 123\n",  # missing parameter_two
+        },
+        headers={"cdf-version": "alpha"},
+    )
+    # Same revision the runtime sees when loading from CDF (see load_from_cdf).
+    response = cognite_client.get(
+        url=f"/api/v1/projects/{cognite_client.config.project}/odin/config",
+        params={"integration": connection_config.integration.external_id},
+        headers={"cdf-version": "alpha"},
+    ).json()
+    expected_revision = response["revision"]
+    assert expected_revision is not None
+
+    # Odin only exposes activeConfigRevision on listed errors when the integration has
+    # config_type set (startup reported). Set activeConfigRevision to the expected failing
+    # revision so the test verifies Odin correctly maps the error's configRevision field.
+    cognite_client.post(
+        url=f"/api/v1/projects/{cognite_client.config.project}/odin/startup",
+        json={
+            "externalId": connection_config.integration.external_id,
+            "extractor": {"externalId": TestExtractor.EXTERNAL_ID, "version": TestExtractor.VERSION},
+            "tasks": [{"name": "startup-task", "type": "batch"}],
+            "timestamp": int(time.time() * 1000),
+            "activeConfigRevision": expected_revision,  # Match the failing config revision
+        },
+        headers={"cdf-version": "alpha"},
+    )
+
+    runtime = Runtime(TestExtractor)
+    runtime._cognite_client = cognite_client
+    runtime.RETRY_CONFIG_INTERVAL = 1
+
+    def cancel_after_delay() -> None:
+        time.sleep(2)
+        runtime._cancellation_token.cancel()
+
+    Thread(target=cancel_after_delay, daemon=True).start()
+    runtime._safe_get_application_config(
+        args=Namespace(force_local_config=None),
+        connection_config=connection_config,
+    )
+
+    errors = cognite_client.get(
+        url=f"/api/v1/projects/{cognite_client.config.project}/odin/errors",
+        params={"integration": connection_config.integration.external_id},
+        headers={"cdf-version": "alpha"},
+    ).json()
+
+    assert len(errors["items"]) >= 1
+    assert errors["items"][0].get("type") == "config"
+    assert errors["items"][0].get("activeConfigRevision") == expected_revision
+
+
 def test_verify_connection_config(connection_config: ConnectionConfig) -> None:
     runtime = Runtime(TestExtractor)
     assert runtime._verify_connection_config(connection_config)

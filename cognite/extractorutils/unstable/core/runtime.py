@@ -397,6 +397,8 @@ class Runtime(Generic[ExtractorType]):
                 prev_error = error_message
 
                 ts = now()
+                config_exc = e if isinstance(e, InvalidConfigError) else None
+                revision = config_exc.attempted_revision if config_exc is not None else None
                 error = Error(
                     external_id=str(uuid4()),
                     level=ErrorLevel.fatal,
@@ -405,13 +407,15 @@ class Runtime(Generic[ExtractorType]):
                     description=error_message,
                     details=None,
                     task=None,
+                    type="config" if config_exc is not None else None,
+                    config_revision=revision,
                 )
 
                 self._cognite_client.post(
                     f"/api/v1/projects/{self._cognite_client.config.project}/odin/checkin",
                     json={
                         "externalId": connection_config.integration.external_id,
-                        "errors": [error.model_dump(mode="json")],
+                        "errors": [error.model_dump(mode="json", by_alias=True)],
                     },
                     headers={"cdf-version": "alpha"},
                 )
