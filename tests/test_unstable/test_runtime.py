@@ -653,18 +653,21 @@ def test_bootstrap_file_logging_creates_file(tmp_path: Path) -> None:
     runtime = Runtime(TestExtractor)
     log_file = tmp_path / "logs" / "bootstrap.log"
 
-    runtime._setup_bootstrap_file_logging(log_file)
+    try:
+        runtime._setup_bootstrap_file_logging(log_file)
 
-    assert log_file.exists(), "Bootstrap log file should have been created"
+        assert log_file.exists(), "Bootstrap log file should have been created"
 
-    root = logging.getLogger()
-    bootstrap_handlers = [h for h in root.handlers if hasattr(h, "baseFilename") and "bootstrap" in h.baseFilename]
-    assert bootstrap_handlers, "No bootstrap file handlers found"
+        root = logging.getLogger()
+        bootstrap_handlers = [h for h in root.handlers if hasattr(h, "baseFilename") and "bootstrap" in h.baseFilename]
+        assert bootstrap_handlers, "No bootstrap file handlers found"
+        assert logging.getLogger().level == logging.DEBUG
 
-    # Cleanup: remove the handler so it doesn't leak into other tests
-    for h in bootstrap_handlers:
-        h.close()
-        root.removeHandler(h)
+    finally:
+        # Cleanup: remove the handler so it doesn't leak into other tests
+        for h in bootstrap_handlers:
+            h.close()
+            root.removeHandler(h)
 
 
 def test_bootstrap_file_logging_skipped_for_non_path(caplog: pytest.LogCaptureFixture) -> None:

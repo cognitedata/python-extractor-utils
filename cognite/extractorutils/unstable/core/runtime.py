@@ -217,12 +217,7 @@ class Runtime(Generic[ExtractorType]):
         return argparser
 
     def _setup_logging(self) -> None:
-        fmt = logging.Formatter(
-            "%(asctime)s.%(msecs)03d UTC [%(levelname)-8s] %(process)d %(threadName)s - %(message)s",
-            "%Y-%m-%d %H:%M:%S",
-        )
-        # Set logging to UTC
-        fmt.converter = time.gmtime
+        fmt = self._make_log_formatter()
 
         root = logging.getLogger()
         root.setLevel(logging.INFO)
@@ -251,6 +246,14 @@ class Runtime(Generic[ExtractorType]):
             except Exception as e:
                 self.logger.warning(f"Failed to initialize Windows Event Log handler: {e}")
 
+    def _make_log_formatter(self) -> logging.Formatter:
+        fmt = logging.Formatter(
+            "%(asctime)s.%(msecs)03d UTC [%(levelname)-8s] %(process)d %(threadName)s - %(message)s",
+            "%Y-%m-%d %H:%M:%S",
+        )
+        fmt.converter = time.gmtime
+        return fmt
+
     def _setup_bootstrap_file_logging(self, path: Path | None) -> None:
         """
         Add a DEBUG-level file handler to capture all logs before the application config is loaded.
@@ -264,11 +267,7 @@ class Runtime(Generic[ExtractorType]):
         if not isinstance(path, Path):
             return
 
-        fmt = logging.Formatter(
-            "%(asctime)s.%(msecs)03d UTC [%(levelname)-8s] %(process)d %(threadName)s - %(message)s",
-            "%Y-%m-%d %H:%M:%S",
-        )
-        fmt.converter = time.gmtime
+        fmt = self._make_log_formatter()
 
         try:
             fh = RobustFileHandler(
@@ -290,7 +289,7 @@ class Runtime(Generic[ExtractorType]):
             root.addHandler(fh)
 
             self.logger.info(f"Bootstrap file logging active: {path.resolve()}")
-        except (OSError, PermissionError) as e:
+        except OSError as e:
             self.logger.warning(f"Could not set up bootstrap file logging at {path}: {e}")
 
     def _start_cancellation_watcher(self, mp_cancel_event: MpEvent) -> None:
