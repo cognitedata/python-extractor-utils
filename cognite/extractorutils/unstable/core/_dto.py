@@ -78,6 +78,7 @@ TaskUpdateList = Annotated[list[TaskUpdate], Len(min_length=1, max_length=1000)]
 ErrorList = Annotated[list[Error], Len(min_length=0, max_length=1000)]
 VersionType = Annotated[str, StringConstraints(min_length=1, max_length=32)]
 DescriptionType = Annotated[str, StringConstraints(min_length=0, max_length=500)]
+NameType = Annotated[str, StringConstraints(min_length=1, max_length=255)]
 TaskList = Annotated[list["Task"], Len(min_length=1, max_length=1000)]
 JSONType = TypeAliasType(  # type: ignore[misc]
     "JSONType",
@@ -98,6 +99,21 @@ class TaskType(Enum):
     batch = "batch"
 
 
+class ActionType(Enum):
+    start_task = "start_task"
+    stop_task = "stop_task"
+    custom = "custom"
+
+
+class ActionStatus(Enum):
+    pending = "pending"
+    running = "running"
+    failed = "failed"
+    succeeded = "succeeded"
+    cancel_pending = "cancel_pending"
+    canceled = "canceled"
+
+
 class Task(CogniteModel):
     type: TaskType
     name: str
@@ -105,17 +121,49 @@ class Task(CogniteModel):
     description: DescriptionType | None = None
 
 
+class AvailableActionWrite(CogniteModel):
+    name: NameType
+    type: ActionType
+    description: DescriptionType | None = None
+    task: str | None = None
+
+
+class Action(CogniteModel):
+    external_id: str
+    action_name: str
+    type: ActionType
+    task: str | None = None
+    call_metadata: JSONType | None = None
+
+
+class ActionUpdate(CogniteModel):
+    external_id: str
+    status: ActionStatus
+    result_message: MessageType | None = None
+    result_metadata: JSONType | None = None
+
+
+AvailableActionList = Annotated[list[AvailableActionWrite], Len(min_length=1, max_length=1000)]
+ActionUpdateList = Annotated[list[ActionUpdate], Len(min_length=1, max_length=1000)]
+PendingActionList = Annotated[list[Action], Len(min_length=1, max_length=1000)]
+
+
 class StartupRequest(WithExternalId):
     extractor: ExtractorInfo
     tasks: TaskList | None = None
     active_config_revision: int | Literal["local"] | None = None
     timestamp: int | None = None
+    available_actions: AvailableActionList | None = None
 
 
 class CheckinRequest(WithExternalId):
     task_events: TaskUpdateList | None = None
     errors: ErrorList | None = None
+    action_updates: ActionUpdateList | None = None
 
 
 class CheckinResponse(WithExternalId):
+    model_config = ConfigDict(extra="ignore")
+
     last_config_revision: int | None = None
+    pending_actions: PendingActionList | None = None
