@@ -398,8 +398,14 @@ class Runtime(Generic[ExtractorType]):
             # Error response from the CDF API
             if e.code == 401:
                 self.logger.critical(
-                    "Got a 401 error from CDF. Please check your configuration. "
-                    "Make sure the credentials and project is correct."
+                    "Got a 401 (Unauthorized) error from CDF. Please check your configuration. "
+                    "Make sure the credentials and project are correct."
+                )
+
+            elif e.code == 403:
+                self.logger.critical(
+                    "Got a 403 (Forbidden) error from CDF. Please check your configuration. "
+                    "Make sure the credentials and project are correct."
                 )
 
             elif e.message:

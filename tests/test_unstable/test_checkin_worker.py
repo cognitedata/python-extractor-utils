@@ -6,6 +6,7 @@ from threading import Thread
 from time import sleep
 
 import faker
+import pytest
 import requests_mock
 
 from cognite.extractorutils.threading import CancellationToken
@@ -377,14 +378,21 @@ def test_run_report_periodic_checkin(
     assert len(worker._task_updates) == 0
 
 
+@pytest.mark.parametrize(
+    "status_code, status_message",
+    [(401, "Unauthorized request"), (403, "Forbidden request")],
+    ids=["401-Unauthorized", "403-Forbidden"],
+)
 def test_on_fatal_hook_is_called(
     connection_config: ConnectionConfig,
     application_config: TestConfig,
     requests_mock: requests_mock.Mocker,
+    status_code: int,
+    status_message: str,
     mock_startup_request: Callable[[requests_mock.Mocker, int, str], None],
 ) -> None:
     requests_mock.real_http = True
-    mock_startup_request(requests_mock, 401, "Unauthorized request")
+    mock_startup_request(requests_mock, status_code, status_message)
     cognite_client = connection_config.get_cognite_client("test_checkin")
     on_fatal_count = 0
 
