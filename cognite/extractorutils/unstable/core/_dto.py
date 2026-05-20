@@ -80,7 +80,10 @@ TaskUpdateList = Annotated[list[TaskUpdate], Len(min_length=1, max_length=1000)]
 ErrorList = Annotated[list[Error], Len(min_length=0, max_length=1000)]
 VersionType = Annotated[str, StringConstraints(min_length=1, max_length=32)]
 DescriptionType = Annotated[str, StringConstraints(min_length=0, max_length=500)]
+ActionDescriptionType = Annotated[str, StringConstraints(min_length=1, max_length=1000)]
 NameType = Annotated[str, StringConstraints(min_length=1, max_length=255)]
+AvailableActionTaskType = Annotated[str, StringConstraints(min_length=1, max_length=255)]
+ExternalIdType = Annotated[str, StringConstraints(min_length=1, max_length=255)]
 TaskList = Annotated[list["Task"], Len(min_length=1, max_length=1000)]
 JSONType = TypeAliasType(  # type: ignore[misc]
     "JSONType",
@@ -126,29 +129,32 @@ class Task(CogniteModel):
 class AvailableActionWrite(CogniteModel):
     name: NameType
     type: ActionType
-    description: DescriptionType | None = None
-    task: str | None = None
+    description: ActionDescriptionType | None = None
+    task: AvailableActionTaskType | None = None
 
 
 class Action(CogniteModel):
     model_config = ConfigDict(extra="ignore")
 
-    external_id: str
+    external_id: ExternalIdType
     action_name: str
-    type: ActionType
-    task: str | None = None
-    call_metadata: JSONType | None = None
+    status: ActionStatus
+    call_metadata: dict[str, str] | None = None
+    created_time: int | None = None
+    last_updated_time: int | None = None
+    result_message: MessageType | None = None
+    result_metadata: dict[str, str] | None = None
 
 
 class ActionUpdate(CogniteModel):
     external_id: str
     status: ActionStatus
     result_message: MessageType | None = None
-    result_metadata: JSONType | None = None
+    result_metadata: dict[str, str] | None = None
 
 
-AvailableActionList = Annotated[list[AvailableActionWrite], Len(min_length=1, max_length=1000)]
-ActionUpdateList = Annotated[list[ActionUpdate], Len(min_length=1, max_length=1000)]
+AvailableActionList = Annotated[list[AvailableActionWrite], Len(min_length=0, max_length=100)]
+ActionUpdateList = Annotated[list[ActionUpdate], Len(min_length=0, max_length=100)]
 PendingActionList = Annotated[list[Action], Len(min_length=0, max_length=1000)]
 
 

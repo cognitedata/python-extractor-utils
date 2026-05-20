@@ -83,27 +83,27 @@ class TestStartupRequest:
             StartupRequest(
                 external_id="x",
                 extractor=ExtractorInfo(external_id="x"),
-                available_actions=[AvailableActionWrite(name=f"a{i}", type=ActionType.custom) for i in range(1001)],
+                available_actions=[AvailableActionWrite(name=f"a{i}", type=ActionType.custom) for i in range(101)],
             )
 
 
 class TestAction:
     def test_camel_case_serialization(self) -> None:
-        action = Action(external_id="act-1", action_name="restart", type=ActionType.start_task, task="main")
+        action = Action(external_id="act-1", action_name="restart", status=ActionStatus.running)
         body = action.model_dump(mode="json", by_alias=True)
         assert body["externalId"] == "act-1"
         assert body["actionName"] == "restart"
-        assert body["type"] == "start_task"
+        assert body["status"] == "running"
 
     def test_none_fields_excluded(self) -> None:
-        action = Action(external_id="act-1", action_name="ping", type=ActionType.custom)
+        action = Action(external_id="act-1", action_name="ping", status=ActionStatus.pending)
         body = action.model_dump(mode="json", by_alias=True)
-        assert "task" not in body
         assert "callMetadata" not in body
+        assert "resultMetadata" not in body
 
     def test_unknown_fields_ignored(self) -> None:
         action = Action.model_validate(
-            {"externalId": "act-1", "actionName": "ping", "type": "custom", "futureField": "odin-added-this"}
+            {"externalId": "act-1", "actionName": "ping", "status": "running", "futureField": "odin-added-this"}
         )
         assert action.external_id == "act-1"
 
@@ -134,15 +134,15 @@ class TestCheckinResponse:
             {
                 "externalId": "my-extractor",
                 "pendingActions": [
-                    {"externalId": "act-1", "actionName": "restart", "type": "start_task", "task": "main"},
-                    {"externalId": "act-2", "actionName": "ping", "type": "custom"},
+                    {"externalId": "act-1", "actionName": "restart", "status": "pending"},
+                    {"externalId": "act-2", "actionName": "ping", "status": "cancel_pending"},
                 ],
             }
         )
         assert response.pending_actions is not None
         assert len(response.pending_actions) == 2
         assert response.pending_actions[0].external_id == "act-1"
-        assert response.pending_actions[0].type == ActionType.start_task
+        assert response.pending_actions[0].status == ActionStatus.pending
         assert response.pending_actions[1].call_metadata is None
 
     def test_unknown_fields_ignored(self) -> None:
@@ -167,8 +167,8 @@ class TestCheckinResponse:
                     {
                         "externalId": "act-3",
                         "actionName": "configure",
-                        "type": "custom",
-                        "callMetadata": {"key": "value", "count": 3},
+                        "status": "pending",
+                        "callMetadata": {"key": "value", "count": "3"},
                     }
                 ],
             }
