@@ -36,9 +36,7 @@ class ActionContext(CogniteLogger):
         self.external_id = external_id
         self.call_metadata = call_metadata
 
-        self._logger = logging.getLogger(
-            f"{self._extractor.EXTERNAL_ID}.action.{self._action.name.replace(' ', '')}"
-        )
+        self._logger = logging.getLogger(f"{self._extractor.EXTERNAL_ID}.action.{self._action.name.replace(' ', '')}")
 
     def _new_error(
         self,

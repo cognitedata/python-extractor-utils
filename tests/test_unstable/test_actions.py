@@ -73,9 +73,7 @@ def test_action_context_logger_name_strips_spaces(mock_extractor: MagicMock) -> 
     assert ctx._logger.name == "test-extractor.action.processdata"
 
 
-def test_action_context_error_delegates_to_extractor(
-    mock_extractor: MagicMock, simple_action: CustomAction
-) -> None:
+def test_action_context_error_delegates_to_extractor(mock_extractor: MagicMock, simple_action: CustomAction) -> None:
     ctx = ActionContext(action=simple_action, extractor=mock_extractor, external_id="ext-id")
 
     ctx._new_error(level=ErrorLevel.warning, description="Something went wrong")
@@ -87,9 +85,7 @@ def test_action_context_error_delegates_to_extractor(
     )
 
 
-def test_action_context_error_does_not_pass_task_name(
-    mock_extractor: MagicMock, simple_action: CustomAction
-) -> None:
+def test_action_context_error_does_not_pass_task_name(mock_extractor: MagicMock, simple_action: CustomAction) -> None:
     ctx = ActionContext(action=simple_action, extractor=mock_extractor, external_id="ext-id")
 
     ctx._new_error(level=ErrorLevel.error, description="Fail", details="details", task_name="ignored")
