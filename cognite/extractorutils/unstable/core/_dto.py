@@ -1,5 +1,7 @@
 """
 Temporary holding place for DTOs against Extraction Pipelines 2.0 until it's in the SDK.
+
+Jira ticket: https://cognitedata.atlassian.net/browse/EDGE-493
 """
 
 from enum import Enum
@@ -129,6 +131,8 @@ class AvailableActionWrite(CogniteModel):
 
 
 class Action(CogniteModel):
+    model_config = ConfigDict(extra="ignore")
+
     external_id: str
     action_name: str
     type: ActionType
@@ -145,7 +149,7 @@ class ActionUpdate(CogniteModel):
 
 AvailableActionList = Annotated[list[AvailableActionWrite], Len(min_length=1, max_length=1000)]
 ActionUpdateList = Annotated[list[ActionUpdate], Len(min_length=1, max_length=1000)]
-PendingActionList = Annotated[list[Action], Len(min_length=1, max_length=1000)]
+PendingActionList = Annotated[list[Action], Len(min_length=0, max_length=1000)]
 
 
 class StartupRequest(WithExternalId):

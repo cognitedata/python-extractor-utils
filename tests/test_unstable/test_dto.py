@@ -87,6 +87,27 @@ class TestStartupRequest:
             )
 
 
+class TestAction:
+    def test_camel_case_serialization(self) -> None:
+        action = Action(external_id="act-1", action_name="restart", type=ActionType.start_task, task="main")
+        body = action.model_dump(mode="json", by_alias=True)
+        assert body["externalId"] == "act-1"
+        assert body["actionName"] == "restart"
+        assert body["type"] == "start_task"
+
+    def test_none_fields_excluded(self) -> None:
+        action = Action(external_id="act-1", action_name="ping", type=ActionType.custom)
+        body = action.model_dump(mode="json", by_alias=True)
+        assert "task" not in body
+        assert "callMetadata" not in body
+
+    def test_unknown_fields_ignored(self) -> None:
+        action = Action.model_validate(
+            {"externalId": "act-1", "actionName": "ping", "type": "custom", "futureField": "odin-added-this"}
+        )
+        assert action.external_id == "act-1"
+
+
 class TestCheckinRequest:
     def test_action_updates_serialized(self) -> None:
         req = CheckinRequest(
@@ -134,6 +155,10 @@ class TestCheckinResponse:
         response = CheckinResponse.model_validate({"externalId": "x"})
         assert response.pending_actions is None
 
+    def test_pending_actions_empty_list_accepted(self) -> None:
+        response = CheckinResponse.model_validate({"externalId": "x", "pendingActions": []})
+        assert response.pending_actions == []
+
     def test_action_with_call_metadata_deserialized(self) -> None:
         response = CheckinResponse.model_validate(
             {
@@ -167,18 +192,3 @@ class TestActionEnum:
         assert ActionStatus.succeeded.value == "succeeded"
         assert ActionStatus.cancel_pending.value == "cancel_pending"
         assert ActionStatus.canceled.value == "canceled"
-
-
-class TestAction:
-    def test_camel_case_serialization(self) -> None:
-        action = Action(external_id="act-1", action_name="restart", type=ActionType.start_task, task="main")
-        body = action.model_dump(mode="json", by_alias=True)
-        assert body["externalId"] == "act-1"
-        assert body["actionName"] == "restart"
-        assert body["type"] == "start_task"
-
-    def test_none_fields_excluded(self) -> None:
-        action = Action(external_id="act-1", action_name="ping", type=ActionType.custom)
-        body = action.model_dump(mode="json", by_alias=True)
-        assert "task" not in body
-        assert "callMetadata" not in body
