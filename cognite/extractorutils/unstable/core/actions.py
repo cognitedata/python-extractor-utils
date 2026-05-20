@@ -50,6 +50,7 @@ class ActionContext(CogniteLogger):
             level=level,
             description=description,
             details=details,
+            task_name=task_name or self._action.name,
         )
 
 

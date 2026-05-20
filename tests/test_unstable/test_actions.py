@@ -82,16 +82,17 @@ def test_action_context_error_delegates_to_extractor(mock_extractor: MagicMock, 
         level=ErrorLevel.warning,
         description="Something went wrong",
         details=None,
+        task_name="my action",
     )
 
 
-def test_action_context_error_does_not_pass_task_name(mock_extractor: MagicMock, simple_action: CustomAction) -> None:
+def test_action_context_error_passes_explicit_task_name(mock_extractor: MagicMock, simple_action: CustomAction) -> None:
     ctx = ActionContext(action=simple_action, extractor=mock_extractor, external_id="ext-id")
 
-    ctx._new_error(level=ErrorLevel.error, description="Fail", details="details", task_name="ignored")
+    ctx._new_error(level=ErrorLevel.error, description="Fail", details="details", task_name="custom-task")
 
     call_kwargs = mock_extractor._new_error.call_args.kwargs
-    assert "task_name" not in call_kwargs
+    assert call_kwargs["task_name"] == "custom-task"
 
 
 def test_action_target_is_callable() -> None:
