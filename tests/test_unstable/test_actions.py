@@ -73,35 +73,37 @@ def test_action_context_logger_name_strips_spaces(mock_extractor: MagicMock) -> 
     assert ctx._logger.name == "test-extractor.action.processdata"
 
 
-def test_action_context_error_delegates_to_extractor(mock_extractor: MagicMock, simple_action: CustomAction) -> None:
+@pytest.mark.parametrize(
+    "task_name,expected_task_name",
+    [
+        (None, "my action"),
+        ("custom-task", "custom-task"),
+        ("", ""),
+    ],
+)
+def test_action_context_error_task_name(
+    mock_extractor: MagicMock,
+    simple_action: CustomAction,
+    task_name: str | None,
+    expected_task_name: str,
+) -> None:
     ctx = ActionContext(action=simple_action, extractor=mock_extractor, external_id="ext-id")
 
-    ctx._new_error(level=ErrorLevel.warning, description="Something went wrong")
-
-    mock_extractor._new_error.assert_called_once_with(
-        level=ErrorLevel.warning,
-        description="Something went wrong",
-        details=None,
-        task_name="my action",
-    )
-
-
-def test_action_context_error_passes_explicit_task_name(mock_extractor: MagicMock, simple_action: CustomAction) -> None:
-    ctx = ActionContext(action=simple_action, extractor=mock_extractor, external_id="ext-id")
-
-    ctx._new_error(level=ErrorLevel.error, description="Fail", details="details", task_name="custom-task")
+    ctx._new_error(level=ErrorLevel.warning, description="Something went wrong", task_name=task_name)
 
     call_kwargs = mock_extractor._new_error.call_args.kwargs
-    assert call_kwargs["task_name"] == "custom-task"
+    assert call_kwargs["task_name"] == expected_task_name
 
 
-def test_action_target_is_callable() -> None:
+def test_action_target_is_callable(mock_extractor: MagicMock) -> None:
     called: list[ActionContext] = []
 
     def my_action(ctx: ActionContext) -> None:
         called.append(ctx)
 
     action = CustomAction(name="test", target=my_action)
+    ctx = ActionContext(action=action, extractor=mock_extractor, external_id="ext-id")
 
     assert callable(action.target)
-    assert action.target is my_action
+    action.target(ctx)
+    assert called == [ctx]

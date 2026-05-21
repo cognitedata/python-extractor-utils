@@ -6,7 +6,6 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
-from cognite.extractorutils.unstable.core._dto import JSONType
 from cognite.extractorutils.unstable.core.errors import Error, ErrorLevel
 from cognite.extractorutils.unstable.core.logger import CogniteLogger
 
@@ -28,7 +27,7 @@ class ActionContext(CogniteLogger):
         action: "CustomAction",
         extractor: "Extractor",
         external_id: str,
-        call_metadata: JSONType | None = None,
+        call_metadata: dict[str, str] | None = None,
     ) -> None:
         super().__init__()
         self._action = action
@@ -50,7 +49,7 @@ class ActionContext(CogniteLogger):
             level=level,
             description=description,
             details=details,
-            task_name=task_name or self._action.name,
+            task_name=task_name if task_name is not None else self._action.name,
         )
 
 
