@@ -1,4 +1,5 @@
 import pytest
+from pydantic import ValidationError
 
 from cognite.extractorutils.unstable.core._dto import (
     Action,
@@ -21,6 +22,11 @@ def _startup_request() -> StartupRequest:
 
 
 class TestAvailableActionWrite:
+    @pytest.mark.parametrize("action_type", [ActionType.start_task, ActionType.stop_task, ActionType.custom])
+    def test_type_serialization(self, action_type: ActionType) -> None:
+        body = AvailableActionWrite(name="test", type=action_type).model_dump(mode="json", by_alias=True)
+        assert body["type"] == action_type.value
+
     def test_camel_case_serialization(self) -> None:
         action = AvailableActionWrite(name="restart", type=ActionType.start_task, task="main")
         body = action.model_dump(mode="json", by_alias=True)
@@ -33,13 +39,10 @@ class TestAvailableActionWrite:
         assert "description" not in body
         assert "task" not in body
 
-    def test_name_min_length_enforced(self) -> None:
-        with pytest.raises(Exception):
-            AvailableActionWrite(name="", type=ActionType.custom)
-
-    def test_name_max_length_enforced(self) -> None:
-        with pytest.raises(Exception):
-            AvailableActionWrite(name="x" * 256, type=ActionType.custom)
+    @pytest.mark.parametrize("invalid_name", ["", "x" * 256])
+    def test_invalid_name_rejected(self, invalid_name: str) -> None:
+        with pytest.raises(ValidationError):
+            AvailableActionWrite(name=invalid_name, type=ActionType.custom)
 
 
 class TestActionUpdate:
@@ -79,7 +82,7 @@ class TestStartupRequest:
         assert "availableActions" not in body
 
     def test_available_actions_max_length_enforced(self) -> None:
-        with pytest.raises(Exception):
+        with pytest.raises(ValidationError):
             StartupRequest(
                 external_id="x",
                 extractor=ExtractorInfo(external_id="x"),

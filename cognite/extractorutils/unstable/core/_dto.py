@@ -155,7 +155,6 @@ class ActionUpdate(CogniteModel):
 
 AvailableActionList = Annotated[list[AvailableActionWrite], Len(min_length=0, max_length=100)]
 ActionUpdateList = Annotated[list[ActionUpdate], Len(min_length=0, max_length=100)]
-PendingActionList = Annotated[list[Action], Len(min_length=0, max_length=1000)]
 
 
 class StartupRequest(WithExternalId):
@@ -176,4 +175,4 @@ class CheckinResponse(WithExternalId):
     model_config = ConfigDict(extra="ignore")
 
     last_config_revision: int | None = None
-    pending_actions: PendingActionList | None = None
+    pending_actions: list[Action] | None = None
