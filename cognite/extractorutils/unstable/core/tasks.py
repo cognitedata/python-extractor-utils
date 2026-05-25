@@ -6,6 +6,7 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING
 
+from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.unstable.configuration.models import (
     CronConfig,
     IntervalConfig,
@@ -28,10 +29,16 @@ class TaskContext(CogniteLogger):
     This class is used to log errors and messages related to the task execution.
     """
 
-    def __init__(self, task: "Task", extractor: "Extractor") -> None:
+    def __init__(
+        self,
+        task: "Task",
+        extractor: "Extractor",
+        cancellation_token: CancellationToken,
+    ) -> None:
         super().__init__()
         self._task = task
         self._extractor = extractor
+        self.cancellation_token = cancellation_token
 
         self._logger = logging.getLogger(f"{self._extractor.EXTERNAL_ID}.{self._task.name.replace(' ', '')}")
 
