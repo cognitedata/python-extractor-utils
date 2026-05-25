@@ -117,7 +117,9 @@ def test_log_level_override(
 
     with extractor:
         startup_task = next(t for t in extractor._tasks if t.name == "log_task")
-        task_context = TaskContext(task=startup_task, extractor=extractor, cancellation_token=extractor.cancellation_token.create_child_token())
+        task_context = TaskContext(
+            task=startup_task, extractor=extractor, cancellation_token=extractor.cancellation_token.create_child_token()
+        )
         startup_task.target(task_context)
 
     captured = capsys.readouterr()
