@@ -233,8 +233,8 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         # Set logging to UTC
         fmt.converter = time.gmtime
 
-        # Remove any previous logging handlers
-        for handler in root.handlers:
+        # Remove any previous logging handlers; handler owners are responsible for close().
+        for handler in root.handlers[:]:
             root.removeHandler(handler)
 
         # Define new handlers

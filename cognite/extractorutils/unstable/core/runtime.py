@@ -58,6 +58,7 @@ from cognite.extractorutils.unstable.configuration.models import ConnectionConfi
 from cognite.extractorutils.unstable.core._dto import Error
 from cognite.extractorutils.unstable.core.checkin_worker import CheckinWorker
 from cognite.extractorutils.unstable.core.errors import ErrorLevel
+from cognite.extractorutils.unstable.core.logger import RobustFileHandler
 from cognite.extractorutils.util import now
 
 from ._messaging import RuntimeMessage
@@ -202,23 +203,30 @@ class Runtime(Generic[ExtractorType]):
             action="store_true",
             help="Run the extractor as a Windows service (only supported on Windows).",
         )
+        argparser.add_argument(
+            "--bootstrap-log-file",
+            type=Path,
+            required=False,
+            default=Path("logs/bootstrap.log"),
+            help=(
+                "Path to a log file for capturing bootstrap logs before the application config is loaded. "
+                "Defaults to logs/bootstrap.log in the working directory."
+            ),
+        )
 
         return argparser
 
     def _setup_logging(self) -> None:
-        # TODO: Figure out file logging for runtime
-        fmt = logging.Formatter(
-            "%(asctime)s.%(msecs)03d UTC [%(levelname)-8s] %(process)d %(threadName)s - %(message)s",
-            "%Y-%m-%d %H:%M:%S",
-        )
-        # Set logging to UTC
-        fmt.converter = time.gmtime
+        fmt = self._make_log_formatter()
 
         root = logging.getLogger()
         root.setLevel(logging.INFO)
 
         console_handler = logging.StreamHandler()
         console_handler.setFormatter(fmt)
+        # Set an explicit level so that lowering the root level for bootstrap file logging
+        # does not cause DEBUG messages to appear on the console.
+        console_handler.setLevel(logging.INFO)
 
         root.addHandler(console_handler)
 
@@ -237,6 +245,52 @@ class Runtime(Generic[ExtractorType]):
                 )
             except Exception as e:
                 self.logger.warning(f"Failed to initialize Windows Event Log handler: {e}")
+
+    def _make_log_formatter(self) -> logging.Formatter:
+        fmt = logging.Formatter(
+            "%(asctime)s.%(msecs)03d UTC [%(levelname)-8s] %(process)d %(threadName)s - %(message)s",
+            "%Y-%m-%d %H:%M:%S",
+        )
+        fmt.converter = time.gmtime
+        return fmt
+
+    def _setup_bootstrap_file_logging(self, path: Path | None) -> None:
+        """
+        Add a DEBUG-level file handler to capture all logs before the application config is loaded.
+
+        This handler is active from after CWD setup until ``Extractor._setup_logging()`` replaces
+        all handlers with the config-defined ones. If the file cannot be created the method logs a
+        warning and continues without file logging.
+
+        The method is a no-op when *path* is not a ``Path`` instance (e.g. ``None`` or a test mock).
+        """
+        if not isinstance(path, Path):
+            return
+
+        fmt = self._make_log_formatter()
+
+        try:
+            fh = RobustFileHandler(
+                filename=path,
+                when="midnight",
+                utc=True,
+                backupCount=7,
+                create_dirs=True,
+            )
+            fh.setFormatter(fmt)
+            fh.setLevel(logging.DEBUG)
+
+            root = logging.getLogger()
+            # Lower the root level so DEBUG records reach the file handler.
+            # The console handler retains its explicit INFO level, so the console
+            # output is unaffected.
+            root.setLevel(logging.DEBUG)
+            logging.getLogger("requests_oauthlib.oauth2_session").setLevel(logging.INFO)
+            root.addHandler(fh)
+
+            self.logger.info(f"Bootstrap file logging active: {path.resolve()}")
+        except OSError as e:
+            self.logger.warning(f"Could not set up bootstrap file logging at {path}: {e}")
 
     def _start_cancellation_watcher(self, mp_cancel_event: MpEvent) -> None:
         """
@@ -398,8 +452,14 @@ class Runtime(Generic[ExtractorType]):
             # Error response from the CDF API
             if e.code == 401:
                 self.logger.critical(
-                    "Got a 401 error from CDF. Please check your configuration. "
-                    "Make sure the credentials and project is correct."
+                    "Got a 401 (Unauthorized) error from CDF. Please check your configuration. "
+                    "Make sure the credentials and project are correct."
+                )
+
+            elif e.code == 403:
+                self.logger.critical(
+                    "Got a 403 (Forbidden) error from CDF. Please check your configuration. "
+                    "Make sure the credentials and project are correct."
                 )
 
             elif e.message:
@@ -472,6 +532,7 @@ class Runtime(Generic[ExtractorType]):
     def _main_runtime(self, args: Namespace) -> None:
         try:
             self._try_set_cwd(args)
+            self._setup_bootstrap_file_logging(getattr(args, "bootstrap_log_file", None))
             connection_config = load_file(args.connection_config[0], ConnectionConfig)
         except InvalidConfigError as e:
             self.logger.error(str(e))
