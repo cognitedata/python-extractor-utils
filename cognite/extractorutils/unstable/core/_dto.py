@@ -9,7 +9,7 @@ from typing import Annotated, Any, Literal, Optional
 
 from annotated_types import Len
 from humps import camelize
-from pydantic import BaseModel, ConfigDict, StringConstraints
+from pydantic import BaseModel, ConfigDict, StringConstraints, field_validator
 from typing_extensions import TypeAliasType
 
 from cognite.extractorutils.unstable.core.errors import Error as InternalError
@@ -81,9 +81,7 @@ ErrorList = Annotated[list[Error], Len(min_length=0, max_length=1000)]
 VersionType = Annotated[str, StringConstraints(min_length=1, max_length=32)]
 DescriptionType = Annotated[str, StringConstraints(min_length=0, max_length=500)]
 ActionDescriptionType = Annotated[str, StringConstraints(min_length=0, max_length=1000)]
-NameType = Annotated[str, StringConstraints(min_length=1, max_length=255)]
-AvailableActionTaskType = Annotated[str, StringConstraints(min_length=1, max_length=255)]
-ExternalIdType = Annotated[str, StringConstraints(min_length=1, max_length=255)]
+IdentifierType = Annotated[str, StringConstraints(min_length=1, max_length=255)]
 TaskList = Annotated[list["Task"], Len(min_length=1, max_length=1000)]
 JSONType = TypeAliasType(  # type: ignore[misc]
     "JSONType",
@@ -127,17 +125,19 @@ class Task(CogniteModel):
 
 
 class AvailableActionWrite(CogniteModel):
-    name: NameType
+    name: IdentifierType
     type: ActionType
     description: ActionDescriptionType | None = None
-    task: AvailableActionTaskType | None = None
+    task: IdentifierType | None = None
 
 
 class Action(CogniteModel):
+    """Server may add fields before SDK is updated, so ignore extras on deserialize."""
+
     model_config = ConfigDict(extra="ignore")
 
-    external_id: ExternalIdType
-    action_name: NameType
+    external_id: IdentifierType
+    action_name: IdentifierType
     status: ActionStatus
     call_metadata: dict[str, str] | None = None
     created_time: int | None = None
@@ -147,10 +147,17 @@ class Action(CogniteModel):
 
 
 class ActionUpdate(CogniteModel):
-    external_id: ExternalIdType
+    external_id: IdentifierType
     status: ActionStatus
     result_message: MessageType | None = None
     result_metadata: dict[str, str] | None = None
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: ActionStatus) -> ActionStatus:
+        if v in (ActionStatus.pending, ActionStatus.cancel_pending):
+            raise ValueError(f"Extractors cannot set action status to '{v.value}'")
+        return v
 
 
 AvailableActionList = Annotated[list[AvailableActionWrite], Len(min_length=0, max_length=100)]
@@ -172,6 +179,8 @@ class CheckinRequest(WithExternalId):
 
 
 class CheckinResponse(WithExternalId):
+    """Server may add fields before SDK is updated, so ignore extras on deserialize."""
+
     model_config = ConfigDict(extra="ignore")
 
     last_config_revision: int | None = None

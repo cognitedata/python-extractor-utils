@@ -22,16 +22,18 @@ def _startup_request() -> StartupRequest:
 
 
 class TestAvailableActionWrite:
-    @pytest.mark.parametrize("action_type", [ActionType.start_task, ActionType.stop_task, ActionType.custom])
-    def test_type_serialization(self, action_type: ActionType) -> None:
-        body = AvailableActionWrite(name="test", type=action_type).model_dump(mode="json", by_alias=True)
-        assert body["type"] == action_type.value
-
-    def test_camel_case_serialization(self) -> None:
-        action = AvailableActionWrite(name="restart", type=ActionType.start_task, task="main")
-        body = action.model_dump(mode="json", by_alias=True)
-        assert body["type"] == "start_task"
-        assert body["task"] == "main"
+    @pytest.mark.parametrize(
+        "action_type,task,expected_body",
+        [
+            (ActionType.start_task, "main", {"type": "start_task", "task": "main"}),
+            (ActionType.stop_task, None, {"type": "stop_task"}),
+            (ActionType.custom, None, {"type": "custom"}),
+        ],
+    )
+    def test_serialization(self, action_type: ActionType, task: str | None, expected_body: dict[str, str]) -> None:
+        body = AvailableActionWrite(name="test", type=action_type, task=task).model_dump(mode="json", by_alias=True)
+        for key, val in expected_body.items():
+            assert body[key] == val
 
     def test_none_fields_excluded(self) -> None:
         action = AvailableActionWrite(name="restart", type=ActionType.custom)
@@ -41,11 +43,16 @@ class TestAvailableActionWrite:
 
     @pytest.mark.parametrize("invalid_name", ["", "x" * 256])
     def test_invalid_name_rejected(self, invalid_name: str) -> None:
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError, match="String should have"):
             AvailableActionWrite(name=invalid_name, type=ActionType.custom)
 
 
 class TestActionUpdate:
+    @pytest.mark.parametrize("status", [ActionStatus.pending, ActionStatus.cancel_pending])
+    def test_extractor_reserved_statuses_rejected(self, status: ActionStatus) -> None:
+        with pytest.raises(ValidationError, match="Extractors cannot set action status"):
+            ActionUpdate(external_id="act-1", status=status)
+
     def test_camel_case_serialization(self) -> None:
         update = ActionUpdate(
             external_id="act-1",
@@ -82,7 +89,7 @@ class TestStartupRequest:
         assert "availableActions" not in body
 
     def test_available_actions_max_length_enforced(self) -> None:
-        with pytest.raises(ValidationError):
+        with pytest.raises(ValidationError, match="at most 100"):
             StartupRequest(
                 external_id="x",
                 extractor=ExtractorInfo(external_id="x"),
@@ -106,9 +113,15 @@ class TestAction:
 
     def test_unknown_fields_ignored(self) -> None:
         action = Action.model_validate(
-            {"externalId": "act-1", "actionName": "ping", "status": "running", "futureField": "odin-added-this"}
+            {"externalId": "act-1", "actionName": "ping", "status": "running", "unknownField": "unknown-value"}
         )
         assert action.external_id == "act-1"
+
+    def test_call_metadata_non_string_value_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="Input should be a valid string"):
+            Action.model_validate(
+                {"externalId": "act-1", "actionName": "ping", "status": "pending", "callMetadata": {"count": 3}}
+            )
 
 
 class TestCheckinRequest:
@@ -130,6 +143,13 @@ class TestCheckinRequest:
         body = CheckinRequest(external_id="x").model_dump(mode="json", by_alias=True)
         assert "actionUpdates" not in body
 
+    def test_action_updates_max_length_enforced(self) -> None:
+        with pytest.raises(ValidationError, match="at most 100"):
+            CheckinRequest(
+                external_id="x",
+                action_updates=[ActionUpdate(external_id=f"act-{i}", status=ActionStatus.running) for i in range(101)],
+            )
+
 
 class TestCheckinResponse:
     def test_pending_actions_deserialized(self) -> None:
@@ -150,7 +170,7 @@ class TestCheckinResponse:
 
     def test_unknown_fields_ignored(self) -> None:
         response = CheckinResponse.model_validate(
-            {"externalId": "x", "newFieldFromOdin": "some-value", "anotherUnknown": 42}
+            {"externalId": "x", "unknownField": "some-value", "anotherUnknown": 42}
         )
         assert response.external_id == "x"
 
@@ -183,15 +203,18 @@ class TestCheckinResponse:
 
 
 class TestActionEnum:
-    def test_action_type_values(self) -> None:
-        assert ActionType.start_task.value == "start_task"
-        assert ActionType.stop_task.value == "stop_task"
-        assert ActionType.custom.value == "custom"
+    @pytest.mark.parametrize("value", ["start_task", "stop_task", "custom"])
+    def test_action_type_lookup_by_value(self, value: str) -> None:
+        assert ActionType(value).value == value
 
-    def test_action_status_values(self) -> None:
-        assert ActionStatus.pending.value == "pending"
-        assert ActionStatus.running.value == "running"
-        assert ActionStatus.failed.value == "failed"
-        assert ActionStatus.succeeded.value == "succeeded"
-        assert ActionStatus.cancel_pending.value == "cancel_pending"
-        assert ActionStatus.canceled.value == "canceled"
+    def test_action_type_invalid_value_raises(self) -> None:
+        with pytest.raises(ValueError):
+            ActionType("unknown_action")
+
+    @pytest.mark.parametrize("value", ["pending", "running", "failed", "succeeded", "cancel_pending", "canceled"])
+    def test_action_status_lookup_by_value(self, value: str) -> None:
+        assert ActionStatus(value).value == value
+
+    def test_action_status_invalid_value_raises(self) -> None:
+        with pytest.raises(ValueError):
+            ActionStatus("unknown_status")
