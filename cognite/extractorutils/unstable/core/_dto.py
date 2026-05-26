@@ -80,7 +80,6 @@ TaskUpdateList = Annotated[list[TaskUpdate], Len(min_length=1, max_length=1000)]
 ErrorList = Annotated[list[Error], Len(min_length=0, max_length=1000)]
 VersionType = Annotated[str, StringConstraints(min_length=1, max_length=32)]
 DescriptionType = Annotated[str, StringConstraints(min_length=0, max_length=500)]
-ActionDescriptionType = Annotated[str, StringConstraints(min_length=0, max_length=1000)]
 IdentifierType = Annotated[str, StringConstraints(min_length=1, max_length=255)]
 TaskList = Annotated[list["Task"], Len(min_length=1, max_length=1000)]
 JSONType = TypeAliasType(  # type: ignore[misc]
@@ -127,7 +126,7 @@ class Task(CogniteModel):
 class AvailableActionWrite(CogniteModel):
     name: IdentifierType
     type: ActionType
-    description: ActionDescriptionType | None = None
+    description: MessageType | None = None
     task: IdentifierType | None = None
 
 
