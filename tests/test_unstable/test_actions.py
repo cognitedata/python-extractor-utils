@@ -78,6 +78,8 @@ def test_action_context_logger_name_strips_spaces(mock_extractor: MagicMock) -> 
     [
         (None, "my action"),
         ("custom-task", "custom-task"),
+        # Empty string is not None, so it passes through as-is rather than falling back to action name.
+        # Callers should avoid passing "" if they want the default; use None instead.
         ("", ""),
     ],
 )
@@ -89,10 +91,14 @@ def test_action_context_error_task_name(
 ) -> None:
     ctx = ActionContext(action=simple_action, extractor=mock_extractor, external_id="ext-id")
 
-    ctx._new_error(level=ErrorLevel.warning, description="Something went wrong", task_name=task_name)
+    ctx._new_error(
+        level=ErrorLevel.warning, description="Something went wrong", details="some details", task_name=task_name
+    )
 
     call_kwargs = mock_extractor._new_error.call_args.kwargs
     assert call_kwargs["task_name"] == expected_task_name
+    assert call_kwargs["details"] == "some details"
+    assert call_kwargs["level"] == ErrorLevel.warning
 
 
 def test_action_target_is_callable(mock_extractor: MagicMock) -> None:

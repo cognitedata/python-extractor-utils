@@ -20,6 +20,9 @@ class ActionContext(CogniteLogger):
     Context for a custom action invocation.
 
     This class is used to log errors and messages related to the action invocation.
+
+    ``external_id`` and ``call_metadata`` come from the pending action payload sent by Odin and are
+    available for use when reporting results back to the server.
     """
 
     def __init__(
