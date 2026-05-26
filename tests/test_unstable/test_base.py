@@ -75,6 +75,7 @@ def get_checkin_worker(connection_config: ConnectionConfig) -> CheckinWorker:
 )
 def test_log_level_override(
     capsys: pytest.CaptureFixture[str],
+    tmp_path: Path,
     connection_config: ConnectionConfig,
     log_handlers: list[LogHandlerConfig],
     override_level: str | None,
@@ -85,10 +86,24 @@ def test_log_level_override(
     Tests that the log level override parameter correctly overrides the log level
     set in the application configuration.
     """
+    effective_log_handlers: list[LogHandlerConfig] = []
+    for handler in log_handlers:
+        if isinstance(handler, LogFileHandlerConfig) and handler.path == Path("non-existing/test.log"):
+            # Make the file handler fail deterministically by using a read-only directory.
+            read_only_dir = tmp_path / "read_only_logs"
+            read_only_dir.mkdir(mode=0o555)
+            handler = LogFileHandlerConfig(
+                type="file",
+                level=handler.level,
+                path=read_only_dir / "test.log",
+                retention=handler.retention,
+            )
+        effective_log_handlers.append(handler)
+
     app_config = TestConfig(
         parameter_one=1,
         parameter_two="a",
-        log_handlers=log_handlers,
+        log_handlers=effective_log_handlers,
     )
 
     full_config = FullConfig(
