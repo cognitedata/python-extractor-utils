@@ -1,5 +1,7 @@
 """
 Temporary holding place for DTOs against Extraction Pipelines 2.0 until it's in the SDK.
+
+Jira ticket: https://cognitedata.atlassian.net/browse/EDGE-493
 """
 
 from enum import Enum
@@ -7,7 +9,7 @@ from typing import Annotated, Any, Literal, Optional
 
 from annotated_types import Len
 from humps import camelize
-from pydantic import BaseModel, ConfigDict, StringConstraints
+from pydantic import BaseModel, ConfigDict, StringConstraints, field_validator
 from typing_extensions import TypeAliasType
 
 from cognite.extractorutils.unstable.core.errors import Error as InternalError
@@ -78,6 +80,7 @@ TaskUpdateList = Annotated[list[TaskUpdate], Len(min_length=1, max_length=1000)]
 ErrorList = Annotated[list[Error], Len(min_length=0, max_length=1000)]
 VersionType = Annotated[str, StringConstraints(min_length=1, max_length=32)]
 DescriptionType = Annotated[str, StringConstraints(min_length=0, max_length=500)]
+IdentifierType = Annotated[str, StringConstraints(min_length=1, max_length=255)]
 TaskList = Annotated[list["Task"], Len(min_length=1, max_length=1000)]
 JSONType = TypeAliasType(  # type: ignore[misc]
     "JSONType",
@@ -98,6 +101,21 @@ class TaskType(Enum):
     batch = "batch"
 
 
+class ActionType(Enum):
+    start_task = "start_task"
+    stop_task = "stop_task"
+    custom = "custom"
+
+
+class ActionStatus(Enum):
+    pending = "pending"
+    running = "running"
+    failed = "failed"
+    succeeded = "succeeded"
+    cancel_pending = "cancel_pending"
+    canceled = "canceled"
+
+
 class Task(CogniteModel):
     type: TaskType
     name: str
@@ -105,17 +123,64 @@ class Task(CogniteModel):
     description: DescriptionType | None = None
 
 
+class AvailableActionWrite(CogniteModel):
+    name: IdentifierType
+    type: ActionType
+    description: MessageType | None = None
+    task: IdentifierType | None = None
+
+
+class Action(CogniteModel):
+    """Server may add fields before SDK is updated, so ignore extras on deserialize."""
+
+    model_config = ConfigDict(extra="ignore")
+
+    external_id: IdentifierType
+    action_name: IdentifierType
+    status: ActionStatus
+    call_metadata: dict[str, str] | None = None
+    created_time: int | None = None
+    last_updated_time: int | None = None
+    result_message: MessageType | None = None
+    result_metadata: dict[str, str] | None = None
+
+
+class ActionUpdate(CogniteModel):
+    external_id: IdentifierType
+    status: ActionStatus
+    result_message: MessageType | None = None
+    result_metadata: dict[str, str] | None = None
+
+    @field_validator("status")
+    @classmethod
+    def validate_status(cls, v: ActionStatus) -> ActionStatus:
+        if v in (ActionStatus.pending, ActionStatus.cancel_pending):
+            raise ValueError(f"Extractors cannot set action status to '{v.value}'")
+        return v
+
+
+AvailableActionList = Annotated[list[AvailableActionWrite], Len(min_length=0, max_length=100)]
+ActionUpdateList = Annotated[list[ActionUpdate], Len(min_length=0, max_length=100)]
+
+
 class StartupRequest(WithExternalId):
     extractor: ExtractorInfo
     tasks: TaskList | None = None
     active_config_revision: int | Literal["local"] | None = None
     timestamp: int | None = None
+    available_actions: AvailableActionList | None = None
 
 
 class CheckinRequest(WithExternalId):
     task_events: TaskUpdateList | None = None
     errors: ErrorList | None = None
+    action_updates: ActionUpdateList | None = None
 
 
 class CheckinResponse(WithExternalId):
+    """Server may add fields before SDK is updated, so ignore extras on deserialize."""
+
+    model_config = ConfigDict(extra="ignore")
+
     last_config_revision: int | None = None
+    pending_actions: list[Action] | None = None
