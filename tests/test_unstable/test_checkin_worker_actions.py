@@ -33,7 +33,7 @@ from tests.test_unstable.conftest import TestConfig, TestExtractor
 
 
 @pytest.fixture
-def action_updates_bag() -> Generator[list, None]:
+def action_updates_bag() -> Generator[list, None, None]:
     bag: list = []
     yield bag
     bag.clear()
@@ -241,6 +241,35 @@ def test_no_error_when_dispatcher_not_set_and_actions_present(
             "pendingActions": [{"externalId": "act-1", "actionName": "do-thing", "status": "pending"}],
         }
     )
+
+
+def test_dispatcher_receives_all_pending_actions(
+    connection_config: ConnectionConfig,
+) -> None:
+    """All actions in a pendingActions list are forwarded to the dispatcher as a single batch."""
+    worker = _make_worker(connection_config)
+    received: list[Action] = []
+    fired = threading.Event()
+
+    def dispatcher(actions: list[Action]) -> None:
+        received.extend(actions)
+        fired.set()
+
+    worker.set_action_dispatcher(dispatcher)
+    worker._handle_checkin_response(
+        {
+            "externalId": connection_config.integration.external_id,
+            "pendingActions": [
+                {"externalId": "act-1", "actionName": "do-thing", "status": "pending"},
+                {"externalId": "act-2", "actionName": "other-thing", "status": "running"},
+            ],
+        }
+    )
+
+    assert fired.wait(timeout=2), "Dispatcher was never called"
+    assert len(received) == 2
+    assert received[0].external_id == "act-1"
+    assert received[1].external_id == "act-2"
 
 
 def test_dispatcher_exception_is_logged_not_silently_swallowed(

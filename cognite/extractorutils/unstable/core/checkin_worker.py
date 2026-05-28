@@ -43,6 +43,17 @@ MAX_ERRORS_PER_CHECKIN = MAX_TASK_UPDATES_PER_CHECKIN = 1000
 rng = SystemRandom()
 
 
+def _safe_dispatch(
+    dispatcher: Callable[[list[Action]], None],
+    actions: list[Action],
+    logger: Logger,
+) -> None:
+    try:
+        dispatcher(actions)
+    except Exception:
+        logger.exception("Unhandled exception in action dispatcher")
+
+
 class CheckinWorker:
     """
     A worker to manage how we report check-ins to the Integrations API.
@@ -52,9 +63,6 @@ class CheckinWorker:
     1. Manage how we batch errors and task updates.
     2. Manage how we handle retries and backoff.
     """
-
-    _lock = RLock()
-    _flush_lock = RLock()
 
     def __init__(
         self,
@@ -89,6 +97,8 @@ class CheckinWorker:
         self._task_updates: list[TaskUpdate] = []
         self._action_updates: list[ActionUpdate] = []
         self._action_dispatcher: Callable[[list[Action]], None] | None = None
+        self._lock = RLock()
+        self._flush_lock = RLock()
 
     @property
     def active_revision(self) -> ConfigRevision:
@@ -243,16 +253,16 @@ class CheckinWorker:
                 self._active_revision = checkin_response.last_config_revision
 
         if checkin_response.pending_actions and self._action_dispatcher is not None:
-            dispatcher = self._action_dispatcher
-            actions = checkin_response.pending_actions
-
-            def _safe_dispatch() -> None:
-                try:
-                    dispatcher(actions)
-                except Exception:
-                    self._logger.exception("Unhandled exception in action dispatcher")
-
-            Thread(target=_safe_dispatch, name="ActionDispatcher", daemon=True).start()
+            # Each checkin tick may spawn its own ActionDispatcher thread. Overlapping
+            # dispatches are intentional: the checkin interval is much longer than a
+            # typical dispatch, and actions carry server-assigned external IDs so
+            # duplicate delivery is handled by the caller.
+            Thread(
+                target=_safe_dispatch,
+                args=(self._action_dispatcher, checkin_response.pending_actions, self._logger),
+                name="ActionDispatcher",
+                daemon=True,
+            ).start()
 
     def flush(self, cancellation_token: CancellationToken) -> None:
         """
@@ -263,9 +273,10 @@ class CheckinWorker:
         """
         with self._flush_lock:
             self._logger.debug(
-                "Going to report check-in with %d errors and %d task updates.",
+                "Going to report check-in with %d errors, %d task updates and %d action updates.",
                 len(self._errors),
                 len(self._task_updates),
+                len(self._action_updates),
             )
             self.report_checkin(cancellation_token)
 
