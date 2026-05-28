@@ -449,6 +449,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                         TaskContext(
                             task=task,
                             extractor=self,
+                            cancellation_token=self.cancellation_token.create_child_token(),
                         )
                     ),
                 )
@@ -546,6 +547,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                             TaskContext(
                                 task=task,
                                 extractor=self,
+                                cancellation_token=self.cancellation_token.create_child_token(),
                             ),
                         )
                     )
@@ -555,7 +557,13 @@ class Extractor(Generic[ConfigType], CogniteLogger):
             Thread(
                 name=pascalize(task.name),
                 target=task.target,
-                args=(TaskContext(task=task, extractor=self),),
+                args=(
+                    TaskContext(
+                        task=task,
+                        extractor=self,
+                        cancellation_token=self.cancellation_token.create_child_token(),
+                    ),
+                ),
             ).start()
 
         if has_scheduled:
