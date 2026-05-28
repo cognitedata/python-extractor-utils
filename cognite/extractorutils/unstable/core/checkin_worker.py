@@ -243,12 +243,16 @@ class CheckinWorker:
                 self._active_revision = checkin_response.last_config_revision
 
         if checkin_response.pending_actions and self._action_dispatcher is not None:
-            Thread(
-                target=self._action_dispatcher,
-                args=(checkin_response.pending_actions,),
-                name="ActionDispatcher",
-                daemon=True,
-            ).start()
+            dispatcher = self._action_dispatcher
+            actions = checkin_response.pending_actions
+
+            def _safe_dispatch() -> None:
+                try:
+                    dispatcher(actions)
+                except Exception:
+                    self._logger.exception("Unhandled exception in action dispatcher")
+
+            Thread(target=_safe_dispatch, name="ActionDispatcher", daemon=True).start()
 
     def flush(self, cancellation_token: CancellationToken) -> None:
         """
@@ -367,7 +371,7 @@ class CheckinWorker:
             external_id=self._integration,
             errors=list(map(DtoError.from_internal, errors)) if len(errors) > 0 else None,
             task_events=task_updates if len(task_updates) > 0 else None,
-            action_updates=action_updates if action_updates else None,
+            action_updates=action_updates or None,
         )
         should_requeue = self._wrap_checkin_like_request(
             lambda: self._cognite_client.post(

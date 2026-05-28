@@ -27,7 +27,6 @@ from cognite.extractorutils.unstable.core.checkin_worker import CheckinWorker
 from cognite.extractorutils.util import now
 from tests.test_unstable.conftest import TestConfig, TestExtractor
 
-
 # ---------------------------------------------------------------------------
 # Fixtures
 # ---------------------------------------------------------------------------
@@ -236,10 +235,52 @@ def test_no_error_when_dispatcher_not_set_and_actions_present(
     worker = _make_worker(connection_config)
     assert worker._action_dispatcher is None
 
-    worker._handle_checkin_response({
-        "externalId": connection_config.integration.external_id,
-        "pendingActions": [{"externalId": "act-1", "actionName": "do-thing", "status": "pending"}],
-    })
+    worker._handle_checkin_response(
+        {
+            "externalId": connection_config.integration.external_id,
+            "pendingActions": [{"externalId": "act-1", "actionName": "do-thing", "status": "pending"}],
+        }
+    )
+
+
+def test_dispatcher_exception_is_logged_not_silently_swallowed(
+    connection_config: ConnectionConfig,
+) -> None:
+    """An unhandled exception inside the dispatcher is logged, not silently swallowed.
+
+    Regression guard for the Gemini review comment: daemon threads must not hide crashes.
+    """
+    worker = _make_worker(connection_config)
+
+    class _CapturingHandler(logging.Handler):
+        def __init__(self) -> None:
+            super().__init__()
+            self.records: list[logging.LogRecord] = []
+            self.received = threading.Event()
+
+        def emit(self, record: logging.LogRecord) -> None:
+            self.records.append(record)
+            self.received.set()
+
+    handler = _CapturingHandler()
+    worker._logger.addHandler(handler)
+    worker._logger.setLevel(logging.ERROR)
+
+    def bad_dispatcher(actions: list) -> None:
+        raise RuntimeError("dispatcher crashed")
+
+    worker.set_action_dispatcher(bad_dispatcher)
+    worker._handle_checkin_response(
+        {
+            "externalId": connection_config.integration.external_id,
+            "pendingActions": [{"externalId": "act-1", "actionName": "do-thing", "status": "pending"}],
+        }
+    )
+
+    assert handler.received.wait(timeout=2), "No log record was emitted after dispatcher exception"
+    worker._logger.removeHandler(handler)
+
+    assert any("action dispatcher" in r.getMessage().lower() for r in handler.records)
 
 
 # ===========================================================================
