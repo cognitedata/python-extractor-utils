@@ -124,16 +124,8 @@ class CheckinWorker:
             self._has_reported_startup = False
 
     def set_action_dispatcher(self, dispatcher: Callable[[list[Action]], None]) -> None:
-        """
-        Set the dispatcher for handling pending actions from checkin responses.
-
-        Arguments:
-            dispatcher (Callable[[list[Action]], None]): A callback invoked on a daemon thread
-                                                         when the server returns pending_actions.
-        """
-        # No lock needed: a single reference store is atomic under CPython's GIL.
-        # _handle_checkin_response snapshots self._action_dispatcher into a local variable
-        # before use, so a concurrent replacement is safe.
+        """Register the callback invoked on a daemon thread when the server returns pending_actions."""
+        # No lock: GIL makes a single reference store atomic; _handle_checkin_response snapshots it locally.
         self._action_dispatcher = dispatcher
 
     def queue_action_update(self, update: ActionUpdate) -> None:
@@ -258,10 +250,7 @@ class CheckinWorker:
 
         dispatcher = self._action_dispatcher
         if checkin_response.pending_actions and dispatcher is not None:
-            # Each checkin tick may spawn its own ActionDispatcher thread. Overlapping
-            # dispatches are intentional: the checkin interval is much longer than a
-            # typical dispatch, and actions carry server-assigned external IDs so
-            # duplicate delivery is handled by the caller.
+            # Overlapping dispatches are intentional: interval >> dispatch time, and IDs are server-assigned.
             Thread(
                 target=_safe_dispatch,
                 args=(dispatcher, checkin_response.pending_actions, self._logger),
