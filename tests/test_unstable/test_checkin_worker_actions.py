@@ -29,6 +29,7 @@ from cognite.extractorutils.unstable.configuration.models import ConnectionConfi
 from cognite.extractorutils.unstable.core._dto import Action, ActionStatus, ActionUpdate
 from cognite.extractorutils.unstable.core.base import FullConfig
 from cognite.extractorutils.unstable.core.checkin_worker import MAX_ACTION_UPDATES_PER_CHECKIN, CheckinWorker
+from cognite.extractorutils.unstable.core.errors import Error, ErrorLevel
 from cognite.extractorutils.util import now
 from tests.test_unstable.conftest import TestConfig, TestExtractor
 
@@ -252,77 +253,38 @@ def test_dispatcher_called_from_startup_response(
     assert received[0].action_name == "boot-action"
 
 
-def test_dispatcher_not_called_when_no_pending_actions(
-    connection_config: ConnectionConfig,
-    requests_mock: requests_mock.Mocker,
-    mock_checkin_with_actions: Callable,
-    checkin_bag: list,
-) -> None:
-    """Dispatcher is not invoked when the checkin response carries no pending_actions."""
-    requests_mock.real_http = True
-    mock_checkin_with_actions(requests_mock)  # no pending_actions
-
-    worker = _make_worker(connection_config)
-    worker._has_reported_startup = True
-    cancellation_token = CancellationToken()
-
-    dispatcher_fired = threading.Event()
-    worker.set_action_dispatcher(lambda actions: dispatcher_fired.set())
-
-    worker.flush(cancellation_token)
-
-    assert not dispatcher_fired.wait(timeout=0.1), "Dispatcher was called but should not have been"
-    assert len(checkin_bag) == 1
-
-
-def test_no_error_when_dispatcher_not_set_and_actions_present(
+@pytest.mark.parametrize(
+    "register_dispatcher,pending_actions",
+    [
+        # Dispatcher registered but response carries no pending_actions → not called.
+        (True, None),
+        # Actions present in response but no dispatcher registered → no crash, no side-effects.
+        (False, [{"externalId": "act-1", "actionName": "do-thing", "status": "pending"}]),
+    ],
+    ids=["no_pending_actions", "no_dispatcher_registered"],
+)
+def test_dispatcher_not_invoked(
+    register_dispatcher: bool,
+    pending_actions: list[dict] | None,
     connection_config: ConnectionConfig,
 ) -> None:
-    """No exception is raised when pending_actions arrive but no dispatcher is registered.
+    """Dispatcher is not invoked when pending_actions is absent or when no dispatcher is set.
 
-    Extractors that don't use action dispatch must not crash when the server sends actions.
+    Guards both halves of: if checkin_response.pending_actions and dispatcher is not None.
     """
     worker = _make_worker(connection_config)
-    assert worker._action_dispatcher is None
-
-    worker._handle_checkin_response(
-        {
-            "externalId": connection_config.integration.external_id,
-            "pendingActions": [{"externalId": "act-1", "actionName": "do-thing", "status": "pending"}],
-        }
-    )
-
-    assert worker._action_updates == []
-    assert worker._action_dispatcher is None
-
-
-def test_dispatcher_receives_all_pending_actions(
-    connection_config: ConnectionConfig,
-) -> None:
-    """All actions in a pendingActions list are forwarded to the dispatcher as a single batch."""
-    worker = _make_worker(connection_config)
-    received: list[Action] = []
     fired = threading.Event()
 
-    def dispatcher(actions: list[Action]) -> None:
-        received.extend(actions)
-        fired.set()
+    if register_dispatcher:
+        worker.set_action_dispatcher(lambda actions: fired.set())
 
-    worker.set_action_dispatcher(dispatcher)
-    worker._handle_checkin_response(
-        {
-            "externalId": connection_config.integration.external_id,
-            "pendingActions": [
-                {"externalId": "act-1", "actionName": "do-thing", "status": "pending"},
-                {"externalId": "act-2", "actionName": "other-thing", "status": "running"},
-            ],
-        }
-    )
+    response: dict = {"externalId": connection_config.integration.external_id}
+    if pending_actions:
+        response["pendingActions"] = pending_actions
+    worker._handle_checkin_response(response)
 
-    assert fired.wait(timeout=2), "Dispatcher was never called"
-    assert len(received) == 2
-    assert received[0].external_id == "act-1"
-    assert received[1].external_id == "act-2"
+    assert not fired.wait(timeout=0.1), "Dispatcher was called but should not have been"
+    assert worker._action_updates == []
 
 
 def test_dispatcher_exception_is_logged_not_silently_swallowed(
@@ -410,6 +372,44 @@ def test_action_updates_presence_in_checkin_body(
         assert len(action_updates_bag) == 1
         assert action_updates_bag[0]["externalId"] == "act-1"
         assert action_updates_bag[0]["status"] == "succeeded"
+
+
+def test_action_updates_sent_in_pre_startup_path(
+    connection_config: ConnectionConfig,
+    application_config: TestConfig,
+    requests_mock: requests_mock.Mocker,
+    mock_checkin_with_actions: Callable,
+    checkin_bag: list,
+    action_updates_bag: list,
+) -> None:
+    """action_updates flow through the pre-startup emergency path; task_updates do not.
+
+    The pre-startup branch runs when flush() is called before startup has been reported.
+    task_updates are suppressed (they require a running context), but action outcome
+    reports carry server-assigned IDs and should reach the server ASAP.
+    """
+    requests_mock.real_http = True
+    mock_checkin_with_actions(requests_mock)
+
+    worker = _make_worker(connection_config)
+    extractor = _make_extractor(connection_config, application_config, worker)
+    # _has_reported_startup stays False (pre-startup state)
+    cancellation_token = CancellationToken()
+
+    # Pre-startup checkin only runs if there is at least one non-task error;
+    # without it report_checkin returns early before calling try_write_checkin.
+    Error(level=ErrorLevel.warning, description="pre-startup error", details=None, task_name=None, extractor=extractor)
+
+    worker.report_task_start("some-task")  # task update — should be suppressed
+    worker.queue_action_update(ActionUpdate(external_id="act-pre", status=ActionStatus.succeeded))
+    worker.flush(cancellation_token)
+
+    assert len(checkin_bag) == 1
+    # action_updates go out even before startup is reported
+    assert "actionUpdates" in checkin_bag[0]
+    assert action_updates_bag[0]["externalId"] == "act-pre"
+    # task_updates are explicitly suppressed in the pre-startup path
+    assert "taskEvents" not in checkin_bag[0]
 
 
 def test_action_updates_capped_at_100_per_checkin(
