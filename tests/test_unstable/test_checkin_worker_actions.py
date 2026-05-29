@@ -1,15 +1,7 @@
 """Tests for CheckinWorker action dispatch.
 
-Follows the same patterns as test_checkin_worker.py:
-  - requests_mock + gzip-decoded body inspection
-  - connection_config / checkin_bag / mock_startup_request fixtures
-  - Thread + join + cancellation_token pattern
-
-Two testing levels are used intentionally:
-  - Direct calls to _handle_checkin_response: unit-level, tests dispatch logic in
-    isolation without any HTTP machinery.
-  - Full requests_mock path (flush → POST → response): integration-level, tests that
-    the complete checkin cycle correctly wires up the dispatcher and action_updates.
+Two test levels: direct _handle_checkin_response calls (unit) and full
+flush → POST → response via requests_mock (integration).
 """
 
 import gzip
@@ -33,10 +25,6 @@ from cognite.extractorutils.unstable.core.errors import Error, ErrorLevel
 from cognite.extractorutils.util import now
 from tests.test_unstable.conftest import TestConfig, TestExtractor
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
 
 @pytest.fixture
 def action_updates_bag() -> Generator[list, None, None]:
@@ -51,11 +39,6 @@ def mock_checkin_with_actions(
     checkin_bag: list,
     action_updates_bag: list,
 ) -> Callable[[requests_mock.Mocker, list[dict] | None, int], None]:
-    """
-    Like mock_checkin_request, but also captures actionUpdates and can embed
-    pendingActions in the response JSON.
-    """
-
     def mocker(
         mock: requests_mock.Mocker,
         pending_actions: list[dict] | None = None,
@@ -81,11 +64,6 @@ def mock_checkin_with_actions(
         )
 
     return mocker
-
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 
 def _make_worker(connection_config: ConnectionConfig) -> CheckinWorker:
@@ -114,11 +92,6 @@ def _make_extractor(
     return extractor
 
 
-# ===========================================================================
-# set_action_dispatcher
-# ===========================================================================
-
-
 def test_set_action_dispatcher_replaces_previous(
     connection_config: ConnectionConfig,
 ) -> None:
@@ -141,11 +114,6 @@ def test_set_action_dispatcher_replaces_previous(
     assert not first_called.is_set(), "First dispatcher was called but should not have been"
 
 
-# ===========================================================================
-# queue_action_update
-# ===========================================================================
-
-
 def test_queue_action_update_is_thread_safe(
     connection_config: ConnectionConfig,
 ) -> None:
@@ -161,11 +129,6 @@ def test_queue_action_update_is_thread_safe(
 
     assert len(worker._action_updates) == 50
     assert {u.external_id for u in worker._action_updates} == {f"act-{i}" for i in range(50)}
-
-
-# ===========================================================================
-# Dispatcher mechanics
-# ===========================================================================
 
 
 def test_dispatcher_called_on_separate_daemon_thread(
@@ -268,10 +231,7 @@ def test_dispatcher_not_invoked(
     pending_actions: list[dict] | None,
     connection_config: ConnectionConfig,
 ) -> None:
-    """Dispatcher is not invoked when pending_actions is absent or when no dispatcher is set.
-
-    Guards both halves of: if checkin_response.pending_actions and dispatcher is not None.
-    """
+    """Dispatcher is not invoked when pending_actions is absent or no dispatcher is registered."""
     worker = _make_worker(connection_config)
     fired = threading.Event()
 
@@ -290,10 +250,7 @@ def test_dispatcher_not_invoked(
 def test_dispatcher_exception_is_logged_not_silently_swallowed(
     connection_config: ConnectionConfig,
 ) -> None:
-    """An unhandled exception inside the dispatcher is logged, not silently swallowed.
-
-    Regression guard: daemon threads must not hide crashes.
-    """
+    """An unhandled exception inside the dispatcher is logged, not silently swallowed."""
     worker = _make_worker(connection_config)
 
     class _CapturingHandler(logging.Handler):
@@ -327,11 +284,6 @@ def test_dispatcher_exception_is_logged_not_silently_swallowed(
     assert any("action dispatcher" in r.getMessage().lower() for r in handler.records)
 
 
-# ===========================================================================
-# action_updates in the outgoing checkin body
-# ===========================================================================
-
-
 @pytest.mark.parametrize(
     "queued_updates,expect_updates_key",
     [
@@ -349,10 +301,7 @@ def test_action_updates_presence_in_checkin_body(
     checkin_bag: list,
     action_updates_bag: list,
 ) -> None:
-    """actionUpdates is present in the body when updates are queued, absent otherwise.
-
-    Also verifies the queue is drained (empty) after a successful flush.
-    """
+    """actionUpdates present when queued, absent otherwise; queue drained after flush."""
     requests_mock.real_http = True
     mock_checkin_with_actions(requests_mock)
 
@@ -382,33 +331,24 @@ def test_action_updates_sent_in_pre_startup_path(
     checkin_bag: list,
     action_updates_bag: list,
 ) -> None:
-    """action_updates flow through the pre-startup emergency path; task_updates do not.
-
-    The pre-startup branch runs when flush() is called before startup has been reported.
-    task_updates are suppressed (they require a running context), but action outcome
-    reports carry server-assigned IDs and should reach the server ASAP.
-    """
+    """action_updates flow through the pre-startup path; task_updates are suppressed."""
     requests_mock.real_http = True
     mock_checkin_with_actions(requests_mock)
 
     worker = _make_worker(connection_config)
     extractor = _make_extractor(connection_config, application_config, worker)
-    # _has_reported_startup stays False (pre-startup state)
     cancellation_token = CancellationToken()
 
-    # Pre-startup checkin only runs if there is at least one non-task error;
-    # without it report_checkin returns early before calling try_write_checkin.
+    # pre-startup path only fires when at least one non-task error exists
     Error(level=ErrorLevel.warning, description="pre-startup error", details=None, task_name=None, extractor=extractor)
 
-    worker.report_task_start("some-task")  # task update — should be suppressed
+    worker.report_task_start("some-task")
     worker.queue_action_update(ActionUpdate(external_id="act-pre", status=ActionStatus.succeeded))
     worker.flush(cancellation_token)
 
     assert len(checkin_bag) == 1
-    # action_updates go out even before startup is reported
     assert "actionUpdates" in checkin_bag[0]
     assert action_updates_bag[0]["externalId"] == "act-pre"
-    # task_updates are explicitly suppressed in the pre-startup path
     assert "taskEvents" not in checkin_bag[0]
 
 
@@ -440,11 +380,6 @@ def test_action_updates_capped_at_100_per_checkin(
     worker.flush(cancellation_token)  # second flush: sends remaining 10
 
     assert len(action_updates_bag) == total
-
-
-# ===========================================================================
-# Failure / requeue
-# ===========================================================================
 
 
 def test_action_updates_requeue_order_preserved_across_retry(
