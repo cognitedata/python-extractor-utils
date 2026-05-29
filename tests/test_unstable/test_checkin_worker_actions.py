@@ -1,9 +1,15 @@
-"""Tests for CheckinWorker action dispatch (Task 5).
+"""Tests for CheckinWorker action dispatch.
 
 Follows the same patterns as test_checkin_worker.py:
   - requests_mock + gzip-decoded body inspection
   - connection_config / checkin_bag / mock_startup_request fixtures
   - Thread + join + cancellation_token pattern
+
+Two testing levels are used intentionally:
+  - Direct calls to _handle_checkin_response: unit-level, tests dispatch logic in
+    isolation without any HTTP machinery.
+  - Full requests_mock path (flush → POST → response): integration-level, tests that
+    the complete checkin cycle correctly wires up the dispatcher and action_updates.
 """
 
 import gzip
@@ -13,17 +19,16 @@ import threading
 from collections.abc import Callable, Generator
 from datetime import datetime, timezone
 from multiprocessing import Event, Queue
-from threading import Thread
 from typing import Any
 
 import pytest
-import requests_mock as requests_mock_lib
+import requests_mock
 
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.unstable.configuration.models import ConnectionConfig
 from cognite.extractorutils.unstable.core._dto import Action, ActionStatus, ActionUpdate
 from cognite.extractorutils.unstable.core.base import FullConfig
-from cognite.extractorutils.unstable.core.checkin_worker import CheckinWorker
+from cognite.extractorutils.unstable.core.checkin_worker import MAX_ACTION_UPDATES_PER_CHECKIN, CheckinWorker
 from cognite.extractorutils.util import now
 from tests.test_unstable.conftest import TestConfig, TestExtractor
 
@@ -44,14 +49,14 @@ def mock_checkin_with_actions(
     connection_config: ConnectionConfig,
     checkin_bag: list,
     action_updates_bag: list,
-) -> Callable[[requests_mock_lib.Mocker, list[dict] | None, int], None]:
+) -> Callable[[requests_mock.Mocker, list[dict] | None, int], None]:
     """
     Like mock_checkin_request, but also captures actionUpdates and can embed
     pendingActions in the response JSON.
     """
 
     def mocker(
-        mock: requests_mock_lib.Mocker,
+        mock: requests_mock.Mocker,
         pending_actions: list[dict] | None = None,
         status_code: int = 200,
     ) -> None:
@@ -116,15 +121,23 @@ def _make_extractor(
 def test_set_action_dispatcher_replaces_previous(
     connection_config: ConnectionConfig,
 ) -> None:
-    """Calling set_action_dispatcher a second time replaces the first dispatcher."""
+    """Calling set_action_dispatcher a second time replaces the first: only the second fires."""
     worker = _make_worker(connection_config)
-    first = lambda actions: None  # noqa: E731
-    second = lambda actions: None  # noqa: E731
+    first_called = threading.Event()
+    second_called = threading.Event()
 
-    worker.set_action_dispatcher(first)
-    worker.set_action_dispatcher(second)
+    worker.set_action_dispatcher(lambda actions: first_called.set())
+    worker.set_action_dispatcher(lambda actions: second_called.set())
 
-    assert worker._action_dispatcher is second
+    worker._handle_checkin_response(
+        {
+            "externalId": connection_config.integration.external_id,
+            "pendingActions": [{"externalId": "act-1", "actionName": "do-thing", "status": "pending"}],
+        }
+    )
+
+    assert second_called.wait(timeout=2), "Second dispatcher was never called"
+    assert not first_called.is_set(), "First dispatcher was called but should not have been"
 
 
 # ===========================================================================
@@ -139,13 +152,14 @@ def test_queue_action_update_is_thread_safe(
     worker = _make_worker(connection_config)
     updates = [ActionUpdate(external_id=f"act-{i}", status=ActionStatus.succeeded) for i in range(50)]
 
-    threads = [Thread(target=worker.queue_action_update, args=(u,)) for u in updates]
+    threads = [threading.Thread(target=worker.queue_action_update, args=(u,)) for u in updates]
     for t in threads:
         t.start()
     for t in threads:
         t.join()
 
     assert len(worker._action_updates) == 50
+    assert {u.external_id for u in worker._action_updates} == {f"act-{i}" for i in range(50)}
 
 
 # ===========================================================================
@@ -156,8 +170,8 @@ def test_queue_action_update_is_thread_safe(
 def test_dispatcher_called_on_separate_daemon_thread(
     connection_config: ConnectionConfig,
     application_config: TestConfig,
-    requests_mock: requests_mock_lib.Mocker,
-    mock_startup_request: Callable[[requests_mock_lib.Mocker], None],
+    requests_mock: requests_mock.Mocker,
+    mock_startup_request: Callable[[requests_mock.Mocker], None],
     mock_checkin_with_actions: Callable,
 ) -> None:
     """Dispatcher is invoked on a daemon thread named 'ActionDispatcher', not the checkin thread."""
@@ -186,7 +200,7 @@ def test_dispatcher_called_on_separate_daemon_thread(
 
     worker.set_action_dispatcher(dispatcher)
 
-    process = Thread(
+    process = threading.Thread(
         target=worker.run_periodic_checkin,
         args=(cancellation_token, extractor._get_startup_request(), 5),
     )
@@ -202,9 +216,45 @@ def test_dispatcher_called_on_separate_daemon_thread(
     assert received[0].action_name == "do-thing"
 
 
+def test_dispatcher_called_from_startup_response(
+    connection_config: ConnectionConfig,
+    application_config: TestConfig,
+    requests_mock: requests_mock.Mocker,
+) -> None:
+    """Pending actions in a startup response are dispatched, not only checkin responses."""
+    requests_mock.real_http = True
+    requests_mock.register_uri(
+        method="POST",
+        url=f"{connection_config.base_url}/api/v1/projects/{connection_config.project}/integrations/startup",
+        json={
+            "externalId": connection_config.integration.external_id,
+            "lastConfigRevision": 1,
+            "pendingActions": [{"externalId": "startup-act-1", "actionName": "boot-action", "status": "pending"}],
+        },
+    )
+
+    worker = _make_worker(connection_config)
+    extractor = _make_extractor(connection_config, application_config, worker)
+
+    received: list[Action] = []
+    fired = threading.Event()
+
+    def dispatcher(actions: list[Action]) -> None:
+        received.extend(actions)
+        fired.set()
+
+    worker.set_action_dispatcher(dispatcher)
+    worker._report_startup(extractor._get_startup_request())
+
+    assert fired.wait(timeout=2), "Dispatcher was never called from startup response"
+    assert len(received) == 1
+    assert received[0].external_id == "startup-act-1"
+    assert received[0].action_name == "boot-action"
+
+
 def test_dispatcher_not_called_when_no_pending_actions(
     connection_config: ConnectionConfig,
-    requests_mock: requests_mock_lib.Mocker,
+    requests_mock: requests_mock.Mocker,
     mock_checkin_with_actions: Callable,
     checkin_bag: list,
 ) -> None:
@@ -242,6 +292,9 @@ def test_no_error_when_dispatcher_not_set_and_actions_present(
         }
     )
 
+    assert worker._action_updates == []
+    assert worker._action_dispatcher is None
+
 
 def test_dispatcher_receives_all_pending_actions(
     connection_config: ConnectionConfig,
@@ -277,7 +330,7 @@ def test_dispatcher_exception_is_logged_not_silently_swallowed(
 ) -> None:
     """An unhandled exception inside the dispatcher is logged, not silently swallowed.
 
-    Regression guard for the Gemini review comment: daemon threads must not hide crashes.
+    Regression guard: daemon threads must not hide crashes.
     """
     worker = _make_worker(connection_config)
 
@@ -295,7 +348,7 @@ def test_dispatcher_exception_is_logged_not_silently_swallowed(
     worker._logger.addHandler(handler)
     worker._logger.setLevel(logging.ERROR)
 
-    def bad_dispatcher(actions: list) -> None:
+    def bad_dispatcher(actions: list[Action]) -> None:
         raise RuntimeError("dispatcher crashed")
 
     worker.set_action_dispatcher(bad_dispatcher)
@@ -329,7 +382,7 @@ def test_action_updates_presence_in_checkin_body(
     queued_updates: list[ActionUpdate],
     expect_updates_key: bool,
     connection_config: ConnectionConfig,
-    requests_mock: requests_mock_lib.Mocker,
+    requests_mock: requests_mock.Mocker,
     mock_checkin_with_actions: Callable,
     checkin_bag: list,
     action_updates_bag: list,
@@ -359,6 +412,36 @@ def test_action_updates_presence_in_checkin_body(
         assert action_updates_bag[0]["status"] == "succeeded"
 
 
+def test_action_updates_capped_at_100_per_checkin(
+    connection_config: ConnectionConfig,
+    requests_mock: requests_mock.Mocker,
+    mock_checkin_with_actions: Callable,
+    checkin_bag: list,
+    action_updates_bag: list,
+) -> None:
+    """At most MAX_ACTION_UPDATES_PER_CHECKIN updates go out per flush; excess carries to the next."""
+    requests_mock.real_http = True
+    mock_checkin_with_actions(requests_mock)
+
+    worker = _make_worker(connection_config)
+    worker._has_reported_startup = True
+    cancellation_token = CancellationToken()
+
+    overflow = 10
+    total = MAX_ACTION_UPDATES_PER_CHECKIN + overflow
+    for i in range(total):
+        worker.queue_action_update(ActionUpdate(external_id=f"act-{i}", status=ActionStatus.succeeded))
+
+    worker.flush(cancellation_token)  # first flush: sends exactly 100
+
+    assert len(action_updates_bag) == MAX_ACTION_UPDATES_PER_CHECKIN
+    assert len(worker._action_updates) == overflow
+
+    worker.flush(cancellation_token)  # second flush: sends remaining 10
+
+    assert len(action_updates_bag) == total
+
+
 # ===========================================================================
 # Failure / requeue
 # ===========================================================================
@@ -366,7 +449,7 @@ def test_action_updates_presence_in_checkin_body(
 
 def test_action_updates_requeue_order_preserved_across_retry(
     connection_config: ConnectionConfig,
-    requests_mock: requests_mock_lib.Mocker,
+    requests_mock: requests_mock.Mocker,
     checkin_bag: list,
     action_updates_bag: list,
 ) -> None:

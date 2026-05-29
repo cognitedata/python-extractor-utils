@@ -40,6 +40,7 @@ from cognite.extractorutils.util import now
 
 DEFAULT_SLEEP_INTERVAL = STARTUP_BACKOFF_SECONDS = 30.0
 MAX_ERRORS_PER_CHECKIN = MAX_TASK_UPDATES_PER_CHECKIN = 1000
+MAX_ACTION_UPDATES_PER_CHECKIN = 100
 rng = SystemRandom()
 
 
@@ -130,6 +131,9 @@ class CheckinWorker:
             dispatcher (Callable[[list[Action]], None]): A callback invoked on a daemon thread
                                                          when the server returns pending_actions.
         """
+        # No lock needed: a single reference store is atomic under CPython's GIL.
+        # _handle_checkin_response snapshots self._action_dispatcher into a local variable
+        # before use, so a concurrent replacement is safe.
         self._action_dispatcher = dispatcher
 
     def queue_action_update(self, update: ActionUpdate) -> None:
@@ -301,6 +305,8 @@ class CheckinWorker:
                 for error in new_errors:
                     del self._errors[error.external_id]
                 task_updates: list[TaskUpdate] = []
+                # action_updates are not suppressed here: outcome reports should reach
+                # the server as soon as possible regardless of startup state.
             else:
                 new_errors = list(self._errors.values())
                 self._errors.clear()
@@ -376,8 +382,12 @@ class CheckinWorker:
         task_updates(list[TaskUpdate]): The task updates to write.
         """
         with self._lock:
-            action_updates = self._action_updates
-            self._action_updates = []
+            if len(self._action_updates) > MAX_ACTION_UPDATES_PER_CHECKIN:
+                action_updates = self._action_updates[:MAX_ACTION_UPDATES_PER_CHECKIN]
+                self._action_updates = self._action_updates[MAX_ACTION_UPDATES_PER_CHECKIN:]
+            else:
+                action_updates = self._action_updates
+                self._action_updates = []
 
         checkin_request = CheckinRequest(
             external_id=self._integration,
