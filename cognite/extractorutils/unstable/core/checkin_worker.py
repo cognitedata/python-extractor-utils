@@ -252,14 +252,15 @@ class CheckinWorker:
                     self._on_revision_change(checkin_response.last_config_revision)
                 self._active_revision = checkin_response.last_config_revision
 
-        if checkin_response.pending_actions and self._action_dispatcher is not None:
+        dispatcher = self._action_dispatcher
+        if checkin_response.pending_actions and dispatcher is not None:
             # Each checkin tick may spawn its own ActionDispatcher thread. Overlapping
             # dispatches are intentional: the checkin interval is much longer than a
             # typical dispatch, and actions carry server-assigned external IDs so
             # duplicate delivery is handled by the caller.
             Thread(
                 target=_safe_dispatch,
-                args=(self._action_dispatcher, checkin_response.pending_actions, self._logger),
+                args=(dispatcher, checkin_response.pending_actions, self._logger),
                 name="ActionDispatcher",
                 daemon=True,
             ).start()
@@ -375,8 +376,8 @@ class CheckinWorker:
         task_updates(list[TaskUpdate]): The task updates to write.
         """
         with self._lock:
-            action_updates = self._action_updates[:]
-            self._action_updates.clear()
+            action_updates = self._action_updates
+            self._action_updates = []
 
         checkin_request = CheckinRequest(
             external_id=self._integration,
@@ -454,7 +455,8 @@ class CheckinWorker:
                 if error.external_id not in self._errors:
                     self._errors[error.external_id] = error
             self._task_updates.extend(task_updates or [])
-            self._action_updates = (action_updates or []) + self._action_updates
+            if action_updates:
+                self._action_updates = action_updates + self._action_updates
 
     def _wrap_checkin_like_request(self, request: Callable[[], Response]) -> bool:
         exception_to_report: Exception | None = None

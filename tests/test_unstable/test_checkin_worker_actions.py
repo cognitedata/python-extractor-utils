@@ -317,14 +317,27 @@ def test_dispatcher_exception_is_logged_not_silently_swallowed(
 # ===========================================================================
 
 
-def test_action_updates_included_in_checkin_request(
+@pytest.mark.parametrize(
+    "queued_updates,expect_updates_key",
+    [
+        ([], False),
+        ([ActionUpdate(external_id="act-1", status=ActionStatus.succeeded)], True),
+    ],
+    ids=["no_updates_queued", "updates_queued"],
+)
+def test_action_updates_presence_in_checkin_body(
+    queued_updates: list[ActionUpdate],
+    expect_updates_key: bool,
     connection_config: ConnectionConfig,
     requests_mock: requests_mock_lib.Mocker,
     mock_checkin_with_actions: Callable,
     checkin_bag: list,
     action_updates_bag: list,
 ) -> None:
-    """Queued action updates appear in the next checkin body and are cleared after success."""
+    """actionUpdates is present in the body when updates are queued, absent otherwise.
+
+    Also verifies the queue is drained (empty) after a successful flush.
+    """
     requests_mock.real_http = True
     mock_checkin_with_actions(requests_mock)
 
@@ -332,35 +345,18 @@ def test_action_updates_included_in_checkin_request(
     worker._has_reported_startup = True
     cancellation_token = CancellationToken()
 
-    worker.queue_action_update(ActionUpdate(external_id="act-1", status=ActionStatus.succeeded))
+    for update in queued_updates:
+        worker.queue_action_update(update)
     worker.flush(cancellation_token)
 
     assert len(checkin_bag) == 1
-    assert "actionUpdates" in checkin_bag[0]
-    assert len(action_updates_bag) == 1
-    assert action_updates_bag[0]["externalId"] == "act-1"
-    assert action_updates_bag[0]["status"] == "succeeded"
+    assert ("actionUpdates" in checkin_bag[0]) is expect_updates_key
     assert worker._action_updates == []
 
-
-def test_action_updates_absent_when_none_queued(
-    connection_config: ConnectionConfig,
-    requests_mock: requests_mock_lib.Mocker,
-    mock_checkin_with_actions: Callable,
-    checkin_bag: list,
-) -> None:
-    """The actionUpdates field is omitted entirely from the body when nothing is queued."""
-    requests_mock.real_http = True
-    mock_checkin_with_actions(requests_mock)
-
-    worker = _make_worker(connection_config)
-    worker._has_reported_startup = True
-    cancellation_token = CancellationToken()
-
-    worker.flush(cancellation_token)
-
-    assert len(checkin_bag) == 1
-    assert "actionUpdates" not in checkin_bag[0]
+    if expect_updates_key:
+        assert len(action_updates_bag) == 1
+        assert action_updates_bag[0]["externalId"] == "act-1"
+        assert action_updates_bag[0]["status"] == "succeeded"
 
 
 # ===========================================================================
