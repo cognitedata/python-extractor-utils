@@ -477,9 +477,8 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                     self.restart()
 
             finally:
-                # Record task end and clear any per-run cancellation token
+                # Record task end
                 self._checkin_worker.report_task_end(name=task.name, timestamp=now())
-                self._running_task_tokens.pop(task.name, None)
 
         task.target = run_task
         self._tasks.append(task)
@@ -502,7 +501,12 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         """
         child_token = self.cancellation_token.create_child_token()
         self._running_task_tokens[task.name] = child_token
-        task.target(TaskContext(task=task, extractor=self, cancellation_token=child_token))
+        try:
+            task.target(TaskContext(task=task, extractor=self, cancellation_token=child_token))
+        finally:
+            # Only remove our token; a concurrent run may have already replaced it
+            if self._running_task_tokens.get(task.name) is child_token:
+                self._running_task_tokens.pop(task.name, None)
 
     def start(self) -> None:
         """

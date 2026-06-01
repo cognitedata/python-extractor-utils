@@ -72,6 +72,18 @@ def test_continuous_and_startup_tasks_do_not_produce_available_actions() -> None
     assert _startup_request(extractor).available_actions is None
 
 
+def test_scheduled_and_custom_actions_combined_ordering() -> None:
+    extractor = _make_extractor()
+    extractor.add_task(ScheduledTask.from_interval(interval="1h", name="sync", target=lambda _: None))
+    extractor.add_action(CustomAction(name="flush", target=lambda _: None))
+    req = _startup_request(extractor)
+    assert req.available_actions is not None
+    assert len(req.available_actions) == 3
+    # Scheduled task entries appear before custom actions
+    names = [a.name for a in req.available_actions]
+    assert names == ["Start sync", "Stop sync", "flush"]
+
+
 def test_custom_action_appears_with_correct_type_and_description() -> None:
     extractor = _make_extractor()
     extractor.add_action(CustomAction(name="flush cache", target=lambda _: None, description="Clears state"))
@@ -156,6 +168,25 @@ def test_token_removed_from_running_task_tokens_after_task_finishes(raises: bool
     done.wait(timeout=5)
     time.sleep(0.05)  # allow the finally block to execute after task body returns
     assert "the-task" not in extractor._running_task_tokens
+
+
+def test_token_cleanup_does_not_clobber_replacement_token() -> None:
+    extractor = _make_extractor()
+    done = Event()
+    replacement = extractor.cancellation_token.create_child_token()
+
+    def target(_: TaskContext) -> None:
+        # Simulate a subsequent invocation overwriting the entry before this run finishes
+        extractor._running_task_tokens["the-task"] = replacement
+        done.set()
+
+    extractor.add_task(ScheduledTask.from_interval(interval="1h", name="the-task", target=target))
+    extractor._scheduler.trigger("the-task")
+    done.wait(timeout=5)
+    time.sleep(0.05)  # allow _run_task_with_token's finally to run
+
+    # Identity check must preserve the replacement — the old blind pop would remove it
+    assert extractor._running_task_tokens.get("the-task") is replacement
 
 
 def test_scheduled_task_token_is_child_of_extractor_cancellation_token() -> None:
