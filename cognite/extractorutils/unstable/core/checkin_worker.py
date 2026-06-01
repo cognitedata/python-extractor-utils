@@ -13,7 +13,7 @@ import sys
 from collections.abc import Callable
 from logging import Logger
 from secrets import SystemRandom
-from threading import RLock
+from threading import RLock, Thread
 from time import sleep
 
 from cognite.client import CogniteClient
@@ -23,6 +23,8 @@ from requests import Response
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.unstable.configuration.models import ConfigRevision
 from cognite.extractorutils.unstable.core._dto import (
+    Action,
+    ActionUpdate,
     CheckinRequest,
     CheckinResponse,
     JSONType,
@@ -38,7 +40,19 @@ from cognite.extractorutils.util import now
 
 DEFAULT_SLEEP_INTERVAL = STARTUP_BACKOFF_SECONDS = 30.0
 MAX_ERRORS_PER_CHECKIN = MAX_TASK_UPDATES_PER_CHECKIN = 1000
+MAX_ACTION_UPDATES_PER_CHECKIN = 100
 rng = SystemRandom()
+
+
+def _safe_dispatch(
+    dispatcher: Callable[[list[Action]], None],
+    actions: list[Action],
+    logger: Logger,
+) -> None:
+    try:
+        dispatcher(actions)
+    except Exception:
+        logger.exception("Unhandled exception in action dispatcher")
 
 
 class CheckinWorker:
@@ -50,9 +64,6 @@ class CheckinWorker:
     1. Manage how we batch errors and task updates.
     2. Manage how we handle retries and backoff.
     """
-
-    _lock = RLock()
-    _flush_lock = RLock()
 
     def __init__(
         self,
@@ -85,6 +96,10 @@ class CheckinWorker:
         self._active_revision: ConfigRevision = "local"
         self._errors: dict[str, Error] = {}
         self._task_updates: list[TaskUpdate] = []
+        self._action_updates: list[ActionUpdate] = []
+        self._action_dispatcher: Callable[[list[Action]], None] | None = None
+        self._lock = RLock()
+        self._flush_lock = RLock()
 
     @property
     def active_revision(self) -> ConfigRevision:
@@ -107,6 +122,23 @@ class CheckinWorker:
         with self._lock:
             self._is_running = False
             self._has_reported_startup = False
+
+    def set_action_dispatcher(self, dispatcher: Callable[[list[Action]], None]) -> None:
+        """Register the callback invoked on a daemon thread when the server returns pending_actions."""
+        # No lock: GIL makes a single reference store atomic; _handle_checkin_response snapshots it locally.
+        self._action_dispatcher = dispatcher
+
+    def queue_action_update(self, update: ActionUpdate) -> None:
+        """
+        Queue an action update to be included in the next checkin request.
+
+        This method is thread-safe and may be called from action handler threads.
+
+        Arguments:
+            update (ActionUpdate): The action update to queue.
+        """
+        with self._lock:
+            self._action_updates.append(update)
 
     def set_on_revision_change_handler(self, on_revision_change: Callable[[int], None]) -> None:
         """
@@ -216,6 +248,16 @@ class CheckinWorker:
                     self._on_revision_change(checkin_response.last_config_revision)
                 self._active_revision = checkin_response.last_config_revision
 
+        dispatcher = self._action_dispatcher
+        if checkin_response.pending_actions and dispatcher is not None:
+            # Overlapping dispatches are intentional: interval >> dispatch time, and IDs are server-assigned.
+            Thread(
+                target=_safe_dispatch,
+                args=(dispatcher, checkin_response.pending_actions, self._logger),
+                name="ActionDispatcher",
+                daemon=True,
+            ).start()
+
     def flush(self, cancellation_token: CancellationToken) -> None:
         """
         Flush available check-ins.
@@ -225,9 +267,10 @@ class CheckinWorker:
         """
         with self._flush_lock:
             self._logger.debug(
-                "Going to report check-in with %d errors and %d task updates.",
+                "Going to report check-in with %d errors, %d task updates and %d action updates.",
                 len(self._errors),
                 len(self._task_updates),
+                len(self._action_updates),
             )
             self.report_checkin(cancellation_token)
 
@@ -251,6 +294,8 @@ class CheckinWorker:
                 for error in new_errors:
                     del self._errors[error.external_id]
                 task_updates: list[TaskUpdate] = []
+                # action_updates are not suppressed here: outcome reports should reach
+                # the server as soon as possible regardless of startup state.
             else:
                 new_errors = list(self._errors.values())
                 self._errors.clear()
@@ -325,10 +370,19 @@ class CheckinWorker:
         errors(list[Error]): The errors to write.
         task_updates(list[TaskUpdate]): The task updates to write.
         """
+        with self._lock:
+            if len(self._action_updates) > MAX_ACTION_UPDATES_PER_CHECKIN:
+                action_updates = self._action_updates[:MAX_ACTION_UPDATES_PER_CHECKIN]
+                self._action_updates = self._action_updates[MAX_ACTION_UPDATES_PER_CHECKIN:]
+            else:
+                action_updates = self._action_updates
+                self._action_updates = []
+
         checkin_request = CheckinRequest(
             external_id=self._integration,
             errors=list(map(DtoError.from_internal, errors)) if len(errors) > 0 else None,
             task_events=task_updates if len(task_updates) > 0 else None,
+            action_updates=action_updates or None,
         )
         should_requeue = self._wrap_checkin_like_request(
             lambda: self._cognite_client.post(
@@ -339,7 +393,7 @@ class CheckinWorker:
         )
 
         if should_requeue:
-            self._requeue_checkin(errors, checkin_request.task_events)
+            self._requeue_checkin(errors, checkin_request.task_events, action_updates)
 
     def report_error(self, error: Error) -> None:
         """
@@ -389,12 +443,19 @@ class CheckinWorker:
                 TaskUpdate(type="ended", name=name, timestamp=timestamp or (int(now() * 1000)), message=message)
             )
 
-    def _requeue_checkin(self, errors: list[Error] | None, task_updates: list[TaskUpdate] | None) -> None:
+    def _requeue_checkin(
+        self,
+        errors: list[Error] | None,
+        task_updates: list[TaskUpdate] | None,
+        action_updates: list[ActionUpdate] | None = None,
+    ) -> None:
         with self._lock:
             for error in errors or []:
                 if error.external_id not in self._errors:
                     self._errors[error.external_id] = error
             self._task_updates.extend(task_updates or [])
+            if action_updates:
+                self._action_updates = action_updates + self._action_updates
 
     def _wrap_checkin_like_request(self, request: Callable[[], Response]) -> bool:
         exception_to_report: Exception | None = None
