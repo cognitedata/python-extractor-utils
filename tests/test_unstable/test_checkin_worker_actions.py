@@ -350,6 +350,8 @@ def test_action_updates_sent_in_pre_startup_path(
     assert "actionUpdates" in checkin_bag[0]
     assert action_updates_bag[0]["externalId"] == "act-pre"
     assert "taskEvents" not in checkin_bag[0]
+    assert "errors" in checkin_bag[0]
+    assert checkin_bag[0]["errors"][0]["description"] == "pre-startup error"
 
 
 def test_action_updates_capped_at_100_per_checkin(
