@@ -131,6 +131,21 @@ def test_multiple_add_action_calls_accumulate_in_registration_order() -> None:
     assert [a.name for a in extractor._custom_actions] == ["a1", "a2", "a3"]
 
 
+def test_add_action_raises_on_duplicate_name() -> None:
+    extractor = _make_extractor()
+    extractor.add_action(CustomAction(name="ping", target=lambda _: None))
+    with pytest.raises(ValueError, match="ping"):
+        extractor.add_action(CustomAction(name="ping", target=lambda _: None))
+
+
+@pytest.mark.parametrize("conflicting_name", ["Start sync", "Stop sync"])
+def test_add_action_raises_on_conflict_with_scheduled_task_action_name(conflicting_name: str) -> None:
+    extractor = _make_extractor()
+    extractor.add_task(ScheduledTask.from_interval(interval="1h", name="sync", target=lambda _: None))
+    with pytest.raises(ValueError, match=conflicting_name):
+        extractor.add_action(CustomAction(name=conflicting_name, target=lambda _: None))
+
+
 # -- _running_task_tokens lifecycle --
 
 

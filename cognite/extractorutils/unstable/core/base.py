@@ -190,6 +190,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self._tasks: list[Task] = []
         self._custom_actions: list[CustomAction] = []
         self._running_task_tokens: dict[str, CancellationToken] = {}
+        self._running_task_tokens_lock = RLock()
         self._start_time: datetime
 
         self.metrics: BaseMetrics = self._load_metrics(config.metrics_class)
@@ -359,6 +360,17 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         Args:
             action: The custom action to register.
         """
+        if any(a.name == action.name for a in self._custom_actions):
+            raise ValueError(f"Custom action '{action.name}' is already registered.")
+
+        reserved_names = {
+            name for t in self._tasks if isinstance(t, ScheduledTask) for name in (f"Start {t.name}", f"Stop {t.name}")
+        }
+        if action.name in reserved_names:
+            raise ValueError(
+                f"Custom action name '{action.name}' conflicts with an auto-generated scheduled task action."
+            )
+
         self._custom_actions.append(action)
 
     def _set_runtime_message_queue(self, queue: Queue) -> None:
@@ -500,13 +512,14 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         future start_task action handler.
         """
         child_token = self.cancellation_token.create_child_token()
-        self._running_task_tokens[task.name] = child_token
+        with self._running_task_tokens_lock:
+            self._running_task_tokens[task.name] = child_token
         try:
             task.target(TaskContext(task=task, extractor=self, cancellation_token=child_token))
         finally:
-            # Only remove our token; a concurrent run may have already replaced it
-            if self._running_task_tokens.get(task.name) is child_token:
-                self._running_task_tokens.pop(task.name, None)
+            with self._running_task_tokens_lock:
+                if self._running_task_tokens.get(task.name) is child_token:
+                    self._running_task_tokens.pop(task.name, None)
 
     def start(self) -> None:
         """
