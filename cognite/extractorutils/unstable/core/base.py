@@ -85,6 +85,8 @@ from cognite.extractorutils.unstable.configuration.models import (
     create_state_store,
 )
 from cognite.extractorutils.unstable.core._dto import (
+    ActionType,
+    AvailableActionWrite,
     CogniteModel,
     ExtractorInfo,
     StartupRequest,
@@ -94,6 +96,7 @@ from cognite.extractorutils.unstable.core._dto import (
     Task as DtoTask,
 )
 from cognite.extractorutils.unstable.core._messaging import RuntimeMessage
+from cognite.extractorutils.unstable.core.actions import CustomAction
 from cognite.extractorutils.unstable.core.checkin_worker import CheckinWorker
 from cognite.extractorutils.unstable.core.errors import Error, ErrorLevel
 from cognite.extractorutils.unstable.core.logger import CogniteLogger, RobustFileHandler
@@ -106,6 +109,7 @@ __all__ = [
     "CogniteModel",
     "ConfigRevision",
     "ConfigType",
+    "CustomAction",
     "Extractor",
 ]
 
@@ -184,6 +188,9 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self._scheduler = TaskScheduler(self.cancellation_token.create_child_token())
 
         self._tasks: list[Task] = []
+        self._custom_actions: list[CustomAction] = []
+        self._running_task_tokens: dict[str, CancellationToken] = {}
+        self._running_task_tokens_lock = RLock()
         self._start_time: datetime
 
         self.metrics: BaseMetrics = self._load_metrics(config.metrics_class)
@@ -195,6 +202,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         )
 
         self.__init_tasks__()
+        self.__init_actions__()
 
     def _setup_cancellation_watcher(self, cancel_event: MpEvent) -> None:
         """Starts a daemon thread to watch the inter-process event."""
@@ -335,6 +343,36 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         """
         pass
 
+    def __init_actions__(self) -> None:
+        """
+        This method should be overridden by subclasses to register custom actions.
+
+        It is called automatically after ``__init_tasks__`` during initialization.
+
+        Subclasses should call ``self.add_action(...)`` to register custom actions.
+        """
+        pass
+
+    def add_action(self, action: CustomAction) -> None:
+        """
+        Register a custom action that Odin can invoke on this extractor.
+
+        Args:
+            action: The custom action to register.
+        """
+        if any(a.name == action.name for a in self._custom_actions):
+            raise ValueError(f"Custom action '{action.name}' is already registered.")
+
+        reserved_names = {
+            name for t in self._tasks if isinstance(t, ScheduledTask) for name in (f"Start {t.name}", f"Stop {t.name}")
+        }
+        if action.name in reserved_names:
+            raise ValueError(
+                f"Custom action name '{action.name}' conflicts with an auto-generated scheduled task action."
+            )
+
+        self._custom_actions.append(action)
+
     def _set_runtime_message_queue(self, queue: Queue) -> None:
         self._runtime_messages = queue
 
@@ -343,6 +381,22 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self._setup_cancellation_watcher(cancel_event)
 
     def _get_startup_request(self) -> StartupRequest:
+        available_actions: list[AvailableActionWrite] = []
+
+        for t in self._tasks:
+            if isinstance(t, ScheduledTask):
+                available_actions.append(
+                    AvailableActionWrite(name=f"Start {t.name}", type=ActionType.start_task, task=t.name)
+                )
+                available_actions.append(
+                    AvailableActionWrite(name=f"Stop {t.name}", type=ActionType.stop_task, task=t.name)
+                )
+
+        available_actions.extend(
+            AvailableActionWrite(name=a.name, type=ActionType.custom, description=a.description)
+            for a in self._custom_actions
+        )
+
         return StartupRequest(
             external_id=self.connection_config.integration.external_id,
             active_config_revision=self.current_config_revision,
@@ -358,6 +412,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
             ]
             if len(self._tasks) > 0
             else None,
+            available_actions=available_actions or None,
             timestamp=int(self._start_time.timestamp() * 1000),
         )
 
@@ -445,14 +500,26 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                 self._scheduler.schedule_task(
                     name=t.name,
                     schedule=t.schedule,
-                    task=lambda: t.target(
-                        TaskContext(
-                            task=task,
-                            extractor=self,
-                            cancellation_token=self.cancellation_token.create_child_token(),
-                        )
-                    ),
+                    task=lambda: self._run_task_with_token(t),
                 )
+
+    def _run_task_with_token(self, task: ScheduledTask) -> None:
+        """
+        Create a fresh child cancellation token for a scheduled task run.
+
+        Stores the token in ``_running_task_tokens`` for external cancellation (e.g. a
+        stop_task action), then executes the task. Called by both the scheduler and any
+        future start_task action handler.
+        """
+        child_token = self.cancellation_token.create_child_token()
+        with self._running_task_tokens_lock:
+            self._running_task_tokens[task.name] = child_token
+        try:
+            task.target(TaskContext(task=task, extractor=self, cancellation_token=child_token))
+        finally:
+            with self._running_task_tokens_lock:
+                if self._running_task_tokens.get(task.name) is child_token:
+                    self._running_task_tokens.pop(task.name, None)
 
     def start(self) -> None:
         """
