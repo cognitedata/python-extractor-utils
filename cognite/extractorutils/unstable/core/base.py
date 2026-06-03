@@ -516,9 +516,6 @@ class Extractor(Generic[ConfigType], CogniteLogger):
             self._running_task_tokens[task.name] = child_token
         try:
             task.target(TaskContext(task=task, extractor=self, cancellation_token=child_token))
-        except Exception:
-            self._logger.exception(f"Task '{task.name}' raised an unhandled exception")
-            raise
         finally:
             with self._running_task_tokens_lock:
                 if self._running_task_tokens.get(task.name) is child_token:
