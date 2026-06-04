@@ -85,7 +85,10 @@ from cognite.extractorutils.unstable.configuration.models import (
     create_state_store,
 )
 from cognite.extractorutils.unstable.core._dto import (
+    Action,
+    ActionStatus,
     ActionType,
+    ActionUpdate,
     AvailableActionWrite,
     CogniteModel,
     ExtractorInfo,
@@ -96,7 +99,7 @@ from cognite.extractorutils.unstable.core._dto import (
     Task as DtoTask,
 )
 from cognite.extractorutils.unstable.core._messaging import RuntimeMessage
-from cognite.extractorutils.unstable.core.actions import CustomAction
+from cognite.extractorutils.unstable.core.actions import ActionContext, CustomAction
 from cognite.extractorutils.unstable.core.checkin_worker import CheckinWorker
 from cognite.extractorutils.unstable.core.errors import Error, ErrorLevel
 from cognite.extractorutils.unstable.core.logger import CogniteLogger, RobustFileHandler
@@ -524,6 +527,136 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                 if self._running_task_tokens.get(task.name) is child_token:
                     self._running_task_tokens.pop(task.name, None)
 
+    def _handle_actions(self, actions: list[Action]) -> None:
+        for action in actions:
+            Thread(
+                target=self._dispatch_single_action,
+                args=(action,),
+                name=f"Action-{action.external_id}",
+                daemon=True,
+            ).start()
+
+    def _dispatch_single_action(self, action: Action) -> None:
+        scheduled_start_names = {f"Start {t.name}" for t in self._tasks if isinstance(t, ScheduledTask)}
+        scheduled_stop_names = {f"Stop {t.name}" for t in self._tasks if isinstance(t, ScheduledTask)}
+        custom_names = {a.name for a in self._custom_actions}
+
+        if action.action_name in scheduled_start_names:
+            self._handle_start_task_action(action)
+        elif action.action_name in scheduled_stop_names:
+            self._handle_stop_task_action(action)
+        elif action.action_name in custom_names:
+            self._handle_custom_action(action)
+        else:
+            self._checkin_worker.queue_action_update(
+                ActionUpdate(
+                    external_id=action.external_id,
+                    status=ActionStatus.failed,
+                    result_message=f"No action named '{action.action_name}' registered",
+                )
+            )
+
+    def _handle_start_task_action(self, action: Action) -> None:
+        task_name = action.action_name[len("Start ") :]
+        task = next(
+            (t for t in self._tasks if t.name == task_name and isinstance(t, ScheduledTask)),
+            None,
+        )
+        if task is None:
+            self._checkin_worker.queue_action_update(
+                ActionUpdate(
+                    external_id=action.external_id,
+                    status=ActionStatus.failed,
+                    result_message=f"No scheduled task named '{task_name}' found",
+                )
+            )
+            return
+
+        with self._running_task_tokens_lock:
+            if task_name in self._running_task_tokens:
+                self._checkin_worker.queue_action_update(
+                    ActionUpdate(
+                        external_id=action.external_id,
+                        status=ActionStatus.failed,
+                        result_message=f"Task '{task_name}' is already running",
+                    )
+                )
+                return
+
+        self._checkin_worker.queue_action_update(
+            ActionUpdate(external_id=action.external_id, status=ActionStatus.running)
+        )
+
+        try:
+            self._run_task_with_token(task)
+            self._checkin_worker.queue_action_update(
+                ActionUpdate(external_id=action.external_id, status=ActionStatus.succeeded)
+            )
+        except Exception as e:
+            self._checkin_worker.queue_action_update(
+                ActionUpdate(
+                    external_id=action.external_id,
+                    status=ActionStatus.failed,
+                    result_message=str(e),
+                )
+            )
+
+    def _handle_stop_task_action(self, action: Action) -> None:
+        task_name = action.action_name[len("Stop ") :]
+        with self._running_task_tokens_lock:
+            token = self._running_task_tokens.get(task_name)
+        if token is None:
+            self._checkin_worker.queue_action_update(
+                ActionUpdate(
+                    external_id=action.external_id,
+                    status=ActionStatus.failed,
+                    result_message=f"Task '{task_name}' is not currently running",
+                )
+            )
+            return
+
+        token.cancel()
+        self._checkin_worker.queue_action_update(
+            ActionUpdate(external_id=action.external_id, status=ActionStatus.canceled)
+        )
+
+    def _handle_custom_action(self, action: Action) -> None:
+        custom = next((a for a in self._custom_actions if a.name == action.action_name), None)
+        if custom is None:
+            self._checkin_worker.queue_action_update(
+                ActionUpdate(
+                    external_id=action.external_id,
+                    status=ActionStatus.failed,
+                    result_message=f"No custom action named '{action.action_name}' registered",
+                )
+            )
+            return
+
+        self._checkin_worker.queue_action_update(
+            ActionUpdate(external_id=action.external_id, status=ActionStatus.running)
+        )
+
+        ctx = ActionContext(
+            action=custom,
+            extractor=self,
+            external_id=action.external_id,
+            call_metadata=action.call_metadata,
+        )
+
+        try:
+            custom.target(ctx)
+            self._checkin_worker.queue_action_update(
+                ActionUpdate(external_id=action.external_id, status=ActionStatus.succeeded)
+            )
+        except Exception as e:
+            self._checkin_worker.queue_action_update(
+                ActionUpdate(
+                    external_id=action.external_id,
+                    status=ActionStatus.failed,
+                    result_message=str(e),
+                )
+            )
+
     def start(self) -> None:
         """
         Start the extractor.
@@ -536,6 +669,8 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
         self._load_state_store()
         self.state_store.start()
+
+        self._checkin_worker.set_action_dispatcher(self._handle_actions)
 
         Thread(target=self._run_checkin, name="ExtractorCheckin", daemon=True).start()
         if self.metrics_push_manager:
