@@ -463,6 +463,9 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         Args:
             task: The task to add. It should be an instance of ``StartupTask``, ``ContinuousTask``, or ``ScheduledTask``
         """
+        if any(t.name == task.name for t in self._tasks):
+            raise ValueError(f"Task '{task.name}' is already registered.")
+
         # Store this for later, since we'll override it with the wrapped version
         target = task.target
 

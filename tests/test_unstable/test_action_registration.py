@@ -153,17 +153,20 @@ def test_token_present_in_running_task_tokens_during_execution() -> None:
     extractor = _make_extractor()
     token_present: list[bool] = []
     task_running = Event()
+    appended = Event()
     allow_finish = Event()
 
     def target(_: TaskContext) -> None:
         task_running.set()
         token_present.append("the-task" in extractor._running_task_tokens)
+        appended.set()
         allow_finish.wait(timeout=5)
 
     extractor.add_task(ScheduledTask.from_interval(interval="1h", name="the-task", target=target))
     extractor._scheduler.trigger("the-task")
     task_running.wait(timeout=5)
     allow_finish.set()
+    appended.wait(timeout=5)
 
     assert token_present == [True]
 
@@ -181,7 +184,9 @@ def test_token_removed_from_running_task_tokens_after_task_finishes(raises: bool
     extractor.add_task(ScheduledTask.from_interval(interval="1h", name="the-task", target=target))
     extractor._scheduler.trigger("the-task")
     done.wait(timeout=5)
-    time.sleep(0.05)  # allow the finally block to execute after task body returns
+    deadline = time.monotonic() + 5
+    while "the-task" in extractor._running_task_tokens and time.monotonic() < deadline:
+        time.sleep(0.005)
     assert "the-task" not in extractor._running_task_tokens
 
 
@@ -198,7 +203,9 @@ def test_token_cleanup_does_not_clobber_replacement_token() -> None:
     extractor.add_task(ScheduledTask.from_interval(interval="1h", name="the-task", target=target))
     extractor._scheduler.trigger("the-task")
     done.wait(timeout=5)
-    time.sleep(0.05)  # allow _run_task_with_token's finally to run
+    deadline = time.monotonic() + 5
+    while any(j.name == "the-task" for j in extractor._scheduler._running) and time.monotonic() < deadline:
+        time.sleep(0.005)
 
     # Identity check must preserve the replacement — the old blind pop would remove it
     assert extractor._running_task_tokens.get("the-task") is replacement
