@@ -161,7 +161,7 @@ def test_start_task_action_raises_reports_failed() -> None:
 
     original = extractor._run_task_with_token
 
-    def raise_on_call(task: ScheduledTask) -> None:
+    def raise_on_call(task: ScheduledTask, *args: object, **kwargs: object) -> None:
         raise RuntimeError("token failure")
 
     extractor._run_task_with_token = raise_on_call
@@ -322,10 +322,12 @@ def test_handle_actions_multiple_actions_run_concurrently() -> None:
     extractor.add_action(CustomAction(name="op-1", target=slow))
     extractor.add_action(CustomAction(name="op-2", target=slow))
 
-    extractor._handle_actions([
-        _make_action("act-1", "op-1"),
-        _make_action("act-2", "op-2"),
-    ])
+    extractor._handle_actions(
+        [
+            _make_action("act-1", "op-1"),
+            _make_action("act-2", "op-2"),
+        ]
+    )
 
     # Both must start before either finishes — proves concurrent execution
     assert a1_started.wait(timeout=5), "op-1 never started"

@@ -469,6 +469,17 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         if any(t.name == task.name for t in self._tasks):
             raise ValueError(f"Task '{task.name}' is already registered.")
 
+        if isinstance(task, ScheduledTask):
+            conflicting = next(
+                (a for a in self._custom_actions if a.name in (f"Start {task.name}", f"Stop {task.name}")),
+                None,
+            )
+            if conflicting:
+                raise ValueError(
+                    f"Scheduled task '{task.name}' auto-generated action name "
+                    f"conflicts with custom action '{conflicting.name}'."
+                )
+
         # Store this for later, since we'll override it with the wrapped version
         target = task.target
 
@@ -509,17 +520,22 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                     task=lambda: self._run_task_with_token(t),
                 )
 
-    def _run_task_with_token(self, task: ScheduledTask) -> None:
+    def _run_task_with_token(self, task: ScheduledTask, child_token: CancellationToken | None = None) -> None:
         """
         Create a fresh child cancellation token for a scheduled task run.
 
         Stores the token in ``_running_task_tokens`` for external cancellation (e.g. a
         stop_task action), then executes the task. Called by both the scheduler and any
         future start_task action handler.
+
+        If ``child_token`` is supplied (action dispatch path), the caller has already
+        registered it in ``_running_task_tokens`` atomically; this method skips the
+        registration step and goes straight to execution.
         """
-        child_token = self.cancellation_token.create_child_token()
-        with self._running_task_tokens_lock:
-            self._running_task_tokens[task.name] = child_token
+        if child_token is None:
+            child_token = self.cancellation_token.create_child_token()
+            with self._running_task_tokens_lock:
+                self._running_task_tokens[task.name] = child_token
         try:
             task.target(TaskContext(task=task, extractor=self, cancellation_token=child_token))
         finally:
@@ -572,6 +588,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
             )
             return
 
+        child_token = self.cancellation_token.create_child_token()
         with self._running_task_tokens_lock:
             if task_name in self._running_task_tokens:
                 self._checkin_worker.queue_action_update(
@@ -582,13 +599,14 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                     )
                 )
                 return
+            self._running_task_tokens[task_name] = child_token
 
         self._checkin_worker.queue_action_update(
             ActionUpdate(external_id=action.external_id, status=ActionStatus.running)
         )
 
         try:
-            self._run_task_with_token(task)
+            self._run_task_with_token(task, child_token)
             self._checkin_worker.queue_action_update(
                 ActionUpdate(external_id=action.external_id, status=ActionStatus.succeeded)
             )

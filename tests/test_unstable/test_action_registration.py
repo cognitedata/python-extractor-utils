@@ -146,6 +146,14 @@ def test_add_action_raises_on_conflict_with_scheduled_task_action_name(conflicti
         extractor.add_action(CustomAction(name=conflicting_name, target=lambda _: None))
 
 
+@pytest.mark.parametrize("conflicting_name", ["Start sync", "Stop sync"])
+def test_add_task_raises_on_conflict_with_existing_custom_action_name(conflicting_name: str) -> None:
+    extractor = _make_extractor()
+    extractor.add_action(CustomAction(name=conflicting_name, target=lambda _: None))
+    with pytest.raises(ValueError, match="sync"):
+        extractor.add_task(ScheduledTask.from_interval(interval="1h", name="sync", target=lambda _: None))
+
+
 # -- _running_task_tokens lifecycle --
 
 
