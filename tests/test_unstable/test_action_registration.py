@@ -29,8 +29,20 @@ def _startup_request(extractor: Extractor) -> StartupRequest:
     return extractor._get_startup_request()
 
 
-def test_no_scheduled_tasks_no_custom_actions_sends_available_actions_none() -> None:
+@pytest.mark.parametrize(
+    "extra_tasks",
+    [
+        pytest.param([], id="no_tasks"),
+        pytest.param(
+            [ContinuousTask(name="cont", target=lambda _: None), StartupTask(name="init", target=lambda _: None)],
+            id="non_scheduled_tasks",
+        ),
+    ],
+)
+def test_available_actions_none_without_scheduled_tasks(extra_tasks: list) -> None:
     extractor = _make_extractor()
+    for task in extra_tasks:
+        extractor.add_task(task)
     assert _startup_request(extractor).available_actions is None
 
 
@@ -59,13 +71,6 @@ def test_scheduled_task_action_entry_has_correct_type_and_task_ref(
     by_name = {a.name: a for a in _startup_request(extractor).available_actions}
     assert by_name[action_name].type == expected_type
     assert by_name[action_name].task == expected_task
-
-
-def test_continuous_and_startup_tasks_do_not_produce_available_actions() -> None:
-    extractor = _make_extractor()
-    extractor.add_task(ContinuousTask(name="cont", target=lambda _: None))
-    extractor.add_task(StartupTask(name="init", target=lambda _: None))
-    assert _startup_request(extractor).available_actions is None
 
 
 def test_scheduled_and_custom_actions_combined_ordering() -> None:
@@ -121,41 +126,36 @@ def test_add_action_raises_on_duplicate_name() -> None:
 
 
 @pytest.mark.parametrize("conflicting_name", ["Start sync", "Stop sync"])
-def test_add_action_raises_on_conflict_with_scheduled_task_action_name(conflicting_name: str) -> None:
-    extractor = _make_extractor()
-    extractor.add_task(ScheduledTask.from_interval(interval="1h", name="sync", target=lambda _: None))
+def test_action_name_conflict_is_bidirectional(conflicting_name: str) -> None:
+    ext = _make_extractor()
+    ext.add_task(ScheduledTask.from_interval(interval="1h", name="sync", target=lambda _: None))
     with pytest.raises(ValueError, match=conflicting_name):
-        extractor.add_action(CustomAction(name=conflicting_name, target=lambda _: None))
+        ext.add_action(CustomAction(name=conflicting_name, target=lambda _: None))
 
-
-@pytest.mark.parametrize("conflicting_name", ["Start sync", "Stop sync"])
-def test_add_task_raises_on_conflict_with_existing_custom_action_name(conflicting_name: str) -> None:
-    extractor = _make_extractor()
-    extractor.add_action(CustomAction(name=conflicting_name, target=lambda _: None))
+    ext2 = _make_extractor()
+    ext2.add_action(CustomAction(name=conflicting_name, target=lambda _: None))
     with pytest.raises(ValueError, match="sync"):
-        extractor.add_task(ScheduledTask.from_interval(interval="1h", name="sync", target=lambda _: None))
+        ext2.add_task(ScheduledTask.from_interval(interval="1h", name="sync", target=lambda _: None))
 
 
-def test_token_present_in_running_task_tokens_during_execution() -> None:
+def test_token_in_running_tokens_during_execution_is_child() -> None:
     extractor = _make_extractor()
-    token_present: list[bool] = []
-    task_running = Event()
-    appended = Event()
+    captured: list = []
+    done = Event()
     allow_finish = Event()
 
     def target(_: TaskContext) -> None:
-        task_running.set()
-        token_present.append("the-task" in extractor._running_task_tokens)
-        appended.set()
+        captured.append(extractor._running_task_tokens.get("the-task"))
+        done.set()
         allow_finish.wait(timeout=5)
 
     extractor.add_task(ScheduledTask.from_interval(interval="1h", name="the-task", target=target))
     extractor._scheduler.trigger("the-task")
-    task_running.wait(timeout=5)
+    done.wait(timeout=5)
     allow_finish.set()
-    appended.wait(timeout=5)
 
-    assert token_present == [True]
+    assert captured[0] is not None
+    assert captured[0]._parent is extractor.cancellation_token
 
 
 @pytest.mark.parametrize("raises", [False, True])
@@ -194,20 +194,3 @@ def test_token_cleanup_does_not_clobber_replacement_token() -> None:
         time.sleep(0.005)
 
     assert extractor._running_task_tokens.get("the-task") is replacement
-
-
-def test_scheduled_task_token_is_child_of_extractor_cancellation_token() -> None:
-    extractor = _make_extractor()
-    captured: list = []
-    done = Event()
-
-    def target(_: TaskContext) -> None:
-        captured.append(extractor._running_task_tokens.get("the-task"))
-        done.set()
-
-    extractor.add_task(ScheduledTask.from_interval(interval="1h", name="the-task", target=target))
-    extractor._scheduler.trigger("the-task")
-    done.wait(timeout=5)
-
-    assert len(captured) == 1 and captured[0] is not None
-    assert captured[0]._parent is extractor.cancellation_token

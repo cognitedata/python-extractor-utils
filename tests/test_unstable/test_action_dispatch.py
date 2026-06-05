@@ -1,6 +1,9 @@
 import threading
+from collections.abc import Callable
 from threading import Event
 from unittest.mock import MagicMock
+
+import pytest
 
 from cognite.extractorutils.unstable.core._dto import Action, ActionStatus, ActionUpdate
 from cognite.extractorutils.unstable.core.actions import ActionContext, CustomAction
@@ -39,26 +42,30 @@ def test_dispatch_unrecognised_action_name_reports_failed() -> None:
     assert "DoesNotExist" in (updates[0].result_message or "")
 
 
-def test_dispatch_routes_to_start_handler_for_registered_scheduled_task() -> None:
+@pytest.mark.parametrize(
+    "register,action_name,expected_status",
+    [
+        pytest.param(
+            lambda ext: ext.add_task(ScheduledTask.from_interval(interval="1h", name="sync", target=lambda _: None)),
+            "Start sync",
+            ActionStatus.running,
+            id="start_task",
+        ),
+        pytest.param(
+            lambda ext: ext.add_action(CustomAction(name="flush", target=lambda ctx: None)),
+            "flush",
+            ActionStatus.succeeded,
+            id="custom_action",
+        ),
+    ],
+)
+def test_dispatch_routes_to_correct_handler(
+    register: Callable, action_name: str, expected_status: ActionStatus
+) -> None:
     extractor = _make_extractor()
-    extractor.add_task(ScheduledTask.from_interval(interval="1h", name="sync", target=lambda _: None))
-
-    extractor._dispatch_single_action(_make_action("act-1", "Start sync"))
-
-    updates = _queued_updates(extractor)
-    assert any(u.status == ActionStatus.running for u in updates)
-
-
-def test_dispatch_routes_to_custom_handler_for_registered_custom_action() -> None:
-    extractor = _make_extractor()
-    invoked = []
-    extractor.add_action(CustomAction(name="flush", target=lambda ctx: invoked.append(True)))
-
-    extractor._dispatch_single_action(_make_action("act-1", "flush"))
-
-    assert invoked == [True]
-    updates = _queued_updates(extractor)
-    assert any(u.status == ActionStatus.succeeded for u in updates)
+    register(extractor)
+    extractor._dispatch_single_action(_make_action("act-1", action_name))
+    assert any(u.status == expected_status for u in _queued_updates(extractor))
 
 
 def test_start_task_action_already_running_reports_failed() -> None:
@@ -137,32 +144,30 @@ def test_stop_task_action_cancels_child_token_and_reports_canceled() -> None:
     allow_exit.set()
 
 
-def test_custom_action_succeeds_reports_running_then_succeeded() -> None:
-    extractor = _make_extractor()
-    extractor.add_action(CustomAction(name="ping", target=lambda ctx: None))
+@pytest.mark.parametrize(
+    "raises,expected_final,expected_message",
+    [
+        (False, ActionStatus.succeeded, None),
+        (True, ActionStatus.failed, "something went wrong"),
+    ],
+)
+def test_custom_action_status_lifecycle(
+    raises: bool, expected_final: ActionStatus, expected_message: str | None
+) -> None:
+    def target(ctx: ActionContext) -> None:
+        if raises:
+            raise ValueError("something went wrong")
 
-    extractor._dispatch_single_action(_make_action("act-ping", "ping"))
+    extractor = _make_extractor()
+    extractor.add_action(CustomAction(name="act", target=target))
+    extractor._dispatch_single_action(_make_action("act-1", "act"))
 
     updates = _queued_updates(extractor)
-    statuses = [u.status for u in updates if u.external_id == "act-ping"]
-    assert statuses == [ActionStatus.running, ActionStatus.succeeded]
-
-
-def test_custom_action_raises_reports_failed_with_message() -> None:
-    def bad_action(ctx: ActionContext) -> None:
-        raise ValueError("something went wrong")
-
-    extractor = _make_extractor()
-    extractor.add_action(CustomAction(name="bad", target=bad_action))
-
-    extractor._dispatch_single_action(_make_action("act-bad", "bad"))
-
-    updates = _queued_updates(extractor)
-    statuses = [u.status for u in updates if u.external_id == "act-bad"]
-    assert ActionStatus.running in statuses
-    assert ActionStatus.failed in statuses
-    failed = next(u for u in updates if u.status == ActionStatus.failed)
-    assert "something went wrong" in (failed.result_message or "")
+    statuses = [u.status for u in updates if u.external_id == "act-1"]
+    assert statuses[0] == ActionStatus.running
+    assert statuses[-1] == expected_final
+    if expected_message:
+        assert expected_message in (updates[-1].result_message or "")
 
 
 def test_custom_action_receives_call_metadata_in_context() -> None:
