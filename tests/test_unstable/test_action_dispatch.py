@@ -1,11 +1,3 @@
-"""Tests for Extractor action dispatch wiring (Task 6).
-
-Covers _handle_actions, _dispatch_single_action, and the three handler methods,
-plus the start() wiring that registers the dispatcher with CheckinWorker.
-
-All tests use a MagicMock checkin worker to avoid real API calls.
-"""
-
 import threading
 from threading import Event
 from unittest.mock import MagicMock
@@ -16,10 +8,6 @@ from cognite.extractorutils.unstable.core.base import FullConfig
 from cognite.extractorutils.unstable.core.tasks import ScheduledTask, TaskContext
 
 from .conftest import TestConfig, TestExtractor
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
 
 
 def _make_extractor(extractor_cls: type[TestExtractor] = TestExtractor) -> TestExtractor:
@@ -34,7 +22,6 @@ def _make_extractor(extractor_cls: type[TestExtractor] = TestExtractor) -> TestE
 
 
 def _queued_updates(extractor: TestExtractor) -> list[ActionUpdate]:
-    """Return all ActionUpdate objects passed to queue_action_update, in call order."""
     return [c[0][0] for c in extractor._checkin_worker.queue_action_update.call_args_list]
 
 
@@ -42,13 +29,7 @@ def _make_action(external_id: str, action_name: str) -> Action:
     return Action(external_id=external_id, action_name=action_name, status=ActionStatus.pending)
 
 
-# ---------------------------------------------------------------------------
-# _dispatch_single_action - routing & unknown-action handling
-# ---------------------------------------------------------------------------
-
-
 def test_dispatch_unrecognised_action_name_reports_failed() -> None:
-    """An action name that matches nothing registered is reported as failed with a descriptive message."""
     extractor = _make_extractor()
     extractor._dispatch_single_action(_make_action("act-1", "DoesNotExist"))
 
@@ -59,19 +40,16 @@ def test_dispatch_unrecognised_action_name_reports_failed() -> None:
 
 
 def test_dispatch_routes_to_start_handler_for_registered_scheduled_task() -> None:
-    """'Start <task>' where <task> is a ScheduledTask routes to the start handler."""
     extractor = _make_extractor()
     extractor.add_task(ScheduledTask.from_interval(interval="1h", name="sync", target=lambda _: None))
 
     extractor._dispatch_single_action(_make_action("act-1", "Start sync"))
 
     updates = _queued_updates(extractor)
-    # running status means the start handler was reached (not the "unrecognised" path)
     assert any(u.status == ActionStatus.running for u in updates)
 
 
 def test_dispatch_routes_to_custom_handler_for_registered_custom_action() -> None:
-    """A registered custom action name routes to the custom handler."""
     extractor = _make_extractor()
     invoked = []
     extractor.add_action(CustomAction(name="flush", target=lambda ctx: invoked.append(True)))
@@ -83,13 +61,7 @@ def test_dispatch_routes_to_custom_handler_for_registered_custom_action() -> Non
     assert any(u.status == ActionStatus.succeeded for u in updates)
 
 
-# ---------------------------------------------------------------------------
-# _handle_start_task_action
-# ---------------------------------------------------------------------------
-
-
 def test_start_task_action_already_running_reports_failed() -> None:
-    """If the task is already in _running_task_tokens, the action fails without starting a second instance."""
     extractor = _make_extractor()
     task_started = Event()
     allow_finish = Event()
@@ -102,7 +74,6 @@ def test_start_task_action_already_running_reports_failed() -> None:
     extractor._scheduler.trigger("worker")
     task_started.wait(timeout=5)
 
-    # Task is now running; attempt a second start via action
     extractor._dispatch_single_action(_make_action("act-dup", "Start worker"))
 
     allow_finish.set()
@@ -112,7 +83,6 @@ def test_start_task_action_already_running_reports_failed() -> None:
 
 
 def test_start_task_action_valid_idle_task_reports_running_then_succeeded() -> None:
-    """A valid, idle ScheduledTask reports running before execution and succeeded after."""
     extractor = _make_extractor()
     ran = []
 
@@ -120,7 +90,6 @@ def test_start_task_action_valid_idle_task_reports_running_then_succeeded() -> N
         ran.append(True)
 
     extractor.add_task(ScheduledTask.from_interval(interval="1h", name="quick", target=quick))
-    # _dispatch_single_action is synchronous for start_task (blocks until task completes)
     extractor._dispatch_single_action(_make_action("act-1", "Start quick"))
 
     assert ran == [True]
@@ -131,13 +100,7 @@ def test_start_task_action_valid_idle_task_reports_running_then_succeeded() -> N
     assert statuses.index(ActionStatus.running) < statuses.index(ActionStatus.succeeded)
 
 
-# ---------------------------------------------------------------------------
-# _handle_stop_task_action
-# ---------------------------------------------------------------------------
-
-
 def test_stop_task_action_not_running_reports_failed() -> None:
-    """Stopping a task that is not in _running_task_tokens reports failed."""
     extractor = _make_extractor()
     extractor.add_task(ScheduledTask.from_interval(interval="1h", name="worker", target=lambda _: None))
 
@@ -150,7 +113,6 @@ def test_stop_task_action_not_running_reports_failed() -> None:
 
 
 def test_stop_task_action_cancels_child_token_and_reports_canceled() -> None:
-    """Stopping a running task cancels its child token and reports ActionStatus.canceled."""
     extractor = _make_extractor()
     task_started = Event()
     allow_exit = Event()
@@ -163,7 +125,6 @@ def test_stop_task_action_cancels_child_token_and_reports_canceled() -> None:
     extractor._scheduler.trigger("worker")
     task_started.wait(timeout=5)
 
-    # Snapshot the token before issuing stop
     with extractor._running_task_tokens_lock:
         token = extractor._running_task_tokens.get("worker")
 
@@ -176,13 +137,7 @@ def test_stop_task_action_cancels_child_token_and_reports_canceled() -> None:
     allow_exit.set()
 
 
-# ---------------------------------------------------------------------------
-# _handle_custom_action
-# ---------------------------------------------------------------------------
-
-
 def test_custom_action_succeeds_reports_running_then_succeeded() -> None:
-    """A custom action that completes without exception is reported as running → succeeded."""
     extractor = _make_extractor()
     extractor.add_action(CustomAction(name="ping", target=lambda ctx: None))
 
@@ -194,8 +149,6 @@ def test_custom_action_succeeds_reports_running_then_succeeded() -> None:
 
 
 def test_custom_action_raises_reports_failed_with_message() -> None:
-    """A custom action that raises is reported as failed with the exception message."""
-
     def bad_action(ctx: ActionContext) -> None:
         raise ValueError("something went wrong")
 
@@ -213,7 +166,6 @@ def test_custom_action_raises_reports_failed_with_message() -> None:
 
 
 def test_custom_action_receives_call_metadata_in_context() -> None:
-    """call_metadata from the server-side Action is forwarded to ActionContext."""
     received_metadata: list[dict | None] = []
 
     def capture(ctx: ActionContext) -> None:
@@ -233,13 +185,7 @@ def test_custom_action_receives_call_metadata_in_context() -> None:
     assert received_metadata == [{"key": "value"}]
 
 
-# ---------------------------------------------------------------------------
-# _handle_actions - threading
-# ---------------------------------------------------------------------------
-
-
 def test_handle_actions_spawns_daemon_thread_named_after_external_id() -> None:
-    """Each action in _handle_actions runs on a daemon thread named 'Action-<external_id>'."""
     extractor = _make_extractor()
     captured: dict = {}
     done = Event()
@@ -259,7 +205,6 @@ def test_handle_actions_spawns_daemon_thread_named_after_external_id() -> None:
 
 
 def test_handle_actions_multiple_actions_run_concurrently() -> None:
-    """Two actions are dispatched to separate threads; they overlap in time."""
     extractor = _make_extractor()
     a1_started = Event()
     a2_started = Event()
@@ -282,26 +227,18 @@ def test_handle_actions_multiple_actions_run_concurrently() -> None:
         ]
     )
 
-    # Both must start before either finishes — proves concurrent execution
     assert a1_started.wait(timeout=5), "op-1 never started"
     assert a2_started.wait(timeout=5), "op-2 never started"
 
     release.set()
 
 
-# ---------------------------------------------------------------------------
-# start() wiring
-# ---------------------------------------------------------------------------
-
-
 def test_start_registers_handle_actions_as_dispatcher() -> None:
-    """start() calls set_action_dispatcher exactly once with _handle_actions."""
     extractor = _make_extractor()
     with extractor:
         pass
 
     extractor._checkin_worker.set_action_dispatcher.assert_called_once()
     registered = extractor._checkin_worker.set_action_dispatcher.call_args[0][0]
-    # Verify the registered callable IS the bound _handle_actions method
     assert registered.__func__.__name__ == "_handle_actions"
     assert registered.__self__ is extractor

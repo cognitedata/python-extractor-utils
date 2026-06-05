@@ -29,11 +29,7 @@ def _startup_request(extractor: Extractor) -> StartupRequest:
     return extractor._get_startup_request()
 
 
-# -- available_actions population --
-
-
 def test_no_scheduled_tasks_no_custom_actions_sends_available_actions_none() -> None:
-    # TestExtractor has one StartupTask; StartupTasks do not produce available_actions entries.
     extractor = _make_extractor()
     assert _startup_request(extractor).available_actions is None
 
@@ -79,7 +75,6 @@ def test_scheduled_and_custom_actions_combined_ordering() -> None:
     req = _startup_request(extractor)
     assert req.available_actions is not None
     assert len(req.available_actions) == 3
-    # Scheduled task entries appear before custom actions
     names = [a.name for a in req.available_actions]
     assert names == ["Start sync", "Stop sync", "flush"]
 
@@ -92,9 +87,6 @@ def test_custom_action_appears_with_correct_type_and_description() -> None:
     assert actions[0].name == "flush cache"
     assert actions[0].type == ActionType.custom
     assert actions[0].description == "Clears state"
-
-
-# -- __init_actions__ hook and add_action --
 
 
 def test_init_actions_hook_called_after_init_tasks_and_can_register_actions() -> None:
@@ -144,9 +136,6 @@ def test_add_task_raises_on_conflict_with_existing_custom_action_name(conflictin
         extractor.add_task(ScheduledTask.from_interval(interval="1h", name="sync", target=lambda _: None))
 
 
-# -- _running_task_tokens lifecycle --
-
-
 def test_token_present_in_running_task_tokens_during_execution() -> None:
     extractor = _make_extractor()
     token_present: list[bool] = []
@@ -194,7 +183,6 @@ def test_token_cleanup_does_not_clobber_replacement_token() -> None:
     replacement = extractor.cancellation_token.create_child_token()
 
     def target(_: TaskContext) -> None:
-        # Simulate a subsequent invocation overwriting the entry before this run finishes
         extractor._running_task_tokens["the-task"] = replacement
         done.set()
 
@@ -205,7 +193,6 @@ def test_token_cleanup_does_not_clobber_replacement_token() -> None:
     while any(j.name == "the-task" for j in extractor._scheduler._running) and time.monotonic() < deadline:
         time.sleep(0.005)
 
-    # Identity check must preserve the replacement — the old blind pop would remove it
     assert extractor._running_task_tokens.get("the-task") is replacement
 
 
