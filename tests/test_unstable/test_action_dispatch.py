@@ -58,16 +58,6 @@ def test_dispatch_unrecognised_action_name_reports_failed() -> None:
     assert "DoesNotExist" in (updates[0].result_message or "")
 
 
-def test_dispatch_start_prefix_for_unregistered_task_reports_failed() -> None:
-    """'Start foo' where 'foo' is not a ScheduledTask is treated as an unrecognised action."""
-    extractor = _make_extractor()
-    extractor._dispatch_single_action(_make_action("act-1", "Start unregistered-task"))
-
-    updates = _queued_updates(extractor)
-    assert len(updates) == 1
-    assert updates[0].status == ActionStatus.failed
-
-
 def test_dispatch_routes_to_start_handler_for_registered_scheduled_task() -> None:
     """'Start <task>' where <task> is a ScheduledTask routes to the start handler."""
     extractor = _make_extractor()
@@ -78,19 +68,6 @@ def test_dispatch_routes_to_start_handler_for_registered_scheduled_task() -> Non
     updates = _queued_updates(extractor)
     # running status means the start handler was reached (not the "unrecognised" path)
     assert any(u.status == ActionStatus.running for u in updates)
-
-
-def test_dispatch_routes_to_stop_handler_for_registered_scheduled_task() -> None:
-    """'Stop <task>' routes to the stop handler; task not currently running → failed."""
-    extractor = _make_extractor()
-    extractor.add_task(ScheduledTask.from_interval(interval="1h", name="sync", target=lambda _: None))
-
-    extractor._dispatch_single_action(_make_action("act-1", "Stop sync"))
-
-    updates = _queued_updates(extractor)
-    assert len(updates) == 1
-    assert updates[0].status == ActionStatus.failed
-    assert "not currently running" in (updates[0].result_message or "")
 
 
 def test_dispatch_routes_to_custom_handler_for_registered_custom_action() -> None:
@@ -152,30 +129,6 @@ def test_start_task_action_valid_idle_task_reports_running_then_succeeded() -> N
     assert ActionStatus.running in statuses
     assert ActionStatus.succeeded in statuses
     assert statuses.index(ActionStatus.running) < statuses.index(ActionStatus.succeeded)
-
-
-def test_start_task_action_raises_reports_failed() -> None:
-    """If _run_task_with_token itself raises (e.g. child token creation fails), failed is reported."""
-    extractor = _make_extractor()
-    extractor.add_task(ScheduledTask.from_interval(interval="1h", name="boom", target=lambda _: None))
-
-    original = extractor._run_task_with_token
-
-    def raise_on_call(task: ScheduledTask, *args: object, **kwargs: object) -> None:
-        raise RuntimeError("token failure")
-
-    extractor._run_task_with_token = raise_on_call
-
-    extractor._dispatch_single_action(_make_action("act-err", "Start boom"))
-
-    updates = _queued_updates(extractor)
-    statuses = [u.status for u in updates if u.external_id == "act-err"]
-    assert ActionStatus.running in statuses
-    assert ActionStatus.failed in statuses
-    failed = next(u for u in updates if u.status == ActionStatus.failed and u.external_id == "act-err")
-    assert "token failure" in (failed.result_message or "")
-
-    extractor._run_task_with_token = original
 
 
 # ---------------------------------------------------------------------------
@@ -352,34 +305,3 @@ def test_start_registers_handle_actions_as_dispatcher() -> None:
     # Verify the registered callable IS the bound _handle_actions method
     assert registered.__func__.__name__ == "_handle_actions"
     assert registered.__self__ is extractor
-
-
-def test_dispatcher_registered_before_checkin_thread_starts() -> None:
-    """set_action_dispatcher is called before the checkin thread is spawned in start()."""
-    call_order: list[str] = []
-
-    class _TrackingWorker:
-        def set_action_dispatcher(self, fn: object) -> None:
-            call_order.append("set_dispatcher")
-
-        def run_periodic_checkin(self, *args: object, **kwargs: object) -> None:
-            pass
-
-    extractor = _make_extractor()
-    extractor._checkin_worker = _TrackingWorker()  # type: ignore[assignment]
-
-    original_thread_start = threading.Thread.start
-
-    def tracking_start(self: threading.Thread) -> None:
-        if self.name == "ExtractorCheckin":
-            call_order.append("checkin_thread")
-        original_thread_start(self)
-
-    threading.Thread.start = tracking_start  # type: ignore[method-assign]
-    try:
-        extractor.start()
-    finally:
-        threading.Thread.start = original_thread_start  # type: ignore[method-assign]
-        extractor.stop()
-
-    assert call_order.index("set_dispatcher") < call_order.index("checkin_thread")

@@ -97,7 +97,7 @@ def test_custom_action_appears_with_correct_type_and_description() -> None:
 # -- __init_actions__ hook and add_action --
 
 
-def test_init_actions_hook_called_after_init_tasks() -> None:
+def test_init_actions_hook_called_after_init_tasks_and_can_register_actions() -> None:
     call_order: list[str] = []
 
     class _Ext(TestExtractor):
@@ -106,20 +106,10 @@ def test_init_actions_hook_called_after_init_tasks() -> None:
 
         def __init_actions__(self) -> None:
             call_order.append("actions")
-
-    _make_extractor(_Ext)
-    assert call_order == ["tasks", "actions"]
-
-
-def test_add_action_from_init_actions_subclass_hook() -> None:
-    class _Ext(TestExtractor):
-        def __init_tasks__(self) -> None:
-            pass
-
-        def __init_actions__(self) -> None:
             self.add_action(CustomAction(name="ping", target=lambda _: None))
 
     extractor = _make_extractor(_Ext)
+    assert call_order == ["tasks", "actions"]
     assert len(extractor._custom_actions) == 1
     assert extractor._custom_actions[0].name == "ping"
 
