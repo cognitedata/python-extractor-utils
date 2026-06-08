@@ -533,8 +533,11 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         registration step and goes straight to execution.
         """
         if child_token is None:
-            child_token = self.cancellation_token.create_child_token()
             with self._running_task_tokens_lock:
+                if task.name in self._running_task_tokens:
+                    self._logger.warning("Task '%s' is already running, skipping scheduled run.", task.name)
+                    return
+                child_token = self.cancellation_token.create_child_token()
                 self._running_task_tokens[task.name] = child_token
         try:
             task.target(TaskContext(task=task, extractor=self, cancellation_token=child_token))
@@ -607,9 +610,8 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
         try:
             self._run_task_with_token(task, child_token)
-            self._checkin_worker.queue_action_update(
-                ActionUpdate(external_id=action.external_id, status=ActionStatus.succeeded)
-            )
+            status = ActionStatus.canceled if child_token.is_cancelled else ActionStatus.succeeded
+            self._checkin_worker.queue_action_update(ActionUpdate(external_id=action.external_id, status=status))
         except Exception as e:
             self._checkin_worker.queue_action_update(
                 ActionUpdate(
