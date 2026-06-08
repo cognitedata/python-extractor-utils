@@ -625,6 +625,9 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         task_name = action.action_name[len("Stop ") :]
         with self._running_task_tokens_lock:
             token = self._running_task_tokens.get(task_name)
+            if token is not None:
+                token.cancel()
+
         if token is None:
             self._checkin_worker.queue_action_update(
                 ActionUpdate(
@@ -635,7 +638,6 @@ class Extractor(Generic[ConfigType], CogniteLogger):
             )
             return
 
-        token.cancel()
         self._checkin_worker.queue_action_update(
             ActionUpdate(external_id=action.external_id, status=ActionStatus.canceled)
         )
