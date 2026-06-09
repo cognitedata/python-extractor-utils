@@ -466,6 +466,14 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         if any(t.name == task.name for t in self._tasks):
             raise ValueError(f"Task '{task.name}' is already registered.")
 
+        if isinstance(task, ScheduledTask):
+            conflict_names = {f"Start {task.name}", f"Stop {task.name}"}
+            for action in self._custom_actions:
+                if action.name in conflict_names:
+                    raise ValueError(
+                        f"Task name '{task.name}' would conflict with existing custom action '{action.name}'."
+                    )
+
         # Store this for later, since we'll override it with the wrapped version
         target = task.target
 
