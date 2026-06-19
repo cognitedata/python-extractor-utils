@@ -12,7 +12,7 @@ from cognite.extractorutils.unstable.core.logger import CogniteLogger
 if TYPE_CHECKING:
     from cognite.extractorutils.unstable.core.base import Extractor
 
-__all__ = ["ActionContext", "ActionTarget", "CustomAction"]
+__all__ = ["ActionContext", "ActionError", "ActionTarget", "CustomAction"]
 
 
 class ActionContext(CogniteLogger):
@@ -54,6 +54,23 @@ class ActionContext(CogniteLogger):
             details=details,
             task_name=task_name if task_name is not None else self._action.name,
         )
+
+
+class ActionError(Exception):
+    """Deliberate action failure with structured metadata for Odin result reporting."""
+
+    def __init__(self, message: str, *, error_type: str, details: str | None = None) -> None:
+        super().__init__(message)
+        self.error_type = error_type
+        self.details = details
+
+    @property
+    def result_metadata(self) -> dict[str, str]:
+        """Structured metadata dict for the action update."""
+        meta: dict[str, str] = {"error_type": self.error_type}
+        if self.details is not None:
+            meta["error_detail"] = self.details
+        return meta
 
 
 ActionTarget = Callable[["ActionContext"], None]
