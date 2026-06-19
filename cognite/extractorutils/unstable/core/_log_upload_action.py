@@ -59,11 +59,11 @@ def _build_candidate_files(
     Rotated files follow the naming convention ``<base_path>.YYYY-MM-DD``.
     The live file (``base_path``) is used for ``today``; all other dates use the rotated name.
 
-    A file is skipped when it does not exist or is empty. This covers the brief rotation
-    race window: if the action is dispatched right after midnight before ``TimedRotatingFileHandler``
-    has renamed ``file.log`` to ``file.log.YYYY-MM-DD``, the rotated file will not be found and
-    that date will appear in ``skipped``. Retrying after rotation completes (within seconds)
-    will pick it up.
+    A file is skipped when it does not exist, is empty, or is inaccessible (any ``OSError``).
+    This covers the brief rotation race window: if the action is dispatched right after midnight
+    before ``TimedRotatingFileHandler`` has renamed ``file.log`` to ``file.log.YYYY-MM-DD``,
+    the rotated file will not be found and that date will appear in ``skipped``. Retrying after
+    rotation completes (within seconds) will pick it up.
 
     Returns:
         (candidates, skipped): candidates are files that exist and have content;
@@ -83,7 +83,7 @@ def _build_candidate_files(
 
         try:
             size = path.stat().st_size
-        except FileNotFoundError:
+        except OSError:
             skipped.append(current)
         else:
             if size > 0:
@@ -117,6 +117,14 @@ def fetch_logs_action(ctx: ActionContext) -> None:
             error_type="invalid_date_range",
         )
 
+    today = _today_utc()
+
+    if end_date > today:
+        raise ActionError(
+            f"end_date ({end_date}) cannot be in the future (today is {today})",
+            error_type="invalid_date_range",
+        )
+
     num_days = (end_date - start_date).days + 1
     if num_days > MAX_DATE_RANGE_DAYS:
         raise ActionError(
@@ -132,5 +140,4 @@ def fetch_logs_action(ctx: ActionContext) -> None:
             error_type="no_file_handler_configured",
         )
 
-    today = _today_utc()
     _candidates, _skipped = _build_candidate_files(log_file_path, start_date, end_date, today)

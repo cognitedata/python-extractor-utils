@@ -125,8 +125,9 @@ def test_parse_date_non_string_type_raises_action_error() -> None:
             },
             str(MAX_DATE_RANGE_DAYS),
         ),
+        ({"start_date": "2020-01-01", "end_date": "2099-01-01"}, "future"),
     ],
-    ids=["end_before_start", "exceeds_max_days"],
+    ids=["end_before_start", "exceeds_max_days", "end_date_in_future"],
 )
 def test_invalid_date_range_reports_invalid_date_range(
     call_metadata: dict[str, str], message_contains: str | None
