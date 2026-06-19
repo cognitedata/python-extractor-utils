@@ -90,6 +90,16 @@ def test_non_iso_date_reports_invalid_parameter(call_metadata: dict[str, str], b
     assert bad_field in (failed.result_message or "")
 
 
+def test_parse_date_non_string_type_raises_action_error() -> None:
+    # Pydantic guards dict[str, str] at the DTO boundary, but _parse_date may be called
+    # directly, so TypeError from date.fromisoformat must also surface as ActionError.
+    from cognite.extractorutils.unstable.core._log_upload_action import _parse_date
+
+    with pytest.raises(ActionError) as exc_info:
+        _parse_date(20260610, "start_date")  # type: ignore[arg-type]
+    assert exc_info.value.error_type == "invalid_parameter"
+
+
 @pytest.mark.parametrize(
     "call_metadata,message_contains",
     [

@@ -8,15 +8,14 @@ MAX_DATE_RANGE_DAYS = 7
 """Maximum number of calendar days a single ``fetch_logs`` invocation may cover."""
 
 _FETCH_LOGS_DESCRIPTION = (
-    "Upload rotated log files to CDF Files for a given date range. "
-    f"At most {MAX_DATE_RANGE_DAYS} days per invocation."
+    f"Upload rotated log files to CDF Files for a given date range. At most {MAX_DATE_RANGE_DAYS} days per invocation."
 )
 
 
 def _parse_date(raw: str, field: str) -> date:
     try:
         return date.fromisoformat(raw)
-    except ValueError:
+    except (ValueError, TypeError):
         raise ActionError(
             f"Invalid {field} '{raw}': expected ISO 8601 date (YYYY-MM-DD)",
             error_type="invalid_parameter",
@@ -51,4 +50,3 @@ def fetch_logs_action(ctx: ActionContext) -> None:
             "use multiple invocations for longer spans",
             error_type="invalid_date_range",
         )
-
