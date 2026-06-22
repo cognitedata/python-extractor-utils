@@ -80,3 +80,24 @@ def test_midnight_rotation_race_file_shorter_than_snapshot(tmp_path: Path) -> No
         reader = BoundedReader(f, 1_000)
         assert len(reader) == 1_000  # snapshot still declared
         assert reader.read() == b""  # but file is empty
+
+
+def test_tell_tracks_bytes_consumed(tmp_path: Path) -> None:
+    path = _make_file(tmp_path, b"hello world")
+    with open(path, "rb") as f:
+        reader = BoundedReader(f, 8)
+        assert reader.tell() == 0
+        reader.read(3)
+        assert reader.tell() == 3
+        reader.read(5)
+        assert reader.tell() == 8
+
+
+def test_close_and_closed_property(tmp_path: Path) -> None:
+    path = _make_file(tmp_path, b"data")
+    f = open(path, "rb")  # noqa: SIM115
+    reader = BoundedReader(f, 4)
+    assert not reader.closed
+    reader.close()
+    assert reader.closed
+    assert f.closed

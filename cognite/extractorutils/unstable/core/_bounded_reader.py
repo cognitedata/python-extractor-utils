@@ -31,6 +31,16 @@ class BoundedReader:
         # not at the moment the upload resolves the inode size (which may have grown).
         return self._size
 
+    def tell(self) -> int:
+        return self._size - self._remaining
+
+    @property
+    def closed(self) -> bool:
+        return self._f.closed
+
+    def close(self) -> None:
+        self._f.close()
+
     def read(self, size: int = -1) -> bytes:
         if self._remaining <= 0:
             return b""
@@ -43,4 +53,4 @@ class BoundedReader:
         return self
 
     def __exit__(self, *_: object) -> None:
-        self._f.close()
+        self.close()
