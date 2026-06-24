@@ -1,8 +1,11 @@
 """Built-in ``fetch_logs`` action: streams rotated log files to CDF Files."""
 
+import logging
 from datetime import date
 
 from cognite.extractorutils.unstable.core.actions import ActionContext, ActionError
+
+_logger = logging.getLogger(__name__)
 
 MAX_DATE_RANGE_DAYS = 7
 """Maximum number of calendar days a single ``fetch_logs`` invocation may cover."""
@@ -50,3 +53,5 @@ def fetch_logs_action(ctx: ActionContext) -> None:
             "use multiple invocations for longer spans",
             error_type="invalid_date_range",
         )
+
+    _logger.info("fetch_logs: uploading logs for %s to %s (%d day(s))", start_date, end_date, num_days)

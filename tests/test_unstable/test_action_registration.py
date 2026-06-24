@@ -84,10 +84,11 @@ def test_scheduled_and_custom_actions_combined_ordering() -> None:
     req = _startup_request(extractor)
     assert req.available_actions is not None
     names = [a.name for a in req.available_actions]
-    # Built-in actions precede scheduled-task start/stop, which precede user custom actions
+    # Ordering: scheduled-task start/stop actions, then _custom_actions in registration order
+    # (_custom_actions = built-ins registered first, then user-registered actions)
     assert names.index("Start sync") < names.index("flush")
     assert names.index("Stop sync") < names.index("flush")
-    assert "fetch_logs" in names
+    assert names.index("fetch_logs") < names.index("flush")
 
 
 def test_custom_action_appears_with_correct_type_and_description() -> None:
