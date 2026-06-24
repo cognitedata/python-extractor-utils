@@ -1,5 +1,6 @@
 """Built-in ``fetch_logs`` action: streams rotated log files to CDF Files."""
 
+import logging
 from dataclasses import dataclass
 from datetime import date, timedelta, timezone
 from datetime import datetime as dt
@@ -7,6 +8,8 @@ from pathlib import Path
 
 from cognite.extractorutils.unstable.configuration.models import ExtractorConfig, LogFileHandlerConfig
 from cognite.extractorutils.unstable.core.actions import ActionContext, ActionError
+
+_logger = logging.getLogger(__name__)
 
 MAX_DATE_RANGE_DAYS = 7
 """Maximum number of calendar days a single ``fetch_logs`` invocation may cover."""
@@ -20,7 +23,7 @@ _FETCH_LOGS_DESCRIPTION = (
 class LogFileCandidate:
     """A log file resolved for a given date that exists and has content."""
 
-    date: date
+    log_date: date
     path: Path
     is_current: bool  # True when path is the live (unrotated) file.log
 
@@ -83,11 +86,12 @@ def _build_candidate_files(
 
         try:
             size = path.stat().st_size
-        except OSError:
+        except OSError as e:
+            _logger.warning("fetch_logs: skipping %s for %s — %s", path, current, e)
             skipped.append(current)
         else:
             if size > 0:
-                candidates.append(LogFileCandidate(date=current, path=path, is_current=is_current))
+                candidates.append(LogFileCandidate(log_date=current, path=path, is_current=is_current))
             else:
                 skipped.append(current)
 
@@ -140,4 +144,11 @@ def fetch_logs_action(ctx: ActionContext) -> None:
             error_type="no_file_handler_configured",
         )
 
-    _candidates, _skipped = _build_candidate_files(log_file_path, start_date, end_date, today)
+    candidates, skipped = _build_candidate_files(log_file_path, start_date, end_date, today)
+    _logger.info(
+        "fetch_logs: %d candidate file(s) for %s to %s; %d date(s) skipped",
+        len(candidates),
+        start_date,
+        end_date,
+        len(skipped),
+    )

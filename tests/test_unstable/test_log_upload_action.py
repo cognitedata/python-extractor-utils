@@ -269,3 +269,31 @@ def test_fetch_logs_action_with_file_handler_succeeds(tmp_path: Path, create_log
     statuses = [u.status for u in updates]
     assert ActionStatus.succeeded in statuses
     assert ActionStatus.failed not in statuses
+
+
+def test_valid_exact_max_days_range_succeeds_at_dispatch(tmp_path: Path) -> None:
+    # Exactly MAX_DATE_RANGE_DAYS is the boundary — one more would be rejected.
+    start = date(2026, 6, 1)
+    end = start + timedelta(days=MAX_DATE_RANGE_DAYS - 1)
+    log_path = tmp_path / "extractor.log"
+    extractor = _make_extractor(log_path=log_path)
+    updates = _dispatch(extractor, {"start_date": str(start), "end_date": str(end)})
+    statuses = [u.status for u in updates]
+    assert ActionStatus.succeeded in statuses
+    assert ActionStatus.failed not in statuses
+
+
+def test_range_spanning_rotated_and_live_file(tmp_path: Path) -> None:
+    # Covers the common case: start_date = yesterday (rotated file), end_date = today (live file).
+    base = tmp_path / "extractor.log"
+    yesterday = _PAST_TODAY - timedelta(days=1)
+    base.write_bytes(b"today data")
+    (tmp_path / f"extractor.log.{yesterday.isoformat()}").write_bytes(b"yesterday data")
+    candidates, skipped = _build_candidate_files(base, yesterday, _PAST_TODAY, _PAST_TODAY)
+    assert skipped == []
+    assert len(candidates) == 2
+    rotated = next(c for c in candidates if c.log_date == yesterday)
+    live = next(c for c in candidates if c.log_date == _PAST_TODAY)
+    assert rotated.is_current is False
+    assert live.is_current is True
+    assert live.path == base
