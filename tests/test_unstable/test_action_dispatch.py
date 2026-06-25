@@ -261,3 +261,18 @@ def test_start_registers_handle_actions_as_dispatcher() -> None:
     registered = extractor._checkin_worker.set_action_dispatcher.call_args[0][0]
     assert registered.__func__.__name__ == "_handle_actions"
     assert registered.__self__ is extractor
+
+
+def test_set_result_propagates_to_succeeded_action_update() -> None:
+    extractor = _make_extractor()
+
+    def action_with_result(ctx: ActionContext) -> None:
+        ctx.set_result("3 files uploaded", metadata={"total_files": "3", "uploaded_files": "3"})
+
+    extractor.add_action(CustomAction(name="upload", target=action_with_result))
+    action = Action(external_id="act-r", action_name="upload", status=ActionStatus.pending)
+    extractor._dispatch_single_action(action)
+    updates = [c[0][0] for c in extractor._checkin_worker.queue_action_update.call_args_list]
+    succeeded = next(u for u in updates if u.status == ActionStatus.succeeded)
+    assert succeeded.result_message == "3 files uploaded"
+    assert succeeded.result_metadata == {"total_files": "3", "uploaded_files": "3"}

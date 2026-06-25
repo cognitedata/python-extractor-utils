@@ -37,6 +37,8 @@ class ActionContext(CogniteLogger):
         self._extractor = extractor
         self.external_id = external_id
         self.call_metadata = call_metadata
+        self._result_message: str | None = None
+        self._result_metadata: dict[str, str] | None = None
 
         self._logger = logging.getLogger(f"{self._extractor.EXTERNAL_ID}.action.{self._action.name.replace(' ', '')}")
 
@@ -54,6 +56,11 @@ class ActionContext(CogniteLogger):
             details=details,
             task_name=task_name if task_name is not None else self._action.name,
         )
+
+    def set_result(self, message: str, *, metadata: dict[str, str] | None = None) -> None:
+        """Record the result for a successful action completion."""
+        self._result_message = message
+        self._result_metadata = metadata
 
 
 class ActionError(Exception):
