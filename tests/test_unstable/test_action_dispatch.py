@@ -6,7 +6,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from cognite.extractorutils.unstable.core._dto import Action, ActionStatus, ActionUpdate
-from cognite.extractorutils.unstable.core.actions import ActionContext, CustomAction
+from cognite.extractorutils.unstable.core.actions import ActionContext, ActionError, CustomAction
 from cognite.extractorutils.unstable.core.base import FullConfig
 from cognite.extractorutils.unstable.core.tasks import ScheduledTask, TaskContext
 
@@ -168,6 +168,20 @@ def test_custom_action_status_lifecycle(
     assert statuses[-1] == expected_final
     if expected_message:
         assert expected_message in (updates[-1].result_message or "")
+
+
+def test_action_error_sets_result_metadata_and_keeps_failed_status() -> None:
+    def target(ctx: ActionContext) -> None:
+        raise ActionError("bad input", error_type="invalid_parameter")
+
+    extractor = _make_extractor()
+    extractor.add_action(CustomAction(name="strict", target=target))
+    extractor._dispatch_single_action(_make_action("act-err", "strict"))
+
+    updates = _queued_updates(extractor)
+    failed = next(u for u in updates if u.status == ActionStatus.failed)
+    assert failed.result_metadata == {"error_type": "invalid_parameter"}
+    assert failed.result_message == "bad input"
 
 
 def test_custom_action_receives_call_metadata_in_context() -> None:
