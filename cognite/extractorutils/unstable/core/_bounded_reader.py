@@ -20,8 +20,8 @@ class BoundedReader:
             upload_queue.add_io_to_upload_queue(file_meta, lambda: reader, ...)
     """
 
-    def __init__(self, f: BinaryIO, max_bytes: int) -> None:
-        self._f = f
+    def __init__(self, stream: BinaryIO, max_bytes: int) -> None:
+        self._stream = stream
         self._size = max_bytes
         self._remaining = max_bytes
 
@@ -36,16 +36,16 @@ class BoundedReader:
 
     @property
     def closed(self) -> bool:
-        return self._f.closed
+        return self._stream.closed
 
     def close(self) -> None:
-        self._f.close()
+        self._stream.close()
 
     def read(self, size: int = -1) -> bytes:
         if self._remaining <= 0:
             return b""
         to_read = self._remaining if size < 0 else min(size, self._remaining)
-        data = self._f.read(to_read)
+        data = self._stream.read(to_read)
         self._remaining -= len(data)
         return data
 
