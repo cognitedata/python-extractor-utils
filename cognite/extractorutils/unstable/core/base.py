@@ -98,8 +98,9 @@ from cognite.extractorutils.unstable.core._dto import (
 from cognite.extractorutils.unstable.core._dto import (
     Task as DtoTask,
 )
+from cognite.extractorutils.unstable.core._log_upload_action import _FETCH_LOGS_DESCRIPTION, fetch_logs_action
 from cognite.extractorutils.unstable.core._messaging import RuntimeMessage
-from cognite.extractorutils.unstable.core.actions import ActionContext, CustomAction
+from cognite.extractorutils.unstable.core.actions import ActionContext, ActionError, CustomAction
 from cognite.extractorutils.unstable.core.checkin_worker import CheckinWorker
 from cognite.extractorutils.unstable.core.errors import Error, ErrorLevel
 from cognite.extractorutils.unstable.core.logger import CogniteLogger, RobustFileHandler
@@ -205,6 +206,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         )
 
         self.__init_tasks__()
+        self._register_builtin_actions()
         self.__init_actions__()
 
     def _setup_cancellation_watcher(self, cancel_event: MpEvent) -> None:
@@ -345,6 +347,16 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         Subclasses should call ``self.add_task(...)`` to add tasks to the extractor.
         """
         pass
+
+    def _register_builtin_actions(self) -> None:
+        """Register framework-level actions available on every extractor."""
+        self.add_action(
+            CustomAction(
+                name="fetch_logs",
+                target=fetch_logs_action,
+                description=_FETCH_LOGS_DESCRIPTION,
+            )
+        )
 
     def __init_actions__(self) -> None:
         """
@@ -666,6 +678,15 @@ class Extractor(Generic[ConfigType], CogniteLogger):
             custom.target(ctx)
             self._checkin_worker.queue_action_update(
                 ActionUpdate(external_id=action.external_id, status=ActionStatus.succeeded)
+            )
+        except ActionError as e:
+            self._checkin_worker.queue_action_update(
+                ActionUpdate(
+                    external_id=action.external_id,
+                    status=ActionStatus.failed,
+                    result_message=str(e),
+                    result_metadata=e.result_metadata,
+                )
             )
         except Exception as e:
             self._checkin_worker.queue_action_update(

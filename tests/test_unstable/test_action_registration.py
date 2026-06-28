@@ -39,21 +39,25 @@ def _startup_request(extractor: Extractor) -> StartupRequest:
         ),
     ],
 )
-def test_available_actions_none_without_scheduled_tasks(extra_tasks: list) -> None:
+def test_available_actions_without_scheduled_tasks_only_has_builtins(extra_tasks: list) -> None:
     extractor = _make_extractor()
     for task in extra_tasks:
         extractor.add_task(task)
-    assert _startup_request(extractor).available_actions is None
+    req = _startup_request(extractor)
+    assert req.available_actions is not None
+    # Only built-in actions present — no start/stop actions from scheduled tasks
+    task_action_names = {a.name for a in req.available_actions if a.type != ActionType.custom}
+    assert task_action_names == set()
 
 
-def test_two_scheduled_tasks_produce_four_available_actions() -> None:
+def test_two_scheduled_tasks_produce_four_task_start_stop_actions() -> None:
     extractor = _make_extractor()
     extractor.add_task(ScheduledTask.from_interval(interval="1h", name="alpha", target=lambda _: None))
     extractor.add_task(ScheduledTask.from_interval(interval="2h", name="beta", target=lambda _: None))
     req = _startup_request(extractor)
     assert req.available_actions is not None
-    assert len(req.available_actions) == 4
-    assert {a.name for a in req.available_actions} == {"Start alpha", "Stop alpha", "Start beta", "Stop beta"}
+    task_action_names = {a.name for a in req.available_actions if a.type != ActionType.custom}
+    assert task_action_names == {"Start alpha", "Stop alpha", "Start beta", "Stop beta"}
 
 
 @pytest.mark.parametrize(
@@ -79,19 +83,23 @@ def test_scheduled_and_custom_actions_combined_ordering() -> None:
     extractor.add_action(CustomAction(name="flush", target=lambda _: None))
     req = _startup_request(extractor)
     assert req.available_actions is not None
-    assert len(req.available_actions) == 3
     names = [a.name for a in req.available_actions]
-    assert names == ["Start sync", "Stop sync", "flush"]
+    # Ordering: scheduled-task start/stop actions, then _custom_actions in registration order
+    # (_custom_actions = built-ins registered first, then user-registered actions)
+    assert names.index("Start sync") < names.index("flush")
+    assert names.index("Stop sync") < names.index("flush")
+    assert names.index("fetch_logs") < names.index("flush")
 
 
 def test_custom_action_appears_with_correct_type_and_description() -> None:
     extractor = _make_extractor()
     extractor.add_action(CustomAction(name="flush cache", target=lambda _: None, description="Clears state"))
     actions = _startup_request(extractor).available_actions
-    assert actions is not None and len(actions) == 1
-    assert actions[0].name == "flush cache"
-    assert actions[0].type == ActionType.custom
-    assert actions[0].description == "Clears state"
+    assert actions is not None
+    by_name = {a.name: a for a in actions}
+    assert "flush cache" in by_name
+    assert by_name["flush cache"].type == ActionType.custom
+    assert by_name["flush cache"].description == "Clears state"
 
 
 def test_init_actions_hook_called_after_init_tasks_and_can_register_actions() -> None:
@@ -107,15 +115,15 @@ def test_init_actions_hook_called_after_init_tasks_and_can_register_actions() ->
 
     extractor = _make_extractor(_Ext)
     assert call_order == ["tasks", "actions"]
-    assert len(extractor._custom_actions) == 1
-    assert extractor._custom_actions[0].name == "ping"
+    assert any(a.name == "ping" for a in extractor._custom_actions)
 
 
 def test_multiple_add_action_calls_accumulate_in_registration_order() -> None:
     extractor = _make_extractor()
     for name in ("a1", "a2", "a3"):
         extractor.add_action(CustomAction(name=name, target=lambda _: None))
-    assert [a.name for a in extractor._custom_actions] == ["a1", "a2", "a3"]
+    names = [a.name for a in extractor._custom_actions]
+    assert names.index("a1") < names.index("a2") < names.index("a3")
 
 
 def test_add_action_raises_on_duplicate_name() -> None:
