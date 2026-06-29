@@ -15,7 +15,7 @@ Changes are grouped as follows
 ## 7.12.4
 
 ### Fixed
-* In the `unstabe` and configtools: Fixed the decoding of the `thumbprint` and `key` from bytes during certificate authentication.
+* In the `unstabe` and configtools: Fixed the decoding of the `thumbprint` and `key` from bytes during certificate authentication towards CDF.
 
 ## 7.12.3
 

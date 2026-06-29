@@ -36,6 +36,10 @@ _SCOPES = [f"{_BASE_URL}/.default"]
 @pytest.fixture(scope="module")
 def cert_pem_path(tmp_path_factory: pytest.TempPathFactory) -> Path:
     """Decode the base64 PEM from env and write it to a temp file."""
+    if not _PEM:
+        raise ValueError(
+            f"Expected environment variable CERTIFICATE_AUTH_PEM to be set to run integration tests. Got: {_PEM}"
+        )
     pem_bytes = base64.b64decode(_PEM)
     path = tmp_path_factory.mktemp("certs") / "cert.pem"
     path.write_bytes(pem_bytes)
