@@ -4,8 +4,9 @@ This module defines the base classes for custom actions in the extractor framewo
 
 import logging
 from collections.abc import Callable
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Generic
 
+from cognite.extractorutils.unstable.configuration.models import ConfigType
 from cognite.extractorutils.unstable.core.errors import Error, ErrorLevel
 from cognite.extractorutils.unstable.core.logger import CogniteLogger
 
@@ -15,7 +16,7 @@ if TYPE_CHECKING:
 __all__ = ["ActionContext", "ActionError", "ActionTarget", "CustomAction"]
 
 
-class ActionContext(CogniteLogger):
+class ActionContext(Generic[ConfigType], CogniteLogger):
     """
     Context for a custom action invocation.
 
@@ -28,7 +29,7 @@ class ActionContext(CogniteLogger):
     def __init__(
         self,
         action: "CustomAction",
-        extractor: "Extractor",
+        extractor: "Extractor[ConfigType]",
         external_id: str,
         call_metadata: dict[str, str] | None = None,
     ) -> None:
@@ -41,6 +42,11 @@ class ActionContext(CogniteLogger):
         self._result_metadata: dict[str, str] | None = None
 
         self._logger = logging.getLogger(f"{self._extractor.EXTERNAL_ID}.action.{self._action.name.replace(' ', '')}")
+
+    @property
+    def application_config(self) -> ConfigType:
+        """The extractor's application configuration."""
+        return self._extractor.application_config
 
     def _new_error(
         self,
@@ -61,6 +67,23 @@ class ActionContext(CogniteLogger):
         """Record the result for a successful action completion."""
         self._result_message = message
         self._result_metadata = metadata
+
+
+class ActionError(Exception):
+    """Deliberate action failure with structured metadata for Odin result reporting."""
+
+    def __init__(self, message: str, *, error_type: str, details: str | None = None) -> None:
+        super().__init__(message)
+        self.error_type = error_type
+        self.details = details
+
+    @property
+    def result_metadata(self) -> dict[str, str]:
+        """Structured metadata dict for the action update."""
+        meta: dict[str, str] = {"error_type": self.error_type}
+        if self.details is not None:
+            meta["error_detail"] = self.details
+        return meta
 
 
 class ActionError(Exception):

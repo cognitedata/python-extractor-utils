@@ -693,6 +693,15 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                     result_metadata=e.result_metadata,
                 )
             )
+        except ActionError as e:
+            self._checkin_worker.queue_action_update(
+                ActionUpdate(
+                    external_id=action.external_id,
+                    status=ActionStatus.failed,
+                    result_message=str(e),
+                    result_metadata=e.result_metadata,
+                )
+            )
         except Exception as e:
             self._checkin_worker.queue_action_update(
                 ActionUpdate(
