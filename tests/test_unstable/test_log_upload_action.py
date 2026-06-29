@@ -455,3 +455,52 @@ def test_fetch_logs_action_upload_failure_still_succeeds(tmp_path: Path) -> None
     assert succeeded.result_metadata is not None
     assert succeeded.result_metadata["failed_files"] == "1"
     assert succeeded.result_metadata["uploaded_files"] == "0"
+
+
+def test_report_progress_queues_running_action_update() -> None:
+    extractor = _make_extractor()
+    ctx = ActionContext(
+        action=CustomAction(name="test-action", target=lambda ctx: None),
+        extractor=extractor,
+        external_id="act-progress",
+    )
+    ctx.report_progress("Uploading: 1/3 files complete")
+
+    updates = _queued_updates(extractor)
+    assert len(updates) == 1
+    assert updates[0].status == ActionStatus.running
+    assert updates[0].result_message == "Uploading: 1/3 files complete"
+    assert updates[0].external_id == "act-progress"
+
+
+def test_upload_action_reports_intermediate_progress_for_multi_file_range(tmp_path: Path) -> None:
+    log_path = tmp_path / "extractor.log"
+    (tmp_path / "extractor.log.2026-06-10").write_bytes(b"day 1 data")
+    (tmp_path / "extractor.log.2026-06-11").write_bytes(b"day 2 data")
+    extractor = _make_extractor(log_path=log_path)
+    updates = _dispatch(extractor, {"start_date": "2026-06-10", "end_date": "2026-06-11"})
+    progress_updates = [u for u in updates if u.status == ActionStatus.running and u.result_message is not None]
+    assert len(progress_updates) == 2
+    messages = {u.result_message for u in progress_updates}
+    assert "Uploading: 1/2 files complete" in messages
+    assert "Uploading: 2/2 files complete" in messages
+
+
+def test_upload_action_reports_progress_for_single_file(tmp_path: Path) -> None:
+    log_path = tmp_path / "extractor.log"
+    (tmp_path / "extractor.log.2026-06-10").write_bytes(b"day 1 data")
+    extractor = _make_extractor(log_path=log_path)
+    updates = _dispatch(extractor, {"start_date": "2026-06-10", "end_date": "2026-06-10"})
+    progress_updates = [u for u in updates if u.status == ActionStatus.running and u.result_message is not None]
+    assert len(progress_updates) == 1
+    assert progress_updates[0].result_message == "Uploading: 1/1 files complete"
+
+
+def test_upload_action_no_progress_updates_when_all_files_missing(tmp_path: Path) -> None:
+    # No files on disk → no candidates → no futures → no progress updates.
+    log_path = tmp_path / "extractor.log"
+    extractor = _make_extractor(log_path=log_path)
+    updates = _dispatch(extractor, {"start_date": "2026-06-10", "end_date": "2026-06-10"})
+    progress_updates = [u for u in updates if u.status == ActionStatus.running and u.result_message is not None]
+    assert progress_updates == []
+    assert any(u.status == ActionStatus.succeeded for u in updates)

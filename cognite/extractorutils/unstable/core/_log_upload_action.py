@@ -252,6 +252,8 @@ def fetch_logs_action(ctx: ActionContext) -> None:
     integration_external_id = ctx._extractor.connection_config.integration.external_id
     cdf_client = ctx._extractor.cognite_client
 
+    total_candidates = len(candidates)
+    completed_count = 0
     upload_results: list[_FileUploadResult] = []
     with ThreadPoolExecutor(max_workers=DEFAULT_CONCURRENT_UPLOADS) as pool:
         futures: dict[Future[_FileUploadResult], LogFileCandidate] = {
@@ -264,7 +266,10 @@ def fetch_logs_action(ctx: ActionContext) -> None:
             ): candidate
             for candidate in candidates
         }
-        upload_results.extend(future.result() for future in as_completed(futures))
+        for future in as_completed(futures):
+            upload_results.append(future.result())
+            completed_count += 1
+            ctx.report_progress(f"Uploading: {completed_count}/{total_candidates} files complete")
 
     upload_results.sort(key=lambda r: r.log_date)
 
