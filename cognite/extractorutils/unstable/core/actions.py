@@ -86,23 +86,6 @@ class ActionError(Exception):
         return meta
 
 
-class ActionError(Exception):
-    """Deliberate action failure with structured metadata for Odin result reporting."""
-
-    def __init__(self, message: str, *, error_type: str, details: str | None = None) -> None:
-        super().__init__(message)
-        self.error_type = error_type
-        self.details = details
-
-    @property
-    def result_metadata(self) -> dict[str, str]:
-        """Structured metadata dict for the action update."""
-        meta: dict[str, str] = {"error_type": self.error_type}
-        if self.details is not None:
-            meta["error_detail"] = self.details
-        return meta
-
-
 ActionTarget = Callable[["ActionContext"], None]
 
 
