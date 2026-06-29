@@ -153,9 +153,8 @@ def _upload_candidate(
         )
 
     try:
-        f = open(candidate.path, "rb")  # noqa: SIM115
-        reader: BinaryIO = BoundedReader(f, snapshot_size) if snapshot_size is not None else f  # type: ignore[assignment]
-        with reader:
+        with open(candidate.path, "rb") as f:
+            reader: BinaryIO = BoundedReader(f, snapshot_size) if snapshot_size is not None else f  # type: ignore[assignment]
             cdf_client.files.upload_bytes(
                 content=reader,
                 name=f"{external_id}.log",
