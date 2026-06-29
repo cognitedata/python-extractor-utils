@@ -137,7 +137,7 @@ def fetch_logs_action(ctx: ActionContext) -> None:
             error_type="invalid_date_range",
         )
 
-    log_file_path = _resolve_log_file_path(ctx._extractor.application_config)
+    log_file_path = _resolve_log_file_path(ctx.application_config)
     if log_file_path is None:
         raise ActionError(
             "No file log handler configured; add a 'file' type log handler to enable log uploads",
