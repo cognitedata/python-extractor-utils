@@ -76,47 +76,41 @@ def test_load_certificate_data_returns_bytes(self_signed_cert_pem: Path) -> None
     assert isinstance(key, bytes), "private key must be bytes"
 
 
-def test_bare_str_produces_repr_with_b_prefix(self_signed_cert_pem: Path) -> None:
+def test_bare_str_produces_repr_with_b_prefix() -> None:
     """Document the bug: bare str() wraps bytes in b'...' repr, making a2b_hex fail."""
-    thumbprint, _ = _load_certificate_data(self_signed_cert_pem, password=None)
-    broken = str(thumbprint)
+    broken = str(_FAKE_THUMB)
     assert broken.startswith("b'"), f"Expected b'...' repr, got: {broken!r}"
     with pytest.raises(binascii.Error, match=r"(?i)odd"):
         binascii.a2b_hex(broken)
 
 
-def test_utf8_decode_produces_clean_hex(self_signed_cert_pem: Path) -> None:
+def test_utf8_decode_produces_clean_hex() -> None:
     """str(bytes, 'utf-8') yields a clean even-length hex string that a2b_hex accepts."""
-    thumbprint, _ = _load_certificate_data(self_signed_cert_pem, password=None)
-    clean = str(thumbprint, "utf-8")
+    clean = str(_FAKE_THUMB, "utf-8")
     assert not clean.startswith("b'"), f"Unexpected b'...' prefix: {clean!r}"
     assert len(clean) % 2 == 0, f"Hex string must have even length, got {len(clean)}"
     binascii.a2b_hex(clean)  # must not raise
 
 
-def test_oauth_certificate_constructs_with_correct_strings(self_signed_cert_pem: Path) -> None:
+def test_oauth_certificate_constructs_with_correct_strings() -> None:
     """OAuthClientCertificate must accept decoded thumbprint and key without raising."""
-    thumbprint, key = _load_certificate_data(self_signed_cert_pem, password=None)
-    # ConfidentialClientApplication validates authority via network; mock it out.
     with patch("msal.ConfidentialClientApplication.__init__", return_value=None):
         OAuthClientCertificate(
             authority_url=_AUTHORITY_URL,
             client_id=_CLIENT_ID,
-            cert_thumbprint=str(thumbprint, "utf-8"),
-            certificate=str(key, "utf-8"),
+            cert_thumbprint=str(_FAKE_THUMB, "utf-8"),
+            certificate=str(_FAKE_KEY, "utf-8"),
             scopes=_SCOPES,
         )
 
 
-def test_oauth_certificate_broken_str_raises_on_auth(self_signed_cert_pem: Path) -> None:
+def test_oauth_certificate_broken_str_raises_on_auth() -> None:
     """Regression anchor: bare str() thumbprint causes binascii.Error during JWT assertion building.
 
     OAuthClientCertificate delegates JWT creation to msal.oauth2cli.assertion._encode_thumbprint,
     which calls binascii.a2b_hex. Verify this call path fails with the broken repr string.
     """
-    thumbprint, _ = _load_certificate_data(self_signed_cert_pem, password=None)
-    broken = str(thumbprint)  # intentionally broken — b'...' repr
-
+    broken = str(_FAKE_THUMB)  # intentionally broken — b'...' repr
     with pytest.raises(binascii.Error, match=r"(?i)odd"):
         _encode_thumbprint(broken)
 
