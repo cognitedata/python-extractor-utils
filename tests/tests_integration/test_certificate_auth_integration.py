@@ -24,7 +24,7 @@ from cognite.client.credentials import OAuthClientCertificate
 
 from cognite.extractorutils.configtools._util import _load_certificate_data
 
-_AUTHORITY_URL = os.environ.get("COGNITE_AUTHORITY_URL")
+_AUTHORITY_URL = os.environ.get("COGNITE_PROJECT_AUTHORITY_URL")
 _CLIENT_ID = os.environ.get("COGNITE_CLIENT_ID")
 _PROJECT = os.environ.get("COGNITE_PROJECT")
 _BASE_URL = os.environ.get("COGNITE_BASE_URL")
