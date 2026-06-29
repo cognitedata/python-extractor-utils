@@ -23,11 +23,11 @@ from cognite.client import CogniteClient
 from cognite.extractorutils.configtools._util import _load_certificate_data
 from cognite.extractorutils.unstable.configuration.models import ConnectionConfig
 
-_AUTHORITY_URL = os.environ.get("COGNITE_AUTHORITY_URL")
+_AUTHORITY_URL = os.environ.get("COGNITE_PROJECT_AUTHORITY_URL")
 _CLIENT_ID = os.environ.get("COGNITE_DEV_CLIENT_ID") or os.environ.get("COGNITE_CLIENT_ID")
-_PROJECT = os.environ.get("COGNITE_DEV_PROJECT")
-_BASE_URL = os.environ.get("COGNITE_DEV_BASE_URL")
-_SCOPES = os.environ.get("COGNITE_DEV_TOKEN_SCOPES")
+_PROJECT = os.environ.get("COGNITE_PROJECT")
+_BASE_URL = os.environ.get("COGNITE_BASE_URL")
+_SCOPES = os.environ.get("COGNITE_TOKEN_SCOPES")
 _PEM = os.environ.get("CERTIFICATE_AUTH_PEM")
 
 
