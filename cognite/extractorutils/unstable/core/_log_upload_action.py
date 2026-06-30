@@ -2,12 +2,12 @@
 
 import json
 import logging
-from concurrent.futures import Future, ThreadPoolExecutor, as_completed
+from collections import Counter
 from dataclasses import dataclass
 from datetime import date, timedelta, timezone
 from datetime import datetime as dt
 from pathlib import Path
-from typing import BinaryIO
+from typing import BinaryIO, Literal
 
 from cognite.client import CogniteClient
 
@@ -41,7 +41,7 @@ class LogFileCandidate:
 class _FileUploadResult:
     log_date: date
     file_external_id: str
-    status: str  # "uploaded" | "skipped_too_large" | "failed"
+    status: Literal["uploaded", "skipped_too_large", "failed"]
     size_bytes: int = 0
     error: str | None = None
 
@@ -251,25 +251,17 @@ def fetch_logs_action(ctx: ActionContext) -> None:
     integration_external_id = ctx._extractor.connection_config.integration.external_id
     cdf_client = ctx._extractor.cognite_client
 
-    upload_results: list[_FileUploadResult] = []
-    with ThreadPoolExecutor(max_workers=DEFAULT_CONCURRENT_UPLOADS) as pool:
-        futures: dict[Future[_FileUploadResult], LogFileCandidate] = {
-            pool.submit(
-                _upload_candidate,
-                candidate,
-                integration_external_id,
-                cdf_client,
-                snapshot_size if candidate.is_current else None,
-            ): candidate
-            for candidate in candidates
-        }
-        upload_results.extend(future.result() for future in as_completed(futures))
+    upload_results: list[_FileUploadResult] = [
+        _upload_candidate(
+            candidate,
+            integration_external_id,
+            cdf_client,
+            snapshot_size if candidate.is_current else None,
+        )
+        for candidate in candidates
+    ]
 
-    upload_results.sort(key=lambda r: r.log_date)
-
-    uploaded = [r for r in upload_results if r.status == "uploaded"]
-    too_large = [r for r in upload_results if r.status == "skipped_too_large"]
-    failed = [r for r in upload_results if r.status == "failed"]
+    counts = Counter(r.status for r in upload_results)
 
     # Per-file entries: upload results (sorted by date) + missing dates (skipped by candidate builder)
     files_list: list[dict[str, str]] = []
@@ -286,23 +278,23 @@ def fetch_logs_action(ctx: ActionContext) -> None:
         files_list.append(entry)
     files_list.extend(
         {
-            "date": str(d),
-            "file_external_id": _file_external_id(integration_external_id, d),
+            "date": str(skipped_date),
+            "file_external_id": _file_external_id(integration_external_id, skipped_date),
             "status": "skipped",
         }
-        for d in sorted(skipped_dates)
+        for skipped_date in sorted(skipped_dates)
     )
     files_list.sort(key=lambda e: e["date"])
 
-    total_skipped = len(skipped_dates) + len(too_large)
+    total_skipped = len(skipped_dates) + counts["skipped_too_large"]
 
     ctx.set_result(
-        f"{len(uploaded)} of {num_days} log files uploaded to CDF Files",
+        f"{counts['uploaded']} of {num_days} log files uploaded to CDF Files",
         metadata={
             "total_files": str(num_days),
-            "uploaded_files": str(len(uploaded)),
+            "uploaded_files": str(counts["uploaded"]),
             "skipped_files": str(total_skipped),
-            "failed_files": str(len(failed)),
+            "failed_files": str(counts["failed"]),
             "files": json.dumps(files_list),
         },
     )
