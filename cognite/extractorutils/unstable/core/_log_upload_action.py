@@ -21,7 +21,6 @@ MAX_DATE_RANGE_DAYS = 7
 """Maximum number of calendar days a single ``fetch_logs`` invocation may cover."""
 
 MAX_FILE_SIZE_BYTES = 4 * 1024 * 1024 * 1024  # 4 GiB — CDF single-request upload limit
-DEFAULT_CONCURRENT_UPLOADS = 1  # Sequential by default; safe on constrained networks
 
 _FETCH_LOGS_DESCRIPTION = (
     f"Upload rotated log files to CDF Files for a given date range. At most {MAX_DATE_RANGE_DAYS} days per invocation."
