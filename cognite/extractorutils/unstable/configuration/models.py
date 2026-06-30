@@ -328,8 +328,8 @@ class ConnectionConfig(ConfigModel):
                 credential_provider = OAuthClientCertificate(
                     authority_url=client_certificate.authority_url,
                     client_id=client_certificate.client_id,
-                    cert_thumbprint=str(thumbprint),
-                    certificate=str(key),
+                    cert_thumbprint=str(thumbprint, "utf-8"),
+                    certificate=str(key, "utf-8"),
                     scopes=list(client_certificate.scopes),
                 )
 
