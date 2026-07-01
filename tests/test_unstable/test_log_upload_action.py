@@ -308,8 +308,6 @@ def test_file_external_id_naming_convention() -> None:
 
 
 def test_upload_candidate_calls_cdf_upload_for_rotated_file(tmp_path: Path) -> None:
-    from unittest.mock import MagicMock
-
     from cognite.extractorutils.unstable.core._log_upload_action import LogFileCandidate, _upload_candidate
 
     path = tmp_path / "extractor.log.2026-06-01"
@@ -329,8 +327,6 @@ def test_upload_candidate_calls_cdf_upload_for_rotated_file(tmp_path: Path) -> N
 
 
 def test_upload_candidate_current_day_uses_bounded_reader(tmp_path: Path) -> None:
-    from unittest.mock import MagicMock
-
     from cognite.extractorutils.unstable.core._bounded_reader import BoundedReader
     from cognite.extractorutils.unstable.core._log_upload_action import LogFileCandidate, _upload_candidate
 
@@ -349,7 +345,7 @@ def test_upload_candidate_current_day_uses_bounded_reader(tmp_path: Path) -> Non
 
 
 def test_upload_candidate_exceeds_max_size_returns_skipped_too_large(tmp_path: Path) -> None:
-    from unittest.mock import MagicMock, patch
+    from unittest.mock import patch
 
     from cognite.extractorutils.unstable.core._log_upload_action import (
         MAX_FILE_SIZE_BYTES,
@@ -374,8 +370,6 @@ def test_upload_candidate_exceeds_max_size_returns_skipped_too_large(tmp_path: P
 
 
 def test_upload_candidate_cdf_error_returns_failed(tmp_path: Path) -> None:
-    from unittest.mock import MagicMock
-
     from cognite.extractorutils.unstable.core._log_upload_action import LogFileCandidate, _upload_candidate
 
     path = tmp_path / "extractor.log.2026-06-01"

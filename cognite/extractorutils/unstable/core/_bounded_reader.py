@@ -34,6 +34,14 @@ class BoundedReader:
     def tell(self) -> int:
         return self._size - self._remaining
 
+    def seek(self, offset: int, whence: int = 0) -> int:
+        pos = self._stream.seek(offset, whence)
+        self._remaining = max(0, self._size - pos)
+        return pos
+
+    def seekable(self) -> bool:
+        return self._stream.seekable()
+
     @property
     def closed(self) -> bool:
         return self._stream.closed

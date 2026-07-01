@@ -231,7 +231,7 @@ def fetch_logs_action(ctx: ActionContext) -> None:
         len(skipped_dates),
     )
 
-    # Snapshot the current-day file size BEFORE spawning upload threads.
+    # Snapshot the current-day file size BEFORE starting uploads.
     # This gives a fixed read ceiling for BoundedReader — bytes written after this
     # point are excluded from the upload, preventing Content-Length mismatches.
     snapshot_size: int | None = None
