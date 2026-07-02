@@ -6,6 +6,7 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Generic
 
+from cognite.extractorutils.unstable.core._dto import ActionStatus, ActionUpdate
 from cognite.extractorutils.unstable.configuration.models import ConfigType
 from cognite.extractorutils.unstable.core.errors import Error, ErrorLevel
 from cognite.extractorutils.unstable.core.logger import CogniteLogger
@@ -67,6 +68,16 @@ class ActionContext(Generic[ConfigType], CogniteLogger):
         """Record the result for a successful action completion."""
         self._result_message = message
         self._result_metadata = metadata
+
+    def report_progress(self, message: str) -> None:
+        """Queue an intermediate progress update while the action is still running."""
+        self._extractor._checkin_worker.queue_action_update(
+            ActionUpdate(
+                external_id=self.external_id,
+                status=ActionStatus.running,
+                result_message=message,
+            )
+        )
 
 
 class ActionError(Exception):

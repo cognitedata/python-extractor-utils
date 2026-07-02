@@ -250,15 +250,18 @@ def fetch_logs_action(ctx: ActionContext) -> None:
     integration_external_id = ctx._extractor.connection_config.integration.external_id
     cdf_client = ctx._extractor.cognite_client
 
-    upload_results: list[_FileUploadResult] = [
-        _upload_candidate(
-            candidate,
-            integration_external_id,
-            cdf_client,
-            snapshot_size if candidate.is_current else None,
+    total_candidates = len(candidates)
+    upload_results: list[_FileUploadResult] = []
+    for i, candidate in enumerate(candidates, 1):
+        upload_results.append(
+            _upload_candidate(
+                candidate,
+                integration_external_id,
+                cdf_client,
+                snapshot_size if candidate.is_current else None,
+            )
         )
-        for candidate in candidates
-    ]
+        ctx.report_progress(f"Uploading: {i}/{total_candidates} files complete")
 
     counts = Counter(r.status for r in upload_results)
 
