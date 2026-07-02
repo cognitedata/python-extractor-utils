@@ -431,6 +431,43 @@ def test_fetch_logs_action_all_files_missing_still_succeeds(tmp_path: Path) -> N
     assert succeeded.result_metadata["skipped_too_large_files"] == "0"
 
 
+def test_set_result_raises_on_second_call() -> None:
+    extractor = _make_extractor()
+    action = CustomAction(name="test", target=lambda ctx: None)
+    ctx = ActionContext(action=action, extractor=extractor, external_id="test-123")
+    ctx.set_result("first result")
+    with pytest.raises(RuntimeError, match="set_result\\(\\) has already been called"):
+        ctx.set_result("second result")
+
+
+def test_fetch_logs_action_snapshot_stat_failure_reports_failed(tmp_path: Path) -> None:
+    from unittest.mock import patch
+
+    log_path = tmp_path / "extractor.log"
+    log_path.write_bytes(b"x" * 100)
+    extractor = _make_extractor(log_path=log_path)
+
+    # Patch _today_utc so _PAST_TODAY is treated as "today", making the live file is_current=True.
+    # First stat (candidate building on the live file) succeeds; second (snapshot) raises.
+    stat_results = [MagicMock(st_size=100), OSError("permission denied")]
+    with (
+        patch(
+            "cognite.extractorutils.unstable.core._log_upload_action._today_utc",
+            return_value=_PAST_TODAY,
+        ),
+        patch("pathlib.Path.stat", side_effect=stat_results),
+    ):
+        updates = _dispatch(extractor, {"start_date": str(_PAST_TODAY), "end_date": str(_PAST_TODAY)})
+
+    succeeded = next(u for u in updates if u.status == ActionStatus.succeeded)
+    assert succeeded.result_metadata is not None
+    assert succeeded.result_metadata["failed_files"] == "1"
+    assert succeeded.result_metadata["uploaded_files"] == "0"
+    files = json.loads(succeeded.result_metadata["files"])
+    assert files[0]["status"] == "failed"
+    assert "could not read file size" in files[0]["error"]
+
+
 def test_fetch_logs_action_upload_failure_still_succeeds(tmp_path: Path) -> None:
     from unittest.mock import patch
 

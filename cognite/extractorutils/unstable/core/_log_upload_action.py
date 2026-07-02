@@ -231,10 +231,14 @@ def fetch_logs_action(ctx: ActionContext) -> None:
         len(skipped_dates),
     )
 
+    integration_external_id = ctx.integration_external_id
+    cdf_client = ctx.cdf_client
+
     # Snapshot the current-day file size BEFORE starting uploads.
     # This gives a fixed read ceiling for BoundedReader — bytes written after this
     # point are excluded from the upload, preventing Content-Length mismatches.
     snapshot_size: int | None = None
+    snapshot_failed_result: _FileUploadResult | None = None
     current_candidate = next((c for c in candidates if c.is_current), None)
     if current_candidate is not None:
         try:
@@ -245,10 +249,17 @@ def fetch_logs_action(ctx: ActionContext) -> None:
                 current_candidate.path.name,
             )
         except OSError as e:
-            _logger.warning("fetch_logs: could not snapshot current-day file size — %s", e)
-
-    integration_external_id = ctx.integration_external_id
-    cdf_client = ctx.cdf_client
+            _logger.warning(
+                "fetch_logs: could not snapshot current-day file size — %s; skipping to avoid uncapped upload",
+                e,
+            )
+            candidates = [c for c in candidates if not c.is_current]
+            snapshot_failed_result = _FileUploadResult(
+                log_date=current_candidate.log_date,
+                file_external_id=_file_external_id(integration_external_id, current_candidate.log_date),
+                status="failed",
+                error=f"could not read file size for bounded upload: {e}",
+            )
 
     upload_results: list[_FileUploadResult] = [
         _upload_candidate(
@@ -259,6 +270,8 @@ def fetch_logs_action(ctx: ActionContext) -> None:
         )
         for candidate in candidates
     ]
+    if snapshot_failed_result is not None:
+        upload_results.append(snapshot_failed_result)
 
     counts = Counter(r.status for r in upload_results)
 

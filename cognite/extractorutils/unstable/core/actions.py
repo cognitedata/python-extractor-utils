@@ -77,6 +77,11 @@ class ActionContext(Generic[ConfigType], CogniteLogger):
 
     def set_result(self, message: str, *, metadata: dict[str, str] | None = None) -> None:
         """Record the result for a successful action completion."""
+        if self._result_message is not None:
+            raise RuntimeError(
+                f"set_result() has already been called for this action invocation; "
+                f"existing message: {self._result_message!r}"
+            )
         self._result_message = message
         self._result_metadata = metadata
 
