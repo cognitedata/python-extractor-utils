@@ -1,3 +1,4 @@
+import io
 from pathlib import Path
 
 import pytest
@@ -111,6 +112,14 @@ def test_seek_relative(tmp_path: Path) -> None:
         assert reader.seek(2, 1) == 5
         assert reader.tell() == 5
         assert reader.read(3) == b" wo"  # bytes 5-7 of b"hello world" within snapshot of 8
+
+
+def test_seek_from_end_raises(tmp_path: Path) -> None:
+    path = _make_file(tmp_path, b"hello world")
+    with open(path, "rb") as f:
+        reader = BoundedReader(f, 8)
+        with pytest.raises(io.UnsupportedOperation):
+            reader.seek(0, 2)
 
 
 def test_seekable_mirrors_underlying_stream(tmp_path: Path) -> None:

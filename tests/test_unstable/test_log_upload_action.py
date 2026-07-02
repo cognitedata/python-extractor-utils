@@ -411,7 +411,8 @@ def test_fetch_logs_action_missing_files_reported_in_metadata(tmp_path: Path) ->
     succeeded = next(u for u in updates if u.status == ActionStatus.succeeded)
     assert succeeded.result_metadata is not None
     assert succeeded.result_metadata["uploaded_files"] == "1"
-    assert succeeded.result_metadata["skipped_files"] == "1"
+    assert succeeded.result_metadata["skipped_missing_files"] == "1"
+    assert succeeded.result_metadata["skipped_too_large_files"] == "0"
     assert succeeded.result_metadata["total_files"] == "2"
     files = json.loads(succeeded.result_metadata["files"])
     by_date = {f["date"]: f for f in files}
@@ -426,7 +427,8 @@ def test_fetch_logs_action_all_files_missing_still_succeeds(tmp_path: Path) -> N
     succeeded = next(u for u in updates if u.status == ActionStatus.succeeded)
     assert succeeded.result_metadata is not None
     assert succeeded.result_metadata["uploaded_files"] == "0"
-    assert succeeded.result_metadata["skipped_files"] == "1"
+    assert succeeded.result_metadata["skipped_missing_files"] == "1"
+    assert succeeded.result_metadata["skipped_too_large_files"] == "0"
 
 
 def test_fetch_logs_action_upload_failure_still_succeeds(tmp_path: Path) -> None:

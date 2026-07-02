@@ -281,18 +281,17 @@ def fetch_logs_action(ctx: ActionContext) -> None:
             "file_external_id": _file_external_id(integration_external_id, skipped_date),
             "status": "skipped",
         }
-        for skipped_date in sorted(skipped_dates)
+        for skipped_date in skipped_dates
     )
     files_list.sort(key=lambda e: e["date"])
-
-    total_skipped = len(skipped_dates) + counts["skipped_too_large"]
 
     ctx.set_result(
         f"{counts['uploaded']} of {num_days} log files uploaded to CDF Files",
         metadata={
             "total_files": str(num_days),
             "uploaded_files": str(counts["uploaded"]),
-            "skipped_files": str(total_skipped),
+            "skipped_missing_files": str(len(skipped_dates)),
+            "skipped_too_large_files": str(counts["skipped_too_large"]),
             "failed_files": str(counts["failed"]),
             "files": json.dumps(files_list),
         },
