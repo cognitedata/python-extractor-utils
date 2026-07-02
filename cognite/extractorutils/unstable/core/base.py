@@ -677,7 +677,12 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         try:
             custom.target(ctx)
             self._checkin_worker.queue_action_update(
-                ActionUpdate(external_id=action.external_id, status=ActionStatus.succeeded)
+                ActionUpdate(
+                    external_id=action.external_id,
+                    status=ActionStatus.succeeded,
+                    result_message=ctx._result_message,
+                    result_metadata=ctx._result_metadata,
+                )
             )
         except ActionError as e:
             self._checkin_worker.queue_action_update(

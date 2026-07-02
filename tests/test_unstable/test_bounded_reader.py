@@ -93,6 +93,33 @@ def test_tell_tracks_bytes_consumed(tmp_path: Path) -> None:
         assert reader.tell() == 8
 
 
+def test_seek_rewinds_for_retry(tmp_path: Path) -> None:
+    path = _make_file(tmp_path, b"hello world")
+    with open(path, "rb") as f:
+        reader = BoundedReader(f, 8)
+        assert reader.read(5) == b"hello"
+        assert reader.seek(0) == 0
+        assert reader.tell() == 0
+        assert reader.read(5) == b"hello"
+
+
+def test_seek_relative(tmp_path: Path) -> None:
+    path = _make_file(tmp_path, b"hello world")
+    with open(path, "rb") as f:
+        reader = BoundedReader(f, 8)
+        reader.read(3)
+        assert reader.seek(2, 1) == 5
+        assert reader.tell() == 5
+        assert reader.read(3) == b" wo"  # bytes 5-7 of b"hello world" within snapshot of 8
+
+
+def test_seekable_mirrors_underlying_stream(tmp_path: Path) -> None:
+    path = _make_file(tmp_path, b"data")
+    with open(path, "rb") as f:
+        reader = BoundedReader(f, 4)
+        assert reader.seekable() == f.seekable()
+
+
 def test_stream_shorter_than_snapshot_partial(tmp_path: Path) -> None:
     # File has 5 bytes but snapshot declares 10 (e.g. file was truncated after snapshot).
     # _remaining decrements by len(data) not to_read, so tell() reflects actual bytes read.
