@@ -83,7 +83,7 @@ def _to_snake_case(dictionary: dict[str, Any], case_style: str) -> dict[str, Any
         raise ValueError(f"Invalid case style: {case_style}")
 
 
-def _load_certificate_data(cert_path: str | Path, password: str | None) -> tuple[str, str] | tuple[bytes, bytes]:
+def _load_certificate_data(cert_path: str | Path, password: str | None) -> tuple[bytes, bytes]:
     path = Path(cert_path) if isinstance(cert_path, str) else cert_path
     cert_data = Path(path).read_bytes()
 

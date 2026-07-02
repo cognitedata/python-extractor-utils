@@ -444,8 +444,8 @@ class CogniteConfig:
             credential_provider = OAuthClientCertificate(
                 authority_url=authority_url,
                 client_id=self.idp_authentication.client_id,
-                cert_thumbprint=str(thumprint),
-                certificate=str(key),
+                cert_thumbprint=str(thumprint, "utf-8"),
+                certificate=str(key, "utf-8"),
                 scopes=self.idp_authentication.scopes,
             )
 
