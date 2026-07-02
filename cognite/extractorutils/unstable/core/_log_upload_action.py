@@ -247,8 +247,8 @@ def fetch_logs_action(ctx: ActionContext) -> None:
         except OSError as e:
             _logger.warning("fetch_logs: could not snapshot current-day file size — %s", e)
 
-    integration_external_id = ctx._extractor.connection_config.integration.external_id
-    cdf_client = ctx._extractor.cognite_client
+    integration_external_id = ctx.integration_external_id
+    cdf_client = ctx.cdf_client
 
     upload_results: list[_FileUploadResult] = [
         _upload_candidate(

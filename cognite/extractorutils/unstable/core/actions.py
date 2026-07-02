@@ -11,6 +11,8 @@ from cognite.extractorutils.unstable.core.errors import Error, ErrorLevel
 from cognite.extractorutils.unstable.core.logger import CogniteLogger
 
 if TYPE_CHECKING:
+    from cognite.client import CogniteClient
+
     from cognite.extractorutils.unstable.core.base import Extractor
 
 __all__ = ["ActionContext", "ActionError", "ActionTarget", "CustomAction"]
@@ -47,6 +49,16 @@ class ActionContext(Generic[ConfigType], CogniteLogger):
     def application_config(self) -> ConfigType:
         """The extractor's application configuration."""
         return self._extractor.application_config
+
+    @property
+    def cdf_client(self) -> "CogniteClient":
+        """The Cognite client for interacting with CDF."""
+        return self._extractor.cognite_client
+
+    @property
+    def integration_external_id(self) -> str:
+        """The external ID of the integration this extractor is registered as."""
+        return self._extractor.connection_config.integration.external_id
 
     def _new_error(
         self,
