@@ -1,3 +1,4 @@
+import io
 from pathlib import Path
 
 import pytest
@@ -91,6 +92,72 @@ def test_tell_tracks_bytes_consumed(tmp_path: Path) -> None:
         assert reader.tell() == 3
         reader.read(5)
         assert reader.tell() == 8
+
+
+def test_seek_rewinds_for_retry(tmp_path: Path) -> None:
+    path = _make_file(tmp_path, b"hello world")
+    with open(path, "rb") as f:
+        reader = BoundedReader(f, 8)
+        assert reader.read(5) == b"hello"
+        assert reader.seek(0) == 0
+        assert reader.tell() == 0
+        assert reader.read(5) == b"hello"
+
+
+def test_seek_relative(tmp_path: Path) -> None:
+    path = _make_file(tmp_path, b"hello world")
+    with open(path, "rb") as f:
+        reader = BoundedReader(f, 8)
+        reader.read(3)
+        assert reader.seek(2, 1) == 5
+        assert reader.tell() == 5
+        assert reader.read(3) == b" wo"  # bytes 5-7 of b"hello world" within snapshot of 8
+
+
+def test_seek_from_end_raises(tmp_path: Path) -> None:
+    path = _make_file(tmp_path, b"hello world")
+    with open(path, "rb") as f:
+        reader = BoundedReader(f, 8)
+        with pytest.raises(io.UnsupportedOperation):
+            reader.seek(0, 2)
+
+
+def test_seekable_mirrors_underlying_stream(tmp_path: Path) -> None:
+    path = _make_file(tmp_path, b"data")
+    with open(path, "rb") as f:
+        reader = BoundedReader(f, 4)
+        assert reader.seekable() == f.seekable()
+
+
+def test_stream_shorter_than_snapshot_partial(tmp_path: Path) -> None:
+    # File has 5 bytes but snapshot declares 10 (e.g. file was truncated after snapshot).
+    # _remaining decrements by len(data) not to_read, so tell() reflects actual bytes read.
+    path = _make_file(tmp_path, b"hello")
+    with open(path, "rb") as f:
+        reader = BoundedReader(f, 10)
+        assert len(reader) == 10  # snapshot still declared
+        data = reader.read(10)
+        assert data == b"hello"  # only 5 bytes available
+        assert reader.tell() == 5  # tracks actual bytes, not requested
+        assert reader.read() == b""
+
+
+def test_read_multiple_calls_clamps_final_chunk(tmp_path: Path) -> None:
+    path = _make_file(tmp_path, b"hello world")
+    with open(path, "rb") as f:
+        reader = BoundedReader(f, 7)
+        assert reader.read(3) == b"hel"
+        assert reader.read(3) == b"lo "
+        assert reader.read(3) == b"w"  # only 1 byte left — clamped by min(size, remaining)
+        assert reader.read(3) == b""
+
+
+def test_read_all_after_partial_consumption(tmp_path: Path) -> None:
+    path = _make_file(tmp_path, b"hello")
+    with open(path, "rb") as f:
+        reader = BoundedReader(f, 5)
+        assert reader.read(3) == b"hel"
+        assert reader.read(-1) == b"lo"  # read() after partial — returns only remaining 2 bytes
 
 
 def test_close_and_closed_property(tmp_path: Path) -> None:

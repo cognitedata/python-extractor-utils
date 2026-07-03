@@ -41,7 +41,7 @@ class _FileUploadResult:
     log_date: date
     file_external_id: str
     status: Literal["uploaded", "skipped_too_large", "failed"]
-    size_bytes: int = 0
+    size_bytes: int | None = None
     error: str | None = None
 
 
@@ -231,10 +231,14 @@ def fetch_logs_action(ctx: ActionContext) -> None:
         len(skipped_dates),
     )
 
-    # Snapshot the current-day file size BEFORE spawning upload threads.
+    integration_external_id = ctx.integration_external_id
+    cdf_client = ctx.cdf_client
+
+    # Snapshot the current-day file size BEFORE starting uploads.
     # This gives a fixed read ceiling for BoundedReader — bytes written after this
     # point are excluded from the upload, preventing Content-Length mismatches.
     snapshot_size: int | None = None
+    snapshot_failed_result: _FileUploadResult | None = None
     current_candidate = next((c for c in candidates if c.is_current), None)
     if current_candidate is not None:
         try:
@@ -245,10 +249,17 @@ def fetch_logs_action(ctx: ActionContext) -> None:
                 current_candidate.path.name,
             )
         except OSError as e:
-            _logger.warning("fetch_logs: could not snapshot current-day file size — %s", e)
-
-    integration_external_id = ctx._extractor.connection_config.integration.external_id
-    cdf_client = ctx._extractor.cognite_client
+            _logger.warning(
+                "fetch_logs: could not snapshot current-day file size — %s; skipping to avoid uncapped upload",
+                e,
+            )
+            candidates = [c for c in candidates if not c.is_current]
+            snapshot_failed_result = _FileUploadResult(
+                log_date=current_candidate.log_date,
+                file_external_id=_file_external_id(integration_external_id, current_candidate.log_date),
+                status="failed",
+                error=f"could not read file size for bounded upload: {e}",
+            )
 
     total_candidates = len(candidates)
     upload_results: list[_FileUploadResult] = []
@@ -262,6 +273,9 @@ def fetch_logs_action(ctx: ActionContext) -> None:
             )
         )
         ctx.report_progress(f"Uploading: {i}/{total_candidates} files complete")
+        
+    if snapshot_failed_result is not None:
+        upload_results.append(snapshot_failed_result)
 
     counts = Counter(r.status for r in upload_results)
 
@@ -273,7 +287,7 @@ def fetch_logs_action(ctx: ActionContext) -> None:
             "file_external_id": r.file_external_id,
             "status": r.status,
         }
-        if r.size_bytes:
+        if r.size_bytes is not None:
             entry["size_bytes"] = str(r.size_bytes)
         if r.error:
             entry["error"] = r.error
@@ -284,18 +298,17 @@ def fetch_logs_action(ctx: ActionContext) -> None:
             "file_external_id": _file_external_id(integration_external_id, skipped_date),
             "status": "skipped",
         }
-        for skipped_date in sorted(skipped_dates)
+        for skipped_date in skipped_dates
     )
     files_list.sort(key=lambda e: e["date"])
-
-    total_skipped = len(skipped_dates) + counts["skipped_too_large"]
 
     ctx.set_result(
         f"{counts['uploaded']} of {num_days} log files uploaded to CDF Files",
         metadata={
             "total_files": str(num_days),
             "uploaded_files": str(counts["uploaded"]),
-            "skipped_files": str(total_skipped),
+            "skipped_missing_files": str(len(skipped_dates)),
+            "skipped_too_large_files": str(counts["skipped_too_large"]),
             "failed_files": str(counts["failed"]),
             "files": json.dumps(files_list),
         },
