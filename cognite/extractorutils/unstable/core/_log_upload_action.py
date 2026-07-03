@@ -41,7 +41,7 @@ class _FileUploadResult:
     log_date: date
     file_external_id: str
     status: Literal["uploaded", "skipped_too_large", "failed"]
-    size_bytes: int | None = None
+    size_bytes: int = 0
     error: str | None = None
 
 
@@ -283,7 +283,7 @@ def fetch_logs_action(ctx: ActionContext) -> None:
             "file_external_id": r.file_external_id,
             "status": r.status,
         }
-        if r.size_bytes is not None:
+        if r.size_bytes:
             entry["size_bytes"] = str(r.size_bytes)
         if r.error:
             entry["error"] = r.error
