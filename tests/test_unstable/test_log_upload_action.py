@@ -178,6 +178,26 @@ def test_resolve_log_file_path_with_file_handlers(tmp_path: Path, handler_names:
     assert _resolve_log_file_path(config) == tmp_path / expected_name
 
 
+def test_resolve_log_file_path_warns_for_multiple_file_handlers(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    config = TestConfig(
+        parameter_one=1,
+        parameter_two="a",
+        log_handlers=[
+            LogFileHandlerConfig(type="file", path=tmp_path / "first.log", level=LogLevel.INFO),
+            LogFileHandlerConfig(type="file", path=tmp_path / "second.log", level=LogLevel.INFO),
+        ],
+    )
+    import logging
+
+    with caplog.at_level(logging.WARNING):
+        result = _resolve_log_file_path(config)
+
+    assert result == tmp_path / "first.log"
+    assert any("multiple file log handlers" in r.message for r in caplog.records)
+
+
 def test_existing_rotated_files_become_candidates(tmp_path: Path) -> None:
     base = tmp_path / "extractor.log"
     start = date(2026, 6, 1)

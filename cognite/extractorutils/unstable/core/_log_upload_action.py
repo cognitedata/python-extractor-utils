@@ -61,10 +61,15 @@ def _parse_date(raw: str, field: str) -> date:
 
 def _resolve_log_file_path(config: ExtractorConfig) -> Path | None:
     """Return the base log file path from the first file handler in config, or None."""
-    for handler in config.log_handlers:
-        if isinstance(handler, LogFileHandlerConfig):
-            return handler.path
-    return None
+    file_handlers = [h for h in config.log_handlers if isinstance(h, LogFileHandlerConfig)]
+    if not file_handlers:
+        return None
+    if len(file_handlers) > 1:
+        _logger.warning(
+            "fetch_logs: multiple file log handlers configured; only the first (%s) will be uploaded",
+            file_handlers[0].path,
+        )
+    return file_handlers[0].path
 
 
 def _build_candidate_files(
