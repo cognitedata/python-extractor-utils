@@ -16,9 +16,9 @@ class BoundedReader:
 
     Usage::
 
-        snapshot_size = os.path.getsize(log_path)
-        with BoundedReader(open(log_path, "rb"), snapshot_size) as reader:
-            upload_queue.add_io_to_upload_queue(file_meta, lambda: reader, ...)
+        with open(log_path, "rb") as f:
+            size = f.seek(0, 2); f.seek(0)
+            cdf_client.files.upload_bytes(content=BoundedReader(f, size), ...)
     """
 
     def __init__(self, stream: BinaryIO, max_bytes: int) -> None:

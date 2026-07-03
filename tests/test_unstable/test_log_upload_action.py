@@ -335,7 +335,7 @@ def test_upload_candidate_calls_cdf_upload_for_rotated_file(tmp_path: Path) -> N
     candidate = LogFileCandidate(log_date=date(2026, 6, 1), path=path, is_current=False)
     mock_client = MagicMock()
 
-    result = _upload_candidate(candidate, "my-extractor", mock_client, snapshot_size=None)
+    result = _upload_candidate(candidate, "my-extractor", mock_client)
 
     assert result.status == "uploaded"
     assert result.size_bytes == path.stat().st_size
@@ -351,11 +351,51 @@ def test_upload_candidate_current_day_uses_bounded_reader(tmp_path: Path) -> Non
     from cognite.extractorutils.unstable.core._log_upload_action import LogFileCandidate, _upload_candidate
 
     path = tmp_path / "extractor.log"
+    path.write_bytes(b"x" * 300)
+    candidate = LogFileCandidate(log_date=_PAST_TODAY, path=path, is_current=True)
+    mock_client = MagicMock()
+
+    result = _upload_candidate(candidate, "my-extractor", mock_client)
+
+    assert result.status == "uploaded"
+    assert result.size_bytes == 300
+    _, kwargs = mock_client.files.upload_bytes.call_args
+    assert isinstance(kwargs["content"], BoundedReader)
+    assert len(kwargs["content"]) == 300
+
+
+def test_upload_candidate_rotated_file_does_not_use_bounded_reader(tmp_path: Path) -> None:
+    from cognite.extractorutils.unstable.core._bounded_reader import BoundedReader
+    from cognite.extractorutils.unstable.core._log_upload_action import LogFileCandidate, _upload_candidate
+
+    path = tmp_path / "extractor.log.2026-06-01"
+    path.write_bytes(b"rotated data")
+    candidate = LogFileCandidate(log_date=date(2026, 6, 1), path=path, is_current=False)
+    mock_client = MagicMock()
+
+    _upload_candidate(candidate, "my-extractor", mock_client)
+
+    _, kwargs = mock_client.files.upload_bytes.call_args
+    assert not isinstance(kwargs["content"], BoundedReader)
+
+
+def test_upload_candidate_current_day_bounded_reader_caps_to_stat_size(tmp_path: Path) -> None:
+    from unittest.mock import patch
+
+    from cognite.extractorutils.unstable.core._bounded_reader import BoundedReader
+    from cognite.extractorutils.unstable.core._log_upload_action import LogFileCandidate, _upload_candidate
+
+    path = tmp_path / "extractor.log"
     path.write_bytes(b"x" * 500)
     candidate = LogFileCandidate(log_date=_PAST_TODAY, path=path, is_current=True)
     mock_client = MagicMock()
 
-    result = _upload_candidate(candidate, "my-extractor", mock_client, snapshot_size=300)
+    # Simulate file stat returning 300 while the file on disk is actually 500 bytes
+    # (as if the logger appended bytes after the stat but before upload).
+    mock_stat_result = MagicMock()
+    mock_stat_result.st_size = 300
+    with patch("pathlib.Path.stat", return_value=mock_stat_result):
+        result = _upload_candidate(candidate, "my-extractor", mock_client)
 
     assert result.status == "uploaded"
     assert result.size_bytes == 300
@@ -382,7 +422,7 @@ def test_upload_candidate_exceeds_max_size_returns_skipped_too_large(tmp_path: P
     mock_stat_result = MagicMock()
     mock_stat_result.st_size = oversized
     with patch("pathlib.Path.stat", return_value=mock_stat_result):
-        result = _upload_candidate(candidate, "my-extractor", mock_client, snapshot_size=None)
+        result = _upload_candidate(candidate, "my-extractor", mock_client)
 
     assert result.status == "skipped_too_large"
     assert result.size_bytes == oversized
@@ -398,7 +438,7 @@ def test_upload_candidate_cdf_error_returns_failed(tmp_path: Path) -> None:
     mock_client = MagicMock()
     mock_client.files.upload_bytes.side_effect = RuntimeError("CDF unavailable")
 
-    result = _upload_candidate(candidate, "my-extractor", mock_client, snapshot_size=None)
+    result = _upload_candidate(candidate, "my-extractor", mock_client)
 
     assert result.status == "failed"
     assert "CDF unavailable" in (result.error or "")
@@ -460,7 +500,7 @@ def test_set_result_raises_on_second_call() -> None:
         ctx.set_result("second result")
 
 
-def test_fetch_logs_action_snapshot_stat_failure_reports_failed(tmp_path: Path) -> None:
+def test_fetch_logs_action_stat_failure_for_current_file_reports_failed(tmp_path: Path) -> None:
     from unittest.mock import patch
 
     log_path = tmp_path / "extractor.log"
@@ -468,7 +508,7 @@ def test_fetch_logs_action_snapshot_stat_failure_reports_failed(tmp_path: Path) 
     extractor = _make_extractor(log_path=log_path)
 
     # Patch _today_utc so _PAST_TODAY is treated as "today", making the live file is_current=True.
-    # First stat (candidate building on the live file) succeeds; second (snapshot) raises.
+    # First stat (candidate building on the live file) succeeds; second (in _upload_candidate) raises.
     stat_results = [MagicMock(st_size=100), OSError("permission denied")]
     with (
         patch(
@@ -485,7 +525,7 @@ def test_fetch_logs_action_snapshot_stat_failure_reports_failed(tmp_path: Path) 
     assert succeeded.result_metadata["uploaded_files"] == "0"
     files = json.loads(succeeded.result_metadata["files"])
     assert files[0]["status"] == "failed"
-    assert "could not read file size" in files[0]["error"]
+    assert "permission denied" in files[0]["error"]
 
 
 def test_fetch_logs_action_upload_failure_still_succeeds(tmp_path: Path) -> None:

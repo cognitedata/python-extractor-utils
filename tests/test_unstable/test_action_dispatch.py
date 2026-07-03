@@ -276,3 +276,31 @@ def test_set_result_propagates_to_succeeded_action_update() -> None:
     succeeded = next(u for u in updates if u.status == ActionStatus.succeeded)
     assert succeeded.result_message == "3 files uploaded"
     assert succeeded.result_metadata == {"total_files": "3", "uploaded_files": "3"}
+
+
+def test_set_result_without_metadata_leaves_result_metadata_none() -> None:
+    extractor = _make_extractor()
+
+    def action_message_only(ctx: ActionContext) -> None:
+        ctx.set_result("done")
+
+    extractor.add_action(CustomAction(name="simple", target=action_message_only))
+    extractor._dispatch_single_action(_make_action("act-s", "simple"))
+    updates = [c[0][0] for c in extractor._checkin_worker.queue_action_update.call_args_list]
+    succeeded = next(u for u in updates if u.status == ActionStatus.succeeded)
+    assert succeeded.result_message == "done"
+    assert succeeded.result_metadata is None
+
+
+def test_action_context_exposes_cdf_client_and_integration_external_id() -> None:
+    extractor = _make_extractor()
+    captured: dict = {}
+
+    def capture(ctx: ActionContext) -> None:
+        captured["cdf_client"] = ctx.cdf_client
+        captured["integration_external_id"] = ctx.integration_external_id
+
+    extractor.add_action(CustomAction(name="probe", target=capture))
+    extractor._dispatch_single_action(_make_action("act-p", "probe"))
+    assert captured["cdf_client"] is extractor.cognite_client
+    assert captured["integration_external_id"] == "test-integration"
