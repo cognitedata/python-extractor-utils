@@ -303,7 +303,7 @@ def fetch_logs_action(ctx: ActionContext) -> None:
         metadata={
             "total_files": str(num_days),
             "uploaded_files": str(counts["uploaded"]),
-            "skipped_missing_files": str(len(skipped_dates)),
+            "missing_files": str(len(skipped_dates)),
             "skipped_too_large_files": str(counts["skipped_too_large"]),
             "failed_files": str(counts["failed"]),
             "files": json.dumps(files_list),
