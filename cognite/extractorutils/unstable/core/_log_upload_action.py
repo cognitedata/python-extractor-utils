@@ -61,10 +61,15 @@ def _parse_date(raw: str, field: str) -> date:
 
 def _resolve_log_file_path(config: ExtractorConfig) -> Path | None:
     """Return the base log file path from the first file handler in config, or None."""
-    for handler in config.log_handlers:
-        if isinstance(handler, LogFileHandlerConfig):
-            return handler.path
-    return None
+    file_handlers = [h for h in config.log_handlers if isinstance(h, LogFileHandlerConfig)]
+    if not file_handlers:
+        return None
+    if len(file_handlers) > 1:
+        _logger.warning(
+            "fetch_logs: multiple file log handlers configured; only the first (%s) will be uploaded",
+            file_handlers[0].path,
+        )
+    return file_handlers[0].path
 
 
 def _build_candidate_files(
@@ -125,13 +130,12 @@ def _upload_candidate(
     candidate: LogFileCandidate,
     integration_external_id: str,
     cdf_client: CogniteClient,
-    snapshot_size: int | None,
 ) -> _FileUploadResult:
     """Upload one candidate log file to CDF Files. Returns a result regardless of success or failure."""
     external_id = _file_external_id(integration_external_id, candidate.log_date)
 
     try:
-        actual_size = snapshot_size if snapshot_size is not None else candidate.path.stat().st_size
+        actual_size = candidate.path.stat().st_size
     except OSError as e:
         return _FileUploadResult(
             log_date=candidate.log_date, file_external_id=external_id, status="failed", error=str(e)
@@ -153,7 +157,7 @@ def _upload_candidate(
 
     try:
         with open(candidate.path, "rb") as f:
-            reader: BinaryIO = BoundedReader(f, snapshot_size) if snapshot_size is not None else f  # type: ignore[assignment]
+            reader: BinaryIO = BoundedReader(f, actual_size) if candidate.is_current else f  # type: ignore[assignment]
             cdf_client.files.upload_bytes(
                 content=reader,
                 name=f"{external_id}.log",
@@ -234,33 +238,6 @@ def fetch_logs_action(ctx: ActionContext) -> None:
     integration_external_id = ctx.integration_external_id
     cdf_client = ctx.cdf_client
 
-    # Snapshot the current-day file size BEFORE starting uploads.
-    # This gives a fixed read ceiling for BoundedReader — bytes written after this
-    # point are excluded from the upload, preventing Content-Length mismatches.
-    snapshot_size: int | None = None
-    snapshot_failed_result: _FileUploadResult | None = None
-    current_candidate = next((c for c in candidates if c.is_current), None)
-    if current_candidate is not None:
-        try:
-            snapshot_size = current_candidate.path.stat().st_size
-            _logger.info(
-                "fetch_logs: current-day snapshot %d bytes (%s)",
-                snapshot_size,
-                current_candidate.path.name,
-            )
-        except OSError as e:
-            _logger.warning(
-                "fetch_logs: could not snapshot current-day file size — %s; skipping to avoid uncapped upload",
-                e,
-            )
-            candidates = [c for c in candidates if not c.is_current]
-            snapshot_failed_result = _FileUploadResult(
-                log_date=current_candidate.log_date,
-                file_external_id=_file_external_id(integration_external_id, current_candidate.log_date),
-                status="failed",
-                error=f"could not read file size for bounded upload: {e}",
-            )
-
     total_candidates = len(candidates)
     upload_results: list[_FileUploadResult] = []
     for i, candidate in enumerate(candidates, 1):
@@ -268,14 +245,10 @@ def fetch_logs_action(ctx: ActionContext) -> None:
             _upload_candidate(
                 candidate,
                 integration_external_id,
-                cdf_client,
-                snapshot_size if candidate.is_current else None,
+                cdf_client
             )
         )
         ctx.report_progress(f"Uploading: {i}/{total_candidates} files complete")
-        
-    if snapshot_failed_result is not None:
-        upload_results.append(snapshot_failed_result)
 
     counts = Counter(r.status for r in upload_results)
 
@@ -307,7 +280,7 @@ def fetch_logs_action(ctx: ActionContext) -> None:
         metadata={
             "total_files": str(num_days),
             "uploaded_files": str(counts["uploaded"]),
-            "skipped_missing_files": str(len(skipped_dates)),
+            "missing_files": str(len(skipped_dates)),
             "skipped_too_large_files": str(counts["skipped_too_large"]),
             "failed_files": str(counts["failed"]),
             "files": json.dumps(files_list),
