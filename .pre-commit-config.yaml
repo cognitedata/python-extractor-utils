@@ -4,7 +4,7 @@ repos:
     -   id: ruff
         args: [--fix, --exit-non-zero-on-fix]
     -   id: ruff-format
-    rev: v0.15.18
+    rev: v0.15.19
 -   repo: local
     hooks:
     -   id: mypy
