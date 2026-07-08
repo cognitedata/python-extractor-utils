@@ -168,3 +168,27 @@ def test_close_and_closed_property(tmp_path: Path) -> None:
     reader.close()
     assert reader.closed
     assert f.closed
+
+
+def test_retry_cycle_preserves_content_length_and_content(tmp_path: Path) -> None:
+    # Simulates what requests/httpx does on a transport error: read partway,
+    # call seek(0), then re-read from the start for the retry attempt.
+    # Both passes must declare the same Content-Length and reproduce the full content.
+    content = b"hello world retry test data"
+    path = _make_file(tmp_path, content)
+
+    with open(path, "rb") as f:
+        reader = BoundedReader(f, len(content))
+
+        # First attempt: super_len() is called to set Content-Length, then partial read
+        assert super_len(reader) == len(content)
+        partial = reader.read(10)
+        assert partial == content[:10]
+
+        # Transport error → retry: SDK calls seek(0) to reset the body
+        reader.seek(0)
+
+        # Second attempt: Content-Length must be identical and full content reproduced
+        assert super_len(reader) == len(content)
+        second_read = reader.read()
+        assert second_read == content
