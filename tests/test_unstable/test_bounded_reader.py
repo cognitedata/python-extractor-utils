@@ -1,7 +1,10 @@
+import io
 from pathlib import Path
 
 import pytest
+import urllib3
 from requests.utils import super_len
+from urllib3.connectionpool import HTTPConnectionPool
 
 from cognite.extractorutils.unstable.core._bounded_reader import BoundedReader
 
@@ -93,6 +96,41 @@ def test_tell_tracks_bytes_consumed(tmp_path: Path) -> None:
         assert reader.tell() == 8
 
 
+def test_seek_rewinds_for_retry(tmp_path: Path) -> None:
+    path = _make_file(tmp_path, b"hello world")
+    with open(path, "rb") as f:
+        reader = BoundedReader(f, 8)
+        assert reader.read(5) == b"hello"
+        assert reader.seek(0) == 0
+        assert reader.tell() == 0
+        assert reader.read(5) == b"hello"
+
+
+def test_seek_relative(tmp_path: Path) -> None:
+    path = _make_file(tmp_path, b"hello world")
+    with open(path, "rb") as f:
+        reader = BoundedReader(f, 8)
+        reader.read(3)
+        assert reader.seek(2, 1) == 5
+        assert reader.tell() == 5
+        assert reader.read(3) == b" wo"  # bytes 5-7 of b"hello world" within snapshot of 8
+
+
+def test_seek_from_end_raises(tmp_path: Path) -> None:
+    path = _make_file(tmp_path, b"hello world")
+    with open(path, "rb") as f:
+        reader = BoundedReader(f, 8)
+        with pytest.raises(io.UnsupportedOperation):
+            reader.seek(0, 2)
+
+
+def test_seekable_mirrors_underlying_stream(tmp_path: Path) -> None:
+    path = _make_file(tmp_path, b"data")
+    with open(path, "rb") as f:
+        reader = BoundedReader(f, 4)
+        assert reader.seekable() == f.seekable()
+
+
 def test_stream_shorter_than_snapshot_partial(tmp_path: Path) -> None:
     # File has 5 bytes but snapshot declares 10 (e.g. file was truncated after snapshot).
     # _remaining decrements by len(data) not to_read, so tell() reflects actual bytes read.
@@ -132,3 +170,46 @@ def test_close_and_closed_property(tmp_path: Path) -> None:
     reader.close()
     assert reader.closed
     assert f.closed
+
+
+def test_seek_driven_by_real_urllib3_retry(tmp_path: Path) -> None:
+    """
+    Unlike a hand-written retry loop, this test never calls reader.seek()
+    itself — urllib3 (the library requests/httpx sit on top of) calls it
+    internally via rewind_body() when it retries a failed connection.
+    This proves BoundedReader satisfies the real contract, not just the
+    contract as the test imagines it.
+    """
+    content = b"hello world retry test data"
+    path = _make_file(tmp_path, content)
+    attempts: dict[str, object] = {"count": 0}
+
+    class FlakyConnection:
+        is_closed = False
+        is_verified = True
+        proxy_is_verified = None
+
+        def __init__(self, *a: object, **kw: object) -> None:
+            pass
+
+        def request(self, method: str, url: str, body: object = None, **kw: object) -> None:
+            attempts["count"] = int(attempts["count"]) + 1
+            if attempts["count"] == 1:
+                body.read(10)  # type: ignore[union-attr]  # partial read before the simulated drop
+                raise urllib3.exceptions.ProtocolError("simulated transport failure")
+            attempts["second_read"] = body.read()  # type: ignore[union-attr]  # urllib3 already rewound body for us
+
+        def getresponse(self) -> urllib3.HTTPResponse:
+            return urllib3.HTTPResponse(body=b"", status=200, preload_content=False)
+
+        def close(self) -> None:
+            pass
+
+    with open(path, "rb") as f:
+        reader = BoundedReader(f, len(content))
+        pool = HTTPConnectionPool("example.invalid")
+        pool.ConnectionCls = FlakyConnection  # type: ignore[assignment]
+        pool.urlopen("POST", "/upload", body=reader, retries=urllib3.Retry(total=1, allowed_methods=None))
+
+    assert attempts["count"] == 2
+    assert attempts["second_read"] == content

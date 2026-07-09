@@ -1,5 +1,6 @@
 """Bounded binary reader for point-in-time log file uploads."""
 
+import io
 from typing import BinaryIO
 
 
@@ -15,9 +16,9 @@ class BoundedReader:
 
     Usage::
 
-        snapshot_size = os.path.getsize(log_path)
-        with BoundedReader(open(log_path, "rb"), snapshot_size) as reader:
-            upload_queue.add_io_to_upload_queue(file_meta, lambda: reader, ...)
+        with open(log_path, "rb") as f:
+            size = f.seek(0, 2); f.seek(0)
+            cdf_client.files.upload_bytes(content=BoundedReader(f, size), ...)
     """
 
     def __init__(self, stream: BinaryIO, max_bytes: int) -> None:
@@ -33,6 +34,16 @@ class BoundedReader:
 
     def tell(self) -> int:
         return self._size - self._remaining
+
+    def seek(self, offset: int, whence: int = 0) -> int:
+        if whence == 2:
+            raise io.UnsupportedOperation("BoundedReader does not support seek from end (whence=2)")
+        pos = self._stream.seek(offset, whence)
+        self._remaining = max(0, self._size - pos)
+        return pos
+
+    def seekable(self) -> bool:
+        return self._stream.seekable()
 
     @property
     def closed(self) -> bool:
