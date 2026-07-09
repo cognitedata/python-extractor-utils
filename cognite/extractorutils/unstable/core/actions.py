@@ -6,8 +6,8 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Generic
 
-from cognite.extractorutils.unstable.core._dto import ActionStatus, ActionUpdate
 from cognite.extractorutils.unstable.configuration.models import ConfigType
+from cognite.extractorutils.unstable.core._dto import ActionStatus, ActionUpdate
 from cognite.extractorutils.unstable.core.errors import Error, ErrorLevel
 from cognite.extractorutils.unstable.core.logger import CogniteLogger
 

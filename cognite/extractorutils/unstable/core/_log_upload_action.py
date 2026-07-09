@@ -241,13 +241,7 @@ def fetch_logs_action(ctx: ActionContext) -> None:
     total_candidates = len(candidates)
     upload_results: list[_FileUploadResult] = []
     for i, candidate in enumerate(candidates, 1):
-        upload_results.append(
-            _upload_candidate(
-                candidate,
-                integration_external_id,
-                cdf_client
-            )
-        )
+        upload_results.append(_upload_candidate(candidate, integration_external_id, cdf_client))
         ctx.report_progress(f"Uploading: {i}/{total_candidates} files complete")
 
     counts = Counter(r.status for r in upload_results)
