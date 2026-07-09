@@ -9,12 +9,15 @@ from cognite.extractorutils.unstable.configuration.models import (
     LogFileHandlerConfig,
     LogLevel,
 )
+from cognite.extractorutils.unstable.core._bounded_reader import BoundedReader
 from cognite.extractorutils.unstable.core._dto import Action, ActionStatus, ActionUpdate
 from cognite.extractorutils.unstable.core._log_upload_action import (
     MAX_DATE_RANGE_DAYS,
+    LogFileCandidate,
     _build_candidate_files,
     _FileUploadResult,
     _resolve_log_file_path,
+    _upload_candidate,
 )
 from cognite.extractorutils.unstable.core.actions import ActionContext, ActionError, CustomAction
 from cognite.extractorutils.unstable.core.base import FullConfig
@@ -402,6 +405,27 @@ def test_upload_candidate_current_day_bounded_reader_caps_to_stat_size(tmp_path:
     _, kwargs = mock_client.files.upload_bytes.call_args
     assert isinstance(kwargs["content"], BoundedReader)
     assert len(kwargs["content"]) == 300
+
+
+def test_upload_candidate_bounded_reader_content_is_actually_consumable(tmp_path: Path) -> None:
+    path = tmp_path / "extractor.log"
+    file_content = b"log line " * 40
+    path.write_bytes(file_content)
+    candidate = LogFileCandidate(log_date=_PAST_TODAY, path=path, is_current=True)
+    consumed: dict[str, object] = {}
+
+    def capture_upload(*, content: BoundedReader, **kwargs: object) -> None:
+        consumed["length"] = len(content)
+        consumed["bytes"] = content.read()
+
+    mock_client = MagicMock()
+    mock_client.files.upload_bytes.side_effect = capture_upload
+
+    result = _upload_candidate(candidate, "my-extractor", mock_client)
+
+    assert result.status == "uploaded"
+    assert consumed["length"] == len(file_content)
+    assert consumed["bytes"] == file_content
 
 
 def test_upload_candidate_exceeds_max_size_returns_skipped_too_large(tmp_path: Path) -> None:
