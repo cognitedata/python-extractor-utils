@@ -12,10 +12,10 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
-## 7.12.5
+## 7.13.0
 
 ### Added
-* In the `unstable` package: Added built-in action support for scheduled tasks. Extractors now automatically expose `Start <task>` and `Stop <task>` actions for each `ScheduledTask`, allowing Odin to start and stop individual tasks on demand. A built-in `fetch_logs` action is also registered on every extractor, enabling upload of rotated log files (up to 7 days per invocation) to CDF Files.
+* In the `unstable` package: Added built-in action support for scheduled tasks. Extractors now automatically expose `Start <task>` and `Stop <task>` actions for each `ScheduledTask`, allowing Integrations API to start and stop individual tasks on demand. A built-in `fetch_logs` action is also registered on every extractor, enabling upload of rotated log files (up to 7 days per invocation) to CDF Files.
 
 ## 7.12.4
 
