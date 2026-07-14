@@ -719,7 +719,11 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                             f"the {MAX_METADATA_VALUE_BYTES}-byte-per-value limit and were dropped)"
                         )
                     ),
-                    result_metadata=None if oversized_fields else e.result_metadata,
+                    result_metadata=(
+                        {k: v for k, v in e.result_metadata.items() if k not in oversized_fields}
+                        if e.result_metadata
+                        else None
+                    ),
                 )
             )
         except Exception as e:

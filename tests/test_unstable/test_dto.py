@@ -2,6 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from cognite.extractorutils.unstable.core._dto import (
+    MAX_METADATA_VALUE_BYTES,
     Action,
     ActionStatus,
     ActionType,
@@ -11,6 +12,7 @@ from cognite.extractorutils.unstable.core._dto import (
     CheckinResponse,
     ExtractorInfo,
     StartupRequest,
+    oversized_metadata_fields,
 )
 
 
@@ -229,3 +231,30 @@ def test_action_status_lookup_by_value(value: str) -> None:
 def test_action_status_invalid_value_raises() -> None:
     with pytest.raises(ValueError):
         ActionStatus("unknown_status")
+
+
+@pytest.mark.parametrize("metadata", [None, {}])
+def test_oversized_metadata_fields_empty_or_none_returns_empty_list(metadata: dict[str, str] | None) -> None:
+    assert oversized_metadata_fields(metadata) == []
+
+
+def test_oversized_metadata_fields_flags_only_the_oversized_keys() -> None:
+    metadata = {"small": "ok", "big": "x" * (MAX_METADATA_VALUE_BYTES + 1)}
+    assert oversized_metadata_fields(metadata) == ["big"]
+
+
+@pytest.mark.parametrize(
+    "size,expect_flagged",
+    [(MAX_METADATA_VALUE_BYTES, False), (MAX_METADATA_VALUE_BYTES + 1, True)],
+)
+def test_oversized_metadata_fields_boundary_is_inclusive_of_the_limit(size: int, expect_flagged: bool) -> None:
+    flagged = oversized_metadata_fields({"value": "x" * size})
+    assert flagged == (["value"] if expect_flagged else [])
+
+
+def test_oversized_metadata_fields_non_string_value_is_coerced_instead_of_raising() -> None:
+    # Regression test: metadata is typed dict[str, str], but that's not enforced at runtime, and
+    # set_result() is a user-facing API that extractor authors call directly. A non-string value
+    # must not crash the check with an AttributeError on `.encode`.
+    assert oversized_metadata_fields({"count": 3}) == []  # type: ignore[dict-item]
+    assert oversized_metadata_fields({"count": 10**600}) == ["count"]  # type: ignore[dict-item]

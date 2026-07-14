@@ -24,7 +24,7 @@ def oversized_metadata_fields(metadata: dict[str, str] | None) -> list[str]:
     """Return the keys of ``metadata`` whose UTF-8 encoded value exceeds ``MAX_METADATA_VALUE_BYTES``."""
     if not metadata:
         return []
-    return [key for key, value in metadata.items() if len(value.encode("utf-8")) > MAX_METADATA_VALUE_BYTES]
+    return [key for key, value in metadata.items() if len(str(value).encode("utf-8")) > MAX_METADATA_VALUE_BYTES]
 
 
 class CogniteModel(BaseModel):

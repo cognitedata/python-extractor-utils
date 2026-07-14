@@ -201,7 +201,7 @@ def test_oversized_result_metadata_fails_action_instead_of_reporting_succeeded()
     assert "512" in (final.result_message or "")
 
 
-def test_oversized_action_error_metadata_drops_metadata_but_keeps_original_message() -> None:
+def test_oversized_action_error_metadata_drops_only_oversized_field() -> None:
     def target(ctx: ActionContext) -> None:
         raise ActionError("bad input", error_type="invalid_parameter", details="x" * 600)
 
@@ -211,8 +211,9 @@ def test_oversized_action_error_metadata_drops_metadata_but_keeps_original_messa
 
     updates = _queued_updates(extractor)
     failed = next(u for u in updates if u.status == ActionStatus.failed)
-    assert failed.result_metadata is None
+    assert failed.result_metadata == {"error_type": "invalid_parameter"}
     assert "bad input" in (failed.result_message or "")
+    assert "error_detail" in (failed.result_message or "")
     assert "512" in (failed.result_message or "")
 
 
