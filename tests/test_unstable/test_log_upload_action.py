@@ -308,6 +308,56 @@ def test_valid_exact_max_days_range_succeeds_at_dispatch(tmp_path: Path) -> None
     assert ActionStatus.failed not in statuses
 
 
+def _write_daily_rotated_files(log_path: Path, start: date, end: date) -> None:
+    current = start
+    while current <= end:
+        rotated = log_path.parent / f"{log_path.name}.{current.isoformat()}"
+        rotated.write_bytes(b"log line\n" * 50)
+        current += timedelta(days=1)
+
+
+def test_max_range_with_uploads_keeps_files_metadata_within_budget(tmp_path: Path) -> None:
+    # Regression test: 'files' used to embed each file's full external_id, which for a real
+    # MAX_DATE_RANGE_DAYS range exceeds CDF's 512-byte metadata value limit. It now references the
+    # compact numeric CDF file id instead, so it must fit even in the worst case (max int64 id).
+    start = date(2026, 6, 1)
+    end = start + timedelta(days=MAX_DATE_RANGE_DAYS - 1)
+    log_path = tmp_path / "extractor.log"
+    _write_daily_rotated_files(log_path, start, end)
+
+    extractor = _make_extractor(log_path=log_path)
+    extractor.cognite_client.files.upload_bytes.return_value = MagicMock(id=9223372036854775807)
+    updates = _dispatch(extractor, {"start_date": str(start), "end_date": str(end)})
+    succeeded = next(u for u in updates if u.status == ActionStatus.succeeded)
+    assert succeeded.result_metadata is not None
+    assert succeeded.result_metadata["uploaded_files"] == str(MAX_DATE_RANGE_DAYS)
+    assert "files" in succeeded.result_metadata
+    files = json.loads(succeeded.result_metadata["files"])
+    assert len(files) == MAX_DATE_RANGE_DAYS
+    assert all(f["status"] == "uploaded" and f["id"] == "9223372036854775807" for f in files)
+    assert "file_external_id" not in files[0]
+
+
+def test_files_metadata_omitted_when_still_oversized(tmp_path: Path) -> None:
+    # Defense in depth: even with the compact schema, a pathological case (e.g. long per-file error
+    # messages) could still overflow the budget. The action must still succeed on the aggregate
+    # counts, gracefully omitting 'files' rather than producing an oversized result that Odin would
+    # reject and retry forever.
+    start = date(2026, 6, 1)
+    end = start + timedelta(days=MAX_DATE_RANGE_DAYS - 1)
+    log_path = tmp_path / "extractor.log"
+    _write_daily_rotated_files(log_path, start, end)
+
+    extractor = _make_extractor(log_path=log_path)
+    extractor.cognite_client.files.upload_bytes.side_effect = RuntimeError("x" * 150)
+    updates = _dispatch(extractor, {"start_date": str(start), "end_date": str(end)})
+    succeeded = next(u for u in updates if u.status == ActionStatus.succeeded)
+    assert succeeded.result_metadata is not None
+    assert succeeded.result_metadata["failed_files"] == str(MAX_DATE_RANGE_DAYS)
+    assert "files" not in succeeded.result_metadata
+    assert "omitted" in (succeeded.result_message or "")
+
+
 def test_range_spanning_rotated_and_live_file(tmp_path: Path) -> None:
     # Covers the common case: start_date = yesterday (rotated file), end_date = today (live file).
     base = tmp_path / "extractor.log"
@@ -414,9 +464,10 @@ def test_upload_candidate_bounded_reader_content_is_actually_consumable(tmp_path
     candidate = LogFileCandidate(log_date=_PAST_TODAY, path=path, is_current=True)
     consumed: dict[str, object] = {}
 
-    def capture_upload(*, content: BoundedReader, **kwargs: object) -> None:
+    def capture_upload(*, content: BoundedReader, **kwargs: object) -> MagicMock:
         consumed["length"] = len(content)
         consumed["bytes"] = content.read()
+        return MagicMock(id=123)
 
     mock_client = MagicMock()
     mock_client.files.upload_bytes.side_effect = capture_upload

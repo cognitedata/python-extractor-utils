@@ -184,6 +184,38 @@ def test_action_error_sets_result_metadata_and_keeps_failed_status() -> None:
     assert failed.result_message == "bad input"
 
 
+def test_oversized_result_metadata_fails_action_instead_of_reporting_succeeded() -> None:
+    def target(ctx: ActionContext) -> None:
+        ctx.set_result("done", metadata={"blob": "x" * 600})
+
+    extractor = _make_extractor()
+    extractor.add_action(CustomAction(name="big-result", target=target))
+    extractor._dispatch_single_action(_make_action("act-big", "big-result"))
+
+    updates = _queued_updates(extractor)
+    final = updates[-1]
+    assert final.status == ActionStatus.failed
+    assert final.result_metadata is None
+    assert "big-result" in (final.result_message or "")
+    assert "blob" in (final.result_message or "")
+    assert "512" in (final.result_message or "")
+
+
+def test_oversized_action_error_metadata_drops_metadata_but_keeps_original_message() -> None:
+    def target(ctx: ActionContext) -> None:
+        raise ActionError("bad input", error_type="invalid_parameter", details="x" * 600)
+
+    extractor = _make_extractor()
+    extractor.add_action(CustomAction(name="strict-big", target=target))
+    extractor._dispatch_single_action(_make_action("act-strict-big", "strict-big"))
+
+    updates = _queued_updates(extractor)
+    failed = next(u for u in updates if u.status == ActionStatus.failed)
+    assert failed.result_metadata is None
+    assert "bad input" in (failed.result_message or "")
+    assert "512" in (failed.result_message or "")
+
+
 def test_custom_action_receives_call_metadata_in_context() -> None:
     received_metadata: list[dict | None] = []
 

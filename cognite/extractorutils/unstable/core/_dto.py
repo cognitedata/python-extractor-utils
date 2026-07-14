@@ -15,6 +15,17 @@ from typing_extensions import TypeAliasType
 from cognite.extractorutils.unstable.core.errors import Error as InternalError
 from cognite.extractorutils.unstable.core.errors import ErrorLevel
 
+MAX_METADATA_VALUE_BYTES = 512
+"""CDF's per-value size limit for metadata dict fields (e.g. action result metadata). The Integrations
+API rejects the whole checkin request otherwise, with "Metadata values may be at most 512 bytes"."""
+
+
+def oversized_metadata_fields(metadata: dict[str, str] | None) -> list[str]:
+    """Return the keys of ``metadata`` whose UTF-8 encoded value exceeds ``MAX_METADATA_VALUE_BYTES``."""
+    if not metadata:
+        return []
+    return [key for key, value in metadata.items() if len(value.encode("utf-8")) > MAX_METADATA_VALUE_BYTES]
+
 
 class CogniteModel(BaseModel):
     """
