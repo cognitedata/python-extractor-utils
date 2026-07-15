@@ -615,5 +615,10 @@ def test_checkin_worker_is_picklable_with_spawn_start_method() -> None:
         assert result_queue.get(timeout=10) == 3
     finally:
         process.join(timeout=10)
+        if process.is_alive():
+            # Only reached if the process failed to exit on its own (e.g. the assert above raised
+            # before the process could finish); avoids leaking a background process in that case.
+            process.terminate()
+        process.join(timeout=5)
 
     assert process.exitcode == 0
