@@ -184,9 +184,9 @@ def test_action_error_sets_result_metadata_and_keeps_failed_status() -> None:
     assert failed.result_message == "bad input"
 
 
-def test_oversized_result_metadata_fails_action_instead_of_reporting_succeeded() -> None:
+def test_oversized_result_metadata_fails_action_but_keeps_valid_fields() -> None:
     def target(ctx: ActionContext) -> None:
-        ctx.set_result("done", metadata={"blob": "x" * 600})
+        ctx.set_result("done", metadata={"summary": "ok", "blob": "x" * 600})
 
     extractor = _make_extractor()
     extractor.add_action(CustomAction(name="big-result", target=target))
@@ -195,7 +195,7 @@ def test_oversized_result_metadata_fails_action_instead_of_reporting_succeeded()
     updates = _queued_updates(extractor)
     final = updates[-1]
     assert final.status == ActionStatus.failed
-    assert final.result_metadata is None
+    assert final.result_metadata == {"summary": "ok"}
     assert "big-result" in (final.result_message or "")
     assert "blob" in (final.result_message or "")
     assert "512" in (final.result_message or "")
@@ -215,6 +215,23 @@ def test_oversized_action_error_metadata_drops_only_oversized_field() -> None:
     assert "bad input" in (failed.result_message or "")
     assert "error_detail" in (failed.result_message or "")
     assert "512" in (failed.result_message or "")
+
+
+def test_oversized_action_error_metadata_all_fields_oversized_normalizes_to_none() -> None:
+    # Regression test: error_type itself is caller-supplied and unbounded (ActionError places no
+    # length limit on it), so it — not just the optional error_detail — can end up oversized. When
+    # every field is dropped, result_metadata must be None (field omitted from the checkin payload),
+    # not {} (field sent as an empty object, an untested Integrations API edge case).
+    def target(ctx: ActionContext) -> None:
+        raise ActionError("bad input", error_type="x" * 600)
+
+    extractor = _make_extractor()
+    extractor.add_action(CustomAction(name="strict-huge", target=target))
+    extractor._dispatch_single_action(_make_action("act-strict-huge", "strict-huge"))
+
+    updates = _queued_updates(extractor)
+    failed = next(u for u in updates if u.status == ActionStatus.failed)
+    assert failed.result_metadata is None
 
 
 def test_custom_action_receives_call_metadata_in_context() -> None:

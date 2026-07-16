@@ -95,7 +95,7 @@ from cognite.extractorutils.unstable.core._dto import (
     ExtractorInfo,
     StartupRequest,
     TaskType,
-    oversized_metadata_fields,
+    drop_oversized_metadata_fields,
 )
 from cognite.extractorutils.unstable.core._dto import (
     Task as DtoTask,
@@ -678,22 +678,23 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
         try:
             custom.target(ctx)
-            oversized_fields = oversized_metadata_fields(ctx._result_metadata)
+            filtered_metadata, oversized_fields = drop_oversized_metadata_fields(ctx._result_metadata)
             if oversized_fields:
-                # The action itself ran to completion — only reporting the result back to Odin
-                # failed, because a metadata value is too large to send. Fail the action instead
-                # of queuing a payload that Odin would reject (which would otherwise poison the
-                # checkin batch and retry forever, since checkin bundles all pending updates
-                # together and requeues the whole batch on any rejection).
+                # The action itself ran to completion — only reporting the full result back to Odin
+                # failed, because a metadata value is too large to send. Fail the action instead of
+                # queuing a payload that Odin would reject (which would otherwise poison the checkin
+                # batch and retry forever, since checkin bundles all pending updates together and
+                # requeues the whole batch on any rejection). Non-oversized fields are still reported.
                 self._checkin_worker.queue_action_update(
                     ActionUpdate(
                         external_id=action.external_id,
                         status=ActionStatus.failed,
                         result_message=(
-                            f"Action '{custom.name}' completed successfully, but its result could not be "
-                            f"reported: metadata field(s) {', '.join(oversized_fields)} exceed the "
-                            f"{MAX_METADATA_VALUE_BYTES}-byte-per-value limit"
+                            f"Action '{custom.name}' completed successfully, but metadata field(s) "
+                            f"{', '.join(oversized_fields)} exceeded the {MAX_METADATA_VALUE_BYTES}-byte-per-value "
+                            f"limit and were dropped from the reported result"
                         ),
+                        result_metadata=filtered_metadata,
                     )
                 )
             else:
@@ -706,7 +707,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                     )
                 )
         except ActionError as e:
-            oversized_fields = oversized_metadata_fields(e.result_metadata)
+            filtered_metadata, oversized_fields = drop_oversized_metadata_fields(e.result_metadata)
             self._checkin_worker.queue_action_update(
                 ActionUpdate(
                     external_id=action.external_id,
@@ -719,11 +720,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                             f"the {MAX_METADATA_VALUE_BYTES}-byte-per-value limit and were dropped)"
                         )
                     ),
-                    result_metadata=(
-                        {k: v for k, v in e.result_metadata.items() if k not in oversized_fields}
-                        if e.result_metadata
-                        else None
-                    ),
+                    result_metadata=filtered_metadata,
                 )
             )
         except Exception as e:

@@ -27,6 +27,20 @@ def oversized_metadata_fields(metadata: dict[str, str] | None) -> list[str]:
     return [key for key, value in metadata.items() if len(str(value).encode("utf-8")) > MAX_METADATA_VALUE_BYTES]
 
 
+def drop_oversized_metadata_fields(metadata: dict[str, str] | None) -> tuple[dict[str, str] | None, list[str]]:
+    """
+    Remove any oversized fields from ``metadata``.
+
+    Returns the remaining metadata (``None`` if nothing is left, so callers can pass it straight
+    into a ``dict[str, str] | None`` field) alongside the keys that were dropped.
+    """
+    oversized_fields = oversized_metadata_fields(metadata)
+    if not oversized_fields:
+        return metadata, []
+    filtered = {key: value for key, value in (metadata or {}).items() if key not in oversized_fields}
+    return filtered or None, oversized_fields
+
+
 class CogniteModel(BaseModel):
     """
     Base class for DTO classes based on pydantic.

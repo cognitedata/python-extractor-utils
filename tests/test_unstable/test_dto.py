@@ -12,6 +12,7 @@ from cognite.extractorutils.unstable.core._dto import (
     CheckinResponse,
     ExtractorInfo,
     StartupRequest,
+    drop_oversized_metadata_fields,
     oversized_metadata_fields,
 )
 
@@ -258,3 +259,27 @@ def test_oversized_metadata_fields_non_string_value_is_coerced_instead_of_raisin
     # must not crash the check with an AttributeError on `.encode`.
     assert oversized_metadata_fields({"count": 3}) == []  # type: ignore[dict-item]
     assert oversized_metadata_fields({"count": 10**600}) == ["count"]  # type: ignore[dict-item]
+
+
+@pytest.mark.parametrize("metadata", [None, {}, {"small": "ok"}])
+def test_drop_oversized_metadata_fields_returns_input_unchanged_when_nothing_oversized(
+    metadata: dict[str, str] | None,
+) -> None:
+    assert drop_oversized_metadata_fields(metadata) == (metadata, [])
+
+
+def test_drop_oversized_metadata_fields_keeps_only_the_non_oversized_keys() -> None:
+    metadata = {"small": "ok", "big": "x" * (MAX_METADATA_VALUE_BYTES + 1)}
+    filtered, dropped = drop_oversized_metadata_fields(metadata)
+    assert filtered == {"small": "ok"}
+    assert dropped == ["big"]
+
+
+def test_drop_oversized_metadata_fields_normalizes_to_none_when_nothing_remains() -> None:
+    # Both fields oversized (or the only field is oversized) must leave `None`, not `{}` — an empty
+    # dict would still serialize as an explicit `resultMetadata: {}` in the checkin payload (only
+    # `None` fields are excluded), an untested edge case for the Integrations API.
+    metadata = {"big": "x" * (MAX_METADATA_VALUE_BYTES + 1)}
+    filtered, dropped = drop_oversized_metadata_fields(metadata)
+    assert filtered is None
+    assert dropped == ["big"]
