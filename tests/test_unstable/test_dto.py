@@ -2,6 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from cognite.extractorutils.unstable.core._dto import (
+    MAX_MESSAGE_LENGTH,
     MAX_METADATA_VALUE_BYTES,
     Action,
     ActionStatus,
@@ -14,6 +15,7 @@ from cognite.extractorutils.unstable.core._dto import (
     StartupRequest,
     drop_oversized_metadata_fields,
     oversized_metadata_fields,
+    truncate_message,
 )
 
 
@@ -283,3 +285,21 @@ def test_drop_oversized_metadata_fields_normalizes_to_none_when_nothing_remains(
     filtered, dropped = drop_oversized_metadata_fields(metadata)
     assert filtered is None
     assert dropped == ["big"]
+
+
+@pytest.mark.parametrize("length", [0, MAX_MESSAGE_LENGTH - 1, MAX_MESSAGE_LENGTH])
+def test_truncate_message_leaves_short_messages_unchanged(length: int) -> None:
+    message = "x" * length
+    assert truncate_message(message) == message
+
+
+def test_truncate_message_shortens_long_messages_to_the_limit_with_a_marker() -> None:
+    # Regression test: ActionUpdate.result_message is a pydantic MessageType capped at
+    # MAX_MESSAGE_LENGTH chars; constructing one with a longer message raises ValidationError.
+    # Messages built from unbounded inputs (action names, metadata keys, exception text) must be
+    # truncated before they ever reach ActionUpdate(...).
+    message = "x" * (MAX_MESSAGE_LENGTH + 250)
+    truncated = truncate_message(message)
+    assert len(truncated) == MAX_MESSAGE_LENGTH
+    assert truncated.endswith("...")
+    assert truncated.startswith("x" * (MAX_MESSAGE_LENGTH - 3))

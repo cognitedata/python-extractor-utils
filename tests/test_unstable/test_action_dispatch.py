@@ -5,7 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from cognite.extractorutils.unstable.core._dto import Action, ActionStatus, ActionUpdate
+from cognite.extractorutils.unstable.core._dto import MAX_MESSAGE_LENGTH, Action, ActionStatus, ActionUpdate
 from cognite.extractorutils.unstable.core.actions import ActionContext, ActionError, CustomAction
 from cognite.extractorutils.unstable.core.base import FullConfig
 from cognite.extractorutils.unstable.core.tasks import ScheduledTask, TaskContext
@@ -232,6 +232,50 @@ def test_oversized_action_error_metadata_all_fields_oversized_normalizes_to_none
     updates = _queued_updates(extractor)
     failed = next(u for u in updates if u.status == ActionStatus.failed)
     assert failed.result_metadata is None
+
+
+def test_oversized_result_metadata_with_many_fields_truncates_message_instead_of_crashing() -> None:
+    # Regression test: ctx.set_result() places no cap on the number or length of metadata keys, so
+    # joining many oversized field names into the failure message could exceed MessageType's
+    # 1000-char limit and raise a pydantic.ValidationError while constructing the ActionUpdate —
+    # which, for this branch, would be swallowed by the generic `except Exception` fallback and
+    # silently discard the valid metadata this whole mechanism exists to preserve.
+    def target(ctx: ActionContext) -> None:
+        oversized = {f"oversized_field_number_{i:03d}": "x" * 600 for i in range(45)}
+        ctx.set_result("done", metadata={"summary": "ok", **oversized})
+
+    extractor = _make_extractor()
+    extractor.add_action(CustomAction(name="huge-result", target=target))
+    extractor._dispatch_single_action(_make_action("act-huge", "huge-result"))
+
+    updates = _queued_updates(extractor)
+    final = updates[-1]
+    assert final.status == ActionStatus.failed
+    assert final.result_metadata == {"summary": "ok"}
+    assert final.result_message is not None
+    assert len(final.result_message) <= MAX_MESSAGE_LENGTH
+    assert final.result_message.endswith("...")
+
+
+def test_oversized_action_error_with_long_message_truncates_instead_of_crashing() -> None:
+    # Regression test: ActionError places no length limit on its own message either, so appending
+    # the "metadata field(s) dropped" note could push the combined result_message past the 1000-char
+    # limit. Unlike the success-path branch, this ActionUpdate(...) call isn't nested in any further
+    # try/except, so a ValidationError here would escape _handle_custom_action entirely and kill the
+    # dispatch thread, leaving the action stuck at "running" forever.
+    def target(ctx: ActionContext) -> None:
+        raise ActionError("x" * 1200, error_type="invalid_parameter", details="y" * 600)
+
+    extractor = _make_extractor()
+    extractor.add_action(CustomAction(name="strict-huge-msg", target=target))
+    extractor._dispatch_single_action(_make_action("act-strict-huge-msg", "strict-huge-msg"))
+
+    updates = _queued_updates(extractor)
+    failed = next(u for u in updates if u.status == ActionStatus.failed)
+    assert failed.result_metadata == {"error_type": "invalid_parameter"}
+    assert failed.result_message is not None
+    assert len(failed.result_message) <= MAX_MESSAGE_LENGTH
+    assert failed.result_message.endswith("...")
 
 
 def test_custom_action_receives_call_metadata_in_context() -> None:

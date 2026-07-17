@@ -96,6 +96,7 @@ from cognite.extractorutils.unstable.core._dto import (
     StartupRequest,
     TaskType,
     drop_oversized_metadata_fields,
+    truncate_message,
 )
 from cognite.extractorutils.unstable.core._dto import (
     Task as DtoTask,
@@ -689,7 +690,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                     ActionUpdate(
                         external_id=action.external_id,
                         status=ActionStatus.failed,
-                        result_message=(
+                        result_message=truncate_message(
                             f"Action '{custom.name}' completed successfully, but metadata field(s) "
                             f"{', '.join(oversized_fields)} exceeded the {MAX_METADATA_VALUE_BYTES}-byte-per-value "
                             f"limit and were dropped from the reported result"
@@ -715,7 +716,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                     result_message=(
                         str(e)
                         if not oversized_fields
-                        else (
+                        else truncate_message(
                             f"{e} (additionally, metadata field(s) {', '.join(oversized_fields)} exceeded "
                             f"the {MAX_METADATA_VALUE_BYTES}-byte-per-value limit and were dropped)"
                         )

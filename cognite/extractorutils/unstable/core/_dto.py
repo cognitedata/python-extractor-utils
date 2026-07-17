@@ -67,7 +67,18 @@ class WithExternalId(CogniteModel):
     external_id: str
 
 
-MessageType = Annotated[str, StringConstraints(min_length=0, max_length=1000)]
+MAX_MESSAGE_LENGTH = 1000
+"""Matches the ``max_length`` enforced by ``MessageType`` below; pydantic raises a ValidationError past this."""
+
+MessageType = Annotated[str, StringConstraints(min_length=0, max_length=MAX_MESSAGE_LENGTH)]
+
+
+def truncate_message(message: str, max_length: int = MAX_MESSAGE_LENGTH) -> str:
+    """Truncate ``message`` (marking it with a trailing ``...``) so it fits within ``max_length`` characters."""
+    if len(message) <= max_length:
+        return message
+    suffix = "..."
+    return message[: max_length - len(suffix)] + suffix
 
 
 class TaskUpdate(CogniteModel):
