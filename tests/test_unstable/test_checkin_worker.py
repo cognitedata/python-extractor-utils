@@ -1,13 +1,17 @@
 import logging
+import pickle
 from collections.abc import Callable
 from datetime import datetime, timezone
-from multiprocessing import Event, Queue
+from multiprocessing import Event, Queue, get_context
 from threading import Thread
 from time import sleep
 
 import faker
 import pytest
 import requests_mock
+from cognite.client import CogniteClient
+from cognite.client.config import ClientConfig
+from cognite.client.credentials import OAuthClientCredentials
 
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.unstable.configuration.models import ConnectionConfig
@@ -16,6 +20,39 @@ from cognite.extractorutils.unstable.core.checkin_worker import CheckinWorker
 from cognite.extractorutils.unstable.core.errors import Error, ErrorLevel
 from cognite.extractorutils.util import now
 from tests.test_unstable.conftest import TestConfig, TestExtractor
+
+
+def _make_local_cognite_client() -> CogniteClient:
+    """
+    Build a CogniteClient that never talks to the network, for tests that only exercise pickling.
+
+    Avoids the live-integration `connection_config` fixture, which provisions a real integration
+    in a CDF project and therefore requires dev credentials to be set in the environment.
+    """
+    return CogniteClient(
+        ClientConfig(
+            client_name="test-checkin-worker-pickling",
+            project="test-project",
+            base_url="https://api.cognitedata.com",
+            credentials=OAuthClientCredentials(
+                token_url="https://example.com/token",
+                client_id="client-id",
+                client_secret="client-secret",
+                scopes=["scope"],
+            ),
+        )
+    )
+
+
+def _put_active_revision_in_queue(worker: CheckinWorker, result_queue: "Queue[int]") -> None:
+    """
+    Module-level target for the spawn-based multiprocessing test below.
+
+    A spawned child process re-imports this function by qualified name, so it must be a
+    top-level, module-scoped callable rather than a closure or a lambda.
+    """
+    with worker._lock, worker._flush_lock:
+        result_queue.put(worker.active_revision)
 
 
 def test_report_startup_request(
@@ -536,3 +573,52 @@ def test_run_report_periodic_checkin_requeue(
     # initial 2 requests for auth and startup, then 1 for expected number of check-ins
     assert requests_mock.call_count == 2 + 1
     assert len(worker._errors) == 2
+
+
+def test_checkin_worker_pickle_round_trip() -> None:
+    """
+    __getstate__/__setstate__ must drop the un-picklable RLocks and recreate fresh, usable ones,
+    while preserving the rest of the worker's state.
+    """
+    worker = CheckinWorker(_make_local_cognite_client(), "test-integration", logging.getLogger(__name__))
+    worker.active_revision = 5
+    worker.report_task_start("some-task")
+
+    restored: CheckinWorker = pickle.loads(pickle.dumps(worker))  # noqa: S301 (data is produced in-process, not untrusted)
+
+    assert restored.active_revision == 5
+    assert len(restored._task_updates) == 1
+    assert restored._lock is not worker._lock
+    assert restored._flush_lock is not worker._flush_lock
+
+    # The recreated locks must actually be usable, not left in some broken or shared state.
+    with restored._lock, restored._flush_lock:
+        pass
+
+
+def test_checkin_worker_is_picklable_with_spawn_start_method() -> None:
+    """
+    Runtime._spawn_extractor passes a live CheckinWorker to multiprocessing.Process as a target argument.
+
+    On macOS and Windows, the default start method is "spawn", which pickles every argument passed to
+    Process(...). This reproduces that path directly: threading.RLock instances used to make the whole
+    worker unpicklable, crashing the extractor with a TypeError before any provider/destination code ran.
+    """
+    worker = CheckinWorker(_make_local_cognite_client(), "test-integration", logging.getLogger(__name__))
+    worker.active_revision = 3
+
+    ctx = get_context("spawn")
+    result_queue: Queue[int] = ctx.Queue()
+    process = ctx.Process(target=_put_active_revision_in_queue, args=(worker, result_queue))
+    process.start()
+    try:
+        assert result_queue.get(timeout=10) == 3
+    finally:
+        process.join(timeout=10)
+        if process.is_alive():
+            # Only reached if the process failed to exit on its own (e.g. the assert above raised
+            # before the process could finish); avoids leaking a background process in that case.
+            process.terminate()
+        process.join(timeout=5)
+
+    assert process.exitcode == 0

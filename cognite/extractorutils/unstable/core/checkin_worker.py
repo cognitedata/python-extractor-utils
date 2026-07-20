@@ -101,6 +101,28 @@ class CheckinWorker:
         self._lock = RLock()
         self._flush_lock = RLock()
 
+    def __getstate__(self) -> dict[str, object]:
+        """
+        Return the worker's state for pickling, dropping the locks.
+
+        The worker is passed to ``multiprocessing.Process`` as a target argument, which pickles it
+        when the process is started with the ``spawn`` method (the default on macOS and Windows).
+        ``threading.RLock`` cannot be pickled, and a lock inherited from the parent process would be
+        meaningless in the child anyway, so the locks are recreated fresh in ``__setstate__`` instead.
+        """
+        state = self.__dict__.copy()
+        del state["_lock"]
+        del state["_flush_lock"]
+        return state
+
+    def __setstate__(self, state: dict[str, object]) -> None:
+        """
+        Restore the worker's state after unpickling, recreating the locks dropped by ``__getstate__``.
+        """
+        self.__dict__.update(state)
+        self._lock = RLock()
+        self._flush_lock = RLock()
+
     @property
     def active_revision(self) -> ConfigRevision:
         """Get the active configuration revision."""
