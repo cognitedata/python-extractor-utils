@@ -13,6 +13,7 @@ from cognite.client import CogniteClient
 
 from cognite.extractorutils.unstable.configuration.models import ExtractorConfig, LogFileHandlerConfig
 from cognite.extractorutils.unstable.core._bounded_reader import BoundedReader
+from cognite.extractorutils.unstable.core._dto import MAX_METADATA_VALUE_BYTES
 from cognite.extractorutils.unstable.core.actions import ActionContext, ActionError
 
 _logger = logging.getLogger(__name__)
@@ -41,6 +42,7 @@ class _FileUploadResult:
     log_date: date
     file_external_id: str
     status: Literal["uploaded", "skipped_too_large", "failed"]
+    file_id: int | None = None  # CDF's internal (numeric) file id; set only when status == "uploaded"
     size_bytes: int | None = None
     error: str | None = None
 
@@ -158,7 +160,7 @@ def _upload_candidate(
     try:
         with open(candidate.path, "rb") as f:
             reader: BinaryIO = BoundedReader(f, actual_size) if candidate.is_current else f  # type: ignore[assignment]
-            cdf_client.files.upload_bytes(
+            uploaded = cdf_client.files.upload_bytes(
                 content=reader,
                 name=f"{external_id}.log",
                 external_id=external_id,
@@ -170,6 +172,7 @@ def _upload_candidate(
             log_date=candidate.log_date,
             file_external_id=external_id,
             status="uploaded",
+            file_id=uploaded.id,
             size_bytes=actual_size,
         )
     except Exception as e:
@@ -246,37 +249,45 @@ def fetch_logs_action(ctx: ActionContext) -> None:
 
     counts = Counter(r.status for r in upload_results)
 
-    # Per-file entries: upload results (sorted by date) + missing dates (skipped by candidate builder)
+    # Per-file entries: upload results (sorted by date) + missing dates (skipped by candidate builder).
     files_list: list[dict[str, str]] = []
     for r in upload_results:
-        entry: dict[str, str] = {
-            "date": str(r.log_date),
-            "file_external_id": r.file_external_id,
-            "status": r.status,
-        }
-        if r.size_bytes is not None:
+        entry: dict[str, str] = {"date": str(r.log_date), "status": r.status}
+        if r.file_id is not None:
+            entry["id"] = str(r.file_id)
+        if r.status != "uploaded" and r.size_bytes is not None:
             entry["size_bytes"] = str(r.size_bytes)
         if r.error:
             entry["error"] = r.error
         files_list.append(entry)
-    files_list.extend(
-        {
-            "date": str(skipped_date),
-            "file_external_id": _file_external_id(integration_external_id, skipped_date),
-            "status": "skipped",
-        }
-        for skipped_date in skipped_dates
-    )
+    files_list.extend({"date": str(skipped_date), "status": "skipped"} for skipped_date in skipped_dates)
     files_list.sort(key=lambda e: e["date"])
 
-    ctx.set_result(
-        f"{counts['uploaded']} of {num_days} log files uploaded to CDF Files",
-        metadata={
-            "total_files": str(num_days),
-            "uploaded_files": str(counts["uploaded"]),
-            "missing_files": str(len(skipped_dates)),
-            "skipped_too_large_files": str(counts["skipped_too_large"]),
-            "failed_files": str(counts["failed"]),
-            "files": json.dumps(files_list),
-        },
-    )
+    result_message = f"{counts['uploaded']} of {num_days} log files uploaded to CDF Files"
+    metadata: dict[str, str] = {
+        "total_files": str(num_days),
+        "uploaded_files": str(counts["uploaded"]),
+        "missing_files": str(len(skipped_dates)),
+        "skipped_too_large_files": str(counts["skipped_too_large"]),
+        "failed_files": str(counts["failed"]),
+    }
+
+    # The per-file breakdown is supplementary detail on top of the counts above. For date ranges
+    # near MAX_DATE_RANGE_DAYS it can exceed CDF's 512-byte-per-metadata-value limit (each entry
+    # embeds a full file_external_id), which would otherwise get the whole result rejected. Rather
+    # than risk that, only attach it when it demonstrably fits — the aggregate counts always do,
+    # regardless of range length, and full per-file detail has already been logged individually above.
+    files_json = json.dumps(files_list, separators=(",", ":"))
+    if len(files_json.encode("utf-8")) <= MAX_METADATA_VALUE_BYTES:
+        metadata["files"] = files_json
+    else:
+        _logger.info(
+            "fetch_logs: per-file detail (%d bytes) would exceed the %d-byte metadata value limit; omitting "
+            "'files' from the reported result. Full per-file detail for this invocation is available above "
+            "in the extractor's own logs.",
+            len(files_json.encode("utf-8")),
+            MAX_METADATA_VALUE_BYTES,
+        )
+        result_message += " (per-file detail omitted from result metadata — see extractor logs for full detail)"
+
+    ctx.set_result(result_message, metadata=metadata)

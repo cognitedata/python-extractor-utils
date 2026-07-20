@@ -15,6 +15,31 @@ from typing_extensions import TypeAliasType
 from cognite.extractorutils.unstable.core.errors import Error as InternalError
 from cognite.extractorutils.unstable.core.errors import ErrorLevel
 
+MAX_METADATA_VALUE_BYTES = 512
+"""CDF's per-value size limit for metadata dict fields (e.g. action result metadata). The Integrations
+API rejects the whole checkin request otherwise, with "Metadata values may be at most 512 bytes"."""
+
+
+def oversized_metadata_fields(metadata: dict[str, str] | None) -> list[str]:
+    """Return the keys of ``metadata`` whose UTF-8 encoded value exceeds ``MAX_METADATA_VALUE_BYTES``."""
+    if not metadata:
+        return []
+    return [key for key, value in metadata.items() if len(str(value).encode("utf-8")) > MAX_METADATA_VALUE_BYTES]
+
+
+def drop_oversized_metadata_fields(metadata: dict[str, str] | None) -> tuple[dict[str, str] | None, list[str]]:
+    """
+    Remove any oversized fields from ``metadata``.
+
+    Returns the remaining metadata (``None`` if nothing is left, so callers can pass it straight
+    into a ``dict[str, str] | None`` field) alongside the keys that were dropped.
+    """
+    oversized_fields = oversized_metadata_fields(metadata)
+    if not oversized_fields:
+        return metadata, []
+    filtered = {key: value for key, value in (metadata or {}).items() if key not in oversized_fields}
+    return filtered or None, oversized_fields
+
 
 class CogniteModel(BaseModel):
     """
@@ -42,7 +67,18 @@ class WithExternalId(CogniteModel):
     external_id: str
 
 
-MessageType = Annotated[str, StringConstraints(min_length=0, max_length=1000)]
+MAX_MESSAGE_LENGTH = 1000
+"""Matches the ``max_length`` enforced by ``MessageType`` below; pydantic raises a ValidationError past this."""
+
+MessageType = Annotated[str, StringConstraints(min_length=0, max_length=MAX_MESSAGE_LENGTH)]
+
+
+def truncate_message(message: str, max_length: int = MAX_MESSAGE_LENGTH) -> str:
+    """Truncate ``message`` (marking it with a trailing ``...``) so it fits within ``max_length`` characters."""
+    if len(message) <= max_length:
+        return message
+    suffix = "..."
+    return message[: max_length - len(suffix)] + suffix
 
 
 class TaskUpdate(CogniteModel):
