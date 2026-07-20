@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.13.1
+
+### Fixed
+* In the `unstable` package: Fixed `fetch_logs` action result metadata exceeding CDF's 512-byte-per-value limit on long date ranges, which could cause the entire checkin batch to be rejected and retried indefinitely.
+* In the `unstable` package: Fixed `CheckinWorker` not being picklable, which crashed extractor startup on macOS/Windows where multiprocessing defaults to the `spawn` start method.
+
 ## 7.13.0
 
 ### Added
