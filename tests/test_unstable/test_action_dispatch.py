@@ -211,9 +211,7 @@ def test_start_action_on_running_continuous_task_reports_failed() -> None:
     extractor._dispatch_single_action(_make_action("act-start", "Start listener"))
 
     updates = _queued_updates(extractor)
-    assert any(
-        u.status == ActionStatus.failed and "already running" in (u.result_message or "") for u in updates
-    )
+    assert any(u.status == ActionStatus.failed and "already running" in (u.result_message or "") for u in updates)
     allow_exit.set()
 
 
