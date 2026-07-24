@@ -33,19 +33,16 @@ def _startup_request(extractor: Extractor) -> StartupRequest:
     "extra_tasks",
     [
         pytest.param([], id="no_tasks"),
-        pytest.param(
-            [ContinuousTask(name="cont", target=lambda _: None), StartupTask(name="init", target=lambda _: None)],
-            id="non_scheduled_tasks",
-        ),
+        pytest.param([StartupTask(name="init", target=lambda _: None)], id="startup_task_only"),
     ],
 )
-def test_available_actions_without_scheduled_tasks_only_has_builtins(extra_tasks: list) -> None:
+def test_available_actions_without_actionable_tasks_only_has_builtins(extra_tasks: list) -> None:
     extractor = _make_extractor()
     for task in extra_tasks:
         extractor.add_task(task)
     req = _startup_request(extractor)
     assert req.available_actions is not None
-    # Only built-in actions present — no start/stop actions from scheduled tasks
+    # Only built-in actions present — StartupTask does not get start/stop actions
     task_action_names = {a.name for a in req.available_actions if a.type != ActionType.custom}
     assert task_action_names == set()
 
@@ -58,6 +55,19 @@ def test_two_scheduled_tasks_produce_four_task_start_stop_actions() -> None:
     assert req.available_actions is not None
     task_action_names = {a.name for a in req.available_actions if a.type != ActionType.custom}
     assert task_action_names == {"Start alpha", "Stop alpha", "Start beta", "Stop beta"}
+
+
+def test_continuous_task_also_produces_start_stop_actions() -> None:
+    extractor = _make_extractor()
+    extractor.add_task(ContinuousTask(name="listener", target=lambda _: None))
+    req = _startup_request(extractor)
+    assert req.available_actions is not None
+    task_action_names = {a.name for a in req.available_actions if a.type != ActionType.custom}
+    assert task_action_names == {"Start listener", "Stop listener"}
+    by_name = {a.name: a for a in req.available_actions}
+    assert by_name["Start listener"].type == ActionType.start_task
+    assert by_name["Start listener"].task == "listener"
+    assert by_name["Stop listener"].type == ActionType.stop_task
 
 
 @pytest.mark.parametrize(

@@ -382,12 +382,13 @@ class Extractor(Generic[ConfigType], CogniteLogger):
             raise ValueError(f"Custom action '{action.name}' is already registered.")
 
         reserved_names = {
-            name for t in self._tasks if isinstance(t, ScheduledTask) for name in (f"Start {t.name}", f"Stop {t.name}")
+            name
+            for t in self._tasks
+            if isinstance(t, (ScheduledTask, ContinuousTask))
+            for name in (f"Start {t.name}", f"Stop {t.name}")
         }
         if action.name in reserved_names:
-            raise ValueError(
-                f"Custom action name '{action.name}' conflicts with an auto-generated scheduled task action."
-            )
+            raise ValueError(f"Custom action name '{action.name}' conflicts with an auto-generated task action.")
 
         self._custom_actions.append(action)
 
@@ -402,7 +403,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         available_actions: list[AvailableActionWrite] = []
 
         for t in self._tasks:
-            if isinstance(t, ScheduledTask):
+            if isinstance(t, (ScheduledTask, ContinuousTask)):
                 available_actions.append(
                     AvailableActionWrite(name=f"Start {t.name}", type=ActionType.start_task, task=t.name)
                 )
@@ -422,7 +423,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
             tasks=[
                 DtoTask(
                     type=TaskType.continuous if isinstance(t, ContinuousTask) else TaskType.batch,
-                    action=isinstance(t, ScheduledTask),
+                    action=isinstance(t, (ScheduledTask, ContinuousTask)),
                     description=t.description,
                     name=t.name,
                 )
@@ -484,7 +485,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         if any(t.name == task.name for t in self._tasks):
             raise ValueError(f"Task '{task.name}' is already registered.")
 
-        if isinstance(task, ScheduledTask):
+        if isinstance(task, (ScheduledTask, ContinuousTask)):
             conflict_names = {f"Start {task.name}", f"Stop {task.name}"}
             for action in self._custom_actions:
                 if action.name in conflict_names:
@@ -532,17 +533,20 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                     task=lambda: self._run_task_with_token(t),
                 )
 
-    def _run_task_with_token(self, task: ScheduledTask, child_token: CancellationToken | None = None) -> None:
+    def _run_task_with_token(
+        self, task: ScheduledTask | ContinuousTask, child_token: CancellationToken | None = None
+    ) -> None:
         """
-        Create a fresh child cancellation token for a scheduled task run.
+        Create a fresh child cancellation token for an actionable task run.
 
         Stores the token in ``_running_task_tokens`` for external cancellation (e.g. a
-        stop_task action), then executes the task. Called by both the scheduler and any
-        future start_task action handler.
+        stop_task action), then executes the task. Called by the scheduler (for
+        ``ScheduledTask``), the initial boot-time launch (for ``ContinuousTask``), and the
+        start_task action handler (for both).
 
-        If ``child_token`` is supplied (action dispatch path), the caller has already
-        registered it in ``_running_task_tokens`` atomically; this method skips the
-        registration step and goes straight to execution.
+        If ``child_token`` is supplied (the caller has already registered it in
+        ``_running_task_tokens`` atomically), this method skips the registration step and
+        goes straight to execution.
         """
         if child_token is None:
             with self._running_task_tokens_lock:
@@ -558,6 +562,41 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                 if self._running_task_tokens.get(task.name) is child_token:
                     self._running_task_tokens.pop(task.name, None)
 
+    def _launch_continuous_task(self, task: ContinuousTask) -> None:
+        """
+        Start a ``ContinuousTask`` in its own thread, tracked for external Start/Stop actions.
+
+        The token is pre-registered in ``_running_task_tokens`` before the thread starts (rather
+        than letting ``_run_task_with_token`` register it lazily inside the spawned thread), so
+        there is no race window where a Stop/Start action could run before this instance is visible.
+
+        If starting the thread itself fails (e.g. a thread/resource limit in a constrained
+        environment), the failure is reported as a fatal error for this task rather than left to
+        propagate — one task failing to launch should not crash the whole extractor or prevent the
+        remaining continuous tasks from starting.
+        """
+        child_token = self.cancellation_token.create_child_token()
+        with self._running_task_tokens_lock:
+            self._running_task_tokens[task.name] = child_token
+        try:
+            Thread(
+                name=pascalize(task.name),
+                target=self._run_task_with_token,
+                args=(task, child_token),
+            ).start()
+        except Exception as e:
+            with self._running_task_tokens_lock:
+                if self._running_task_tokens.get(task.name) is child_token:
+                    self._running_task_tokens.pop(task.name, None)
+            message = f"Failed to launch continuous task '{task.name}'"
+            self._logger.log(level=ErrorLevel.fatal.log_level, msg=message, exc_info=e)
+            self._new_error(
+                level=ErrorLevel.fatal,
+                description=message,
+                details=str(e),
+                task_name=task.name,
+            ).instant()
+
     def _handle_actions(self, actions: list[Action]) -> None:
         for action in actions:
             Thread(
@@ -568,8 +607,9 @@ class Extractor(Generic[ConfigType], CogniteLogger):
             ).start()
 
     def _dispatch_single_action(self, action: Action) -> None:
-        scheduled_start_names = {f"Start {t.name}" for t in self._tasks if isinstance(t, ScheduledTask)}
-        scheduled_stop_names = {f"Stop {t.name}" for t in self._tasks if isinstance(t, ScheduledTask)}
+        actionable_tasks = [t for t in self._tasks if isinstance(t, (ScheduledTask, ContinuousTask))]
+        scheduled_start_names = {f"Start {t.name}" for t in actionable_tasks}
+        scheduled_stop_names = {f"Stop {t.name}" for t in actionable_tasks}
         custom_names = {a.name for a in self._custom_actions}
 
         if action.action_name in scheduled_start_names:
@@ -590,7 +630,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
     def _handle_start_task_action(self, action: Action) -> None:
         task_name = action.action_name[len("Start ") :]
         task = next(
-            (t for t in self._tasks if t.name == task_name and isinstance(t, ScheduledTask)),
+            (t for t in self._tasks if t.name == task_name and isinstance(t, (ScheduledTask, ContinuousTask))),
             None,
         )
         if task is None:
@@ -598,7 +638,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                 ActionUpdate(
                     external_id=action.external_id,
                     status=ActionStatus.failed,
-                    result_message=f"No scheduled task named '{task_name}' found",
+                    result_message=f"No startable task named '{task_name}' found",
                 )
             )
             return
@@ -835,17 +875,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self._logger.info("Startup done")
 
         for task in continuous:
-            Thread(
-                name=pascalize(task.name),
-                target=task.target,
-                args=(
-                    TaskContext(
-                        task=task,
-                        extractor=self,
-                        cancellation_token=self.cancellation_token.create_child_token(),
-                    ),
-                ),
-            ).start()
+            self._launch_continuous_task(task)
 
         if has_scheduled:
             self._scheduler.run()
