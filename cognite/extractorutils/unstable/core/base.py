@@ -569,15 +569,33 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         The token is pre-registered in ``_running_task_tokens`` before the thread starts (rather
         than letting ``_run_task_with_token`` register it lazily inside the spawned thread), so
         there is no race window where a Stop/Start action could run before this instance is visible.
+
+        If starting the thread itself fails (e.g. a thread/resource limit in a constrained
+        environment), the failure is reported as a fatal error for this task rather than left to
+        propagate — one task failing to launch should not crash the whole extractor or prevent the
+        remaining continuous tasks from starting.
         """
         child_token = self.cancellation_token.create_child_token()
         with self._running_task_tokens_lock:
             self._running_task_tokens[task.name] = child_token
-        Thread(
-            name=pascalize(task.name),
-            target=self._run_task_with_token,
-            args=(task, child_token),
-        ).start()
+        try:
+            Thread(
+                name=pascalize(task.name),
+                target=self._run_task_with_token,
+                args=(task, child_token),
+            ).start()
+        except Exception as e:
+            with self._running_task_tokens_lock:
+                if self._running_task_tokens.get(task.name) is child_token:
+                    self._running_task_tokens.pop(task.name, None)
+            message = f"Failed to launch continuous task '{task.name}'"
+            self._logger.log(level=ErrorLevel.fatal.log_level, msg=message, exc_info=e)
+            self._new_error(
+                level=ErrorLevel.fatal,
+                description=message,
+                details=str(e),
+                task_name=task.name,
+            ).instant()
 
     def _handle_actions(self, actions: list[Action]) -> None:
         for action in actions:

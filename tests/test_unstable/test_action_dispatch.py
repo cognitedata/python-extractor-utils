@@ -2,13 +2,14 @@ import threading
 import time
 from collections.abc import Callable
 from threading import Event
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from cognite.extractorutils.unstable.core._dto import MAX_MESSAGE_LENGTH, Action, ActionStatus, ActionUpdate
 from cognite.extractorutils.unstable.core.actions import ActionContext, ActionError, CustomAction
 from cognite.extractorutils.unstable.core.base import FullConfig
+from cognite.extractorutils.unstable.core.errors import ErrorLevel
 from cognite.extractorutils.unstable.core.tasks import ContinuousTask, ScheduledTask, TaskContext
 
 from .conftest import TestConfig, TestExtractor
@@ -166,6 +167,25 @@ def test_launch_continuous_task_is_tracked_before_thread_starts() -> None:
 
     task_started.wait(timeout=5)
     allow_exit.set()
+
+
+def test_launch_continuous_task_reports_fatal_error_and_keeps_going_if_thread_start_fails() -> None:
+    extractor = _make_extractor()
+    task = ContinuousTask(name="listener", target=lambda ctx: None)
+    extractor.add_task(task)
+
+    with patch.object(threading.Thread, "start", side_effect=RuntimeError("can't start new thread")):
+        extractor._launch_continuous_task(task)  # must not raise
+
+    # The pre-registered token must be cleaned up rather than leaking forever.
+    assert "listener" not in extractor._running_task_tokens
+
+    reported = [c.args[0] for c in extractor._checkin_worker.report_error.call_args_list]
+    assert len(reported) == 1
+    error = reported[0]
+    assert error.level == ErrorLevel.fatal
+    assert error._task_name == "listener"
+    assert "listener" in error.description
 
 
 def test_stop_action_cancels_boot_launched_continuous_task() -> None:
