@@ -123,6 +123,11 @@ __all__ = [
 
 _T = TypeVar("_T", bound=ExtractorConfig)
 
+ACTIONABLE_TASK_TYPES: tuple[type[ScheduledTask], type[ContinuousTask]] = (ScheduledTask, ContinuousTask)
+"""Task types that get auto-generated ``Start``/``Stop`` actions and are tracked in
+``_running_task_tokens``. Kept as a single constant so every ``isinstance`` check that gates this
+behavior stays in sync - add a type here (and only here) to make a new task type actionable."""
+
 
 class FullConfig(Generic[_T]):
     """
@@ -384,7 +389,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         reserved_names = {
             name
             for t in self._tasks
-            if isinstance(t, (ScheduledTask, ContinuousTask))
+            if isinstance(t, ACTIONABLE_TASK_TYPES)
             for name in (f"Start {t.name}", f"Stop {t.name}")
         }
         if action.name in reserved_names:
@@ -403,7 +408,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         available_actions: list[AvailableActionWrite] = []
 
         for t in self._tasks:
-            if isinstance(t, (ScheduledTask, ContinuousTask)):
+            if isinstance(t, ACTIONABLE_TASK_TYPES):
                 available_actions.append(
                     AvailableActionWrite(name=f"Start {t.name}", type=ActionType.start_task, task=t.name)
                 )
@@ -423,7 +428,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
             tasks=[
                 DtoTask(
                     type=TaskType.continuous if isinstance(t, ContinuousTask) else TaskType.batch,
-                    action=isinstance(t, (ScheduledTask, ContinuousTask)),
+                    action=isinstance(t, ACTIONABLE_TASK_TYPES),
                     description=t.description,
                     name=t.name,
                 )
@@ -485,7 +490,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         if any(t.name == task.name for t in self._tasks):
             raise ValueError(f"Task '{task.name}' is already registered.")
 
-        if isinstance(task, (ScheduledTask, ContinuousTask)):
+        if isinstance(task, ACTIONABLE_TASK_TYPES):
             conflict_names = {f"Start {task.name}", f"Stop {task.name}"}
             for action in self._custom_actions:
                 if action.name in conflict_names:
@@ -607,7 +612,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
             ).start()
 
     def _dispatch_single_action(self, action: Action) -> None:
-        actionable_tasks = [t for t in self._tasks if isinstance(t, (ScheduledTask, ContinuousTask))]
+        actionable_tasks = [t for t in self._tasks if isinstance(t, ACTIONABLE_TASK_TYPES)]
         scheduled_start_names = {f"Start {t.name}" for t in actionable_tasks}
         scheduled_stop_names = {f"Stop {t.name}" for t in actionable_tasks}
         custom_names = {a.name for a in self._custom_actions}
@@ -630,7 +635,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
     def _handle_start_task_action(self, action: Action) -> None:
         task_name = action.action_name[len("Start ") :]
         task = next(
-            (t for t in self._tasks if t.name == task_name and isinstance(t, (ScheduledTask, ContinuousTask))),
+            (t for t in self._tasks if t.name == task_name and isinstance(t, ACTIONABLE_TASK_TYPES)),
             None,
         )
         if task is None:
