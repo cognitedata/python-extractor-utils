@@ -1,14 +1,16 @@
 import threading
+import time
 from collections.abc import Callable
 from threading import Event
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from cognite.extractorutils.unstable.core._dto import MAX_MESSAGE_LENGTH, Action, ActionStatus, ActionUpdate
 from cognite.extractorutils.unstable.core.actions import ActionContext, ActionError, CustomAction
 from cognite.extractorutils.unstable.core.base import FullConfig
-from cognite.extractorutils.unstable.core.tasks import ScheduledTask, TaskContext
+from cognite.extractorutils.unstable.core.errors import ErrorLevel
+from cognite.extractorutils.unstable.core.tasks import ContinuousTask, ScheduledTask, TaskContext
 
 from .conftest import TestConfig, TestExtractor
 
@@ -142,6 +144,137 @@ def test_stop_task_action_cancels_child_token_and_reports_canceled() -> None:
     assert token is not None and token.is_cancelled
 
     allow_exit.set()
+
+
+def test_launch_continuous_task_is_tracked_before_thread_starts() -> None:
+    extractor = _make_extractor()
+    task_started = Event()
+    allow_exit = Event()
+
+    def cancellable(ctx: TaskContext) -> None:
+        task_started.set()
+        allow_exit.wait(timeout=5)
+
+    task = ContinuousTask(name="listener", target=cancellable)
+    extractor.add_task(task)
+
+    extractor._launch_continuous_task(task)
+    # No race: the token is registered synchronously by _launch_continuous_task, before the
+    # spawned thread even starts, so it must already be present here.
+    with extractor._running_task_tokens_lock:
+        token = extractor._running_task_tokens.get("listener")
+    assert token is not None
+
+    task_started.wait(timeout=5)
+    allow_exit.set()
+
+
+def test_launch_continuous_task_reports_fatal_error_and_keeps_going_if_thread_start_fails() -> None:
+    extractor = _make_extractor()
+    task = ContinuousTask(name="listener", target=lambda ctx: None)
+    extractor.add_task(task)
+
+    with patch.object(threading.Thread, "start", side_effect=RuntimeError("can't start new thread")):
+        extractor._launch_continuous_task(task)  # must not raise
+
+    # The pre-registered token must be cleaned up rather than leaking forever.
+    assert "listener" not in extractor._running_task_tokens
+
+    reported = [c.args[0] for c in extractor._checkin_worker.report_error.call_args_list]
+    assert len(reported) == 1
+    error = reported[0]
+    assert error.level == ErrorLevel.fatal
+    assert error._task_name == "listener"
+    assert "listener" in error.description
+
+
+def test_stop_action_cancels_boot_launched_continuous_task() -> None:
+    extractor = _make_extractor()
+    task_started = Event()
+    task_exited = Event()
+
+    def cancellable(ctx: TaskContext) -> None:
+        task_started.set()
+        ctx.cancellation_token.wait()
+        task_exited.set()
+
+    task = ContinuousTask(name="listener", target=cancellable)
+    extractor.add_task(task)
+    extractor._launch_continuous_task(task)
+    task_started.wait(timeout=5)
+
+    extractor._dispatch_single_action(_make_action("act-stop", "Stop listener"))
+
+    updates = _queued_updates(extractor)
+    assert any(u.status == ActionStatus.canceled and u.external_id == "act-stop" for u in updates)
+    assert task_exited.wait(timeout=5)
+    deadline = time.monotonic() + 5
+    while "listener" in extractor._running_task_tokens and time.monotonic() < deadline:
+        time.sleep(0.005)
+    assert "listener" not in extractor._running_task_tokens
+
+
+def test_start_action_on_running_continuous_task_reports_failed() -> None:
+    extractor = _make_extractor()
+    task_started = Event()
+    allow_exit = Event()
+
+    def cancellable(ctx: TaskContext) -> None:
+        task_started.set()
+        allow_exit.wait(timeout=5)
+
+    task = ContinuousTask(name="listener", target=cancellable)
+    extractor.add_task(task)
+    extractor._launch_continuous_task(task)
+    task_started.wait(timeout=5)
+
+    extractor._dispatch_single_action(_make_action("act-start", "Start listener"))
+
+    updates = _queued_updates(extractor)
+    assert any(u.status == ActionStatus.failed and "already running" in (u.result_message or "") for u in updates)
+    allow_exit.set()
+
+
+def test_start_action_relaunches_continuous_task_after_stop() -> None:
+    extractor = _make_extractor()
+    run_count = {"n": 0}
+    started = [Event(), Event()]
+
+    def cancellable(ctx: TaskContext) -> None:
+        i = run_count["n"]
+        run_count["n"] += 1
+        started[i].set()
+        ctx.cancellation_token.wait()
+
+    task = ContinuousTask(name="listener", target=cancellable)
+    extractor.add_task(task)
+    extractor._launch_continuous_task(task)
+    assert started[0].wait(timeout=5)
+
+    extractor._dispatch_single_action(_make_action("act-stop", "Stop listener"))
+    deadline = time.monotonic() + 5
+    while "listener" in extractor._running_task_tokens and time.monotonic() < deadline:
+        time.sleep(0.005)
+    assert "listener" not in extractor._running_task_tokens
+
+    # The real dispatch path runs this on its own dedicated thread (base.py's _handle_actions);
+    # since a ContinuousTask's target runs indefinitely, _handle_start_task_action blocks for as
+    # long as the task runs, so mirror that here rather than calling it on the test's own thread.
+    start_thread = threading.Thread(
+        target=extractor._dispatch_single_action,
+        args=(_make_action("act-start", "Start listener"),),
+        daemon=True,
+    )
+    start_thread.start()
+    assert started[1].wait(timeout=5)
+    assert run_count["n"] == 2
+
+    with extractor._running_task_tokens_lock:
+        token = extractor._running_task_tokens.get("listener")
+    assert token is not None
+    token.cancel()
+    start_thread.join(timeout=5)
+    assert not start_thread.is_alive()
 
 
 @pytest.mark.parametrize(
