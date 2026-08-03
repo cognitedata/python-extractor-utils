@@ -120,7 +120,7 @@ IdentifierType = Annotated[str, StringConstraints(min_length=1, max_length=255)]
 TaskList = Annotated[list["Task"], Len(min_length=1, max_length=1000)]
 JSONType = TypeAliasType(  # type: ignore[misc]
     "JSONType",
-    bool | int | float | str | None | list[Optional["JSONType"]] | dict[str, Optional["JSONType"]],  # type: ignore[misc]
+    bool | int | float | str | list[Optional["JSONType"]] | dict[str, Optional["JSONType"]] | None,  # type: ignore[misc]
 )
 
 
