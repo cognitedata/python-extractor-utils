@@ -249,7 +249,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
         overwrite_existing: bool = False,
         cancellation_token: CancellationToken | None = None,
         max_parallelism: int | None = None,
-        failure_logging_path: None | str = None,
+        failure_logging_path: str | None = None,
         ssl_verify: bool | str = True,
     ) -> None:
         # Super sets post_upload and threshold
