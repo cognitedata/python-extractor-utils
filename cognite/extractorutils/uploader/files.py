@@ -456,9 +456,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
         )
         res.raise_for_status()
 
-    def _create_version_multi_part(
-        self, file_meta: CogniteExtractorFileApply, version: str, chunk_count: int
-    ) -> dict:
+    def _create_version_multi_part(self, file_meta: CogniteExtractorFileApply, version: str, chunk_count: int) -> dict:
         # Deliberately does NOT re-apply file_meta (name/metadata/directory/...) here: the parent
         # CogniteFile is expected to already exist (created by a prior add_io_to_upload_queue call
         # in the same run), and the versions endpoint only needs its instance id, not its
@@ -479,9 +477,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
         res.raise_for_status()
         return res.json()["items"][0]
 
-    def _upload_version(
-        self, size: int, file: BinaryIO, file_meta: CogniteExtractorFileApply, version: str
-    ) -> dict:
+    def _upload_version(self, size: int, file: BinaryIO, file_meta: CogniteExtractorFileApply, version: str) -> dict:
         chunks = ChunkedStream(file, self.max_file_chunk_size, size)
         chunk_count = max(chunks.chunk_count, 1)
 
@@ -493,9 +489,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
         if size > 0:
             for url in upload_urls:
                 chunks.next_chunk()
-                resp = self._httpx_client.send(
-                    self._get_file_upload_request(url, chunks, len(chunks), mime_type=None)
-                )
+                resp = self._httpx_client.send(self._get_file_upload_request(url, chunks, len(chunks), mime_type=None))
                 resp.raise_for_status()
         else:
             empty = BytesIO(b"")
@@ -577,7 +571,8 @@ class IOFileUploadQueue(AbstractUploadQueue):
         This is done instead of overwriting the base ``CogniteFile``'s own content.
 
         This targets the alpha CDF file-versioning API (``/files/versions/multiuploadlink``). The
-        bytes are attached to a new ``CogniteFileVersion`` node related to the parent file, addressable independently of the base file's own content.
+        bytes are attached to a new ``CogniteFileVersion`` node related to the parent file,
+        addressable independently of the base file's own content.
 
         Unlike ``add_io_to_upload_queue``, this does NOT apply/create the parent ``CogniteFile``
         node -- the versions endpoint only needs its instance id, and re-applying it on every
