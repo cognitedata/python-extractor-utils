@@ -486,6 +486,9 @@ class IOFileUploadQueue(AbstractUploadQueue):
         upload_id = version_item["uploadId"]
         version_instance_id = version_item["instanceId"]
 
+        if not upload_urls:
+            raise ValueError("No upload URLs returned from CDF")
+
         if size > 0:
             for url in upload_urls:
                 chunks.next_chunk()
@@ -601,7 +604,10 @@ class IOFileUploadQueue(AbstractUploadQueue):
                 raise TypeError("File versioning is only supported for CogniteExtractorFileApply (CDM) files")
             version_item = self._upload_version(size, file, file_meta, version)
             if on_version_uploaded is not None:
-                on_version_uploaded(version, version_item)
+                try:
+                    on_version_uploaded(version, version_item)
+                except Exception as e:
+                    self.logger.error("Error in on_version_uploaded callback: %s", str(e))
 
         self._submit_upload(file_meta, read_file, do_upload, extra_retries)
 
