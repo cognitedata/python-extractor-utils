@@ -623,3 +623,47 @@ def test_cancel_pending_unknown_action_is_a_no_op() -> None:
     )
 
     assert _queued_updates(extractor) == []
+
+
+def test_custom_action_reports_canceled_when_target_raises_action_error_after_cancellation() -> None:
+    def target(ctx: ActionContext) -> None:
+        ctx.cancellation_token.cancel()
+        raise ActionError("aborted early", error_type="canceled_mid_run")
+
+    extractor = _make_extractor()
+    extractor.add_action(CustomAction(name="cooperative", target=target))
+    extractor._dispatch_single_action(_make_action("act-1", "cooperative"))
+
+    updates = _queued_updates(extractor)
+    final = updates[-1]
+    assert final.status == ActionStatus.canceled
+    assert final.result_message == "aborted early"
+
+
+def test_custom_action_reports_canceled_when_target_raises_generic_exception_after_cancellation() -> None:
+    def target(ctx: ActionContext) -> None:
+        ctx.cancellation_token.cancel()
+        raise RuntimeError("connection reset")
+
+    extractor = _make_extractor()
+    extractor.add_action(CustomAction(name="cooperative", target=target))
+    extractor._dispatch_single_action(_make_action("act-1", "cooperative"))
+
+    updates = _queued_updates(extractor)
+    final = updates[-1]
+    assert final.status == ActionStatus.canceled
+    assert final.result_message == "connection reset"
+
+
+def test_custom_action_reports_failed_when_target_raises_without_cancellation() -> None:
+    def target(ctx: ActionContext) -> None:
+        raise ActionError("bad input", error_type="invalid_parameter")
+
+    extractor = _make_extractor()
+    extractor.add_action(CustomAction(name="strict", target=target))
+    extractor._dispatch_single_action(_make_action("act-1", "strict"))
+
+    updates = _queued_updates(extractor)
+    final = updates[-1]
+    assert final.status == ActionStatus.failed
+    assert final.result_message == "bad input"

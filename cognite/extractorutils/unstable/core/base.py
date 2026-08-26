@@ -781,11 +781,14 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                     )
                 )
         except ActionError as e:
+            # As with start_task actions, a cooperative abort in response to cancellation may surface
+            # as an ActionError rather than a clean return; report that as canceled, not failed.
+            status = ActionStatus.canceled if action_token.is_cancelled else ActionStatus.failed
             filtered_metadata, oversized_fields = drop_oversized_metadata_fields(e.result_metadata)
             self._checkin_worker.queue_action_update(
                 ActionUpdate(
                     external_id=action.external_id,
-                    status=ActionStatus.failed,
+                    status=status,
                     result_message=(
                         str(e)
                         if not oversized_fields
@@ -798,10 +801,11 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                 )
             )
         except Exception as e:
+            status = ActionStatus.canceled if action_token.is_cancelled else ActionStatus.failed
             self._checkin_worker.queue_action_update(
                 ActionUpdate(
                     external_id=action.external_id,
-                    status=ActionStatus.failed,
+                    status=status,
                     result_message=str(e),
                 )
             )
