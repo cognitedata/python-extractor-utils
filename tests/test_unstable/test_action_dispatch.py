@@ -30,8 +30,8 @@ def _queued_updates(extractor: TestExtractor) -> list[ActionUpdate]:
     return [c[0][0] for c in extractor._checkin_worker.queue_action_update.call_args_list]
 
 
-def _make_action(external_id: str, action_name: str) -> Action:
-    return Action(external_id=external_id, action_name=action_name, status=ActionStatus.pending)
+def _make_action(external_id: str, action_name: str, status: ActionStatus = ActionStatus.pending) -> Action:
+    return Action(external_id=external_id, action_name=action_name, status=status)
 
 
 def test_dispatch_unrecognised_action_name_reports_failed() -> None:
@@ -531,3 +531,95 @@ def test_action_context_exposes_cdf_client_and_integration_external_id() -> None
     extractor._dispatch_single_action(_make_action("act-p", "probe"))
     assert captured["cdf_client"] is extractor.cognite_client
     assert captured["integration_external_id"] == "test-integration"
+
+
+def test_cancel_pending_custom_action_cancels_token_without_rerunning_target() -> None:
+    call_count = {"n": 0}
+    started = Event()
+    allow_exit = Event()
+
+    def target(ctx: ActionContext) -> None:
+        call_count["n"] += 1
+        started.set()
+        allow_exit.wait(timeout=5)
+
+    extractor = _make_extractor()
+    extractor.add_action(CustomAction(name="long-running", target=target))
+
+    dispatch_thread = threading.Thread(
+        target=extractor._dispatch_single_action,
+        args=(_make_action("act-1", "long-running"),),
+        daemon=True,
+    )
+    dispatch_thread.start()
+    assert started.wait(timeout=5)
+
+    with extractor._running_action_tokens_lock:
+        token = extractor._running_action_tokens.get("act-1")
+    assert token is not None and not token.is_cancelled
+
+    # Odin re-delivers the same external_id with cancel_pending once the user cancels it.
+    extractor._dispatch_single_action(_make_action("act-1", "long-running", status=ActionStatus.cancel_pending))
+
+    assert token.is_cancelled
+    assert call_count["n"] == 1  # target was not re-invoked by the cancel_pending re-delivery
+
+    allow_exit.set()
+    dispatch_thread.join(timeout=5)
+
+
+def test_custom_action_reports_canceled_when_cancelled_mid_run() -> None:
+    def target(ctx: ActionContext) -> None:
+        ctx.cancellation_token.cancel()
+
+    extractor = _make_extractor()
+    extractor.add_action(CustomAction(name="cooperative", target=target))
+    extractor._dispatch_single_action(_make_action("act-1", "cooperative"))
+
+    updates = _queued_updates(extractor)
+    assert any(u.status == ActionStatus.canceled and u.external_id == "act-1" for u in updates)
+
+
+def test_cancel_pending_start_task_action_cancels_running_task_instead_of_redispatching() -> None:
+    extractor = _make_extractor()
+    task_started = Event()
+    allow_exit = Event()
+
+    def cancellable(ctx: TaskContext) -> None:
+        task_started.set()
+        allow_exit.wait(timeout=5)
+
+    extractor.add_task(ScheduledTask.from_interval(interval="1h", name="worker", target=cancellable))
+
+    dispatch_thread = threading.Thread(
+        target=extractor._dispatch_single_action,
+        args=(_make_action("act-1", "Start worker"),),
+        daemon=True,
+    )
+    dispatch_thread.start()
+    assert task_started.wait(timeout=5)
+
+    # Odin re-delivers the same external_id with cancel_pending once the user cancels it.
+    extractor._dispatch_single_action(_make_action("act-1", "Start worker", status=ActionStatus.cancel_pending))
+
+    with extractor._running_task_tokens_lock:
+        token = extractor._running_task_tokens.get("worker")
+    assert token is not None and token.is_cancelled
+
+    allow_exit.set()
+    dispatch_thread.join(timeout=5)
+
+    updates = _queued_updates(extractor)
+    statuses = [u.status for u in updates if u.external_id == "act-1"]
+    # No spurious "already running" failure from the cancel_pending re-delivery being re-dispatched.
+    assert ActionStatus.failed not in statuses
+    assert statuses[-1] == ActionStatus.canceled
+
+
+def test_cancel_pending_unknown_action_is_a_no_op() -> None:
+    extractor = _make_extractor()
+    extractor._dispatch_single_action(
+        _make_action("act-unknown", "does not matter", status=ActionStatus.cancel_pending)
+    )
+
+    assert _queued_updates(extractor) == []

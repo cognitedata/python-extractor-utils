@@ -203,6 +203,11 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self._custom_actions: list[CustomAction] = []
         self._running_task_tokens: dict[str, CancellationToken] = {}
         self._running_task_tokens_lock = RLock()
+        # Keyed by Action.external_id (not task name) so a `cancel_pending` re-delivery of an
+        # in-flight start_task/custom action can be cancelled instead of re-dispatched. Populated by
+        # _handle_start_task_action/_handle_custom_action, consulted by _dispatch_single_action.
+        self._running_action_tokens: dict[str, CancellationToken] = {}
+        self._running_action_tokens_lock = RLock()
         self._start_time: datetime
 
         self.metrics: BaseMetrics = self._load_metrics(config.metrics_class)
@@ -612,6 +617,16 @@ class Extractor(Generic[ConfigType], CogniteLogger):
             ).start()
 
     def _dispatch_single_action(self, action: Action) -> None:
+        if action.status == ActionStatus.cancel_pending:
+            # Odin re-delivers an already-dispatched action once a user cancels it, with its status
+            # flipped to cancel_pending. This is not a fresh invocation: cancel the token tracking the
+            # in-flight run (if we have one) and stop, rather than re-running the action's handler.
+            with self._running_action_tokens_lock:
+                token = self._running_action_tokens.get(action.external_id)
+            if token is not None:
+                token.cancel()
+            return
+
         actionable_tasks = [t for t in self._tasks if isinstance(t, ACTIONABLE_TASK_TYPES)]
         scheduled_start_names = {f"Start {t.name}" for t in actionable_tasks}
         scheduled_stop_names = {f"Stop {t.name}" for t in actionable_tasks}
@@ -661,6 +676,9 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                 return
             self._running_task_tokens[task_name] = child_token
 
+        with self._running_action_tokens_lock:
+            self._running_action_tokens[action.external_id] = child_token
+
         self._checkin_worker.queue_action_update(
             ActionUpdate(external_id=action.external_id, status=ActionStatus.running)
         )
@@ -677,6 +695,10 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                     result_message=str(e),
                 )
             )
+        finally:
+            with self._running_action_tokens_lock:
+                if self._running_action_tokens.get(action.external_id) is child_token:
+                    self._running_action_tokens.pop(action.external_id, None)
 
     def _handle_stop_task_action(self, action: Action) -> None:
         task_name = action.action_name[len("Stop ") :]
@@ -711,6 +733,10 @@ class Extractor(Generic[ConfigType], CogniteLogger):
             )
             return
 
+        action_token = self.cancellation_token.create_child_token()
+        with self._running_action_tokens_lock:
+            self._running_action_tokens[action.external_id] = action_token
+
         self._checkin_worker.queue_action_update(
             ActionUpdate(external_id=action.external_id, status=ActionStatus.running)
         )
@@ -720,11 +746,13 @@ class Extractor(Generic[ConfigType], CogniteLogger):
             extractor=self,
             external_id=action.external_id,
             call_metadata=action.call_metadata,
+            cancellation_token=action_token,
         )
 
         try:
             custom.target(ctx)
             filtered_metadata, oversized_fields = drop_oversized_metadata_fields(ctx._result_metadata)
+            completed_status = ActionStatus.canceled if action_token.is_cancelled else ActionStatus.succeeded
             if oversized_fields:
                 # The action itself ran to completion — only reporting the full result back to Odin
                 # failed, because a metadata value is too large to send. Fail the action instead of
@@ -747,7 +775,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                 self._checkin_worker.queue_action_update(
                     ActionUpdate(
                         external_id=action.external_id,
-                        status=ActionStatus.succeeded,
+                        status=completed_status,
                         result_message=ctx._result_message,
                         result_metadata=ctx._result_metadata,
                     )
@@ -777,6 +805,10 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                     result_message=str(e),
                 )
             )
+        finally:
+            with self._running_action_tokens_lock:
+                if self._running_action_tokens.get(action.external_id) is action_token:
+                    self._running_action_tokens.pop(action.external_id, None)
 
     def start(self) -> None:
         """

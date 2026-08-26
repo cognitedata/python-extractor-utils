@@ -2,6 +2,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.unstable.core.actions import ActionContext, CustomAction
 from cognite.extractorutils.unstable.core.errors import Error, ErrorLevel
 
@@ -47,6 +48,7 @@ def test_action_context_attributes(mock_extractor: MagicMock, simple_action: Cus
         action=simple_action,
         extractor=mock_extractor,
         external_id="triggered-action-ext-id",
+        cancellation_token=CancellationToken(),
         call_metadata={"key": "value"},
     )
 
@@ -55,20 +57,26 @@ def test_action_context_attributes(mock_extractor: MagicMock, simple_action: Cus
 
 
 def test_action_context_call_metadata_none(mock_extractor: MagicMock, simple_action: CustomAction) -> None:
-    ctx = ActionContext(action=simple_action, extractor=mock_extractor, external_id="ext-id")
+    ctx = ActionContext(
+        action=simple_action, extractor=mock_extractor, external_id="ext-id", cancellation_token=CancellationToken()
+    )
 
     assert ctx.call_metadata is None
 
 
 def test_action_context_logger_name(mock_extractor: MagicMock, simple_action: CustomAction) -> None:
-    ctx = ActionContext(action=simple_action, extractor=mock_extractor, external_id="ext-id")
+    ctx = ActionContext(
+        action=simple_action, extractor=mock_extractor, external_id="ext-id", cancellation_token=CancellationToken()
+    )
 
     assert ctx._logger.name == "test-extractor.action.myaction"
 
 
 def test_action_context_logger_name_strips_spaces(mock_extractor: MagicMock) -> None:
     action = CustomAction(name="process data", target=lambda ctx: None)
-    ctx = ActionContext(action=action, extractor=mock_extractor, external_id="ext-id")
+    ctx = ActionContext(
+        action=action, extractor=mock_extractor, external_id="ext-id", cancellation_token=CancellationToken()
+    )
 
     assert ctx._logger.name == "test-extractor.action.processdata"
 
@@ -89,7 +97,9 @@ def test_action_context_error_task_name(
     task_name: str | None,
     expected_task_name: str,
 ) -> None:
-    ctx = ActionContext(action=simple_action, extractor=mock_extractor, external_id="ext-id")
+    ctx = ActionContext(
+        action=simple_action, extractor=mock_extractor, external_id="ext-id", cancellation_token=CancellationToken()
+    )
 
     ctx._new_error(
         level=ErrorLevel.warning, description="Something went wrong", details="some details", task_name=task_name
@@ -108,7 +118,9 @@ def test_action_target_is_callable(mock_extractor: MagicMock) -> None:
         called.append(ctx)
 
     action = CustomAction(name="test", target=my_action)
-    ctx = ActionContext(action=action, extractor=mock_extractor, external_id="ext-id")
+    ctx = ActionContext(
+        action=action, extractor=mock_extractor, external_id="ext-id", cancellation_token=CancellationToken()
+    )
 
     assert callable(action.target)
     action.target(ctx)
