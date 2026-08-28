@@ -55,7 +55,7 @@ jobs:
           uv run coverage run --source cognite.extractorutils -m pytest -v tests
           uv run coverage xml
 
-      - uses: codecov/codecov-action@v7
+      - uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: ./coverage.xml
