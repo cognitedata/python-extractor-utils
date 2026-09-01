@@ -317,7 +317,7 @@ def test_action_error_sets_result_metadata_and_keeps_failed_status() -> None:
     assert failed.result_message == "bad input"
 
 
-def test_oversized_result_metadata_fails_action_but_keeps_valid_fields() -> None:
+def test_oversized_result_metadata_keeps_completed_status_and_valid_fields() -> None:
     def target(ctx: ActionContext) -> None:
         ctx.set_result("done", metadata={"summary": "ok", "blob": "x" * 600})
 
@@ -327,11 +327,30 @@ def test_oversized_result_metadata_fails_action_but_keeps_valid_fields() -> None
 
     updates = _queued_updates(extractor)
     final = updates[-1]
-    assert final.status == ActionStatus.failed
+    assert final.status == ActionStatus.succeeded
     assert final.result_metadata == {"summary": "ok"}
     assert "big-result" in (final.result_message or "")
+    assert "completed successfully" in (final.result_message or "")
     assert "blob" in (final.result_message or "")
     assert "512" in (final.result_message or "")
+
+
+def test_oversized_result_metadata_reports_canceled_when_cancelled() -> None:
+    def target(ctx: ActionContext) -> None:
+        ctx.cancellation_token.cancel()
+        ctx.set_result("done", metadata={"summary": "ok", "blob": "x" * 600})
+
+    extractor = _make_extractor()
+    extractor.add_action(CustomAction(name="big-result-canceled", target=target))
+    extractor._dispatch_single_action(_make_action("act-big-canceled", "big-result-canceled"))
+
+    updates = _queued_updates(extractor)
+    final = updates[-1]
+    assert final.status == ActionStatus.canceled
+    assert final.result_metadata == {"summary": "ok"}
+    assert "was canceled" in (final.result_message or "")
+    assert "completed successfully" not in (final.result_message or "")
+    assert "blob" in (final.result_message or "")
 
 
 def test_oversized_action_error_metadata_drops_only_oversized_field() -> None:
@@ -383,7 +402,7 @@ def test_oversized_result_metadata_with_many_fields_truncates_message_instead_of
 
     updates = _queued_updates(extractor)
     final = updates[-1]
-    assert final.status == ActionStatus.failed
+    assert final.status == ActionStatus.succeeded
     assert final.result_metadata == {"summary": "ok"}
     assert final.result_message is not None
     assert len(final.result_message) <= MAX_MESSAGE_LENGTH
