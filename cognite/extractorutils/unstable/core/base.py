@@ -543,6 +543,22 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                     task=lambda: self._run_task_with_token(t),
                 )
 
+    @staticmethod
+    def _release_if_owned(
+        tokens: dict[str, CancellationToken], lock: RLock, key: str, token: CancellationToken
+    ) -> None:
+        """
+        Remove ``key`` from ``tokens`` only if it still maps to ``token``.
+
+        Used when cleaning up a task/action's cancellation-token registration on completion or
+        error. The identity check guards against clobbering a newer registration that may have
+        already replaced this one under the same key (e.g. a task restarted with a fresh token
+        before this cleanup ran).
+        """
+        with lock:
+            if tokens.get(key) is token:
+                tokens.pop(key, None)
+
     def _run_task_with_token(
         self, task: ScheduledTask | ContinuousTask, child_token: CancellationToken | None = None
     ) -> None:
@@ -568,9 +584,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         try:
             task.target(TaskContext(task=task, extractor=self, cancellation_token=child_token))
         finally:
-            with self._running_task_tokens_lock:
-                if self._running_task_tokens.get(task.name) is child_token:
-                    self._running_task_tokens.pop(task.name, None)
+            self._release_if_owned(self._running_task_tokens, self._running_task_tokens_lock, task.name, child_token)
 
     def _launch_continuous_task(self, task: ContinuousTask) -> None:
         """
@@ -595,9 +609,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                 args=(task, child_token),
             ).start()
         except Exception as e:
-            with self._running_task_tokens_lock:
-                if self._running_task_tokens.get(task.name) is child_token:
-                    self._running_task_tokens.pop(task.name, None)
+            self._release_if_owned(self._running_task_tokens, self._running_task_tokens_lock, task.name, child_token)
             message = f"Failed to launch continuous task '{task.name}'"
             self._logger.log(level=ErrorLevel.fatal.log_level, msg=message, exc_info=e)
             self._new_error(
@@ -676,14 +688,14 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                 return
             self._running_task_tokens[task_name] = child_token
 
-        with self._running_action_tokens_lock:
-            self._running_action_tokens[action.external_id] = child_token
-
-        self._checkin_worker.queue_action_update(
-            ActionUpdate(external_id=action.external_id, status=ActionStatus.running)
-        )
-
         try:
+            with self._running_action_tokens_lock:
+                self._running_action_tokens[action.external_id] = child_token
+
+            self._checkin_worker.queue_action_update(
+                ActionUpdate(external_id=action.external_id, status=ActionStatus.running)
+            )
+
             self._run_task_with_token(task, child_token)
             status = ActionStatus.canceled if child_token.is_cancelled else ActionStatus.succeeded
             self._checkin_worker.queue_action_update(ActionUpdate(external_id=action.external_id, status=status))
@@ -696,9 +708,13 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                 )
             )
         finally:
-            with self._running_action_tokens_lock:
-                if self._running_action_tokens.get(action.external_id) is child_token:
-                    self._running_action_tokens.pop(action.external_id, None)
+            # Guards against a leaked "running" registration if something between here and
+            # _run_task_with_token's own cleanup (e.g. the ActionUpdate construction above) ever
+            # raises before _run_task_with_token gets a chance to run its own finally.
+            self._release_if_owned(self._running_task_tokens, self._running_task_tokens_lock, task_name, child_token)
+            self._release_if_owned(
+                self._running_action_tokens, self._running_action_tokens_lock, action.external_id, child_token
+            )
 
     def _handle_stop_task_action(self, action: Action) -> None:
         task_name = action.action_name[len("Stop ") :]
@@ -734,22 +750,23 @@ class Extractor(Generic[ConfigType], CogniteLogger):
             return
 
         action_token = self.cancellation_token.create_child_token()
-        with self._running_action_tokens_lock:
-            self._running_action_tokens[action.external_id] = action_token
-
-        self._checkin_worker.queue_action_update(
-            ActionUpdate(external_id=action.external_id, status=ActionStatus.running)
-        )
-
-        ctx = ActionContext(
-            action=custom,
-            extractor=self,
-            external_id=action.external_id,
-            call_metadata=action.call_metadata,
-            cancellation_token=action_token,
-        )
 
         try:
+            with self._running_action_tokens_lock:
+                self._running_action_tokens[action.external_id] = action_token
+
+            self._checkin_worker.queue_action_update(
+                ActionUpdate(external_id=action.external_id, status=ActionStatus.running)
+            )
+
+            ctx = ActionContext(
+                action=custom,
+                extractor=self,
+                external_id=action.external_id,
+                call_metadata=action.call_metadata,
+                cancellation_token=action_token,
+            )
+
             custom.target(ctx)
             filtered_metadata, oversized_fields = drop_oversized_metadata_fields(ctx._result_metadata)
             completed_status = ActionStatus.canceled if action_token.is_cancelled else ActionStatus.succeeded
@@ -813,9 +830,9 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                 )
             )
         finally:
-            with self._running_action_tokens_lock:
-                if self._running_action_tokens.get(action.external_id) is action_token:
-                    self._running_action_tokens.pop(action.external_id, None)
+            self._release_if_owned(
+                self._running_action_tokens, self._running_action_tokens_lock, action.external_id, action_token
+            )
 
     def start(self) -> None:
         """

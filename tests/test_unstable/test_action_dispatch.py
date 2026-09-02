@@ -686,3 +686,44 @@ def test_custom_action_reports_failed_when_target_raises_without_cancellation() 
     final = updates[-1]
     assert final.status == ActionStatus.failed
     assert final.result_message == "bad input"
+
+
+def test_start_task_action_cleans_up_registration_when_running_update_raises() -> None:
+    # Regression test: registration into _running_task_tokens/_running_action_tokens must happen
+    # inside the same try/finally that cleans them up, so a failure anywhere before the task
+    # actually runs (e.g. constructing the "running" ActionUpdate) can't leave the task stuck
+    # "running" forever.
+    extractor = _make_extractor()
+    extractor.add_task(ScheduledTask.from_interval(interval="1h", name="worker", target=lambda _: None))
+
+    def flaky_queue_update(update: ActionUpdate) -> None:
+        if update.status == ActionStatus.running:
+            raise RuntimeError("boom")
+
+    extractor._checkin_worker.queue_action_update.side_effect = flaky_queue_update
+
+    extractor._dispatch_single_action(_make_action("act-1", "Start worker"))
+
+    assert "worker" not in extractor._running_task_tokens
+    assert "act-1" not in extractor._running_action_tokens
+
+    updates = _queued_updates(extractor)
+    assert any(u.status == ActionStatus.failed and u.result_message == "boom" for u in updates)
+
+
+def test_custom_action_cleans_up_registration_when_running_update_raises() -> None:
+    extractor = _make_extractor()
+    extractor.add_action(CustomAction(name="flaky", target=lambda ctx: None))
+
+    def flaky_queue_update(update: ActionUpdate) -> None:
+        if update.status == ActionStatus.running:
+            raise RuntimeError("boom")
+
+    extractor._checkin_worker.queue_action_update.side_effect = flaky_queue_update
+
+    extractor._dispatch_single_action(_make_action("act-1", "flaky"))
+
+    assert "act-1" not in extractor._running_action_tokens
+
+    updates = _queued_updates(extractor)
+    assert any(u.status == ActionStatus.failed and u.result_message == "boom" for u in updates)
