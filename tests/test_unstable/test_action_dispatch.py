@@ -121,7 +121,7 @@ def test_stop_task_action_not_running_reports_failed() -> None:
     assert "not currently running" in (updates[0].result_message or "")
 
 
-def test_stop_task_action_cancels_child_token_and_reports_canceled() -> None:
+def test_stop_task_action_cancels_child_token_and_reports_succeeded() -> None:
     extractor = _make_extractor()
     task_started = Event()
     allow_exit = Event()
@@ -140,7 +140,7 @@ def test_stop_task_action_cancels_child_token_and_reports_canceled() -> None:
     extractor._dispatch_single_action(_make_action("act-stop", "Stop worker"))
 
     updates = _queued_updates(extractor)
-    assert any(u.status == ActionStatus.canceled and u.external_id == "act-stop" for u in updates)
+    assert any(u.status == ActionStatus.succeeded and u.external_id == "act-stop" for u in updates)
     assert token is not None and token.is_cancelled
 
     allow_exit.set()
@@ -206,7 +206,7 @@ def test_stop_action_cancels_boot_launched_continuous_task() -> None:
     extractor._dispatch_single_action(_make_action("act-stop", "Stop listener"))
 
     updates = _queued_updates(extractor)
-    assert any(u.status == ActionStatus.canceled and u.external_id == "act-stop" for u in updates)
+    assert any(u.status == ActionStatus.succeeded and u.external_id == "act-stop" for u in updates)
     assert task_exited.wait(timeout=5)
     deadline = time.monotonic() + 5
     while "listener" in extractor._running_task_tokens and time.monotonic() < deadline:

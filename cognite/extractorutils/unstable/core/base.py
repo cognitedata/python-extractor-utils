@@ -734,7 +734,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
             return
 
         self._checkin_worker.queue_action_update(
-            ActionUpdate(external_id=action.external_id, status=ActionStatus.canceled)
+            ActionUpdate(external_id=action.external_id, status=ActionStatus.succeeded)
         )
 
     def _handle_custom_action(self, action: Action) -> None:
