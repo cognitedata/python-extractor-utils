@@ -203,6 +203,11 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         self._custom_actions: list[CustomAction] = []
         self._running_task_tokens: dict[str, CancellationToken] = {}
         self._running_task_tokens_lock = RLock()
+        # Keyed by Action.external_id (not task name) so a `cancel_pending` re-delivery of an
+        # in-flight start_task/custom action can be cancelled instead of re-dispatched. Populated by
+        # _handle_start_task_action/_handle_custom_action, consulted by _dispatch_single_action.
+        self._running_action_tokens: dict[str, CancellationToken] = {}
+        self._running_action_tokens_lock = RLock()
         self._start_time: datetime
 
         self.metrics: BaseMetrics = self._load_metrics(config.metrics_class)
@@ -538,6 +543,22 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                     task=lambda: self._run_task_with_token(t),
                 )
 
+    @staticmethod
+    def _release_if_owned(
+        tokens: dict[str, CancellationToken], lock: RLock, key: str, token: CancellationToken
+    ) -> None:
+        """
+        Remove ``key`` from ``tokens`` only if it still maps to ``token``.
+
+        Used when cleaning up a task/action's cancellation-token registration on completion or
+        error. The identity check guards against clobbering a newer registration that may have
+        already replaced this one under the same key (e.g. a task restarted with a fresh token
+        before this cleanup ran).
+        """
+        with lock:
+            if tokens.get(key) is token:
+                tokens.pop(key, None)
+
     def _run_task_with_token(
         self, task: ScheduledTask | ContinuousTask, child_token: CancellationToken | None = None
     ) -> None:
@@ -563,9 +584,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         try:
             task.target(TaskContext(task=task, extractor=self, cancellation_token=child_token))
         finally:
-            with self._running_task_tokens_lock:
-                if self._running_task_tokens.get(task.name) is child_token:
-                    self._running_task_tokens.pop(task.name, None)
+            self._release_if_owned(self._running_task_tokens, self._running_task_tokens_lock, task.name, child_token)
 
     def _launch_continuous_task(self, task: ContinuousTask) -> None:
         """
@@ -590,9 +609,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                 args=(task, child_token),
             ).start()
         except Exception as e:
-            with self._running_task_tokens_lock:
-                if self._running_task_tokens.get(task.name) is child_token:
-                    self._running_task_tokens.pop(task.name, None)
+            self._release_if_owned(self._running_task_tokens, self._running_task_tokens_lock, task.name, child_token)
             message = f"Failed to launch continuous task '{task.name}'"
             self._logger.log(level=ErrorLevel.fatal.log_level, msg=message, exc_info=e)
             self._new_error(
@@ -612,6 +629,16 @@ class Extractor(Generic[ConfigType], CogniteLogger):
             ).start()
 
     def _dispatch_single_action(self, action: Action) -> None:
+        if action.status == ActionStatus.cancel_pending:
+            # Odin re-delivers an already-dispatched action once a user cancels it, with its status
+            # flipped to cancel_pending. This is not a fresh invocation: cancel the token tracking the
+            # in-flight run (if we have one) and stop, rather than re-running the action's handler.
+            with self._running_action_tokens_lock:
+                token = self._running_action_tokens.get(action.external_id)
+            if token is not None:
+                token.cancel()
+            return
+
         actionable_tasks = [t for t in self._tasks if isinstance(t, ACTIONABLE_TASK_TYPES)]
         scheduled_start_names = {f"Start {t.name}" for t in actionable_tasks}
         scheduled_stop_names = {f"Stop {t.name}" for t in actionable_tasks}
@@ -661,11 +688,14 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                 return
             self._running_task_tokens[task_name] = child_token
 
-        self._checkin_worker.queue_action_update(
-            ActionUpdate(external_id=action.external_id, status=ActionStatus.running)
-        )
-
         try:
+            with self._running_action_tokens_lock:
+                self._running_action_tokens[action.external_id] = child_token
+
+            self._checkin_worker.queue_action_update(
+                ActionUpdate(external_id=action.external_id, status=ActionStatus.running)
+            )
+
             self._run_task_with_token(task, child_token)
             status = ActionStatus.canceled if child_token.is_cancelled else ActionStatus.succeeded
             self._checkin_worker.queue_action_update(ActionUpdate(external_id=action.external_id, status=status))
@@ -676,6 +706,14 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                     status=ActionStatus.failed,
                     result_message=str(e),
                 )
+            )
+        finally:
+            # Guards against a leaked "running" registration if something between here and
+            # _run_task_with_token's own cleanup (e.g. the ActionUpdate construction above) ever
+            # raises before _run_task_with_token gets a chance to run its own finally.
+            self._release_if_owned(self._running_task_tokens, self._running_task_tokens_lock, task_name, child_token)
+            self._release_if_owned(
+                self._running_action_tokens, self._running_action_tokens_lock, action.external_id, child_token
             )
 
     def _handle_stop_task_action(self, action: Action) -> None:
@@ -711,32 +749,42 @@ class Extractor(Generic[ConfigType], CogniteLogger):
             )
             return
 
-        self._checkin_worker.queue_action_update(
-            ActionUpdate(external_id=action.external_id, status=ActionStatus.running)
-        )
-
-        ctx = ActionContext(
-            action=custom,
-            extractor=self,
-            external_id=action.external_id,
-            call_metadata=action.call_metadata,
-        )
+        action_token = self.cancellation_token.create_child_token()
 
         try:
+            with self._running_action_tokens_lock:
+                self._running_action_tokens[action.external_id] = action_token
+
+            self._checkin_worker.queue_action_update(
+                ActionUpdate(external_id=action.external_id, status=ActionStatus.running)
+            )
+
+            ctx = ActionContext(
+                action=custom,
+                extractor=self,
+                external_id=action.external_id,
+                call_metadata=action.call_metadata,
+                cancellation_token=action_token,
+            )
+
             custom.target(ctx)
             filtered_metadata, oversized_fields = drop_oversized_metadata_fields(ctx._result_metadata)
+            completed_status = ActionStatus.canceled if action_token.is_cancelled else ActionStatus.succeeded
             if oversized_fields:
-                # The action itself ran to completion — only reporting the full result back to Odin
-                # failed, because a metadata value is too large to send. Fail the action instead of
-                # queuing a payload that Odin would reject (which would otherwise poison the checkin
-                # batch and retry forever, since checkin bundles all pending updates together and
-                # requeues the whole batch on any rejection). Non-oversized fields are still reported.
+                # The action itself ran to completion (or was cancelled) — only reporting the full
+                # result back to Odin is affected, because a metadata value is too large to send.
+                # Drop the oversized field(s) instead of queuing a payload that Odin would reject
+                # (which would otherwise poison the checkin batch and retry forever, since checkin
+                # bundles all pending updates together and requeues the whole batch on any rejection).
+                # Non-oversized fields are still reported, and the action's real outcome (succeeded or
+                # canceled) is preserved rather than being overwritten by this reporting issue.
+                outcome = "was canceled" if completed_status == ActionStatus.canceled else "completed successfully"
                 self._checkin_worker.queue_action_update(
                     ActionUpdate(
                         external_id=action.external_id,
-                        status=ActionStatus.failed,
+                        status=completed_status,
                         result_message=truncate_message(
-                            f"Action '{custom.name}' completed successfully, but metadata field(s) "
+                            f"Action '{custom.name}' {outcome}, but metadata field(s) "
                             f"{', '.join(oversized_fields)} exceeded the {MAX_METADATA_VALUE_BYTES}-byte-per-value "
                             f"limit and were dropped from the reported result"
                         ),
@@ -747,17 +795,20 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                 self._checkin_worker.queue_action_update(
                     ActionUpdate(
                         external_id=action.external_id,
-                        status=ActionStatus.succeeded,
+                        status=completed_status,
                         result_message=ctx._result_message,
                         result_metadata=ctx._result_metadata,
                     )
                 )
         except ActionError as e:
+            # As with start_task actions, a cooperative abort in response to cancellation may surface
+            # as an ActionError rather than a clean return; report that as canceled, not failed.
+            status = ActionStatus.canceled if action_token.is_cancelled else ActionStatus.failed
             filtered_metadata, oversized_fields = drop_oversized_metadata_fields(e.result_metadata)
             self._checkin_worker.queue_action_update(
                 ActionUpdate(
                     external_id=action.external_id,
-                    status=ActionStatus.failed,
+                    status=status,
                     result_message=(
                         str(e)
                         if not oversized_fields
@@ -770,12 +821,17 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                 )
             )
         except Exception as e:
+            status = ActionStatus.canceled if action_token.is_cancelled else ActionStatus.failed
             self._checkin_worker.queue_action_update(
                 ActionUpdate(
                     external_id=action.external_id,
-                    status=ActionStatus.failed,
+                    status=status,
                     result_message=str(e),
                 )
+            )
+        finally:
+            self._release_if_owned(
+                self._running_action_tokens, self._running_action_tokens_lock, action.external_id, action_token
             )
 
     def start(self) -> None:

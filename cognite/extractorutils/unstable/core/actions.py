@@ -6,6 +6,7 @@ import logging
 from collections.abc import Callable
 from typing import TYPE_CHECKING, Generic
 
+from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.unstable.configuration.models import ConfigType
 from cognite.extractorutils.unstable.core._dto import ActionStatus, ActionUpdate
 from cognite.extractorutils.unstable.core.errors import Error, ErrorLevel
@@ -27,6 +28,10 @@ class ActionContext(Generic[ConfigType], CogniteLogger):
 
     ``external_id`` and ``call_metadata`` come from the pending action payload sent by Odin and are
     available for use when reporting results back to the server.
+
+    ``cancellation_token`` is cancelled if the user cancels this specific action invocation from Odin
+    while it is running. Long-running custom actions should check ``cancellation_token.is_cancelled``
+    (or use ``cancellation_token.wait(...)`` instead of blocking sleeps) to exit early when cancelled.
     """
 
     def __init__(
@@ -34,6 +39,7 @@ class ActionContext(Generic[ConfigType], CogniteLogger):
         action: "CustomAction",
         extractor: "Extractor[ConfigType]",
         external_id: str,
+        cancellation_token: CancellationToken,
         call_metadata: dict[str, str] | None = None,
     ) -> None:
         super().__init__()
@@ -41,6 +47,7 @@ class ActionContext(Generic[ConfigType], CogniteLogger):
         self._extractor = extractor
         self.external_id = external_id
         self.call_metadata = call_metadata
+        self.cancellation_token = cancellation_token
         self._result_message: str | None = None
         self._result_metadata: dict[str, str] | None = None
 

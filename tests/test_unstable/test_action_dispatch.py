@@ -30,8 +30,8 @@ def _queued_updates(extractor: TestExtractor) -> list[ActionUpdate]:
     return [c[0][0] for c in extractor._checkin_worker.queue_action_update.call_args_list]
 
 
-def _make_action(external_id: str, action_name: str) -> Action:
-    return Action(external_id=external_id, action_name=action_name, status=ActionStatus.pending)
+def _make_action(external_id: str, action_name: str, status: ActionStatus = ActionStatus.pending) -> Action:
+    return Action(external_id=external_id, action_name=action_name, status=status)
 
 
 def test_dispatch_unrecognised_action_name_reports_failed() -> None:
@@ -317,7 +317,7 @@ def test_action_error_sets_result_metadata_and_keeps_failed_status() -> None:
     assert failed.result_message == "bad input"
 
 
-def test_oversized_result_metadata_fails_action_but_keeps_valid_fields() -> None:
+def test_oversized_result_metadata_keeps_completed_status_and_valid_fields() -> None:
     def target(ctx: ActionContext) -> None:
         ctx.set_result("done", metadata={"summary": "ok", "blob": "x" * 600})
 
@@ -327,11 +327,30 @@ def test_oversized_result_metadata_fails_action_but_keeps_valid_fields() -> None
 
     updates = _queued_updates(extractor)
     final = updates[-1]
-    assert final.status == ActionStatus.failed
+    assert final.status == ActionStatus.succeeded
     assert final.result_metadata == {"summary": "ok"}
     assert "big-result" in (final.result_message or "")
+    assert "completed successfully" in (final.result_message or "")
     assert "blob" in (final.result_message or "")
     assert "512" in (final.result_message or "")
+
+
+def test_oversized_result_metadata_reports_canceled_when_cancelled() -> None:
+    def target(ctx: ActionContext) -> None:
+        ctx.cancellation_token.cancel()
+        ctx.set_result("done", metadata={"summary": "ok", "blob": "x" * 600})
+
+    extractor = _make_extractor()
+    extractor.add_action(CustomAction(name="big-result-canceled", target=target))
+    extractor._dispatch_single_action(_make_action("act-big-canceled", "big-result-canceled"))
+
+    updates = _queued_updates(extractor)
+    final = updates[-1]
+    assert final.status == ActionStatus.canceled
+    assert final.result_metadata == {"summary": "ok"}
+    assert "was canceled" in (final.result_message or "")
+    assert "completed successfully" not in (final.result_message or "")
+    assert "blob" in (final.result_message or "")
 
 
 def test_oversized_action_error_metadata_drops_only_oversized_field() -> None:
@@ -383,7 +402,7 @@ def test_oversized_result_metadata_with_many_fields_truncates_message_instead_of
 
     updates = _queued_updates(extractor)
     final = updates[-1]
-    assert final.status == ActionStatus.failed
+    assert final.status == ActionStatus.succeeded
     assert final.result_metadata == {"summary": "ok"}
     assert final.result_message is not None
     assert len(final.result_message) <= MAX_MESSAGE_LENGTH
@@ -531,3 +550,180 @@ def test_action_context_exposes_cdf_client_and_integration_external_id() -> None
     extractor._dispatch_single_action(_make_action("act-p", "probe"))
     assert captured["cdf_client"] is extractor.cognite_client
     assert captured["integration_external_id"] == "test-integration"
+
+
+def test_cancel_pending_custom_action_cancels_token_without_rerunning_target() -> None:
+    call_count = {"n": 0}
+    started = Event()
+    allow_exit = Event()
+
+    def target(ctx: ActionContext) -> None:
+        call_count["n"] += 1
+        started.set()
+        allow_exit.wait(timeout=5)
+
+    extractor = _make_extractor()
+    extractor.add_action(CustomAction(name="long-running", target=target))
+
+    dispatch_thread = threading.Thread(
+        target=extractor._dispatch_single_action,
+        args=(_make_action("act-1", "long-running"),),
+        daemon=True,
+    )
+    dispatch_thread.start()
+    assert started.wait(timeout=5)
+
+    with extractor._running_action_tokens_lock:
+        token = extractor._running_action_tokens.get("act-1")
+    assert token is not None and not token.is_cancelled
+
+    # Odin re-delivers the same external_id with cancel_pending once the user cancels it.
+    extractor._dispatch_single_action(_make_action("act-1", "long-running", status=ActionStatus.cancel_pending))
+
+    assert token.is_cancelled
+    assert call_count["n"] == 1  # target was not re-invoked by the cancel_pending re-delivery
+
+    allow_exit.set()
+    dispatch_thread.join(timeout=5)
+
+
+def test_custom_action_reports_canceled_when_cancelled_mid_run() -> None:
+    def target(ctx: ActionContext) -> None:
+        ctx.cancellation_token.cancel()
+
+    extractor = _make_extractor()
+    extractor.add_action(CustomAction(name="cooperative", target=target))
+    extractor._dispatch_single_action(_make_action("act-1", "cooperative"))
+
+    updates = _queued_updates(extractor)
+    assert any(u.status == ActionStatus.canceled and u.external_id == "act-1" for u in updates)
+
+
+def test_cancel_pending_start_task_action_cancels_running_task_instead_of_redispatching() -> None:
+    extractor = _make_extractor()
+    task_started = Event()
+    allow_exit = Event()
+
+    def cancellable(ctx: TaskContext) -> None:
+        task_started.set()
+        allow_exit.wait(timeout=5)
+
+    extractor.add_task(ScheduledTask.from_interval(interval="1h", name="worker", target=cancellable))
+
+    dispatch_thread = threading.Thread(
+        target=extractor._dispatch_single_action,
+        args=(_make_action("act-1", "Start worker"),),
+        daemon=True,
+    )
+    dispatch_thread.start()
+    assert task_started.wait(timeout=5)
+
+    # Odin re-delivers the same external_id with cancel_pending once the user cancels it.
+    extractor._dispatch_single_action(_make_action("act-1", "Start worker", status=ActionStatus.cancel_pending))
+
+    with extractor._running_task_tokens_lock:
+        token = extractor._running_task_tokens.get("worker")
+    assert token is not None and token.is_cancelled
+
+    allow_exit.set()
+    dispatch_thread.join(timeout=5)
+
+    updates = _queued_updates(extractor)
+    statuses = [u.status for u in updates if u.external_id == "act-1"]
+    # No spurious "already running" failure from the cancel_pending re-delivery being re-dispatched.
+    assert ActionStatus.failed not in statuses
+    assert statuses[-1] == ActionStatus.canceled
+
+
+def test_cancel_pending_unknown_action_is_a_no_op() -> None:
+    extractor = _make_extractor()
+    extractor._dispatch_single_action(
+        _make_action("act-unknown", "does not matter", status=ActionStatus.cancel_pending)
+    )
+
+    assert _queued_updates(extractor) == []
+
+
+def test_custom_action_reports_canceled_when_target_raises_action_error_after_cancellation() -> None:
+    def target(ctx: ActionContext) -> None:
+        ctx.cancellation_token.cancel()
+        raise ActionError("aborted early", error_type="canceled_mid_run")
+
+    extractor = _make_extractor()
+    extractor.add_action(CustomAction(name="cooperative", target=target))
+    extractor._dispatch_single_action(_make_action("act-1", "cooperative"))
+
+    updates = _queued_updates(extractor)
+    final = updates[-1]
+    assert final.status == ActionStatus.canceled
+    assert final.result_message == "aborted early"
+
+
+def test_custom_action_reports_canceled_when_target_raises_generic_exception_after_cancellation() -> None:
+    def target(ctx: ActionContext) -> None:
+        ctx.cancellation_token.cancel()
+        raise RuntimeError("connection reset")
+
+    extractor = _make_extractor()
+    extractor.add_action(CustomAction(name="cooperative", target=target))
+    extractor._dispatch_single_action(_make_action("act-1", "cooperative"))
+
+    updates = _queued_updates(extractor)
+    final = updates[-1]
+    assert final.status == ActionStatus.canceled
+    assert final.result_message == "connection reset"
+
+
+def test_custom_action_reports_failed_when_target_raises_without_cancellation() -> None:
+    def target(ctx: ActionContext) -> None:
+        raise ActionError("bad input", error_type="invalid_parameter")
+
+    extractor = _make_extractor()
+    extractor.add_action(CustomAction(name="strict", target=target))
+    extractor._dispatch_single_action(_make_action("act-1", "strict"))
+
+    updates = _queued_updates(extractor)
+    final = updates[-1]
+    assert final.status == ActionStatus.failed
+    assert final.result_message == "bad input"
+
+
+def test_start_task_action_cleans_up_registration_when_running_update_raises() -> None:
+    # Regression test: registration into _running_task_tokens/_running_action_tokens must happen
+    # inside the same try/finally that cleans them up, so a failure anywhere before the task
+    # actually runs (e.g. constructing the "running" ActionUpdate) can't leave the task stuck
+    # "running" forever.
+    extractor = _make_extractor()
+    extractor.add_task(ScheduledTask.from_interval(interval="1h", name="worker", target=lambda _: None))
+
+    def flaky_queue_update(update: ActionUpdate) -> None:
+        if update.status == ActionStatus.running:
+            raise RuntimeError("boom")
+
+    extractor._checkin_worker.queue_action_update.side_effect = flaky_queue_update
+
+    extractor._dispatch_single_action(_make_action("act-1", "Start worker"))
+
+    assert "worker" not in extractor._running_task_tokens
+    assert "act-1" not in extractor._running_action_tokens
+
+    updates = _queued_updates(extractor)
+    assert any(u.status == ActionStatus.failed and u.result_message == "boom" for u in updates)
+
+
+def test_custom_action_cleans_up_registration_when_running_update_raises() -> None:
+    extractor = _make_extractor()
+    extractor.add_action(CustomAction(name="flaky", target=lambda ctx: None))
+
+    def flaky_queue_update(update: ActionUpdate) -> None:
+        if update.status == ActionStatus.running:
+            raise RuntimeError("boom")
+
+    extractor._checkin_worker.queue_action_update.side_effect = flaky_queue_update
+
+    extractor._dispatch_single_action(_make_action("act-1", "flaky"))
+
+    assert "act-1" not in extractor._running_action_tokens
+
+    updates = _queued_updates(extractor)
+    assert any(u.status == ActionStatus.failed and u.result_message == "boom" for u in updates)

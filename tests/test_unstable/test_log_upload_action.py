@@ -5,6 +5,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.unstable.configuration.models import (
     LogFileHandlerConfig,
     LogLevel,
@@ -569,7 +570,9 @@ def test_fetch_logs_action_all_files_missing_still_succeeds(tmp_path: Path) -> N
 def test_set_result_raises_on_second_call() -> None:
     extractor = _make_extractor()
     action = CustomAction(name="test", target=lambda ctx: None)
-    ctx = ActionContext(action=action, extractor=extractor, external_id="test-123")
+    ctx = ActionContext(
+        action=action, extractor=extractor, external_id="test-123", cancellation_token=CancellationToken()
+    )
     ctx.set_result("first result")
     with pytest.raises(RuntimeError, match="set_result\\(\\) has already been called"):
         ctx.set_result("second result")
@@ -631,6 +634,7 @@ def test_report_progress_queues_running_action_update() -> None:
         action=CustomAction(name="test-action", target=lambda ctx: None),
         extractor=extractor,
         external_id="act-progress",
+        cancellation_token=CancellationToken(),
     )
     ctx.report_progress("Uploading: 1/3 files complete")
 
