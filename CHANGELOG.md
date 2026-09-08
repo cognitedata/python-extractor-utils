@@ -532,9 +532,7 @@ changed for this version.
    be retied or not. Example:
 
    ``` python
-   @retry(
-       exceptions = {ValueError: lambda x: "Invalid" not in str(x)}
-   )
+   @retry(exceptions={ValueError: lambda x: "Invalid" not in str(x)})
    def func() -> None:
        value = some_function()
 
@@ -549,7 +547,7 @@ changed for this version.
     `requests` library, you can do
 
     ``` python
-    retry(exceptions = request_exceptions())
+    retry(exceptions=request_exceptions())
     ```
 
 ### Changed
@@ -1031,10 +1029,7 @@ config: MyConfig = resolver.config
 
 
 # With path to a yaml file:
-resolver = ConfigResolver(
-    config_path="/path/to/config.yaml",
-    config_type=MyConfig
-)
+resolver = ConfigResolver(config_path="/path/to/config.yaml", config_type=MyConfig)
 config: MyConfig = resolver.config
 ```
 
@@ -1081,6 +1076,7 @@ with Extractor(
     reload_config_action=ReloadConfigAction.SHUTDOWN,
 ) as extractor:
     extractor.run()
+
 
 # Using subclass:
 class MyExtractor(Extractor):
