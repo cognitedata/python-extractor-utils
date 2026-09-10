@@ -407,6 +407,9 @@ def test_oversized_result_metadata_with_many_fields_truncates_message_instead_of
     assert final.result_message is not None
     assert len(final.result_message) <= MAX_MESSAGE_LENGTH
     assert final.result_message.endswith("...")
+    # Regression: the explanation must survive truncation even when the field-name list doesn't.
+    assert "exceeded" in final.result_message
+    assert "dropped" in final.result_message
 
 
 def test_oversized_action_error_with_long_message_truncates_instead_of_crashing() -> None:
