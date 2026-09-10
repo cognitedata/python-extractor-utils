@@ -635,13 +635,16 @@ def test_cancel_pending_start_task_action_cancels_running_task_instead_of_redisp
     assert statuses[-1] == ActionStatus.canceled
 
 
-def test_cancel_pending_unknown_action_is_a_no_op() -> None:
+def test_cancel_pending_unknown_action_confirms_canceled() -> None:
     extractor = _make_extractor()
     extractor._dispatch_single_action(
         _make_action("act-unknown", "does not matter", status=ActionStatus.cancel_pending)
     )
 
-    assert _queued_updates(extractor) == []
+    updates = _queued_updates(extractor)
+    assert len(updates) == 1
+    assert updates[0].external_id == "act-unknown"
+    assert updates[0].status == ActionStatus.canceled
 
 
 def test_custom_action_reports_canceled_when_target_raises_action_error_after_cancellation() -> None:
