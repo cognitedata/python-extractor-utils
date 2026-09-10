@@ -8,7 +8,7 @@ registries:
     password: ${{secrets.ARTIFACTORY_READONLY_TOKEN}}
 
 updates:
-  - package-ecosystem: uv 
+  - package-ecosystem: uv
     directory: /
     schedule:
       interval: daily
