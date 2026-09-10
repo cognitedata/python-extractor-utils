@@ -813,9 +813,9 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                         str(e)
                         if not oversized_fields
                         else truncate_message(
-                            f"{e} (additionally, {len(oversized_fields)} metadata field(s) exceeded the "
-                            f"{MAX_METADATA_VALUE_BYTES}-byte-per-value limit and were dropped: "
-                            f"{', '.join(oversized_fields)})"
+                            f"{len(oversized_fields)} metadata field(s) exceeded the "
+                            f"{MAX_METADATA_VALUE_BYTES}-byte-per-value limit and were dropped. "
+                            f"Action failed: {e}. Dropped fields: {', '.join(oversized_fields)}"
                         )
                     ),
                     result_metadata=filtered_metadata,
