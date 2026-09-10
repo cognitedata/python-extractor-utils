@@ -1,0 +1,20 @@
+version: 2
+
+registries:
+  artifactory-python:
+    type: python-index
+    url: https://cognite.jfrog.io/cognite/api/pypi/snakepit/simple
+    username: ${{secrets.ARTIFACTORY_READONLY_TOKEN_USER}}
+    password: ${{secrets.ARTIFACTORY_READONLY_TOKEN}}
+
+updates:
+  - package-ecosystem: uv
+    directory: /
+    schedule:
+      interval: daily
+    registries:
+      - artifactory-python
+    # Security updates only: version-update PRs are disabled, but this block
+    # still supplies the private registry credentials Dependabot needs to
+    # resolve security fixes.
+    open-pull-requests-limit: 0
