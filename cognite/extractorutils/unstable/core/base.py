@@ -637,6 +637,14 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                 token = self._running_action_tokens.get(action.external_id)
             if token is not None:
                 token.cancel()
+            else:
+                # No in-flight run for this external_id: either never dispatched by this process, or
+                # already finished and cleaned up. Safe to confirm cancellation immediately — Odin
+                # would otherwise wait on an ack that never comes until this integration's next
+                # startup.
+                self._checkin_worker.queue_action_update(
+                    ActionUpdate(external_id=action.external_id, status=ActionStatus.canceled)
+                )
             return
 
         actionable_tasks = [t for t in self._tasks if isinstance(t, ACTIONABLE_TASK_TYPES)]
