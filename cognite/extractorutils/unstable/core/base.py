@@ -784,9 +784,9 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                         external_id=action.external_id,
                         status=completed_status,
                         result_message=truncate_message(
-                            f"Action '{custom.name}' {outcome}, but metadata field(s) "
-                            f"{', '.join(oversized_fields)} exceeded the {MAX_METADATA_VALUE_BYTES}-byte-per-value "
-                            f"limit and were dropped from the reported result"
+                            f"Action '{custom.name}' {outcome}, but {len(oversized_fields)} metadata field(s) "
+                            f"exceeded the {MAX_METADATA_VALUE_BYTES}-byte-per-value limit and were dropped from "
+                            f"the reported result: {', '.join(oversized_fields)}"
                         ),
                         result_metadata=filtered_metadata,
                     )
@@ -813,8 +813,10 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                         str(e)
                         if not oversized_fields
                         else truncate_message(
-                            f"{e} (additionally, metadata field(s) {', '.join(oversized_fields)} exceeded "
-                            f"the {MAX_METADATA_VALUE_BYTES}-byte-per-value limit and were dropped)"
+                            f"{len(oversized_fields)} metadata field(s) exceeded the "
+                            f"{MAX_METADATA_VALUE_BYTES}-byte-per-value limit and were dropped. "
+                            f"Action failed: {truncate_message(str(e), max_length=500)}. "
+                            f"Dropped fields: {', '.join(oversized_fields)}"
                         )
                     ),
                     result_metadata=filtered_metadata,
