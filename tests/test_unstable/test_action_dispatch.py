@@ -407,6 +407,10 @@ def test_oversized_result_metadata_with_many_fields_truncates_message_instead_of
     assert final.result_message is not None
     assert len(final.result_message) <= MAX_MESSAGE_LENGTH
     assert final.result_message.endswith("...")
+    # Regression: the explanation, including the count, must survive truncation even when the
+    # field-name list doesn't.
+    assert "45 metadata field(s) exceeded" in final.result_message
+    assert "dropped" in final.result_message
 
 
 def test_oversized_action_error_with_long_message_truncates_instead_of_crashing() -> None:
@@ -427,7 +431,13 @@ def test_oversized_action_error_with_long_message_truncates_instead_of_crashing(
     assert failed.result_metadata == {"error_type": "invalid_parameter"}
     assert failed.result_message is not None
     assert len(failed.result_message) <= MAX_MESSAGE_LENGTH
-    assert failed.result_message.endswith("...")
+    # Regression: the metadata-dropped explanation must survive truncation even when the
+    # ActionError message itself is long enough to need truncating on its own.
+    assert "exceeded" in failed.result_message
+    assert "dropped" in failed.result_message
+    # Regression: str(e) is bounded before combining, so there's still room left for the
+    # dropped-field-name list even when the ActionError message alone is very long.
+    assert "error_detail" in failed.result_message
 
 
 def test_custom_action_receives_call_metadata_in_context() -> None:
