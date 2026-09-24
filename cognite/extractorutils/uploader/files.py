@@ -456,6 +456,57 @@ class IOFileUploadQueue(AbstractUploadQueue):
         )
         res.raise_for_status()
 
+    def _create_version_multi_part(self, file_meta: CogniteExtractorFileApply, version: str, chunk_count: int) -> dict:
+        # Deliberately does NOT re-apply file_meta (name/metadata/directory/...) here: the parent
+        # CogniteFile is expected to already exist (created by a prior add_io_to_upload_queue call
+        # in the same run), and the versions endpoint only needs its instance id, not its
+        # properties. Re-applying per version would mean one redundant DMS write per version.
+        res = self.cdf_client.files._post(
+            url_path="/files/versions/multiuploadlink",
+            json={
+                "items": [
+                    {
+                        "file": {"instanceId": {"space": file_meta.space, "externalId": file_meta.external_id}},
+                        "version": {"version": version},
+                    }
+                ]
+            },
+            params={"parts": chunk_count},
+            headers=_CDF_ALPHA_VERSION_HEADER,
+        )
+        res.raise_for_status()
+        return res.json()["items"][0]
+
+    def _upload_version(self, size: int, file: BinaryIO, file_meta: CogniteExtractorFileApply, version: str) -> dict:
+        chunks = ChunkedStream(file, self.max_file_chunk_size, size)
+        chunk_count = max(chunks.chunk_count, 1)
+
+        version_item = self._create_version_multi_part(file_meta, version, chunk_count)
+        upload_urls = version_item["uploadUrls"]
+        upload_id = version_item["uploadId"]
+        version_instance_id = version_item["instanceId"]
+
+        if not upload_urls:
+            raise ValueError("No upload URLs returned from CDF")
+
+        if size > 0:
+            for url in upload_urls:
+                chunks.next_chunk()
+                resp = self._httpx_client.send(self._get_file_upload_request(url, chunks, len(chunks), mime_type=None))
+                resp.raise_for_status()
+        else:
+            empty = BytesIO(b"")
+            resp = self._httpx_client.send(self._get_file_upload_request(upload_urls[0], empty, 0, mime_type=None))
+            resp.raise_for_status()
+
+        res = self.cdf_client.files._post(
+            url_path="/files/completemultipartupload",
+            json={"instanceId": version_instance_id, "uploadId": upload_id},
+            headers=_CDF_ALPHA_VERSION_HEADER,
+        )
+        res.raise_for_status()
+        return version_item
+
     def _create_multi_part(self, file_meta: FileMetadataOrCogniteExtractorFile, chunks: ChunkedStream) -> dict:
         if isinstance(file_meta, CogniteExtractorFileApply):
             node_id = self._apply_cognite_file(file_meta)
@@ -497,6 +548,82 @@ class IOFileUploadQueue(AbstractUploadQueue):
             read_file: Callable that returns a BinaryIO stream to read the file from.
             extra_retries: Exception types that might be raised by ``read_file`` that should be retried
         """
+
+        def do_upload(size: int, file: BinaryIO, file_meta: FileMetadataOrCogniteExtractorFile) -> None:
+            if size == 0:
+                self._upload_empty_file(file_meta)
+            elif size >= self.max_single_chunk_file_size:
+                # The minimum chunk size is 4000MiB.
+                self._upload_multipart(size, file, file_meta)
+            else:
+                self._upload_bytes(size, file, file_meta)
+
+        self._submit_upload(file_meta, read_file, do_upload, extra_retries)
+
+    def add_io_to_upload_queue_as_version(
+        self,
+        file_meta: CogniteExtractorFileApply,
+        version: str,
+        read_file: Callable[[], BinaryIO],
+        on_version_uploaded: Callable[[str, dict], None] | None = None,
+        extra_retries: tuple[type[Exception], ...] | dict[type[Exception], Callable[[Any], bool]] | None = None,
+    ) -> None:
+        """
+        Upload file content as a new, named version of ``file_meta`` (a ``CogniteFileVersion``).
+
+        This is done instead of overwriting the base ``CogniteFile``'s own content.
+
+        This targets the alpha CDF file-versioning API (``/files/versions/multiuploadlink``). The
+        bytes are attached to a new ``CogniteFileVersion`` node related to the parent file,
+        addressable independently of the base file's own content.
+
+        Unlike ``add_io_to_upload_queue``, this does NOT apply/create the parent ``CogniteFile``
+        node -- the versions endpoint only needs its instance id, and re-applying it on every
+        version upload would mean one redundant DMS write per version. The parent file is expected
+        to already exist in DMS (e.g. from a prior ``add_io_to_upload_queue`` call for its current
+        state) before calling this.
+
+        This method does not mark the new version as "latest" -- that is a decision for the
+        caller (e.g. based on whether this is the newest known version from the source system).
+        Use ``on_version_uploaded`` to learn the new version's own instance id once uploaded, so
+        the caller can flip ``isLatest`` via a direct data modeling instances write.
+
+        Args:
+            file_meta: identifies the parent file (``space``/``external_id``) this is a version
+                of. Its other properties (name, metadata, ...) are not sent anywhere by this call.
+            version: version label. Must be unique per file.
+            read_file: Callable that returns a BinaryIO stream to read the version's content from.
+            on_version_uploaded: called with ``(version, response)`` from the upload thread after a
+                successful upload, where ``response`` is the raw API response for the version
+                (contains the version's own ``instanceId`` under the ``"instanceId"`` key).
+            extra_retries: Exception types that might be raised by ``read_file`` that should be retried
+        """
+
+        def do_upload(size: int, file: BinaryIO, file_meta: FileMetadataOrCogniteExtractorFile) -> None:
+            if not isinstance(file_meta, CogniteExtractorFileApply):
+                raise TypeError("File versioning is only supported for CogniteExtractorFileApply (CDM) files")
+            version_item = self._upload_version(size, file, file_meta, version)
+            if on_version_uploaded is not None:
+                try:
+                    on_version_uploaded(version, version_item)
+                except Exception as e:
+                    self.logger.error("Error in on_version_uploaded callback: %s", str(e))
+
+        self._submit_upload(file_meta, read_file, do_upload, extra_retries)
+
+    def _submit_upload(
+        self,
+        file_meta: FileMetadataOrCogniteExtractorFile,
+        read_file: Callable[[], BinaryIO],
+        do_upload: Callable[[int, BinaryIO, FileMetadataOrCogniteExtractorFile], None],
+        extra_retries: tuple[type[Exception], ...] | dict[type[Exception], Callable[[Any], bool]] | None = None,
+    ) -> None:
+        """
+        Shared retry/threading/queue plumbing behind the ``add_io_to_upload_queue*`` methods.
+
+        ``do_upload`` performs the actual HTTP work for whichever upload flavor is being used, and
+        is called with the file's content stream once it's been sized and opened.
+        """
         retries = cognite_exceptions()
         if isinstance(extra_retries, tuple):
             retries.update({exc: lambda _: True for exc in extra_retries or []})
@@ -522,14 +649,7 @@ class IOFileUploadQueue(AbstractUploadQueue):
 
             with read_file() as file:
                 size = super_len(file)
-                if size == 0:
-                    self._upload_empty_file(file_meta)
-                elif size >= self.max_single_chunk_file_size:
-                    # The minimum chunk size is 4000MiB.
-                    self._upload_multipart(size, file, file_meta)
-
-                else:
-                    self._upload_bytes(size, file, file_meta)
+                do_upload(size, file, file_meta)
 
             if self.post_upload_function:
                 try:
