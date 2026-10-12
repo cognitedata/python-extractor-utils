@@ -12,6 +12,12 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## 7.13.2
+
+### Fixed
+* In the `unstable` package: Fixed cancelling an in-flight action, including confirming cancellation of a `cancel_pending` action that was never dispatched locally so Odin no longer waits for an acknowledgement that never arrives.
+* In the `unstable` package: Fixed action status reporting: stopped actions now finish as `succeeded` instead of `canceled`, and results with oversize metadata fields are reported as completed with the dropped fields included in the truncated message.
+
 ## 7.13.1
 
 ### Fixed
