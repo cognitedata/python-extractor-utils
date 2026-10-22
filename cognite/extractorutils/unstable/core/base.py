@@ -63,7 +63,7 @@ from multiprocessing import Queue
 from multiprocessing.synchronize import Event as MpEvent
 from threading import RLock, Thread
 from types import TracebackType
-from typing import Generic, TypeVar
+from typing import Generic, TypeGuard, TypeVar
 
 from humps import pascalize
 from typing_extensions import Self, assert_never
@@ -124,9 +124,13 @@ __all__ = [
 _T = TypeVar("_T", bound=ExtractorConfig)
 
 ACTIONABLE_TASK_TYPES: tuple[type[ScheduledTask], type[ContinuousTask]] = (ScheduledTask, ContinuousTask)
-"""Task types that get auto-generated ``Start``/``Stop`` actions and are tracked in
-``_running_task_tokens``. Kept as a single constant so every ``isinstance`` check that gates this
-behavior stays in sync - add a type here (and only here) to make a new task type actionable."""
+"""Task types that can get auto-generated ``Start``/``Stop`` actions. Individual tasks can still opt out
+with ``actionable=False``; use ``_is_actionable`` to check both."""
+
+
+def _is_actionable(task: Task) -> TypeGuard[ScheduledTask | ContinuousTask]:
+    """Whether ``task`` is of an actionable type and has not opted out of Actions support."""
+    return isinstance(task, ACTIONABLE_TASK_TYPES) and task.actionable
 
 
 class FullConfig(Generic[_T]):
@@ -392,10 +396,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
             raise ValueError(f"Custom action '{action.name}' is already registered.")
 
         reserved_names = {
-            name
-            for t in self._tasks
-            if isinstance(t, ACTIONABLE_TASK_TYPES)
-            for name in (f"Start {t.name}", f"Stop {t.name}")
+            name for t in self._tasks if _is_actionable(t) for name in (f"Start {t.name}", f"Stop {t.name}")
         }
         if action.name in reserved_names:
             raise ValueError(f"Custom action name '{action.name}' conflicts with an auto-generated task action.")
@@ -413,7 +414,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         available_actions: list[AvailableActionWrite] = []
 
         for t in self._tasks:
-            if isinstance(t, ACTIONABLE_TASK_TYPES):
+            if _is_actionable(t):
                 available_actions.append(
                     AvailableActionWrite(name=f"Start {t.name}", type=ActionType.start_task, task=t.name)
                 )
@@ -433,7 +434,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
             tasks=[
                 DtoTask(
                     type=TaskType.continuous if isinstance(t, ContinuousTask) else TaskType.batch,
-                    action=isinstance(t, ACTIONABLE_TASK_TYPES),
+                    action=_is_actionable(t),
                     description=t.description,
                     name=t.name,
                 )
@@ -495,7 +496,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         if any(t.name == task.name for t in self._tasks):
             raise ValueError(f"Task '{task.name}' is already registered.")
 
-        if isinstance(task, ACTIONABLE_TASK_TYPES):
+        if _is_actionable(task):
             conflict_names = {f"Start {task.name}", f"Stop {task.name}"}
             for action in self._custom_actions:
                 if action.name in conflict_names:
@@ -647,7 +648,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                 )
             return
 
-        actionable_tasks = [t for t in self._tasks if isinstance(t, ACTIONABLE_TASK_TYPES)]
+        actionable_tasks = [t for t in self._tasks if _is_actionable(t)]
         scheduled_start_names = {f"Start {t.name}" for t in actionable_tasks}
         scheduled_stop_names = {f"Stop {t.name}" for t in actionable_tasks}
         custom_names = {a.name for a in self._custom_actions}
@@ -670,7 +671,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
     def _handle_start_task_action(self, action: Action) -> None:
         task_name = action.action_name[len("Start ") :]
         task = next(
-            (t for t in self._tasks if t.name == task_name and isinstance(t, ACTIONABLE_TASK_TYPES)),
+            (t for t in self._tasks if t.name == task_name and _is_actionable(t)),
             None,
         )
         if task is None:

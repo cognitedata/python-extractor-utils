@@ -68,10 +68,12 @@ class _Task:
         name: str,
         target: TaskTarget,
         description: str | None = None,
+        actionable: bool = False,
     ) -> None:
         self.name = name
         self.target = target
         self.description = description
+        self.actionable = actionable
 
 
 class ScheduledTask(_Task):
@@ -85,6 +87,7 @@ class ScheduledTask(_Task):
         target: A callable that takes a ``TaskContext`` and performs the task.
         description: An optional description of the task.
         schedule: A ``ScheduleConfig`` object that defines the scheduling configuration for the task.
+        actionable: Whether the task supports Start/Stop actions. Enabled by default; set to ``False`` to opt out.
     """
 
     def __init__(
@@ -94,13 +97,20 @@ class ScheduledTask(_Task):
         target: TaskTarget,
         description: str | None = None,
         schedule: ScheduleConfig,
+        actionable: bool = True,
     ) -> None:
-        super().__init__(name=name, target=target, description=description)
+        super().__init__(name=name, target=target, description=description, actionable=actionable)
         self.schedule = schedule
 
     @classmethod
     def from_interval(
-        cls, *, interval: str, name: str, target: TaskTarget, description: str | None = None
+        cls,
+        *,
+        interval: str,
+        name: str,
+        target: TaskTarget,
+        description: str | None = None,
+        actionable: bool = True,
     ) -> "ScheduledTask":
         """
         Create a scheduled task that runs at regular intervals.
@@ -110,16 +120,26 @@ class ScheduledTask(_Task):
             name: The name of the task.
             target: A callable that takes a ``TaskContext`` and performs the task.
             description: An optional description of the task.
+            actionable: Whether the task supports Start/Stop actions. Enabled by default.
         """
         return ScheduledTask(
             name=name,
             target=target,
             description=description,
+            actionable=actionable,
             schedule=IntervalConfig(type="interval", expression=TimeIntervalConfig(interval)),
         )
 
     @classmethod
-    def from_cron(cls, *, cron: str, name: str, target: TaskTarget, description: str | None = None) -> "ScheduledTask":
+    def from_cron(
+        cls,
+        *,
+        cron: str,
+        name: str,
+        target: TaskTarget,
+        description: str | None = None,
+        actionable: bool = True,
+    ) -> "ScheduledTask":
         """
         Create a scheduled task that runs according to a cron expression.
 
@@ -128,11 +148,13 @@ class ScheduledTask(_Task):
             name: The name of the task.
             target: A callable that takes a ``TaskContext`` and performs the task.
             description: An optional description of the task.
+            actionable: Whether the task supports Start/Stop actions. Enabled by default.
         """
         return ScheduledTask(
             name=name,
             target=target,
             description=description,
+            actionable=actionable,
             schedule=CronConfig(type="cron", expression=cron),
         )
 
@@ -142,6 +164,12 @@ class ContinuousTask(_Task):
     A task that runs continuously.
 
     Continuous tasks are started when the extractor starts and are expected to run until the extractor stops.
+
+    Args:
+        name: The name of the task.
+        target: A callable that takes a ``TaskContext`` and performs the task.
+        description: An optional description of the task.
+        actionable: Whether the task supports Start/Stop actions. Enabled by default; set to ``False`` to opt out.
     """
 
     def __init__(
@@ -150,8 +178,9 @@ class ContinuousTask(_Task):
         name: str,
         target: TaskTarget,
         description: str | None = None,
+        actionable: bool = True,
     ) -> None:
-        super().__init__(name=name, target=target, description=description)
+        super().__init__(name=name, target=target, description=description, actionable=actionable)
 
 
 class StartupTask(_Task):
