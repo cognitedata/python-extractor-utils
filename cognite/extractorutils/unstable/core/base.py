@@ -55,6 +55,8 @@ The subclass should also define several class attributes:
 """
 
 import logging
+import os
+import sys
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
@@ -65,6 +67,7 @@ from threading import RLock, Thread
 from types import TracebackType
 from typing import Generic, TypeVar
 
+import psutil
 from humps import pascalize
 from typing_extensions import Self, assert_never
 
@@ -126,6 +129,30 @@ _T = TypeVar("_T", bound=ExtractorConfig)
 ACTIONABLE_TASK_TYPES: tuple[type[ScheduledTask], type[ContinuousTask]] = (ScheduledTask, ContinuousTask)
 """Task types that can support Start/Stop actions.
 Whether a given task supports actions is set by its ``actionable`` flag."""
+
+SHUTDOWN_ACTION_JOIN_TIMEOUT_SECONDS = 10.0
+"""How long ``__exit__`` waits for running action threads to finish after cancelling them. Actions still running
+after this are abandoned (they run on daemon threads) and reported as ``canceled``."""
+
+SHUTDOWN_FLUSH_TIMEOUT_SECONDS = 10.0
+"""How long ``__exit__`` waits for the final check-in (which carries the final action statuses) to be sent."""
+
+PARENT_WATCHDOG_INTERVAL_SECONDS = 1.0
+"""How often the extractor process checks that the runtime process that spawned it is still alive."""
+
+SHUTDOWN_ACTION_MESSAGE = "Extractor shut down while the action was running"
+
+
+def _parent_is_alive(parent_pid: int) -> bool:
+    """
+    Check whether the process with the given PID, which spawned this process, is still running.
+
+    On POSIX an orphaned process is re-parented, so a changed parent PID means the original parent is gone. Windows
+    does not re-parent, so there the parent is looked up by PID (psutil also guards against PID reuse).
+    """
+    if sys.platform != "win32":
+        return os.getppid() == parent_pid
+    return psutil.pid_exists(parent_pid)  # pragma: no cover - Windows only
 
 
 class FullConfig(Generic[_T]):
@@ -207,6 +234,9 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         # _handle_start_task_action/_handle_custom_action, consulted by _dispatch_single_action.
         self._running_action_tokens: dict[str, CancellationToken] = {}
         self._running_action_tokens_lock = RLock()
+        # Threads running dispatched actions, joined (bounded) on shutdown so they can report a final status.
+        self._action_threads: list[Thread] = []
+        self._action_threads_lock = RLock()
         self._start_time: datetime
 
         self.metrics: BaseMetrics = self._load_metrics(config.metrics_class)
@@ -399,9 +429,32 @@ class Extractor(Generic[ConfigType], CogniteLogger):
     def _set_runtime_message_queue(self, queue: Queue) -> None:
         self._runtime_messages = queue
 
-    def _attach_runtime_controls(self, *, cancel_event: MpEvent, message_queue: Queue) -> None:
+    def _attach_runtime_controls(
+        self, *, cancel_event: MpEvent, message_queue: Queue, parent_pid: int | None = None
+    ) -> None:
         self._set_runtime_message_queue(message_queue)
         self._setup_cancellation_watcher(cancel_event)
+        if parent_pid is not None:
+            self._setup_parent_watchdog(parent_pid)
+
+    def _setup_parent_watchdog(self, parent_pid: int) -> None:
+        """
+        Shut down gracefully if the runtime process that spawned this process dies.
+
+        The runtime stops the extractor through a multiprocessing event, which is never set if the runtime is killed
+        (for example with SIGKILL), so the extractor would otherwise keep running and checking in as an orphan.
+        """
+
+        def watchdog() -> None:
+            while not self.cancellation_token.wait(PARENT_WATCHDOG_INTERVAL_SECONDS):
+                if not _parent_is_alive(parent_pid):
+                    self._logger.critical(
+                        "Runtime process (PID %d) is gone, shutting down the extractor gracefully.", parent_pid
+                    )
+                    self.cancellation_token.cancel()
+                    return
+
+        Thread(target=watchdog, name="ParentProcessWatchdog", daemon=True).start()
 
     def _get_startup_request(self) -> StartupRequest:
         available_actions: list[AvailableActionWrite] = []
@@ -626,12 +679,64 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
     def _handle_actions(self, actions: list[Action]) -> None:
         for action in actions:
-            Thread(
+            thread = Thread(
                 target=self._dispatch_single_action,
                 args=(action,),
                 name=f"Action-{action.external_id}",
                 daemon=True,
-            ).start()
+            )
+            with self._action_threads_lock:
+                self._action_threads = [t for t in self._action_threads if t.is_alive()]
+                self._action_threads.append(thread)
+            thread.start()
+
+    def _finish_running_actions(self) -> None:
+        """
+        Cancel running actions, wait (bounded) for them, and queue ``canceled`` for any that did not finish.
+
+        Action handlers report their own final status once they return, so a well-behaved action needs no help. An
+        action that is still registered after the timeout is stuck in a blocking call: its daemon thread is abandoned
+        and the shutdown is reported on its behalf so Odin does not see it as running until the next startup.
+        """
+        with self._running_action_tokens_lock:
+            tokens = list(self._running_action_tokens.values())
+        for token in tokens:
+            token.cancel()
+
+        with self._action_threads_lock:
+            threads = list(self._action_threads)
+        deadline = time.monotonic() + SHUTDOWN_ACTION_JOIN_TIMEOUT_SECONDS
+        for thread in threads:
+            thread.join(max(0.0, deadline - time.monotonic()))
+
+        with self._running_action_tokens_lock:
+            abandoned = list(self._running_action_tokens)
+        for external_id in abandoned:
+            self._logger.warning("Action %s did not stop in time, reporting it as canceled", external_id)
+            self._checkin_worker.queue_action_update(
+                ActionUpdate(
+                    external_id=external_id, status=ActionStatus.canceled, result_message=SHUTDOWN_ACTION_MESSAGE
+                )
+            )
+
+    def _final_flush(self) -> None:
+        """
+        Send everything still queued, using a fresh token because ``self.cancellation_token`` is already cancelled.
+
+        Bounded by ``SHUTDOWN_FLUSH_TIMEOUT_SECONDS`` so an unreachable CDF cannot hang the shutdown.
+        """
+
+        def flush() -> None:
+            try:
+                self._checkin_worker.flush(CancellationToken())
+            except Exception:
+                self._logger.exception("Final check-in on shutdown failed")
+
+        thread = Thread(target=flush, name="ExtractorFinalFlush", daemon=True)
+        thread.start()
+        thread.join(SHUTDOWN_FLUSH_TIMEOUT_SECONDS)
+        if thread.is_alive():
+            self._logger.warning("Final check-in did not complete within %.0f seconds", SHUTDOWN_FLUSH_TIMEOUT_SECONDS)
 
     def _dispatch_single_action(self, action: Action) -> None:
         if action.status == ActionStatus.cancel_pending:
@@ -897,11 +1002,12 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         Stop the extractor when exiting the context manager.
         """
         self.stop()
+        self._finish_running_actions()
 
         if self.state_store:
             self.state_store.synchronize()
 
-        self._checkin_worker.flush(self.cancellation_token)
+        self._final_flush()
         return exc_val is None
 
     def run(self) -> None:
