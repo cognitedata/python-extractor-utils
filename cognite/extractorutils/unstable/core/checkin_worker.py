@@ -16,6 +16,8 @@ from secrets import SystemRandom
 from threading import RLock, Thread
 from time import sleep
 
+import httpx
+import requests
 from cognite.client import CogniteClient
 from cognite.client.exceptions import CogniteAPIError, CogniteAuthError, CogniteConnectionError
 from requests import Response
@@ -42,6 +44,19 @@ DEFAULT_SLEEP_INTERVAL = STARTUP_BACKOFF_SECONDS = 30.0
 MAX_ERRORS_PER_CHECKIN = MAX_TASK_UPDATES_PER_CHECKIN = 1000
 MAX_ACTION_UPDATES_PER_CHECKIN = 100
 rng = SystemRandom()
+
+# Errors that mean "could not reach CDF right now" rather than "the request or credentials are wrong". The Cognite SDK
+# only wraps some of these (e.g. connection errors from API calls, OAuth2Error from token refresh), so raw
+# requests/httpx transport errors and timeouts (notably from the OAuth token refresh) can still surface unwrapped.
+# Deliberately narrow: configuration mistakes (invalid URL, missing schema, unsupported protocol) must stay fatal.
+_TRANSIENT_ERRORS: tuple[type[BaseException], ...] = (
+    requests.exceptions.ConnectionError,
+    requests.exceptions.Timeout,
+    httpx.TimeoutException,
+    httpx.NetworkError,
+    TimeoutError,
+    ConnectionError,
+)
 
 
 def _safe_dispatch(
@@ -183,6 +198,18 @@ class CheckinWorker:
             on_fatal_error (Callable[[Exception], None]): A callback to call when a fatal error occurs.
         """
         self._on_fatal_error = on_fatal_error
+
+    def notify_fatal_error(self, error: Exception) -> None:
+        """
+        Invoke the fatal error handler (if any) with the given error.
+
+        Used by callers that fail outside of a check-in request, such as when building the startup request.
+
+        Arguments:
+            error (Exception): The error that should be treated as fatal.
+        """
+        if self._on_fatal_error is not None:
+            self._on_fatal_error(error)
 
     def set_retry_startup(self, retry_startup: bool) -> None:
         """
@@ -480,6 +507,15 @@ class CheckinWorker:
                 self._action_updates = action_updates + self._action_updates
 
     def _wrap_checkin_like_request(self, request: Callable[[], Response]) -> bool:
+        """
+        Run a check-in like request and classify any failure.
+
+        Transient network problems are logged and requeued without being fatal. Only authentication/authorization
+        failures (401/403, bad credentials) and unexpected errors are reported as fatal.
+
+        Returns:
+            True if the payload of the request should be requeued.
+        """
         exception_to_report: Exception | None = None
         requeue = False
         try:
@@ -493,9 +529,13 @@ class CheckinWorker:
 
         except CogniteAuthError as e:
             self._logger.error(str(e))
-            self._logger.critical("Could not get an access token. Please check your configuration.")
-            exception_to_report = e
             requeue = True
+            if isinstance(e.__cause__, _TRANSIENT_ERRORS):
+                # The token endpoint could not be reached; this says nothing about the credentials.
+                self._log_transient_error("Could not reach the token endpoint to get an access token", e.__cause__)
+            else:
+                self._logger.critical("Could not get an access token. Please check your configuration.")
+                exception_to_report = e
 
         except CogniteAPIError as e:
             if e.code == 401:
@@ -519,6 +559,10 @@ class CheckinWorker:
                 self._logger.critical(f"Error while connecting to CDF {e!s}")
             requeue = True
 
+        except _TRANSIENT_ERRORS as e:
+            self._log_transient_error("Could not reach CDF", e)
+            requeue = True
+
         except Exception as e:
             self._logger.critical(f"Extractor could not connect to CDF {e!s}")
             exception_to_report = e
@@ -528,3 +572,8 @@ class CheckinWorker:
             self._on_fatal_error(exception_to_report)
 
         return requeue
+
+    def _log_transient_error(self, message: str, error: BaseException) -> None:
+        self._logger.warning(
+            "%s (%s: %s). The check-in will be retried at the next check-in.", message, type(error).__name__, error
+        )
