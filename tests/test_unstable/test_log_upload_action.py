@@ -286,18 +286,21 @@ def test_no_file_handler_reports_no_file_handler_configured() -> None:
     [True, False],
     ids=["files_present", "all_files_missing"],
 )
-def test_fetch_logs_action_with_file_handler_succeeds(tmp_path: Path, create_log_file: bool) -> None:
+def test_fetch_logs_action_with_file_handler_does_not_fail(tmp_path: Path, create_log_file: bool) -> None:
     log_path = tmp_path / "extractor.log"
     if create_log_file:
         (tmp_path / "extractor.log.2026-06-10").write_bytes(b"log data")
     extractor = _make_extractor(log_path=log_path)
     updates = _dispatch(extractor, {"start_date": "2026-06-10", "end_date": "2026-06-10"})
     statuses = [u.status for u in updates]
-    assert ActionStatus.succeeded in statuses
     assert ActionStatus.failed not in statuses
+    if create_log_file:
+        assert ActionStatus.succeeded in statuses
+    else:
+        assert ActionStatus.completed_with_errors in statuses
 
 
-def test_valid_exact_max_days_range_succeeds_at_dispatch(tmp_path: Path) -> None:
+def test_valid_exact_max_days_range_is_accepted_at_dispatch(tmp_path: Path) -> None:
     # Exactly MAX_DATE_RANGE_DAYS is the boundary — one more would be rejected.
     start = date(2026, 6, 1)
     end = start + timedelta(days=MAX_DATE_RANGE_DAYS - 1)
@@ -305,7 +308,7 @@ def test_valid_exact_max_days_range_succeeds_at_dispatch(tmp_path: Path) -> None
     extractor = _make_extractor(log_path=log_path)
     updates = _dispatch(extractor, {"start_date": str(start), "end_date": str(end)})
     statuses = [u.status for u in updates]
-    assert ActionStatus.succeeded in statuses
+    assert ActionStatus.completed_with_errors in statuses  # no files exist, nothing is uploaded
     assert ActionStatus.failed not in statuses
 
 
@@ -341,7 +344,7 @@ def test_max_range_with_uploads_keeps_files_metadata_within_budget(tmp_path: Pat
 
 def test_files_metadata_omitted_when_still_oversized(tmp_path: Path) -> None:
     # Defense in depth: even with the compact schema, a pathological case (e.g. long per-file error
-    # messages) could still overflow the budget. The action must still succeed on the aggregate
+    # messages) could still overflow the budget. The action must still be reported on the aggregate
     # counts, gracefully omitting 'files' rather than producing an oversized result that Odin would
     # reject and retry forever.
     start = date(2026, 6, 1)
@@ -352,7 +355,7 @@ def test_files_metadata_omitted_when_still_oversized(tmp_path: Path) -> None:
     extractor = _make_extractor(log_path=log_path)
     extractor.cognite_client.files.upload_bytes.side_effect = RuntimeError("x" * 150)
     updates = _dispatch(extractor, {"start_date": str(start), "end_date": str(end)})
-    succeeded = next(u for u in updates if u.status == ActionStatus.succeeded)
+    succeeded = next(u for u in updates if u.status == ActionStatus.completed_with_errors)
     assert succeeded.result_metadata is not None
     assert succeeded.result_metadata["failed_files"] == str(MAX_DATE_RANGE_DAYS)
     assert "files" not in succeeded.result_metadata
@@ -378,7 +381,9 @@ def test_range_spanning_rotated_and_live_file(tmp_path: Path) -> None:
 def test_file_external_id_naming_convention() -> None:
     from cognite.extractorutils.unstable.core._log_upload_action import _file_external_id
 
-    assert _file_external_id("my-extractor", date(2026, 6, 1)) == "extractor-logs-my-extractor-2026-06-01"
+    assert (
+        _file_external_id("my-extractor", date(2026, 6, 1), "act-1") == "extractor-logs-my-extractor-2026-06-01-act-1"
+    )
 
 
 def test_upload_candidate_calls_cdf_upload_for_rotated_file(tmp_path: Path) -> None:
@@ -389,15 +394,16 @@ def test_upload_candidate_calls_cdf_upload_for_rotated_file(tmp_path: Path) -> N
     candidate = LogFileCandidate(log_date=date(2026, 6, 1), path=path, is_current=False)
     mock_client = MagicMock()
 
-    result = _upload_candidate(candidate, "my-extractor", mock_client)
+    result = _upload_candidate(candidate, "my-extractor", mock_client, run_id="act-1")
 
     assert result.status == "uploaded"
     assert result.size_bytes == path.stat().st_size
-    assert result.file_external_id == "extractor-logs-my-extractor-2026-06-01"
+    assert result.file_external_id == "extractor-logs-my-extractor-2026-06-01-act-1"
     mock_client.files.upload_bytes.assert_called_once()
     _, kwargs = mock_client.files.upload_bytes.call_args
-    assert kwargs["external_id"] == "extractor-logs-my-extractor-2026-06-01"
-    assert kwargs["overwrite"] is True
+    assert kwargs["external_id"] == "extractor-logs-my-extractor-2026-06-01-act-1"
+    assert "overwrite" not in kwargs
+    assert "data_set_id" not in kwargs
 
 
 def test_upload_candidate_current_day_uses_bounded_reader(tmp_path: Path) -> None:
@@ -409,7 +415,7 @@ def test_upload_candidate_current_day_uses_bounded_reader(tmp_path: Path) -> Non
     candidate = LogFileCandidate(log_date=_PAST_TODAY, path=path, is_current=True)
     mock_client = MagicMock()
 
-    result = _upload_candidate(candidate, "my-extractor", mock_client)
+    result = _upload_candidate(candidate, "my-extractor", mock_client, run_id="act-1")
 
     assert result.status == "uploaded"
     assert result.size_bytes == 300
@@ -427,7 +433,7 @@ def test_upload_candidate_rotated_file_does_not_use_bounded_reader(tmp_path: Pat
     candidate = LogFileCandidate(log_date=date(2026, 6, 1), path=path, is_current=False)
     mock_client = MagicMock()
 
-    _upload_candidate(candidate, "my-extractor", mock_client)
+    _upload_candidate(candidate, "my-extractor", mock_client, run_id="act-1")
 
     _, kwargs = mock_client.files.upload_bytes.call_args
     assert not isinstance(kwargs["content"], BoundedReader)
@@ -449,7 +455,7 @@ def test_upload_candidate_current_day_bounded_reader_caps_to_stat_size(tmp_path:
     mock_stat_result = MagicMock()
     mock_stat_result.st_size = 300
     with patch("pathlib.Path.stat", return_value=mock_stat_result):
-        result = _upload_candidate(candidate, "my-extractor", mock_client)
+        result = _upload_candidate(candidate, "my-extractor", mock_client, run_id="act-1")
 
     assert result.status == "uploaded"
     assert result.size_bytes == 300
@@ -473,7 +479,7 @@ def test_upload_candidate_bounded_reader_content_is_actually_consumable(tmp_path
     mock_client = MagicMock()
     mock_client.files.upload_bytes.side_effect = capture_upload
 
-    result = _upload_candidate(candidate, "my-extractor", mock_client)
+    result = _upload_candidate(candidate, "my-extractor", mock_client, run_id="act-1")
 
     assert result.status == "uploaded"
     assert consumed["length"] == len(file_content)
@@ -498,7 +504,7 @@ def test_upload_candidate_exceeds_max_size_returns_skipped_too_large(tmp_path: P
     mock_stat_result = MagicMock()
     mock_stat_result.st_size = oversized
     with patch("pathlib.Path.stat", return_value=mock_stat_result):
-        result = _upload_candidate(candidate, "my-extractor", mock_client)
+        result = _upload_candidate(candidate, "my-extractor", mock_client, run_id="act-1")
 
     assert result.status == "skipped_too_large"
     assert result.size_bytes == oversized
@@ -514,7 +520,7 @@ def test_upload_candidate_cdf_error_returns_failed(tmp_path: Path) -> None:
     mock_client = MagicMock()
     mock_client.files.upload_bytes.side_effect = RuntimeError("CDF unavailable")
 
-    result = _upload_candidate(candidate, "my-extractor", mock_client)
+    result = _upload_candidate(candidate, "my-extractor", mock_client, run_id="act-1")
 
     assert result.status == "failed"
     assert "CDF unavailable" in (result.error or "")
@@ -552,15 +558,18 @@ def test_fetch_logs_action_missing_files_reported_in_metadata(tmp_path: Path) ->
     assert succeeded.result_metadata["total_files"] == "2"
     files = json.loads(succeeded.result_metadata["files"])
     by_date = {f["date"]: f for f in files}
-    assert by_date["2026-06-10"]["status"] == "skipped"
+    assert by_date["2026-06-10"]["status"] == "missing"
     assert by_date["2026-06-11"]["status"] == "uploaded"
 
 
-def test_fetch_logs_action_all_files_missing_still_succeeds(tmp_path: Path) -> None:
+def test_fetch_logs_action_all_files_missing_completes_with_errors(tmp_path: Path) -> None:
     log_path = tmp_path / "extractor.log"
     extractor = _make_extractor(log_path=log_path)
     updates = _dispatch(extractor, {"start_date": "2026-06-10", "end_date": "2026-06-10"})
-    succeeded = next(u for u in updates if u.status == ActionStatus.succeeded)
+    assert ActionStatus.succeeded not in [u.status for u in updates]
+    succeeded = next(u for u in updates if u.status == ActionStatus.completed_with_errors)
+    assert succeeded.result_message is not None
+    assert succeeded.result_message.startswith("No log files were uploaded")
     assert succeeded.result_metadata is not None
     assert succeeded.result_metadata["uploaded_files"] == "0"
     assert succeeded.result_metadata["missing_files"] == "1"
@@ -597,7 +606,7 @@ def test_fetch_logs_action_stat_failure_for_current_file_reports_failed(tmp_path
     ):
         updates = _dispatch(extractor, {"start_date": str(_PAST_TODAY), "end_date": str(_PAST_TODAY)})
 
-    succeeded = next(u for u in updates if u.status == ActionStatus.succeeded)
+    succeeded = next(u for u in updates if u.status == ActionStatus.completed_with_errors)
     assert succeeded.result_metadata is not None
     assert succeeded.result_metadata["failed_files"] == "1"
     assert succeeded.result_metadata["uploaded_files"] == "0"
@@ -606,7 +615,7 @@ def test_fetch_logs_action_stat_failure_for_current_file_reports_failed(tmp_path
     assert "permission denied" in files[0]["error"]
 
 
-def test_fetch_logs_action_upload_failure_still_succeeds(tmp_path: Path) -> None:
+def test_fetch_logs_action_upload_failure_completes_with_errors(tmp_path: Path) -> None:
     from unittest.mock import patch
 
     log_path = tmp_path / "extractor.log"
@@ -622,7 +631,7 @@ def test_fetch_logs_action_upload_failure_still_succeeds(tmp_path: Path) -> None
         ),
     ):
         updates = _dispatch(extractor, {"start_date": "2026-06-10", "end_date": "2026-06-10"})
-    succeeded = next(u for u in updates if u.status == ActionStatus.succeeded)
+    succeeded = next(u for u in updates if u.status == ActionStatus.completed_with_errors)
     assert succeeded.result_metadata is not None
     assert succeeded.result_metadata["failed_files"] == "1"
     assert succeeded.result_metadata["uploaded_files"] == "0"
@@ -675,4 +684,115 @@ def test_upload_action_no_progress_updates_when_all_files_missing(tmp_path: Path
     updates = _dispatch(extractor, {"start_date": "2026-06-10", "end_date": "2026-06-10"})
     progress_updates = [u for u in updates if u.status == ActionStatus.running and u.result_message is not None]
     assert progress_updates == []
-    assert any(u.status == ActionStatus.succeeded for u in updates)
+    assert any(u.status == ActionStatus.completed_with_errors for u in updates)
+
+
+# --- data set, per-run external IDs and outcome status (EDG-1037) ---
+
+
+def _upload_kwargs(extractor: TestExtractor) -> list[dict]:
+    return [c.kwargs for c in extractor.cognite_client.files.upload_bytes.call_args_list]
+
+
+def test_fetch_logs_passes_data_set_id_from_extractor_hook(tmp_path: Path) -> None:
+    (tmp_path / "extractor.log.2026-06-10").write_bytes(b"data")
+    extractor = _make_extractor(log_path=tmp_path / "extractor.log")
+    extractor.get_log_upload_data_set_id = lambda: 4242  # type: ignore[method-assign]
+    _dispatch(extractor, {"start_date": "2026-06-10", "end_date": "2026-06-10"})
+    assert [k["data_set_id"] for k in _upload_kwargs(extractor)] == [4242]
+
+
+def test_fetch_logs_omits_data_set_id_by_default(tmp_path: Path) -> None:
+    (tmp_path / "extractor.log.2026-06-10").write_bytes(b"data")
+    extractor = _make_extractor(log_path=tmp_path / "extractor.log")
+    _dispatch(extractor, {"start_date": "2026-06-10", "end_date": "2026-06-10"})
+    kwargs = _upload_kwargs(extractor)
+    assert len(kwargs) == 1
+    assert "data_set_id" not in kwargs[0]
+
+
+def test_default_data_set_hook_uses_with_data_set_id_config() -> None:
+    from cognite.extractorutils.unstable.configuration.models import WithDataSetId
+
+    extractor = _make_extractor()
+    assert extractor.get_log_upload_data_set_id() is None  # TestConfig has no data set
+
+    class _Cfg(WithDataSetId):
+        pass
+
+    cfg = _Cfg.model_validate({"data-set": {"external-id": "ds"}})
+    extractor.application_config = cfg  # type: ignore[assignment]
+    extractor.cognite_client.data_sets.retrieve.return_value = MagicMock(id=77)
+    assert extractor.get_log_upload_data_set_id() == 77
+
+
+def test_fetch_logs_twice_for_same_day_uploads_two_different_files_without_overwrite(tmp_path: Path) -> None:
+    (tmp_path / "extractor.log.2026-06-10").write_bytes(b"data")
+    extractor = _make_extractor(log_path=tmp_path / "extractor.log")
+    for external_id in ("act-1", "act-2"):
+        extractor._dispatch_single_action(
+            Action(
+                external_id=external_id,
+                action_name="fetch_logs",
+                status=ActionStatus.pending,
+                call_metadata={"start_date": "2026-06-10", "end_date": "2026-06-10"},
+            )
+        )
+    kwargs = _upload_kwargs(extractor)
+    ids = [k["external_id"] for k in kwargs]
+    assert ids == [
+        "extractor-logs-test-integration-2026-06-10-act-1",
+        "extractor-logs-test-integration-2026-06-10-act-2",
+    ]
+    assert all("overwrite" not in k for k in kwargs)
+
+
+def test_file_external_id_is_deterministic_and_within_cdf_limit() -> None:
+    from cognite.extractorutils.unstable.core._log_upload_action import MAX_EXTERNAL_ID_LENGTH, _file_external_id
+
+    d = date(2026, 6, 1)
+    assert _file_external_id("integ", d, "run") == _file_external_id("integ", d, "run")
+    long_id = _file_external_id("i" * 255, d, "r" * 255)
+    assert len(long_id) <= MAX_EXTERNAL_ID_LENGTH
+    assert long_id.startswith("extractor-logs-iii")
+    assert _file_external_id("i" * 255, d, "r" * 255) == long_id
+    assert _file_external_id("integ", d, "r" * 255) != _file_external_id("integ", d, "s" * 255)
+    assert len(_file_external_id("integ", d, "r" * 255)) <= MAX_EXTERNAL_ID_LENGTH
+
+
+def test_fetch_logs_partial_upload_is_succeeded(tmp_path: Path) -> None:
+    (tmp_path / "extractor.log.2026-06-11").write_bytes(b"data")  # 2026-06-10 is missing
+    extractor = _make_extractor(log_path=tmp_path / "extractor.log")
+    updates = _dispatch(extractor, {"start_date": "2026-06-10", "end_date": "2026-06-11"})
+    final = updates[-1]
+    assert final.status == ActionStatus.succeeded
+    assert "No log files were uploaded" not in (final.result_message or "")
+
+
+def test_fetch_logs_nothing_uploaded_completes_with_errors_and_message(tmp_path: Path) -> None:
+    extractor = _make_extractor(log_path=tmp_path / "extractor.log")
+    updates = _dispatch(extractor, {"start_date": "2026-06-10", "end_date": "2026-06-11"})
+    final = updates[-1]
+    assert final.status == ActionStatus.completed_with_errors
+    assert final.result_message == "No log files were uploaded (0 of 2 log files uploaded to CDF Files)"
+    assert final.result_metadata is not None
+    assert final.result_metadata["missing_files"] == "2"
+
+
+def test_fetch_logs_invalid_range_still_failed(tmp_path: Path) -> None:
+    extractor = _make_extractor(log_path=tmp_path / "extractor.log")
+    updates = _dispatch(extractor, {"start_date": "2026-06-11", "end_date": "2026-06-10"})
+    assert updates[-1].status == ActionStatus.failed
+    assert updates[-1].result_metadata == {"error_type": "invalid_date_range"}
+
+
+def test_set_result_completed_with_errors_is_ignored_when_cancelled() -> None:
+    extractor = _make_extractor()
+
+    def target(ctx: ActionContext) -> None:
+        ctx.set_result("nothing done", completed_with_errors=True)
+        ctx.cancellation_token.cancel()
+
+    extractor.add_action(CustomAction(name="custom", target=target))
+    extractor._dispatch_single_action(Action(external_id="a", action_name="custom", status=ActionStatus.pending))
+    assert _queued_updates(extractor)[-1].status == ActionStatus.canceled
