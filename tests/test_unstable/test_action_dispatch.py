@@ -137,13 +137,18 @@ def test_stop_task_action_cancels_child_token_and_reports_succeeded() -> None:
     with extractor._running_task_tokens_lock:
         token = extractor._running_task_tokens.get("worker")
 
-    extractor._dispatch_single_action(_make_action("act-stop", "Stop worker"))
+    # Stop only reports succeeded once the task has ended, so let the task finish while Stop is waiting.
+    stop_thread = threading.Thread(
+        target=extractor._dispatch_single_action, args=(_make_action("act-stop", "Stop worker"),)
+    )
+    stop_thread.start()
+    allow_exit.set()
+    stop_thread.join(timeout=5)
+    assert not stop_thread.is_alive()
 
     updates = _queued_updates(extractor)
     assert any(u.status == ActionStatus.succeeded and u.external_id == "act-stop" for u in updates)
     assert token is not None and token.is_cancelled
-
-    allow_exit.set()
 
 
 def test_launch_continuous_task_is_tracked_before_thread_starts() -> None:
