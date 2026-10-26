@@ -102,6 +102,11 @@ def test_opted_out_task_name_does_not_reserve_action_names() -> None:
     extractor = _make_extractor()
     extractor.add_task(ContinuousTask(name="cont", target=lambda _: None, actionable=False))
     extractor.add_action(CustomAction(name="Start cont", target=lambda _: None))
+    req = _startup_request(extractor)
+    assert req.available_actions is not None
+    by_name = {a.name: a for a in req.available_actions}
+    assert by_name["Start cont"].type == ActionType.custom
+    assert "Stop cont" not in by_name
 
 
 @pytest.mark.parametrize(
