@@ -50,6 +50,7 @@ class ActionContext(Generic[ConfigType], CogniteLogger):
         self.cancellation_token = cancellation_token
         self._result_message: str | None = None
         self._result_metadata: dict[str, str] | None = None
+        self._completed_with_errors = False
 
         self._logger = logging.getLogger(f"{self._extractor.EXTERNAL_ID}.action.{self._action.name.replace(' ', '')}")
 
@@ -83,8 +84,22 @@ class ActionContext(Generic[ConfigType], CogniteLogger):
             task_name=task_name if task_name is not None else self._action.name,
         )
 
-    def set_result(self, message: str, *, metadata: dict[str, str] | None = None) -> None:
-        """Record the result for a successful action completion."""
+    def log_upload_data_set_id(self) -> int | None:
+        """The data set the ``fetch_logs`` action uploads into, see ``Extractor.get_log_upload_data_set_id``."""
+        return self._extractor.get_log_upload_data_set_id()
+
+    def set_result(
+        self, message: str, *, metadata: dict[str, str] | None = None, completed_with_errors: bool = False
+    ) -> None:
+        """
+        Record the result for an action completion.
+
+        Args:
+            message: The result message.
+            metadata: Optional result metadata.
+            completed_with_errors: Finish the action as ``completed_with_errors`` instead of ``succeeded``, for an
+                action that ran to the end but did not achieve its goal. Ignored if the action was cancelled.
+        """
         if self._result_message is not None:
             raise RuntimeError(
                 f"set_result() has already been called for this action invocation; "
@@ -92,6 +107,7 @@ class ActionContext(Generic[ConfigType], CogniteLogger):
             )
         self._result_message = message
         self._result_metadata = metadata
+        self._completed_with_errors = completed_with_errors
 
     def report_progress(self, message: str) -> None:
         """Queue an intermediate progress update while the action is still running."""
