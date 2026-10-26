@@ -52,6 +52,31 @@ The subclass should also define several class attributes:
             task_context.logger.info("Running my task")
             # IDE will now autocomplete custom_counter
             self.metrics.custom_counter.inc()
+
+
+Actions
+-------
+
+Every ``ScheduledTask`` and ``ContinuousTask`` gets a ``Start <task>`` and a ``Stop <task>`` action in the Integrations
+API. The final status reported for them:
+
+``Start <task>``
+    Tasks report problems on their ``TaskContext`` instead of raising, so the errors reported during the run decide
+    the status:
+
+    * the run was cancelled -> ``canceled``
+    * a ``fatal`` error was reported, or the task raised -> ``failed``, with the description (and details) of the
+      first fatal error as the result message
+    * no fatal error, but at least one ``error``-level error -> ``completed_with_errors``, with the result message
+      ``Completed with N error(s): <first error description>``
+    * nothing, or only ``warning``-level errors -> ``succeeded``
+
+    Runs triggered by the schedule are not actions and are unaffected.
+
+``Stop <task>``
+    Cancels the running task and stays ``running`` until the task has actually ended, then reports ``succeeded``. If
+    the task is not running the action is ``failed``; if it has not ended within
+    ``STOP_TASK_ACTION_TIMEOUT_SECONDS`` the action is ``failed`` too (the task keeps winding down).
 """
 
 import logging
@@ -141,6 +166,13 @@ PARENT_WATCHDOG_INTERVAL_SECONDS = 1.0
 """How often the extractor process checks that the runtime process that spawned it is still alive."""
 
 SHUTDOWN_ACTION_MESSAGE = "Extractor shut down while the action was running"
+
+STOP_TASK_ACTION_TIMEOUT_SECONDS = 300.0
+"""How long a ``Stop <task>`` action waits for the task to actually end after cancelling it. If the task is still
+running after this the action is reported as ``failed`` (the task keeps winding down in the background)."""
+
+STOP_TASK_POLL_INTERVAL_SECONDS = 0.1
+"""How often a ``Stop <task>`` action checks whether the task has ended."""
 
 
 def _parent_is_alive(parent_pid: int) -> bool:
@@ -592,12 +624,15 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         task.target = run_task
         self._tasks.append(task)
 
+        def run_scheduled(t: ScheduledTask) -> None:
+            self._run_task_with_token(t)
+
         match task:
             case ScheduledTask() as t:
                 self._scheduler.schedule_task(
                     name=t.name,
                     schedule=t.schedule,
-                    task=lambda: self._run_task_with_token(t),
+                    task=lambda: run_scheduled(t),
                 )
 
     @staticmethod
@@ -618,7 +653,7 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
     def _run_task_with_token(
         self, task: ScheduledTask | ContinuousTask, child_token: CancellationToken | None = None
-    ) -> None:
+    ) -> TaskContext | None:
         """
         Run a scheduled or continuous task under a fresh child cancellation token.
 
@@ -631,18 +666,23 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         If ``child_token`` is supplied (the caller has already registered it in
         ``_running_task_tokens`` atomically), this method skips the registration step and
         goes straight to execution.
+
+        Returns the ``TaskContext`` the run used, so callers can inspect the errors reported during it, or ``None``
+        if the run was skipped because the task was already running.
         """
         if child_token is None:
             with self._running_task_tokens_lock:
                 if task.name in self._running_task_tokens:
                     self._logger.warning("Task '%s' is already running, skipping scheduled run.", task.name)
-                    return
+                    return None
                 child_token = self.cancellation_token.create_child_token()
                 self._running_task_tokens[task.name] = child_token
+        context = TaskContext(task=task, extractor=self, cancellation_token=child_token)
         try:
-            task.target(TaskContext(task=task, extractor=self, cancellation_token=child_token))
+            task.target(context)
         finally:
             self._release_if_owned(self._running_task_tokens, self._running_task_tokens_lock, task.name, child_token)
+        return context
 
     def _launch_continuous_task(self, task: ContinuousTask) -> None:
         """
@@ -815,9 +855,8 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                 ActionUpdate(external_id=action.external_id, status=ActionStatus.running)
             )
 
-            self._run_task_with_token(task, child_token)
-            status = ActionStatus.canceled if child_token.is_cancelled else ActionStatus.succeeded
-            self._checkin_worker.queue_action_update(ActionUpdate(external_id=action.external_id, status=status))
+            context = self._run_task_with_token(task, child_token)
+            self._checkin_worker.queue_action_update(self._start_task_outcome(action, context, child_token))
         except Exception as e:
             self._checkin_worker.queue_action_update(
                 ActionUpdate(
@@ -834,6 +873,43 @@ class Extractor(Generic[ConfigType], CogniteLogger):
             self._release_if_owned(
                 self._running_action_tokens, self._running_action_tokens_lock, action.external_id, child_token
             )
+
+    @staticmethod
+    def _start_task_outcome(action: Action, context: TaskContext | None, token: CancellationToken) -> ActionUpdate:
+        """
+        Map how a ``Start <task>`` run went to its final action update.
+
+        Tasks report problems on their ``TaskContext`` rather than raising, so the errors recorded on it decide:
+
+        * cancelled -> ``canceled``
+        * any ``fatal`` error -> ``failed``, with that error's description and details as the result message
+        * otherwise any ``error``-level error -> ``completed_with_errors``, with the error count and first description
+        * otherwise (none, or only warnings) -> ``succeeded``
+        """
+        if token.is_cancelled:
+            return ActionUpdate(external_id=action.external_id, status=ActionStatus.canceled)
+        if context is None:
+            return ActionUpdate(external_id=action.external_id, status=ActionStatus.succeeded)
+
+        summary = context._error_summary
+        fatal = summary.first(ErrorLevel.fatal)
+        if fatal is not None:
+            description, details = fatal
+            message = f"{description}: {details}" if details else description
+            return ActionUpdate(
+                external_id=action.external_id, status=ActionStatus.failed, result_message=truncate_message(message)
+            )
+
+        error_count = summary.count(ErrorLevel.error)
+        first_error = summary.first(ErrorLevel.error)
+        if first_error is not None:
+            message = f"Completed with {error_count} error(s): {first_error[0]}"
+            return ActionUpdate(
+                external_id=action.external_id,
+                status=ActionStatus.completed_with_errors,
+                result_message=truncate_message(message),
+            )
+        return ActionUpdate(external_id=action.external_id, status=ActionStatus.succeeded)
 
     def _handle_stop_task_action(self, action: Action) -> None:
         task_name = action.action_name[len("Stop ") :]
@@ -852,9 +928,50 @@ class Extractor(Generic[ConfigType], CogniteLogger):
             )
             return
 
-        self._checkin_worker.queue_action_update(
-            ActionUpdate(external_id=action.external_id, status=ActionStatus.succeeded)
-        )
+        # The Stop action stays running until the task has actually ended. It is registered like any other running
+        # action so that shutdown, or a user cancelling it, wakes the wait up.
+        stop_token = self.cancellation_token.create_child_token()
+        with self._running_action_tokens_lock:
+            self._running_action_tokens[action.external_id] = stop_token
+        try:
+            self._checkin_worker.queue_action_update(
+                ActionUpdate(external_id=action.external_id, status=ActionStatus.running)
+            )
+            self._checkin_worker.queue_action_update(self._stop_task_outcome(action, task_name, token, stop_token))
+        finally:
+            self._release_if_owned(
+                self._running_action_tokens, self._running_action_tokens_lock, action.external_id, stop_token
+            )
+
+    def _task_run_has_ended(self, task_name: str, token: CancellationToken) -> bool:
+        with self._running_task_tokens_lock:
+            return self._running_task_tokens.get(task_name) is not token
+
+    def _stop_task_outcome(
+        self, action: Action, task_name: str, task_token: CancellationToken, stop_token: CancellationToken
+    ) -> ActionUpdate:
+        """
+        Wait (bounded) for the cancelled run of ``task_name`` to end and return the final ``Stop`` action update.
+
+        ``succeeded`` once the run has ended, ``failed`` if it is still running after
+        ``STOP_TASK_ACTION_TIMEOUT_SECONDS``, and ``canceled`` if the stop action itself is cancelled first (extractor
+        shutdown or the user cancelling it).
+        """
+        deadline = time.monotonic() + STOP_TASK_ACTION_TIMEOUT_SECONDS
+        while not self._task_run_has_ended(task_name, task_token):
+            if stop_token.is_cancelled:
+                return ActionUpdate(external_id=action.external_id, status=ActionStatus.canceled)
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                return ActionUpdate(
+                    external_id=action.external_id,
+                    status=ActionStatus.failed,
+                    result_message=(
+                        f"Task '{task_name}' did not stop within {STOP_TASK_ACTION_TIMEOUT_SECONDS:g} seconds"
+                    ),
+                )
+            stop_token.wait(min(STOP_TASK_POLL_INTERVAL_SECONDS, remaining))
+        return ActionUpdate(external_id=action.external_id, status=ActionStatus.succeeded)
 
     def _handle_custom_action(self, action: Action) -> None:
         custom = next((a for a in self._custom_actions if a.name == action.action_name), None)

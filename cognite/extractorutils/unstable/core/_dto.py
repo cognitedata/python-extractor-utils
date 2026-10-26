@@ -148,6 +148,7 @@ class ActionStatus(Enum):
     running = "running"
     failed = "failed"
     succeeded = "succeeded"
+    completed_with_errors = "completed_with_errors"
     cancel_pending = "cancel_pending"
     canceled = "canceled"
 
