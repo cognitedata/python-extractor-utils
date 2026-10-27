@@ -124,7 +124,8 @@ __all__ = [
 _T = TypeVar("_T", bound=ExtractorConfig)
 
 ACTIONABLE_TASK_TYPES: tuple[type[ScheduledTask], type[ContinuousTask]] = (ScheduledTask, ContinuousTask)
-"""Task types that can support Start/Stop actions. Whether a given task supports actions is set by its ``actionable`` flag."""
+"""Task types that can support Start/Stop actions.
+Whether a given task supports actions is set by its ``actionable`` flag."""
 
 
 class FullConfig(Generic[_T]):
