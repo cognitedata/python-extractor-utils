@@ -123,6 +123,9 @@ __all__ = [
 
 _T = TypeVar("_T", bound=ExtractorConfig)
 
+ACTIONABLE_TASK_TYPES: tuple[type[ScheduledTask], type[ContinuousTask]] = (ScheduledTask, ContinuousTask)
+"""Task types that can support Start/Stop actions. Whether a given task supports actions is set by its ``actionable`` flag."""
+
 
 class FullConfig(Generic[_T]):
     """
@@ -549,14 +552,17 @@ class Extractor(Generic[ConfigType], CogniteLogger):
             if tokens.get(key) is token:
                 tokens.pop(key, None)
 
-    def _run_task_with_token(self, task: Task, child_token: CancellationToken | None = None) -> None:
+    def _run_task_with_token(
+        self, task: ScheduledTask | ContinuousTask, child_token: CancellationToken | None = None
+    ) -> None:
         """
-        Create a fresh child cancellation token for an actionable task run.
+        Run a scheduled or continuous task under a fresh child cancellation token.
 
         Stores the token in ``_running_task_tokens`` for external cancellation (e.g. a
         stop_task action), then executes the task. Called by the scheduler (for
         ``ScheduledTask``), the initial boot-time launch (for ``ContinuousTask``), and the
-        start_task action handler (for both).
+        start_task action handler (for both). Tasks that opted out of Actions
+        (``actionable=False``) also run through here; they just never receive Start/Stop actions.
 
         If ``child_token`` is supplied (the caller has already registered it in
         ``_running_task_tokens`` atomically), this method skips the registration step and
@@ -657,8 +663,9 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
     def _handle_start_task_action(self, action: Action) -> None:
         task_name = action.action_name[len("Start ") :]
+        # StartupTask is never actionable; the isinstance check only narrows the type for _run_task_with_token.
         task = next(
-            (t for t in self._tasks if t.name == task_name and t.actionable),
+            (t for t in self._tasks if t.name == task_name and t.actionable and isinstance(t, ACTIONABLE_TASK_TYPES)),
             None,
         )
         if task is None:
