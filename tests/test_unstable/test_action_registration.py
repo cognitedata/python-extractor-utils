@@ -70,6 +70,45 @@ def test_continuous_task_also_produces_start_stop_actions() -> None:
     assert by_name["Stop listener"].type == ActionType.stop_task
 
 
+def test_tasks_are_actionable_by_default() -> None:
+    assert ScheduledTask.from_interval(interval="1h", name="a", target=lambda _: None).actionable
+    assert ScheduledTask.from_cron(cron="0 0 * * *", name="b", target=lambda _: None).actionable
+    assert ContinuousTask(name="c", target=lambda _: None).actionable
+    assert not StartupTask(name="d", target=lambda _: None).actionable
+
+
+def test_opted_out_tasks_produce_no_actions_and_are_flagged_non_actionable() -> None:
+    extractor = _make_extractor()
+    extractor.add_task(
+        ScheduledTask.from_interval(interval="1h", name="sched", target=lambda _: None, actionable=False)
+    )
+    extractor.add_task(ScheduledTask.from_cron(cron="0 0 * * *", name="cron", target=lambda _: None, actionable=False))
+    extractor.add_task(ContinuousTask(name="cont", target=lambda _: None, actionable=False))
+    extractor.add_task(ContinuousTask(name="kept", target=lambda _: None))
+    req = _startup_request(extractor)
+    assert req.available_actions is not None
+    assert {a.name for a in req.available_actions if a.type != ActionType.custom} == {"Start kept", "Stop kept"}
+    assert req.tasks is not None
+    flags = {t.name: t.action for t in req.tasks}
+    assert {n: flags[n] for n in ("sched", "cron", "cont", "kept")} == {
+        "sched": False,
+        "cron": False,
+        "cont": False,
+        "kept": True,
+    }
+
+
+def test_opted_out_task_name_does_not_reserve_action_names() -> None:
+    extractor = _make_extractor()
+    extractor.add_task(ContinuousTask(name="cont", target=lambda _: None, actionable=False))
+    extractor.add_action(CustomAction(name="Start cont", target=lambda _: None))
+    req = _startup_request(extractor)
+    assert req.available_actions is not None
+    by_name = {a.name: a for a in req.available_actions}
+    assert by_name["Start cont"].type == ActionType.custom
+    assert "Stop cont" not in by_name
+
+
 @pytest.mark.parametrize(
     "action_name,expected_type,expected_task",
     [
