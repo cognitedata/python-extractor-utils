@@ -65,7 +65,7 @@ def test_dispatch_action_on_opted_out_task_reports_failed(make_task: Callable, a
     updates = _queued_updates(extractor)
     assert len(updates) == 1
     assert updates[0].status == ActionStatus.failed
-    assert action_name in (updates[0].result_message or "")
+    assert updates[0].result_message == f"No action named '{action_name}' registered"
     assert not ran
     assert "quiet" not in extractor._running_task_tokens
 
