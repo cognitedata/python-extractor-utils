@@ -4,8 +4,9 @@ from threading import Event
 from unittest.mock import MagicMock
 
 import pytest
+from pydantic import ValidationError
 
-from cognite.extractorutils.unstable.core._dto import ActionType, StartupRequest
+from cognite.extractorutils.unstable.core._dto import MAX_AVAILABLE_ACTIONS, ActionType, StartupRequest
 from cognite.extractorutils.unstable.core.actions import CustomAction
 from cognite.extractorutils.unstable.core.base import Extractor, FullConfig
 from cognite.extractorutils.unstable.core.tasks import ContinuousTask, ScheduledTask, StartupTask, TaskContext
@@ -212,3 +213,20 @@ def test_token_cleanup_does_not_clobber_replacement_token() -> None:
         time.sleep(0.005)
 
     assert extractor._running_task_tokens.get("the-task") is replacement
+
+
+def test_startup_request_accepts_two_actions_per_task_at_odin_task_limit() -> None:
+    extractor = _make_extractor()
+    for i in range(100):
+        extractor.add_task(ScheduledTask.from_interval(interval="1h", name=f"task-{i}", target=lambda _: None))
+    actions = _startup_request(extractor).available_actions
+    assert actions is not None
+    assert len(actions) >= 200
+
+
+def test_startup_request_rejects_more_than_max_available_actions() -> None:
+    extractor = _make_extractor()
+    for i in range(MAX_AVAILABLE_ACTIONS):
+        extractor.add_task(ScheduledTask.from_interval(interval="1h", name=f"task-{i}", target=lambda _: None))
+    with pytest.raises(ValidationError):
+        _startup_request(extractor)
