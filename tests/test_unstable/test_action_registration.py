@@ -259,4 +259,5 @@ def test_startup_request_has_no_client_side_limit_on_available_actions() -> None
         extractor.add_task(ScheduledTask.from_interval(interval="1h", name=f"task-{i}", target=lambda _: None))
     actions = _startup_request(extractor).available_actions
     assert actions is not None
-    assert len(actions) >= 600
+    # A start and a stop action per task, plus the built-in and user-registered custom actions
+    assert len(actions) == 2 * 300 + len(extractor._custom_actions)
