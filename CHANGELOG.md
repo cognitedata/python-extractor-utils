@@ -12,6 +12,11 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## Unreleased
+
+### Changed
+* In the `unstable` package: The maximum number of available actions sent at startup is raised from 100 to 250, so an extractor with up to 100 actionable tasks (a start and a stop action each) plus custom actions can register. Requires an Odin version with the same limit (EDG-1049).
+
 ## 7.13.2
 
 ### Fixed

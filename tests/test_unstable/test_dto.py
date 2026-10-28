@@ -2,6 +2,7 @@ import pytest
 from pydantic import ValidationError
 
 from cognite.extractorutils.unstable.core._dto import (
+    MAX_AVAILABLE_ACTIONS,
     MAX_MESSAGE_LENGTH,
     MAX_METADATA_VALUE_BYTES,
     Action,
@@ -99,11 +100,13 @@ def test_startup_request_available_actions_none_excluded() -> None:
 
 
 def test_startup_request_available_actions_max_length_enforced() -> None:
-    with pytest.raises(ValidationError, match="at most 100"):
+    with pytest.raises(ValidationError, match=f"at most {MAX_AVAILABLE_ACTIONS}"):
         StartupRequest(
             external_id="x",
             extractor=ExtractorInfo(external_id="x"),
-            available_actions=[AvailableActionWrite(name=f"a{i}", type=ActionType.custom) for i in range(101)],
+            available_actions=[
+                AvailableActionWrite(name=f"a{i}", type=ActionType.custom) for i in range(MAX_AVAILABLE_ACTIONS + 1)
+            ],
         )
 
 
@@ -157,10 +160,13 @@ def test_checkin_request_action_updates_none_excluded() -> None:
 
 
 def test_checkin_request_action_updates_max_length_enforced() -> None:
-    with pytest.raises(ValidationError, match="at most 100"):
+    with pytest.raises(ValidationError, match=f"at most {MAX_AVAILABLE_ACTIONS}"):
         CheckinRequest(
             external_id="x",
-            action_updates=[ActionUpdate(external_id=f"act-{i}", status=ActionStatus.running) for i in range(101)],
+            action_updates=[
+                ActionUpdate(external_id=f"act-{i}", status=ActionStatus.running)
+                for i in range(MAX_AVAILABLE_ACTIONS + 1)
+            ],
         )
 
 

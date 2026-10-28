@@ -195,7 +195,9 @@ class ActionUpdate(CogniteModel):
         return v
 
 
-AvailableActionList = Annotated[list[AvailableActionWrite], Len(min_length=0, max_length=100)]
+# Each actionable task registers a start and a stop action; keep in sync with the Odin limit.
+MAX_AVAILABLE_ACTIONS = 250
+AvailableActionList = Annotated[list[AvailableActionWrite], Len(min_length=0, max_length=MAX_AVAILABLE_ACTIONS)]
 ActionUpdateList = Annotated[list[ActionUpdate], Len(min_length=0, max_length=100)]
 
 
