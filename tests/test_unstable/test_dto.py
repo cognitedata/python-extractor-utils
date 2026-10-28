@@ -160,13 +160,10 @@ def test_checkin_request_action_updates_none_excluded() -> None:
 
 
 def test_checkin_request_action_updates_max_length_enforced() -> None:
-    with pytest.raises(ValidationError, match=f"at most {MAX_AVAILABLE_ACTIONS}"):
+    with pytest.raises(ValidationError, match="at most 100"):
         CheckinRequest(
             external_id="x",
-            action_updates=[
-                ActionUpdate(external_id=f"act-{i}", status=ActionStatus.running)
-                for i in range(MAX_AVAILABLE_ACTIONS + 1)
-            ],
+            action_updates=[ActionUpdate(external_id=f"act-{i}", status=ActionStatus.running) for i in range(101)],
         )
 
 
