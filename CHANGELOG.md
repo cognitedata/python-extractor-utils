@@ -17,7 +17,10 @@ Changes are grouped as follows
 ### Added
 * In the `unstable` package: New action status `completed_with_errors` in `ActionStatus`, reported when an action finishes but non-fatal (`error`-level) errors were reported during the run.
 
+* In the `unstable` package: New `Extractor.get_log_upload_data_set_id()` hook that tells the built-in `fetch_logs` action which data set to upload log files into. Resolution order: integration "data domains" field (not available yet, marked TODO), then the extractor's own configured data set, then no data set. The default uses `application_config.data_set` when the config derives from `WithDataSetId` and otherwise returns `None`; extractors that keep their data set elsewhere (for example the File and DB extractors) should override it in their own repositories.
+
 ### Changed
+* In the `unstable` package: `fetch_logs` now uploads a new copy of the log files on every invocation instead of overwriting: the file external ID is now `extractor-logs-<integration>-<date>-<action external id>` (the `extractor-logs-<integration>-<date>` prefix is unchanged). The per-file status `skipped` for a date without a log file is now called `missing`, matching the existing `missing_files` counter (all counter keys are unchanged). When no file was uploaded at all the action now ends as `completed_with_errors` with the message "No log files were uploaded ..." instead of `succeeded`. Custom actions can end as `completed_with_errors` with `ActionContext.set_result(..., completed_with_errors=True)`.
 * In the `unstable` package: `Stop <task>` actions now stay `running` until the task has actually ended and only then report `succeeded`. If the task has not ended within 300 seconds (`STOP_TASK_ACTION_TIMEOUT_SECONDS`) the action is reported as `failed` ("Task '<name>' did not stop within 300 seconds"); a waiting Stop is reported as `canceled` on extractor shutdown.
 
 ### Fixed
