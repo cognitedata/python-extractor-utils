@@ -12,6 +12,11 @@ Changes are grouped as follows
 - `Fixed` for any bug fixes.
 - `Security` in case of vulnerabilities.
 
+## Unreleased
+
+### Fixed
+* In the `unstable` package: Fixed extractors with more than 49 actionable tasks (more than 100 available actions) being unable to start: the startup request was rejected locally by a hard-coded limit of 100 available actions. The client-side limit is removed and Integrations API decides the maximum, so it can be raised without a new extractor-utils release. A request over the API's limit is rejected with a 400 whose message names the limit; the message is logged at critical level, and with `RETRY_STARTUP` (the default) the startup is retried until the limit is raised or the extractor is stopped (EDG-1049).
+
 ## 7.13.2
 
 ### Fixed

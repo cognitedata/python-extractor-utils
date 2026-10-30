@@ -195,7 +195,8 @@ class ActionUpdate(CogniteModel):
         return v
 
 
-AvailableActionList = Annotated[list[AvailableActionWrite], Len(min_length=0, max_length=100)]
+# No client-side limit: Integrations API owns the maximum number of available actions and rejects a larger request.
+AvailableActionList = list[AvailableActionWrite]
 ActionUpdateList = Annotated[list[ActionUpdate], Len(min_length=0, max_length=100)]
 
 

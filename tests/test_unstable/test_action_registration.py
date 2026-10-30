@@ -251,3 +251,13 @@ def test_token_cleanup_does_not_clobber_replacement_token() -> None:
         time.sleep(0.005)
 
     assert extractor._running_task_tokens.get("the-task") is replacement
+
+
+def test_startup_request_has_no_client_side_limit_on_available_actions() -> None:
+    extractor = _make_extractor()
+    for i in range(300):
+        extractor.add_task(ScheduledTask.from_interval(interval="1h", name=f"task-{i}", target=lambda _: None))
+    actions = _startup_request(extractor).available_actions
+    assert actions is not None
+    # A start and a stop action per task, plus the built-in and user-registered custom actions
+    assert len(actions) == 2 * 300 + len(extractor._custom_actions)
