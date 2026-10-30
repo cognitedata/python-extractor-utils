@@ -79,6 +79,8 @@ FATAL_ERROR_EXIT_CODE = 3
 class _RuntimeControls:
     cancel_event: MpEvent
     message_queue: Queue
+    parent_pid: int | None = None
+    """PID of the runtime process; the extractor process shuts down if it disappears."""
 
 
 def _extractor_process_entrypoint(
@@ -102,6 +104,7 @@ def _extractor_process_entrypoint(
     extractor._attach_runtime_controls(
         cancel_event=controls.cancel_event,
         message_queue=controls.message_queue,
+        parent_pid=controls.parent_pid,
     )
 
     try:
@@ -337,6 +340,7 @@ class Runtime(Generic[ExtractorType]):
         controls = _RuntimeControls(
             cancel_event=self._cancel_event,
             message_queue=self._message_queue,
+            parent_pid=os.getpid(),
         )
 
         process = Process(

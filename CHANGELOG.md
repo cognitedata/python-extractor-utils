@@ -15,6 +15,8 @@ Changes are grouped as follows
 ## Unreleased
 
 ### Fixed
+* In the `unstable` package: Fixed actions left in `running` at Integrations API after the extractor shut down (SIGINT, service stop). On shutdown running actions are now cancelled, given up to 10 seconds to finish, and any that do not stop are reported as `canceled`; the final check-in is then sent with a fresh timeout instead of the already cancelled token.
+* In the `unstable` package: Fixed the extractor process continuing to run and check in as an orphan when the runtime process is killed (for example with SIGKILL). The extractor process now watches its parent and shuts down gracefully within a few seconds.
 * In the `unstable` package: Action status updates (`running`, final statuses) are now reported to Integrations API shortly after they are queued (about one second, debounced) instead of waiting for the next periodic check-in.
 * In the `unstable` package: Fixed the check-in thread dying silently when the startup request could not be built or reported (for example when more than 100 actions are available). The failure is now logged at critical level and treated as fatal, and the extractor process exits with a non-zero exit code when it stops because of a fatal check-in error.
 * In the `unstable` package: Fixed transient network errors during check-ins (timeouts, connection errors, including raw `requests`/`httpx` errors from the OAuth token refresh) being treated as fatal and shutting the extractor down. They are now logged as warnings and retried at the next check-in. Only 401/403 errors and bad credentials remain fatal.
