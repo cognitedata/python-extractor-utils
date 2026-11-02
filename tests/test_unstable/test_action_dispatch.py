@@ -45,6 +45,32 @@ def test_dispatch_unrecognised_action_name_reports_failed() -> None:
 
 
 @pytest.mark.parametrize(
+    "make_task",
+    [
+        pytest.param(
+            lambda target: ScheduledTask.from_interval(interval="1h", name="quiet", target=target, actionable=False),
+            id="scheduled",
+        ),
+        pytest.param(lambda target: ContinuousTask(name="quiet", target=target, actionable=False), id="continuous"),
+    ],
+)
+@pytest.mark.parametrize("action_name", ["Start quiet", "Stop quiet"])
+def test_dispatch_action_on_opted_out_task_reports_failed(make_task: Callable, action_name: str) -> None:
+    extractor = _make_extractor()
+    ran = []
+    extractor.add_task(make_task(lambda ctx: ran.append(True)))
+
+    extractor._dispatch_single_action(_make_action("act-1", action_name))
+
+    updates = _queued_updates(extractor)
+    assert len(updates) == 1
+    assert updates[0].status == ActionStatus.failed
+    assert updates[0].result_message == f"No action named '{action_name}' registered"
+    assert not ran
+    assert "quiet" not in extractor._running_task_tokens
+
+
+@pytest.mark.parametrize(
     "register,action_name,expected_status",
     [
         pytest.param(
