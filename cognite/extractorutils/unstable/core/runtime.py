@@ -34,6 +34,7 @@ from multiprocessing import Event, Process, Queue
 from multiprocessing.synchronize import Event as MpEvent
 from pathlib import Path
 from random import randint
+from threading import Event as ThreadEvent
 from threading import Thread
 from typing import Any, Generic, TypeVar
 from uuid import uuid4
@@ -68,6 +69,11 @@ __all__ = ["ExtractorType", "Runtime"]
 
 ExtractorType = TypeVar("ExtractorType", bound=Extractor)
 
+# Exit code the extractor process uses to tell the runtime that it stopped because of a fatal error (for example
+# bad credentials), as opposed to a requested shutdown. Kept distinct from 1 so that unrelated crashes of the child
+# process do not change the runtime's behaviour.
+FATAL_ERROR_EXIT_CODE = 3
+
 
 @dataclass
 class _RuntimeControls:
@@ -83,7 +89,13 @@ def _extractor_process_entrypoint(
 ) -> None:
     logger = logging.getLogger(f"{extractor_class.EXTERNAL_ID}.runtime")
     checkin_worker.active_revision = config.current_config_revision
-    checkin_worker.set_on_fatal_error_handler(lambda _: on_fatal_error(controls))
+    fatal_error_occurred = ThreadEvent()
+
+    def handle_fatal_error(_: Exception) -> None:
+        fatal_error_occurred.set()
+        on_fatal_error(controls)
+
+    checkin_worker.set_on_fatal_error_handler(handle_fatal_error)
     checkin_worker.set_on_revision_change_handler(lambda _: on_revision_changed(controls))
     checkin_worker.set_retry_startup(extractor_class.RETRY_STARTUP)
     extractor = extractor_class._init_from_runtime(config, checkin_worker)
@@ -99,6 +111,11 @@ def _extractor_process_entrypoint(
     except Exception:
         logger.exception("Extractor crashed, will attempt restart")
         controls.message_queue.put(RuntimeMessage.RESTART)
+        return
+
+    if fatal_error_occurred.is_set():
+        logger.critical("Extractor stopped because of a fatal error")
+        sys.exit(FATAL_ERROR_EXIT_CODE)
 
 
 def on_revision_changed(controls: _RuntimeControls) -> None:
@@ -597,6 +614,11 @@ class Runtime(Generic[ExtractorType]):
 
                     case _:
                         assert_never(message)
+
+            elif process.exitcode == FATAL_ERROR_EXIT_CODE:
+                self.logger.critical("Extractor stopped because of a fatal error, shutting down runtime")
+                self._cancellation_token.cancel()
+                sys.exit(1)
 
             else:
                 self.logger.info("Shutting down runtime")
