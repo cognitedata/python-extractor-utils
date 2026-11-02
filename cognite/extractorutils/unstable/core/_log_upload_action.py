@@ -1,5 +1,15 @@
-"""Built-in ``fetch_logs`` action: streams rotated log files to CDF Files."""
+"""
+Built-in ``fetch_logs`` action: streams rotated log files to CDF Files.
 
+Every invocation uploads a new copy of each file (nothing is overwritten): the CDF external ID is
+``extractor-logs-<integration>-<log date>-<action external id>``. The files go into the data set returned by
+``Extractor.get_log_upload_data_set_id`` (none by default).
+
+Final status: ``failed`` for invalid parameters, ``completed_with_errors`` when no file at all was uploaded
+(everything missing, too large or failed), ``succeeded`` otherwise, including when only some days had a file.
+"""
+
+import hashlib
 import json
 import logging
 from collections import Counter
@@ -7,7 +17,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta, timezone
 from datetime import datetime as dt
 from pathlib import Path
-from typing import BinaryIO, Literal
+from typing import Any, BinaryIO, Literal
 
 from cognite.client import CogniteClient
 
@@ -81,23 +91,23 @@ def _build_candidate_files(
     today: date,
 ) -> tuple[list[LogFileCandidate], list[date]]:
     """
-    Enumerate log files for [start_date, end_date] and partition into candidates vs skipped.
+    Enumerate log files for [start_date, end_date] and partition into candidates vs missing.
 
     Rotated files follow the naming convention ``<base_path>.YYYY-MM-DD``.
     The live file (``base_path``) is used for ``today``; all other dates use the rotated name.
 
-    A file is skipped when it does not exist, is empty, or is inaccessible (any ``OSError``).
+    A file is missing when it does not exist, is empty, or is inaccessible (any ``OSError``).
     This covers the brief rotation race window: if the action is dispatched right after midnight
     before ``TimedRotatingFileHandler`` has renamed ``file.log`` to ``file.log.YYYY-MM-DD``,
-    the rotated file will not be found and that date will appear in ``skipped``. Retrying after
+    the rotated file will not be found and that date will be reported as ``missing``. Retrying after
     rotation completes (within seconds) will pick it up.
 
     Returns:
-        (candidates, skipped): candidates are files that exist and have content;
-        skipped contains dates for which no usable file was found.
+        (candidates, missing): candidates are files that exist and have content;
+        missing contains dates for which no usable file was found.
     """
     candidates: list[LogFileCandidate] = []
-    skipped: list[date] = []
+    missing: list[date] = []
 
     current = start_date
     while current <= end_date:
@@ -111,30 +121,55 @@ def _build_candidate_files(
         try:
             size = path.stat().st_size
         except OSError as e:
-            _logger.warning("fetch_logs: skipping %s for %s — %s", path, current, e)
-            skipped.append(current)
+            _logger.warning("fetch_logs: no usable log file %s for %s — %s", path, current, e)
+            missing.append(current)
         else:
             if size > 0:
                 candidates.append(LogFileCandidate(log_date=current, path=path, is_current=is_current))
             else:
-                skipped.append(current)
+                missing.append(current)
 
         current += timedelta(days=1)
 
-    return candidates, skipped
+    return candidates, missing
 
 
-def _file_external_id(integration_external_id: str, log_date: date) -> str:
-    return f"extractor-logs-{integration_external_id}-{log_date.isoformat()}"
+MAX_EXTERNAL_ID_LENGTH = 255
+"""CDF's limit for file external IDs."""
+
+
+def _file_external_id(integration_external_id: str, log_date: date, run_id: str) -> str:
+    """
+    Build the CDF external ID of one uploaded log file.
+
+    ``run_id`` (the external ID of the action invocation) makes the ID unique per run so repeated runs never
+    overwrite each other, while the ``extractor-logs-<integration>-<date>`` prefix keeps the files findable. IDs
+    are deterministic for a given run. If the result would exceed CDF's limit, ``run_id`` is replaced by a hash of
+    itself and, as a last resort, the integration part is shortened.
+    """
+    suffix = f"{log_date.isoformat()}-{run_id}"
+    external_id = f"extractor-logs-{integration_external_id}-{suffix}"
+    if len(external_id) <= MAX_EXTERNAL_ID_LENGTH:
+        return external_id
+    suffix = f"{log_date.isoformat()}-{hashlib.sha256(run_id.encode('utf-8')).hexdigest()[:16]}"
+    room = MAX_EXTERNAL_ID_LENGTH - len("extractor-logs--") - len(suffix)
+    return f"extractor-logs-{integration_external_id[:room]}-{suffix}"
 
 
 def _upload_candidate(
     candidate: LogFileCandidate,
     integration_external_id: str,
     cdf_client: CogniteClient,
+    *,
+    run_id: str,
+    data_set_id: int | None = None,
 ) -> _FileUploadResult:
-    """Upload one candidate log file to CDF Files. Returns a result regardless of success or failure."""
-    external_id = _file_external_id(integration_external_id, candidate.log_date)
+    """
+    Upload one candidate log file to CDF Files as a new file. Returns a result regardless of success or failure.
+
+    The file is never overwritten: ``run_id`` makes the external ID unique per ``fetch_logs`` invocation.
+    """
+    external_id = _file_external_id(integration_external_id, candidate.log_date, run_id)
 
     try:
         actual_size = candidate.path.stat().st_size
@@ -157,6 +192,8 @@ def _upload_candidate(
             size_bytes=actual_size,
         )
 
+    # Only send data_set_id when there is one, so extractors without a data set upload exactly as before.
+    extra_upload_args: dict[str, Any] = {} if data_set_id is None else {"data_set_id": data_set_id}
     try:
         with open(candidate.path, "rb") as f:
             reader: BinaryIO = BoundedReader(f, actual_size) if candidate.is_current else f  # type: ignore[assignment]
@@ -165,7 +202,7 @@ def _upload_candidate(
                 name=f"{external_id}.log",
                 external_id=external_id,
                 mime_type="text/plain",
-                overwrite=True,
+                **extra_upload_args,
             )
         _logger.info("fetch_logs: uploaded %s (%d bytes)", external_id, actual_size)
         return _FileUploadResult(
@@ -229,27 +266,32 @@ def fetch_logs_action(ctx: ActionContext) -> None:
             error_type="no_file_handler_configured",
         )
 
-    candidates, skipped_dates = _build_candidate_files(log_file_path, start_date, end_date, today)
+    candidates, missing_dates = _build_candidate_files(log_file_path, start_date, end_date, today)
     _logger.info(
-        "fetch_logs: %d candidate file(s) for %s to %s; %d date(s) skipped",
+        "fetch_logs: %d candidate file(s) for %s to %s; %d date(s) missing",
         len(candidates),
         start_date,
         end_date,
-        len(skipped_dates),
+        len(missing_dates),
     )
 
     integration_external_id = ctx.integration_external_id
     cdf_client = ctx.cdf_client
+    data_set_id = ctx.log_upload_data_set_id()
 
     total_candidates = len(candidates)
     upload_results: list[_FileUploadResult] = []
     for i, candidate in enumerate(candidates, 1):
-        upload_results.append(_upload_candidate(candidate, integration_external_id, cdf_client))
+        upload_results.append(
+            _upload_candidate(
+                candidate, integration_external_id, cdf_client, run_id=ctx.external_id, data_set_id=data_set_id
+            )
+        )
         ctx.report_progress(f"Uploading: {i}/{total_candidates} files complete")
 
     counts = Counter(r.status for r in upload_results)
 
-    # Per-file entries: upload results (sorted by date) + missing dates (skipped by candidate builder).
+    # Per-file entries: upload results (sorted by date) + missing dates (no usable file found by the candidate builder).
     files_list: list[dict[str, str]] = []
     for r in upload_results:
         entry: dict[str, str] = {"date": str(r.log_date), "status": r.status}
@@ -260,14 +302,17 @@ def fetch_logs_action(ctx: ActionContext) -> None:
         if r.error:
             entry["error"] = r.error
         files_list.append(entry)
-    files_list.extend({"date": str(skipped_date), "status": "skipped"} for skipped_date in skipped_dates)
+    files_list.extend({"date": str(missing_date), "status": "missing"} for missing_date in missing_dates)
     files_list.sort(key=lambda e: e["date"])
 
-    result_message = f"{counts['uploaded']} of {num_days} log files uploaded to CDF Files"
+    uploaded = counts["uploaded"]
+    result_message = f"{uploaded} of {num_days} log files uploaded to CDF Files"
+    if uploaded == 0:
+        result_message = f"No log files were uploaded ({result_message})"
     metadata: dict[str, str] = {
         "total_files": str(num_days),
         "uploaded_files": str(counts["uploaded"]),
-        "missing_files": str(len(skipped_dates)),
+        "missing_files": str(len(missing_dates)),
         "skipped_too_large_files": str(counts["skipped_too_large"]),
         "failed_files": str(counts["failed"]),
     }
@@ -290,4 +335,4 @@ def fetch_logs_action(ctx: ActionContext) -> None:
         )
         result_message += " (per-file detail omitted from result metadata — see extractor logs for full detail)"
 
-    ctx.set_result(result_message, metadata=metadata)
+    ctx.set_result(result_message, metadata=metadata, completed_with_errors=uploaded == 0)

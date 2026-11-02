@@ -110,6 +110,7 @@ from cognite.extractorutils.unstable.configuration.models import (
     ExtractorConfig,
     LogConsoleHandlerConfig,
     LogFileHandlerConfig,
+    WithDataSetId,
     create_state_store,
 )
 from cognite.extractorutils.unstable.core._dto import (
@@ -441,6 +442,28 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         Subclasses should call ``self.add_action(...)`` to register custom actions.
         """
         pass
+
+    def get_log_upload_data_set_id(self) -> int | None:
+        """
+        Return the id of the CDF data set the built-in ``fetch_logs`` action uploads log files into, or ``None``.
+
+        Resolution order:
+
+        1. TODO(data-domains): the integration's "data domains" field. It does not exist in the Integrations API yet;
+           when it does, resolve it here and prefer it over everything below. Intentionally not implemented.
+        2. The extractor's own configured data set. By default this is ``application_config.data_set`` if the
+           application config derives from ``WithDataSetId``. Extractors whose config keeps the data set elsewhere
+           (for example per destination) should override this method.
+        3. ``None``: the files are uploaded without a data set.
+
+        Called on every ``fetch_logs`` invocation. An exception raised here (for example the data set cannot be
+        found) fails the action.
+        """
+        config = self.application_config
+        if isinstance(config, WithDataSetId):
+            data_set = config.get_data_set(self.cognite_client)
+            return data_set.id if data_set is not None else None
+        return None
 
     def add_action(self, action: CustomAction) -> None:
         """
@@ -1005,7 +1028,12 @@ class Extractor(Generic[ConfigType], CogniteLogger):
 
             custom.target(ctx)
             filtered_metadata, oversized_fields = drop_oversized_metadata_fields(ctx._result_metadata)
-            completed_status = ActionStatus.canceled if action_token.is_cancelled else ActionStatus.succeeded
+            if action_token.is_cancelled:
+                completed_status = ActionStatus.canceled
+            elif ctx._completed_with_errors:
+                completed_status = ActionStatus.completed_with_errors
+            else:
+                completed_status = ActionStatus.succeeded
             if oversized_fields:
                 # The action itself ran to completion (or was cancelled) — only reporting the full
                 # result back to Odin is affected, because a metadata value is too large to send.
@@ -1014,7 +1042,10 @@ class Extractor(Generic[ConfigType], CogniteLogger):
                 # bundles all pending updates together and requeues the whole batch on any rejection).
                 # Non-oversized fields are still reported, and the action's real outcome (succeeded or
                 # canceled) is preserved rather than being overwritten by this reporting issue.
-                outcome = "was canceled" if completed_status == ActionStatus.canceled else "completed successfully"
+                outcome = {
+                    ActionStatus.canceled: "was canceled",
+                    ActionStatus.completed_with_errors: "completed with errors",
+                }.get(completed_status, "completed successfully")
                 self._checkin_worker.queue_action_update(
                     ActionUpdate(
                         external_id=action.external_id,
