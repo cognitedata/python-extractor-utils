@@ -226,7 +226,9 @@ def test_action_type_invalid_value_raises() -> None:
         ActionType("unknown_action")
 
 
-@pytest.mark.parametrize("value", ["pending", "running", "failed", "succeeded", "cancel_pending", "canceled"])
+@pytest.mark.parametrize(
+    "value", ["pending", "running", "failed", "succeeded", "completed_with_errors", "cancel_pending", "canceled"]
+)
 def test_action_status_lookup_by_value(value: str) -> None:
     assert ActionStatus(value).value == value
 

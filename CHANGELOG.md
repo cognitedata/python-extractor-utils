@@ -14,7 +14,14 @@ Changes are grouped as follows
 
 ## Unreleased
 
+### Added
+* In the `unstable` package: New action status `completed_with_errors` in `ActionStatus`, reported when an action finishes but non-fatal (`error`-level) errors were reported during the run.
+
+### Changed
+* In the `unstable` package: `Stop <task>` actions now stay `running` until the task has actually ended and only then report `succeeded`. If the task has not ended within 300 seconds (`STOP_TASK_ACTION_TIMEOUT_SECONDS`) the action is reported as `failed` ("Task '<name>' did not stop within 300 seconds"); a waiting Stop is reported as `canceled` on extractor shutdown.
+
 ### Fixed
+* In the `unstable` package: `Start <task>` actions now report the real outcome of the run instead of always `succeeded`. A `fatal` error reported during the run (or an exception) gives `failed` with the error description and details as result message; otherwise, if any `error`-level error was reported, the action is `completed_with_errors` ("Completed with N error(s): <first description>"); only warnings or no errors give `succeeded`; a cancelled run is still `canceled`. Scheduled (non-action) runs are unaffected. This applies to every extractor built on the framework.
 * In the `unstable` package: Fixed actions left in `running` at Integrations API after the extractor shut down (SIGINT, service stop). On shutdown running actions are now cancelled, given up to 10 seconds to finish, and any that do not stop are reported as `canceled`; the final check-in is then sent with a fresh timeout instead of the already cancelled token.
 * In the `unstable` package: Fixed the extractor process continuing to run and check in as an orphan when the runtime process is killed (for example with SIGKILL). The extractor process now watches its parent and shuts down gracefully within a few seconds.
 * In the `unstable` package: Action status updates (`running`, final statuses) are now reported to Integrations API shortly after they are queued (about one second, debounced) instead of waiting for the next periodic check-in.
