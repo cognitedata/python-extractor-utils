@@ -98,13 +98,14 @@ def test_startup_request_available_actions_none_excluded() -> None:
     assert "availableActions" not in body
 
 
-def test_startup_request_available_actions_max_length_enforced() -> None:
-    with pytest.raises(ValidationError, match="at most 100"):
-        StartupRequest(
-            external_id="x",
-            extractor=ExtractorInfo(external_id="x"),
-            available_actions=[AvailableActionWrite(name=f"a{i}", type=ActionType.custom) for i in range(101)],
-        )
+def test_startup_request_available_actions_have_no_client_side_limit() -> None:
+    request = StartupRequest(
+        external_id="x",
+        extractor=ExtractorInfo(external_id="x"),
+        available_actions=[AvailableActionWrite(name=f"a{i}", type=ActionType.custom) for i in range(500)],
+    )
+    assert request.available_actions is not None
+    assert len(request.available_actions) == 500
 
 
 def test_action_camel_case_serialization() -> None:
