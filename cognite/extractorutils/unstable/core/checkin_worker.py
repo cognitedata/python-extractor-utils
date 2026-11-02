@@ -43,6 +43,8 @@ from cognite.extractorutils.util import now
 DEFAULT_SLEEP_INTERVAL = STARTUP_BACKOFF_SECONDS = 30.0
 MAX_ERRORS_PER_CHECKIN = MAX_TASK_UPDATES_PER_CHECKIN = 1000
 MAX_ACTION_UPDATES_PER_CHECKIN = 100
+# After an action update is queued, wait this long before the early check-in so a burst of updates is sent together.
+ACTION_UPDATE_DEBOUNCE_SECONDS = 1.0
 rng = SystemRandom()
 
 # Errors that mean "could not reach CDF right now" rather than "the request or credentials are wrong". The Cognite SDK
@@ -115,6 +117,8 @@ class CheckinWorker:
         self._action_dispatcher: Callable[[list[Action]], None] | None = None
         self._lock = RLock()
         self._flush_lock = RLock()
+        # Child of the check-in loop's token; cancelling it wakes the loop early. Only set while the loop runs.
+        self._wake_token: CancellationToken | None = None
 
     def __getstate__(self) -> dict[str, object]:
         """
@@ -128,6 +132,7 @@ class CheckinWorker:
         state = self.__dict__.copy()
         del state["_lock"]
         del state["_flush_lock"]
+        del state["_wake_token"]
         return state
 
     def __setstate__(self, state: dict[str, object]) -> None:
@@ -137,6 +142,7 @@ class CheckinWorker:
         self.__dict__.update(state)
         self._lock = RLock()
         self._flush_lock = RLock()
+        self._wake_token = None
 
     @property
     def active_revision(self) -> ConfigRevision:
@@ -167,15 +173,20 @@ class CheckinWorker:
 
     def queue_action_update(self, update: ActionUpdate) -> None:
         """
-        Queue an action update to be included in the next checkin request.
+        Queue an action update and wake the periodic check-in loop so it is sent promptly.
 
-        This method is thread-safe and may be called from action handler threads.
+        The early check-in happens after ``ACTION_UPDATE_DEBOUNCE_SECONDS``, so a burst of updates results in a
+        single extra check-in. This method is thread-safe and may be called from action handler threads.
 
         Arguments:
             update (ActionUpdate): The action update to queue.
         """
         with self._lock:
             self._action_updates.append(update)
+            wake_token = self._wake_token
+        # Cancel outside of self._lock: it only takes the token's own condition, never the worker locks.
+        if wake_token is not None:
+            wake_token.cancel()
 
     def set_on_revision_change_handler(self, on_revision_change: Callable[[int], None]) -> None:
         """
@@ -244,10 +255,21 @@ class CheckinWorker:
         report_interval = interval or DEFAULT_SLEEP_INTERVAL
 
         while not cancellation_token.is_cancelled:
+            # Created before the flush so updates queued while flushing wake the next wait. Updates queued during the
+            # debounce below hit the previous (already cancelled) token and are picked up by this flush.
+            wake_token = cancellation_token.create_child_token()
+            with self._lock:
+                self._wake_token = wake_token
             self._logger.debug("Running periodic check-in with interval %.2f seconds", report_interval)
             self.flush(cancellation_token)
             self._logger.debug(f"Check-in worker finished check-in, sleeping for {report_interval:.2f} seconds")
-            cancellation_token.wait(report_interval)
+            wake_token.wait(report_interval)
+            if wake_token.is_cancelled and not cancellation_token.is_cancelled:
+                self._logger.debug("Action update queued, checking in early")
+                cancellation_token.wait(ACTION_UPDATE_DEBOUNCE_SECONDS)
+
+        with self._lock:
+            self._wake_token = None
 
     def _run_startup_report(
         self, cancellation_token: CancellationToken, startup_request: StartupRequest, interval: float | None = None
