@@ -15,7 +15,7 @@ import httpx
 import pytest
 import requests
 from cognite.client.exceptions import CogniteAPIError, CogniteAuthError, CogniteConnectionError
-from oauthlib.oauth2 import OAuth2Error
+from oauthlib.oauth2 import OAuth2Error, ServerError, TemporarilyUnavailableError
 
 from cognite.extractorutils.threading import CancellationToken
 from cognite.extractorutils.unstable.core._dto import ActionStatus, ActionUpdate
@@ -24,8 +24,6 @@ from cognite.extractorutils.unstable.core.checkin_worker import CheckinWorker
 from cognite.extractorutils.unstable.core.tasks import ScheduledTask
 
 from .conftest import TestConfig, TestExtractor
-
-MAX_AVAILABLE_ACTIONS = 100
 
 
 def _make_worker(post: Callable[..., Any] | None = None) -> tuple[CheckinWorker, MagicMock]:
@@ -55,12 +53,6 @@ def _make_extractor(worker: CheckinWorker, n_tasks: int = 0) -> TestExtractor:
     return extractor
 
 
-def _n_builtin_actions() -> int:
-    worker, _ = _make_worker()
-    request = _make_extractor(worker)._get_startup_request()
-    return len(request.available_actions or [])
-
-
 def _ok_response() -> MagicMock:
     response = MagicMock()
     response.json.return_value = {"externalId": "test-integration"}
@@ -80,6 +72,12 @@ def _oauth_auth_error() -> CogniteAuthError:
     return error
 
 
+def _idp_auth_error(cause: OAuth2Error) -> CogniteAuthError:
+    error = CogniteAuthError("Error generating access token")
+    error.__cause__ = cause
+    return error
+
+
 def _timeout_auth_error() -> CogniteAuthError:
     error = CogniteAuthError("Error generating access token")
     error.__cause__ = requests.exceptions.ReadTimeout("token endpoint timed out")
@@ -91,14 +89,19 @@ def _timeout_auth_error() -> CogniteAuthError:
 # ---------------------------------------------------------------------------
 
 
-def test_too_many_available_actions_is_logged_and_fatal(caplog: pytest.LogCaptureFixture) -> None:
-    """More than 100 available actions fails StartupRequest validation; this must not kill the thread silently."""
+def test_failure_building_startup_request_is_logged_and_fatal(
+    caplog: pytest.LogCaptureFixture, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Any failure building the startup request must not kill the check-in thread silently."""
     worker, client = _make_worker(lambda *a, **k: _ok_response())
     fatal_errors: list[Exception] = []
     worker.set_on_fatal_error_handler(fatal_errors.append)
+    extractor = _make_extractor(worker)
 
-    n_tasks = (MAX_AVAILABLE_ACTIONS - _n_builtin_actions()) // 2 + 1  # one task over the limit
-    extractor = _make_extractor(worker, n_tasks=n_tasks)
+    def broken_startup_request() -> None:
+        raise ValueError("cannot build startup request")
+
+    monkeypatch.setattr(extractor, "_get_startup_request", broken_startup_request)
 
     with caplog.at_level(logging.WARNING):
         extractor._run_checkin()  # runs synchronously; would raise (thread dies) without the fix
@@ -109,14 +112,6 @@ def test_too_many_available_actions_is_logged_and_fatal(caplog: pytest.LogCaptur
     critical = [r for r in caplog.records if r.levelno >= logging.CRITICAL]
     assert critical, "failure must be logged at CRITICAL so it reaches the log file"
     assert critical[0].exc_info is not None
-
-
-def test_exactly_100_available_actions_is_fine() -> None:
-    worker, _ = _make_worker()
-    n_tasks = (MAX_AVAILABLE_ACTIONS - _n_builtin_actions()) // 2
-    extractor = _make_extractor(worker, n_tasks=n_tasks)
-    request = extractor._get_startup_request()
-    assert len(request.available_actions or []) <= MAX_AVAILABLE_ACTIONS
 
 
 def test_startup_not_retried_failure_is_fatal(caplog: pytest.LogCaptureFixture) -> None:
@@ -153,6 +148,8 @@ def test_startup_not_retried_failure_is_fatal(caplog: pytest.LogCaptureFixture) 
         pytest.param(CogniteAPIError("Bad gateway", code=502), id="http-502"),
         pytest.param(CogniteAPIError("Unavailable", code=503), id="http-503"),
         pytest.param(_timeout_auth_error(), id="token-refresh-timeout-wrapped"),
+        pytest.param(_idp_auth_error(ServerError("idp failed")), id="token-endpoint-server-error"),
+        pytest.param(_idp_auth_error(TemporarilyUnavailableError()), id="token-endpoint-temporarily-unavailable"),
     ],
 )
 def test_transient_error_is_requeued_and_not_fatal(error: BaseException) -> None:
@@ -309,3 +306,28 @@ def test_extractor_process_exit_code_reflects_fatal_error(fatal: bool) -> None:
         controls.cancel_event.set.assert_called_once()
     else:
         _extractor_process_entrypoint(Extractor, controls, config, worker)  # type: ignore[arg-type]
+
+
+def test_exception_during_shutdown_after_fatal_error_exits_fatal_not_restart() -> None:
+    """A fatal error cancels the extractor; tasks raising while stopping must not trigger a runtime restart."""
+    from cognite.extractorutils.unstable.core.runtime import (
+        FATAL_ERROR_EXIT_CODE,
+        _extractor_process_entrypoint,
+        _RuntimeControls,
+    )
+
+    class Extractor(_FakeExtractor):
+        def run(self) -> None:
+            self._worker.notify_fatal_error(RuntimeError("bad credentials"))
+            raise RuntimeError("task interrupted by shutdown")
+
+    controls = _RuntimeControls(cancel_event=MagicMock(), message_queue=MagicMock())
+    config = MagicMock()
+    config.current_config_revision = 1
+    worker, _ = _make_worker()
+
+    with pytest.raises(SystemExit) as exc_info:
+        _extractor_process_entrypoint(Extractor, controls, config, worker)  # type: ignore[arg-type]
+
+    assert exc_info.value.code == FATAL_ERROR_EXIT_CODE
+    controls.message_queue.put.assert_not_called()

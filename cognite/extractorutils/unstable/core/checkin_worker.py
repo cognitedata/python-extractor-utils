@@ -20,6 +20,7 @@ import httpx
 import requests
 from cognite.client import CogniteClient
 from cognite.client.exceptions import CogniteAPIError, CogniteAuthError, CogniteConnectionError
+from oauthlib.oauth2 import ServerError, TemporarilyUnavailableError  # type: ignore[import-untyped]
 from requests import Response
 
 from cognite.extractorutils.threading import CancellationToken
@@ -57,6 +58,10 @@ _TRANSIENT_ERRORS: tuple[type[BaseException], ...] = (
     TimeoutError,
     ConnectionError,
 )
+
+# The identity provider reporting a problem on its side rather than with the credentials. The SDK wraps these in a
+# CogniteAuthError, with the oauthlib error as the cause.
+_TRANSIENT_TOKEN_ERRORS: tuple[type[BaseException], ...] = (ServerError, TemporarilyUnavailableError)
 
 
 def _safe_dispatch(
@@ -530,7 +535,7 @@ class CheckinWorker:
         except CogniteAuthError as e:
             self._logger.error(str(e))
             requeue = True
-            if isinstance(e.__cause__, _TRANSIENT_ERRORS):
+            if isinstance(e.__cause__, _TRANSIENT_ERRORS + _TRANSIENT_TOKEN_ERRORS):
                 # The token endpoint could not be reached; this says nothing about the credentials.
                 self._log_transient_error("Could not reach the token endpoint to get an access token", e.__cause__)
             else:

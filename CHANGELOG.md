@@ -15,8 +15,8 @@ Changes are grouped as follows
 ## Unreleased
 
 ### Fixed
-* In the `unstable` package: Fixed the check-in thread dying silently when the startup request could not be built or reported (for example when more than 100 actions are available). The failure is now logged at critical level and treated as fatal, and the extractor process exits with a non-zero exit code when it stops because of a fatal check-in error.
-* In the `unstable` package: Fixed transient network errors during check-ins (timeouts, connection errors, including raw `requests`/`httpx` errors from the OAuth token refresh) being treated as fatal and shutting the extractor down. They are now logged as warnings and retried at the next check-in. Only 401/403 errors and bad credentials remain fatal.
+* In the `unstable` package: Fixed the check-in thread dying silently when the startup request could not be built or reported (for example when the startup request is rejected). The failure is now logged at critical level and treated as fatal, and the extractor process exits with a non-zero exit code when it stops because of a fatal check-in error.
+* In the `unstable` package: Fixed transient network errors during check-ins (timeouts, connection errors, including raw `requests`/`httpx` errors from the OAuth token refresh) being treated as fatal and shutting the extractor down. They are now logged as warnings and retried at the next check-in. Server-side errors from the token endpoint are retried as well. Only 401/403 errors and bad credentials remain fatal.
 
 ## 7.13.2
 

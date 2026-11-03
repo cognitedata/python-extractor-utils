@@ -109,6 +109,11 @@ def _extractor_process_entrypoint(
             extractor.run()
 
     except Exception:
+        if fatal_error_occurred.is_set():
+            # The fatal error cancelled the extractor, which can make running tasks raise while shutting down. Don't
+            # mistake that for a crash, or the runtime would restart an extractor that can never succeed.
+            logger.exception("Extractor raised while stopping because of a fatal error")
+            sys.exit(FATAL_ERROR_EXIT_CODE)
         logger.exception("Extractor crashed, will attempt restart")
         controls.message_queue.put(RuntimeMessage.RESTART)
         return
