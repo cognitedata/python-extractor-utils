@@ -17,6 +17,7 @@ Changes are grouped as follows
 ### Fixed
 * In the `unstable` package: Fixed the check-in thread dying silently when the startup request could not be built or reported (for example when the startup request is rejected). The failure is now logged at critical level and treated as fatal, and the extractor process exits with a non-zero exit code when it stops because of a fatal check-in error.
 * In the `unstable` package: Fixed transient network errors during check-ins (timeouts, connection errors, including raw `requests`/`httpx` errors from the OAuth token refresh) being treated as fatal and shutting the extractor down. They are now logged as warnings and retried at the next check-in. Server-side errors from the token endpoint are retried as well. Only 401/403 errors and bad credentials remain fatal.
+* In the `unstable` package: Fixed extractors with more than 49 actionable tasks (more than 100 available actions) being unable to start: the startup request was rejected locally by a hard-coded limit of 100 available actions. The client-side limit is removed and Integrations API decides the maximum, so it can be raised without a new extractor-utils release. A request over the API's limit is rejected with a 400 whose message names the limit; the message is logged at critical level, and with `RETRY_STARTUP` (the default) the startup is retried until the limit is raised or the extractor is stopped.
 
 ## 7.13.2
 
