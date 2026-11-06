@@ -170,9 +170,7 @@ def _load_yaml_dict_raw(
         def ignore_unknown(self, node: yaml.Node) -> None:
             return None
 
-        # Ignoring types since the key can be None.
-
-    SafeLoaderIgnoreUnknown.add_constructor(None, SafeLoaderIgnoreUnknown.ignore_unknown)  # type: ignore
+    SafeLoaderIgnoreUnknown.add_constructor(None, SafeLoaderIgnoreUnknown.ignore_unknown)
     if expand_envvars:
         SafeLoaderIgnoreUnknown.add_implicit_resolver("!env", re.compile(r"\$\{([^}^{]+)\}"), None)
         SafeLoaderIgnoreUnknown.add_constructor("!env", _env_constructor)
