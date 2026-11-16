@@ -11,6 +11,7 @@ followed by (all) errors and task updates.
 
 import sys
 from collections.abc import Callable
+from http import HTTPStatus
 from logging import Logger
 from secrets import SystemRandom
 from threading import RLock, Thread
@@ -553,10 +554,10 @@ class CheckinWorker:
             return e
 
         if isinstance(e, CogniteAPIError):
-            if e.code in (401, 403):
-                reason = "Unauthorized" if e.code == 401 else "Forbidden"
+            if e.code in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN):
+                status = HTTPStatus(e.code)
                 self._logger.critical(
-                    f"Got a {e.code} ({reason}) error from CDF. Please check your configuration. "
+                    f"Got a {status.value} ({status.phrase}) error from CDF. Please check your configuration. "
                     "Make sure the credentials and project are correct."
                 )
                 return e
