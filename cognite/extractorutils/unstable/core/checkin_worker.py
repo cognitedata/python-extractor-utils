@@ -521,62 +521,54 @@ class CheckinWorker:
         Returns:
             True if the payload of the request should be requeued.
         """
-        exception_to_report: Exception | None = None
-        requeue = False
         try:
-            response = request()
-            self._handle_checkin_response(response.json())
-        except CogniteConnectionError as e:
+            self._handle_checkin_response(request().json())
+            return False
+        except Exception as e:
+            fatal_error = self._classify_checkin_error(e)
+            if fatal_error is not None:
+                self.notify_fatal_error(fatal_error)
+            return True
+
+    def _classify_checkin_error(self, e: Exception) -> Exception | None:
+        """
+        Log a failed check-in like request and decide whether it is fatal.
+
+        Returns:
+            The exception to report as fatal, or None if the failure is not fatal and should just be retried.
+        """
+        if isinstance(e, CogniteConnectionError):
             if e.__cause__ is not None:
                 self._logger.error(str(e.__cause__))
             self._logger.critical("Could not connect to CDF. Please check your configuration.")
-            requeue = True
+            return None
 
-        except CogniteAuthError as e:
+        if isinstance(e, CogniteAuthError):
             self._logger.error(str(e))
-            requeue = True
             if isinstance(e.__cause__, _TRANSIENT_ERRORS + _TRANSIENT_TOKEN_ERRORS):
                 # The token endpoint could not be reached; this says nothing about the credentials.
                 self._log_transient_error("Could not reach the token endpoint to get an access token", e.__cause__)
-            else:
-                self._logger.critical("Could not get an access token. Please check your configuration.")
-                exception_to_report = e
+                return None
+            self._logger.critical("Could not get an access token. Please check your configuration.")
+            return e
 
-        except CogniteAPIError as e:
-            if e.code == 401:
+        if isinstance(e, CogniteAPIError):
+            if e.code in (401, 403):
+                reason = "Unauthorized" if e.code == 401 else "Forbidden"
                 self._logger.critical(
-                    "Got a 401 (Unauthorized) error from CDF. Please check your configuration. "
+                    f"Got a {e.code} ({reason}) error from CDF. Please check your configuration. "
                     "Make sure the credentials and project are correct."
                 )
-                exception_to_report = e
+                return e
+            self._logger.critical(str(e.message) if e.message else f"Error while connecting to CDF {e!s}")
+            return None
 
-            elif e.code == 403:
-                self._logger.critical(
-                    "Got a 403 (Forbidden) error from CDF. Please check your configuration. "
-                    "Make sure the credentials and project are correct."
-                )
-                exception_to_report = e
-
-            elif e.message:
-                self._logger.critical(str(e.message))
-
-            else:
-                self._logger.critical(f"Error while connecting to CDF {e!s}")
-            requeue = True
-
-        except _TRANSIENT_ERRORS as e:
+        if isinstance(e, _TRANSIENT_ERRORS):
             self._log_transient_error("Could not reach CDF", e)
-            requeue = True
+            return None
 
-        except Exception as e:
-            self._logger.critical(f"Extractor could not connect to CDF {e!s}")
-            exception_to_report = e
-            requeue = True
-
-        if exception_to_report is not None and self._on_fatal_error is not None:
-            self._on_fatal_error(exception_to_report)
-
-        return requeue
+        self._logger.critical(f"Extractor could not connect to CDF {e!s}")
+        return e
 
     def _log_transient_error(self, message: str, error: BaseException) -> None:
         self._logger.warning(
