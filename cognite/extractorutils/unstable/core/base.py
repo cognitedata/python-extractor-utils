@@ -440,7 +440,17 @@ class Extractor(Generic[ConfigType], CogniteLogger):
         )
 
     def _run_checkin(self) -> None:
-        self._checkin_worker.run_periodic_checkin(self.cancellation_token, self._get_startup_request())
+        try:
+            self._checkin_worker.run_periodic_checkin(self.cancellation_token, self._get_startup_request())
+        except Exception as e:
+            # This runs on a daemon thread: without this, the traceback would only go to stderr and the extractor
+            # would keep running without ever checking in. Treat it as fatal instead.
+            self._logger.critical("Check-in failed unexpectedly, shutting down the extractor: %s", e, exc_info=e)
+            try:
+                self._checkin_worker.notify_fatal_error(e)
+            except Exception:
+                self._logger.exception("Fatal error handler failed")
+            self.cancellation_token.cancel()
 
     def _report_error(self, error: Error) -> None:
         self._checkin_worker.report_error(error)

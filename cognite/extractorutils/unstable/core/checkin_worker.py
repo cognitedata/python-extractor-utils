@@ -11,13 +11,17 @@ followed by (all) errors and task updates.
 
 import sys
 from collections.abc import Callable
+from http import HTTPStatus
 from logging import Logger
 from secrets import SystemRandom
 from threading import RLock, Thread
 from time import sleep
 
+import httpx
+import requests
 from cognite.client import CogniteClient
 from cognite.client.exceptions import CogniteAPIError, CogniteAuthError, CogniteConnectionError
+from oauthlib.oauth2 import ServerError, TemporarilyUnavailableError  # type: ignore[import-untyped]
 from requests import Response
 
 from cognite.extractorutils.threading import CancellationToken
@@ -42,6 +46,23 @@ DEFAULT_SLEEP_INTERVAL = STARTUP_BACKOFF_SECONDS = 30.0
 MAX_ERRORS_PER_CHECKIN = MAX_TASK_UPDATES_PER_CHECKIN = 1000
 MAX_ACTION_UPDATES_PER_CHECKIN = 100
 rng = SystemRandom()
+
+# Errors that mean "could not reach CDF right now" rather than "the request or credentials are wrong". The Cognite SDK
+# only wraps some of these (e.g. connection errors from API calls, OAuth2Error from token refresh), so raw
+# requests/httpx transport errors and timeouts (notably from the OAuth token refresh) can still surface unwrapped.
+# Deliberately narrow: configuration mistakes (invalid URL, missing schema, unsupported protocol) must stay fatal.
+_TRANSIENT_ERRORS: tuple[type[BaseException], ...] = (
+    requests.exceptions.ConnectionError,
+    requests.exceptions.Timeout,
+    httpx.TimeoutException,
+    httpx.NetworkError,
+    TimeoutError,
+    ConnectionError,
+)
+
+# The identity provider reporting a problem on its side rather than with the credentials. The SDK wraps these in a
+# CogniteAuthError, with the oauthlib error as the cause.
+_TRANSIENT_TOKEN_ERRORS: tuple[type[BaseException], ...] = (ServerError, TemporarilyUnavailableError)
 
 
 def _safe_dispatch(
@@ -183,6 +204,18 @@ class CheckinWorker:
             on_fatal_error (Callable[[Exception], None]): A callback to call when a fatal error occurs.
         """
         self._on_fatal_error = on_fatal_error
+
+    def notify_fatal_error(self, error: Exception) -> None:
+        """
+        Invoke the fatal error handler (if any) with the given error.
+
+        Used by callers that fail outside of a check-in request, such as when building the startup request.
+
+        Arguments:
+            error (Exception): The error that should be treated as fatal.
+        """
+        if self._on_fatal_error is not None:
+            self._on_fatal_error(error)
 
     def set_retry_startup(self, retry_startup: bool) -> None:
         """
@@ -480,51 +513,65 @@ class CheckinWorker:
                 self._action_updates = action_updates + self._action_updates
 
     def _wrap_checkin_like_request(self, request: Callable[[], Response]) -> bool:
-        exception_to_report: Exception | None = None
-        requeue = False
+        """
+        Run a check-in like request and classify any failure.
+
+        Transient network problems are logged and requeued without being fatal. Only authentication/authorization
+        failures (401/403, bad credentials) and unexpected errors are reported as fatal.
+
+        Returns:
+            True if the payload of the request should be requeued.
+        """
         try:
-            response = request()
-            self._handle_checkin_response(response.json())
-        except CogniteConnectionError as e:
+            self._handle_checkin_response(request().json())
+            return False
+        except Exception as e:
+            fatal_error = self._classify_checkin_error(e)
+            if fatal_error is not None:
+                self.notify_fatal_error(fatal_error)
+            return True
+
+    def _classify_checkin_error(self, e: Exception) -> Exception | None:
+        """
+        Log a failed check-in like request and decide whether it is fatal.
+
+        Returns:
+            The exception to report as fatal, or None if the failure is not fatal and should just be retried.
+        """
+        if isinstance(e, CogniteConnectionError):
             if e.__cause__ is not None:
                 self._logger.error(str(e.__cause__))
             self._logger.critical("Could not connect to CDF. Please check your configuration.")
-            requeue = True
+            return None
 
-        except CogniteAuthError as e:
+        if isinstance(e, CogniteAuthError):
             self._logger.error(str(e))
+            if isinstance(e.__cause__, _TRANSIENT_ERRORS + _TRANSIENT_TOKEN_ERRORS):
+                # The token endpoint could not be reached; this says nothing about the credentials.
+                self._log_transient_error("Could not reach the token endpoint to get an access token", e.__cause__)
+                return None
             self._logger.critical("Could not get an access token. Please check your configuration.")
-            exception_to_report = e
-            requeue = True
+            return e
 
-        except CogniteAPIError as e:
-            if e.code == 401:
+        if isinstance(e, CogniteAPIError):
+            if e.code in (HTTPStatus.UNAUTHORIZED, HTTPStatus.FORBIDDEN):
+                status = HTTPStatus(e.code)
                 self._logger.critical(
-                    "Got a 401 (Unauthorized) error from CDF. Please check your configuration. "
+                    f"Got a {status.value} ({status.phrase}) error from CDF. Please check your configuration. "
                     "Make sure the credentials and project are correct."
                 )
-                exception_to_report = e
+                return e
+            self._logger.critical(str(e.message) if e.message else f"Error while connecting to CDF {e!s}")
+            return None
 
-            elif e.code == 403:
-                self._logger.critical(
-                    "Got a 403 (Forbidden) error from CDF. Please check your configuration. "
-                    "Make sure the credentials and project are correct."
-                )
-                exception_to_report = e
+        if isinstance(e, _TRANSIENT_ERRORS):
+            self._log_transient_error("Could not reach CDF", e)
+            return None
 
-            elif e.message:
-                self._logger.critical(str(e.message))
+        self._logger.critical(f"Extractor could not connect to CDF {e!s}")
+        return e
 
-            else:
-                self._logger.critical(f"Error while connecting to CDF {e!s}")
-            requeue = True
-
-        except Exception as e:
-            self._logger.critical(f"Extractor could not connect to CDF {e!s}")
-            exception_to_report = e
-            requeue = True
-
-        if exception_to_report is not None and self._on_fatal_error is not None:
-            self._on_fatal_error(exception_to_report)
-
-        return requeue
+    def _log_transient_error(self, message: str, error: BaseException) -> None:
+        self._logger.warning(
+            "%s (%s: %s). The check-in will be retried at the next check-in.", message, type(error).__name__, error
+        )
